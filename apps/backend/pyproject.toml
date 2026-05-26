@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lenquant-backend"
+version = "0.1.0"
+description = "Python backend for LenQuant Website Fabric"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "motor>=3.6.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.4.0",
+  "email-validator>=2.2.0",
+  "python-multipart>=0.0.9"
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]

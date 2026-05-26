@@ -1,0 +1,14 @@
+{
+  "name": "lenquant-website-fabric",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:backend": "python -m uvicorn app.main:app --reload --app-dir apps/backend",
+    "dev": "npm run dev:web",
+    "lint:web": "npm --workspace apps/web run lint"
+  }
+}
+

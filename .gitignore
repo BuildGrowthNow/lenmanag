@@ -1,0 +1,17 @@
+node_modules/
+.next/
+dist/
+build/
+__pycache__/
+*.pyc
+.env
+.env.local
+.DS_Store
+.venv/
+apps/backend/.venv/
+apps/web/.next/
+apps/web/node_modules/
+apps/backend/.pytest_cache/
+apps/backend/.mypy_cache/
+coverage/
+
