@@ -159,12 +159,12 @@ export const ProofCarousel: React.FC<ComponentProps> = ({
             <div key={idx} className={`border p-8 ${panelTone} ${dna.borderRadius}`}>
               {match ? (
                 <>
-                  <p className={`mb-4 text-lg leading-relaxed italic ${bodyTone}`}>"{match[2].trim()}"</p>
+                  <p className={`mb-4 text-lg leading-relaxed italic ${bodyTone}`}>&ldquo;{match[2].trim()}&rdquo;</p>
                   <p className={`text-sm font-semibold ${contentTone}`}>{match[1]}</p>
                 </>
               ) : (
                 <p className={`text-lg leading-relaxed ${isQuote ? 'italic' : ''} ${contentTone}`}>
-                  "{polish(item)}"
+                  &ldquo;{polish(item)}&rdquo;
                 </p>
               )}
             </div>
