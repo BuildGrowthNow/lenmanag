@@ -3,9 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/constants";
 
 const protectedRoutes = ["/nsa"];
+const publicRoutes = ["/", "/landing", "/login", "/api"];
 
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  // Allow public routes
+  const isPublic = publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  if (isPublic) {
+    return NextResponse.next();
+  }
+
+  // Check protected routes
   const isProtected = protectedRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   if (!isProtected) {
     return NextResponse.next();
@@ -22,6 +31,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/nsa/:path*"]
+  matcher: ["/((?!_next|static|favicon.ico|.*\\..*).*)"]
 };
 

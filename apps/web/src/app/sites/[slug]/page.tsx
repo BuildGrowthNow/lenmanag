@@ -2,6 +2,7 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 import { EmptyState } from "@/components/state/empty-state";
 import { Button } from "@/components/ui/button";
@@ -476,11 +477,14 @@ export default function PublicPreviewPage({ params }: { params: Promise<{ slug: 
                     <div key={idx} className={`border rounded-lg overflow-hidden ${screenshotPanelTone}`}>
                       {ref.url && (
                         <>
-                          <img
-                            src={ref.url}
-                            alt={ref.label}
-                            className="w-full h-auto object-cover max-h-96"
-                          />
+                          <div className="relative w-full h-96 max-h-96">
+                            <Image
+                              src={ref.url}
+                              alt={ref.label}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
                           <div className="p-4">
                             <p className={`text-xs font-medium ${contentTone(mode)}`}>{ref.label}</p>
                             {ref.notes && (

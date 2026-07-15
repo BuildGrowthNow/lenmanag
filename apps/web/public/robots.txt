@@ -1,0 +1,10 @@
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Disallow admin areas
+Disallow: /nsa
+Disallow: /api
+
+# Sitemap location
+Sitemap: https://sites.lenquant.com/sitemap.xml
