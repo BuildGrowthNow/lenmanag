@@ -41,7 +41,7 @@ export function PromptHistory({
                   {prompt.status}
                 </Badge>
               </div>
-              <p className="text-sm italic text-muted">"{prompt.promptText}"</p>
+              <p className="text-sm italic text-muted">&ldquo;{prompt.promptText}&rdquo;</p>
               {prompt.qualityScore !== null && prompt.qualityScore !== undefined ? (
                 <div className="mt-2 text-xs text-text">
                   Quality Score: {prompt.qualityScore}/100
