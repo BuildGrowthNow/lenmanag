@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.core.design_prompts import get_industry_design_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -162,14 +161,14 @@ def generate_headline_variations(
 
     # Template 3: Bold Statement (industry-specific)
     industry_statements = {
-        "creative_agency": f"Digital experiences that convert",
-        "saas": f"Ship faster. Scale effortlessly.",
-        "legal_finance": f"Proven expertise. Trusted counsel.",
-        "ecommerce_fashion": f"Style. Refined.",
-        "consulting": f"Strategy. Execution. Results.",
-        "real_estate": f"Your next home awaits",
-        "health_wellness": f"Your health, optimized",
-        "tech": f"Build the future",
+        "creative_agency": "Digital experiences that convert",
+        "saas": "Ship faster. Scale effortlessly.",
+        "legal_finance": "Proven expertise. Trusted counsel.",
+        "ecommerce_fashion": "Style. Refined.",
+        "consulting": "Strategy. Execution. Results.",
+        "real_estate": "Your next home awaits",
+        "health_wellness": "Your health, optimized",
+        "tech": "Build the future",
     }
 
     statement = industry_statements.get(industry, "Excellence, delivered")

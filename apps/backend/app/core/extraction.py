@@ -8,6 +8,7 @@ import os
 import re
 import ssl
 import time
+import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -17,14 +18,12 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
-USER_AGENT = "LenQuantBot/0.3 (+internal extraction)"
-FETCH_TIMEOUT = 12
-
-import uuid
-
 from app.core import asset_metadata
 from app.core.asset_downloader import AssetDownloader
 from app.core.config import get_settings
+
+USER_AGENT = "LenQuantBot/0.3 (+internal extraction)"
+FETCH_TIMEOUT = 12
 
 settings = get_settings()
 logger = logging.getLogger(__name__)

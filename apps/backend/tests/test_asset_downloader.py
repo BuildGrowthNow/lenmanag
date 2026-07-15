@@ -1,4 +1,3 @@
-import os
 from app.core.asset_downloader import AssetDownloader
 from app.core.config import get_settings
 

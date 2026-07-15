@@ -12,7 +12,6 @@ Generates full color systems from 1-3 source colors using color theory:
 from __future__ import annotations
 
 import colorsys
-import re
 from typing import Literal
 
 
@@ -33,17 +32,17 @@ def rgb_to_hex(r: float, g: float, b: float) -> str:
     return f"#{r_int:02x}{g_int:02x}{b_int:02x}"
 
 
-def hsl_to_hex(h: float, s: float, l: float) -> str:
+def hsl_to_hex(h: float, s: float, lightness: float) -> str:
     """Convert HSL to hex color."""
-    r, g, b = colorsys.hls_to_rgb(h, l, s)
+    r, g, b = colorsys.hls_to_rgb(h, lightness, s)
     return rgb_to_hex(r, g, b)
 
 
 def hex_to_hsl(hex_color: str) -> tuple[float, float, float]:
     """Convert hex color to HSL."""
     r, g, b = parse_hex_color(hex_color)
-    h, l, s = colorsys.rgb_to_hls(r, g, b)
-    return h, s, l
+    h, lightness, s = colorsys.rgb_to_hls(r, g, b)
+    return h, s, lightness
 
 
 def tint(hex_color: str, amount: float) -> str:
@@ -66,48 +65,48 @@ def shade(hex_color: str, amount: float) -> str:
 
 def saturate(hex_color: str, amount: float) -> str:
     """Increase saturation of a color."""
-    h, s, l = hex_to_hsl(hex_color)
+    h, s, lightness = hex_to_hsl(hex_color)
     s = min(1.0, s * amount)
-    return hsl_to_hex(h, s, l)
+    return hsl_to_hex(h, s, lightness)
 
 
 def desaturate(hex_color: str, amount: float) -> str:
     """Decrease saturation of a color."""
-    h, s, l = hex_to_hsl(hex_color)
+    h, s, lightness = hex_to_hsl(hex_color)
     s = max(0.0, s * (1 - amount))
-    return hsl_to_hex(h, s, l)
+    return hsl_to_hex(h, s, lightness)
 
 
 def complementary(hex_color: str) -> str:
     """Get complementary color (180° opposite on color wheel)."""
-    h, s, l = hex_to_hsl(hex_color)
+    h, s, lightness = hex_to_hsl(hex_color)
     h = (h + 0.5) % 1.0
-    return hsl_to_hex(h, s, l)
+    return hsl_to_hex(h, s, lightness)
 
 
 def triadic(hex_color: str) -> tuple[str, str]:
     """Get triadic colors (120° apart on color wheel)."""
-    h, s, l = hex_to_hsl(hex_color)
+    h, s, lightness = hex_to_hsl(hex_color)
     h1 = (h + 1 / 3) % 1.0
     h2 = (h + 2 / 3) % 1.0
-    return hsl_to_hex(h1, s, l), hsl_to_hex(h2, s, l)
+    return hsl_to_hex(h1, s, lightness), hsl_to_hex(h2, s, lightness)
 
 
 def analogous(hex_color: str, degrees: int = 30) -> tuple[str, str]:
     """Get analogous colors (adjacent on color wheel)."""
-    h, s, l = hex_to_hsl(hex_color)
+    h, s, lightness = hex_to_hsl(hex_color)
     shift = degrees / 360.0
     h1 = (h + shift) % 1.0
     h2 = (h - shift) % 1.0
-    return hsl_to_hex(h1, s, l), hsl_to_hex(h2, s, l)
+    return hsl_to_hex(h1, s, lightness), hsl_to_hex(h2, s, lightness)
 
 
 def split_complementary(hex_color: str) -> tuple[str, str]:
     """Get split-complementary colors (150° apart)."""
-    h, s, l = hex_to_hsl(hex_color)
+    h, s, lightness = hex_to_hsl(hex_color)
     h1 = (h + 150 / 360) % 1.0
     h2 = (h + 210 / 360) % 1.0
-    return hsl_to_hex(h1, s, l), hsl_to_hex(h2, s, l)
+    return hsl_to_hex(h1, s, lightness), hsl_to_hex(h2, s, lightness)
 
 
 def adjust_lightness(hex_color: str, target_lightness: float) -> str:
@@ -217,10 +216,10 @@ def generate_color_system(
     primary = source_colors[0] if source_colors else industry_default_color(industry)
 
     # Ensure primary has good saturation
-    h, s, l = hex_to_hsl(primary)
+    h, s, lightness = hex_to_hsl(primary)
     if s < 0.3:
         # Boost saturation for muted colors
-        primary = hsl_to_hex(h, min(0.5, s + 0.2), l)
+        primary = hsl_to_hex(h, min(0.5, s + 0.2), lightness)
 
     # Generate secondary from complementary
     secondary = complementary(primary)
@@ -254,7 +253,7 @@ def generate_color_system(
     text = get_text_color(mood, dark_mode)
 
     # Border color (primary with low opacity)
-    h, s, l = hex_to_hsl(primary)
+    h, s, _ = hex_to_hsl(primary)
     border = hsl_to_hex(h, s * 0.5, 0.3 if dark_mode else 0.8)
 
     # Mesh gradient

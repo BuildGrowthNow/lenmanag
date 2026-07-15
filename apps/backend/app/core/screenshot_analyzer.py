@@ -8,7 +8,6 @@ from typing import Any, Optional
 
 from playwright.async_api import async_playwright
 
-from app.core.config import get_settings
 from app.core.llm import get_llm_client
 
 logger = logging.getLogger(__name__)

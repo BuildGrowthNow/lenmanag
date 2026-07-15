@@ -10,10 +10,6 @@ from typing import List, Optional
 
 import httpx
 import tempfile
-import asyncio
-import hashlib
-import os
-from typing import BinaryIO
 
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter, retry_if_exception_type
 
@@ -26,16 +22,15 @@ try:
     from .asset_storage_s3 import S3AssetStorage
 except Exception:  # pragma: no cover - optional dependency at import time
     S3AssetStorage = None
-from .asset_metadata import reserve_crawl_budget
 from prometheus_client import Counter, Histogram
 
 # Metrics
+from .config import get_settings
+
 DOWNLOAD_COUNTER = Counter("asset_download_total", "Total asset download attempts")
 DOWNLOAD_FAILURES = Counter("asset_download_failures_total", "Total failed asset downloads")
 DOWNLOAD_BYTES = Counter("asset_download_bytes_total", "Total bytes downloaded")
 DOWNLOAD_LATENCY = Histogram("asset_download_latency_seconds", "Histogram of asset download latencies")
-
-from .config import get_settings
 
 
 @dataclass
@@ -147,7 +142,7 @@ class AssetDownloader:
 
                         # write streaming using helper
                         try:
-                            bytes_written = await self._stream_to_tempfile(client, url, temp_f, self.settings.asset_max_file_bytes)
+                            await self._stream_to_tempfile(client, url, temp_f, self.settings.asset_max_file_bytes)
                         except Exception as ex:
                             # cleanup
                             try:

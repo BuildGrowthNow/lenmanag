@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import errno
 import hmac
 import hashlib
 import os
@@ -70,7 +69,7 @@ class LocalAssetStorage(AssetStorage):
         # atomic rename
         try:
             os.replace(temp, dest)
-        except OSError as e:
+        except OSError:
             raise
 
         self._stats["stored_files"] += 1

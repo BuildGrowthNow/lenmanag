@@ -16,7 +16,7 @@ if r.status_code == 200:
     print(f'Hero headline: {site.get("heroVariant", {}).get("headline")}')
     print(f'Section stack length: {len(site.get("sectionStack", []))}')
     print(f'First section: {site.get("sectionStack", [{}])[0].get("headline") if site.get("sectionStack") else "None"}')
-    print(f'\nFull response saved to site_data.json')
+    print('\nFull response saved to site_data.json')
     with open('site_data.json', 'w') as f:
         json.dump(data, f, indent=2)
 else:

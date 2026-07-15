@@ -1,6 +1,5 @@
 from playwright.sync_api import sync_playwright
 import time
-import json
 
 url = "http://localhost:3002/sites/b7d2d2d3f4ad4cb7900c7be1c2e86c12"
 

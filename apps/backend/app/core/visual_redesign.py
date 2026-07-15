@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 from app.core.llm import get_llm_client
-from app.core.awwwards_patterns import build_pattern_context_for_llm, get_patterns_for_industry
 from app.schemas.brief import VisualCritique, VisualRedesignBrief, SiteBrief
 from app.schemas.extraction import ExtractionSnapshot, ExtractedSection
 

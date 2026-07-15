@@ -5,7 +5,7 @@ import hashlib
 import os
 import mimetypes
 from datetime import datetime
-from fastapi import APIRouter, Response, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from app.core.config import get_settings

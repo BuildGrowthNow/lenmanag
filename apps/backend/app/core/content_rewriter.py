@@ -173,7 +173,7 @@ async def rewrite_cta(
                 "discover",
             ]
         ):
-            rewritten = f"Get Started"  # Safe fallback
+            rewritten = "Get Started"  # Safe fallback
 
         return {
             "original": original,

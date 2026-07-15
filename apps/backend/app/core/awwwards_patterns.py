@@ -699,7 +699,7 @@ def build_pattern_context_for_llm(industry: str, section_type: str = "hero") -> 
         context += f"**Description:** {pattern['description']}\n"
         context += f"**When to use:** {pattern['when_to_use']}\n"
         if pattern.get('key_elements'):
-            context += f"**Key elements:**\n"
+            context += "**Key elements:**\n"
             for elem in pattern['key_elements']:
                 context += f"- {elem}\n"
         context += "\n"

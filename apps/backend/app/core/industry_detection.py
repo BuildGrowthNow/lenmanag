@@ -6,7 +6,6 @@ Detects industry/vertical from extraction data to enable industry-specific desig
 
 from __future__ import annotations
 
-import re
 from typing import Literal
 
 IndustryType = Literal[

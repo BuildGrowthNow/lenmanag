@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock, patch
 
 from app.core.leads import lead_repository
 from app.core.mongo import get_database
-from app.core.sites import site_repository, _check_theme_diversity_constraint, _compute_diversity_score, THEME_LIBRARY
+from app.core.sites import site_repository, _check_theme_diversity_constraint, _compute_diversity_score
 from app.core.screenshot_comparator import ScreenshotComparator
 from app.schemas.lead import LeadUpsertRequest
-from app.schemas.site import GeneratedSite, SiteOverrideCreateRequest
+from app.schemas.site import GeneratedSite
 
 
 def test_theme_diversity_constraint():

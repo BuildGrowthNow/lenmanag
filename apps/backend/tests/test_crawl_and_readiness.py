@@ -1,15 +1,12 @@
-import asyncio
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 from app.core import extraction
 from app.core.config import Settings
 from app.core.extraction import crawl_website, _max_pages
-from app.core.screenshot_comparator import ScreenshotComparator
 from app.core.sites import _readiness_status
 from app.schemas.brief import SiteBrief, BriefEvidence, BriefTextRecommendation
 
