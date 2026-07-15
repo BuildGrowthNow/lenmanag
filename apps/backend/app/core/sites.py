@@ -127,6 +127,39 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _generate_friendly_slug(company_name: str, existing_slugs: set[str]) -> str:
+    """Generate a friendly URL slug from company name (max 8 chars).
+
+    - Converts to lowercase
+    - Removes special characters
+    - Truncates to 8 characters
+    - Adds numeric suffix if duplicate exists
+    """
+    import re
+
+    # Remove special characters, convert to lowercase
+    clean = re.sub(r'[^a-z0-9]', '', company_name.lower())
+
+    # Truncate to 8 characters
+    base_slug = clean[:8] if clean else 'site'
+
+    # If unique, return as-is
+    if base_slug not in existing_slugs:
+        return base_slug
+
+    # Add numeric suffix if duplicate
+    for i in range(2, 1000):
+        # Truncate base to make room for suffix
+        max_base_len = 8 - len(str(i))
+        candidate = f"{base_slug[:max_base_len]}{i}"
+        if candidate not in existing_slugs:
+            return candidate
+
+    # Fallback to UUID if somehow we can't find a unique slug
+    import uuid
+    return str(uuid.uuid4())[:8]
+
+
 def _is_client_safe_cta(text: str) -> bool:
     settings = get_settings()
     if not text:
@@ -3658,6 +3691,25 @@ class SiteRepository:
 
         now = _now()
 
+        # Generate friendly preview slug from company name
+        database = get_database()
+        existing_slugs: set[str] = set()
+        if database is not None:
+            cursor = database["generated_sites"].find({}, {"previewSlug": 1})
+            async for doc in cursor:
+                if slug := doc.get("previewSlug"):
+                    existing_slugs.add(slug)
+        else:
+            # In-memory mode: get from self._sites
+            async with self._memory_lock:
+                for doc in self._sites.values():
+                    if slug := doc.get("previewSlug"):
+                        existing_slugs.add(slug)
+
+        friendly_slug = _generate_friendly_slug(
+            _text(lead.companyName) or "site", existing_slugs
+        )
+
         # Compute layout hash for duplicate detection
         temp_site = GeneratedSite(
             id=site_id,
@@ -3694,8 +3746,8 @@ class SiteRepository:
             diversityNotes=[],
             diversityScore=diversity_score,
             layoutHash="",
-            previewSlug=site_id,
-            previewUrl=f"/sites/{site_id}",
+            previewSlug=friendly_slug,
+            previewUrl=f"/sites/{friendly_slug}",
             overrideCount=len(overrides),
             overrides=[],
             exportMetadata=None,
