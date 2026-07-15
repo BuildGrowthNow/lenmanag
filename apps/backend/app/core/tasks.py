@@ -11,7 +11,13 @@ from app.core.asset_retention import AssetRetentionManager
 
 
 def _run(coro):
-    asyncio.run(coro)
+    """Run async coroutine in a fresh event loop to avoid 'Event loop is closed' errors in Celery workers."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 @celery_app.task(name="lenquant.jobs.run_extraction")
