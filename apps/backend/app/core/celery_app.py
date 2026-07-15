@@ -19,4 +19,9 @@ celery_app.conf.update(
     task_eager_propagates=True,
     timezone="UTC",
     enable_utc=True,
+    # Use solo pool to avoid asyncio event loop issues with forked workers
+    # The default 'prefork' pool causes RuntimeError: Event loop is closed
+    # when tasks use asyncio (via _run helper in tasks.py)
+    worker_pool="solo",
+    worker_concurrency=1,
 )

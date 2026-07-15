@@ -11,13 +11,28 @@ from app.core.asset_retention import AssetRetentionManager
 
 
 def _run(coro):
-    """Run async coroutine in a fresh event loop to avoid 'Event loop is closed' errors in Celery workers."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    """Run async coroutine in a fresh event loop to avoid 'Event loop is closed' errors in Celery workers.
+
+    With solo pool configured in celery_app.py, this should work reliably without crashes.
+    """
+    try:
+        # Try to get existing event loop first (works with solo pool)
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        # No event loop exists, create a new one
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
     try:
         return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    except Exception as e:
+        # Log the error but don't close the loop in solo pool mode
+        import logging
+        logging.error(f"Task execution failed: {e}", exc_info=True)
+        raise
 
 
 @celery_app.task(name="lenquant.jobs.run_extraction")

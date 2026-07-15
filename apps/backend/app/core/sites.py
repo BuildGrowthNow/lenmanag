@@ -1471,7 +1471,33 @@ def _section_stack(
             }
         )
 
-    return sections
+    # Deduplicate sections by title to prevent excessive duplication
+    # This prevents the quality score from being set to 0 due to >40% duplicates
+    seen_titles: set[str] = set()
+    deduplicated_sections: list[dict[str, Any]] = []
+
+    for section in sections:
+        title_key = _text(section.get("title", "")).strip().lower()
+        if not title_key:
+            # Keep sections without titles (shouldn't happen but defensive)
+            deduplicated_sections.append(section)
+            continue
+
+        if title_key in seen_titles:
+            # Skip duplicate section
+            logger.debug(f"Skipping duplicate section with title: {title_key}")
+            continue
+
+        seen_titles.add(title_key)
+        deduplicated_sections.append(section)
+
+    if len(deduplicated_sections) < len(sections):
+        logger.info(
+            f"Deduplicated sections from {len(sections)} to {len(deduplicated_sections)} "
+            f"({len(sections) - len(deduplicated_sections)} duplicates removed)"
+        )
+
+    return deduplicated_sections
 
 
 def _canonical_section_type(label: str) -> str | None:
@@ -3885,7 +3911,8 @@ class SiteRepository:
             "refinementPromptId": refinement_prompt_id,
             "createdAt": now,
             "updatedAt": now,
-            "publishedAt": now if readiness_status == "published" else None,
+            # Auto-publish sites that meet quality threshold
+            "publishedAt": now if readiness_status == "ready_to_publish" else None,
         }
         site_doc = {
             "id": site_id,
@@ -3938,7 +3965,8 @@ class SiteRepository:
             "isManuallyRefined": bool(refinement_prompt_id),
             "createdAt": current.createdAt if current else now,
             "updatedAt": now,
-            "publishedAt": now if readiness_status == "published" else None,
+            # Auto-publish sites that meet quality threshold
+            "publishedAt": now if readiness_status == "ready_to_publish" else None,
         }
         
         # Run screenshot QA if enabled

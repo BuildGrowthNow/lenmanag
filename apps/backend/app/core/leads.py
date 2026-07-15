@@ -1533,11 +1533,30 @@ class LeadRepository:
         next_version = previous_version + 1
 
         positioning = extraction.summary.positioningSummary
-        company_summary_value = positioning or (
-            f"{lead.companyName} is the lead record for {lead.websiteUrl}."
-            if lead.companyName
-            else f"Public positioning for {lead.websiteUrl} is sparse in the current crawl."
-        )
+
+        # Build robust company summary from available data
+        if positioning and len(positioning) > 40:
+            # Good positioning from extraction enrichment
+            company_summary_value = positioning
+        elif extraction.summary.serviceClues:
+            # Fallback: construct from services and company name
+            services = ", ".join(extraction.summary.serviceClues[:3])
+            audience_hint = (
+                f" for {extraction.summary.audienceClues[0]}"
+                if extraction.summary.audienceClues
+                else ""
+            )
+            company_summary_value = (
+                f"{lead.companyName} provides {services}{audience_hint}."
+                if lead.companyName
+                else f"This company provides {services}{audience_hint}."
+            )
+        elif lead.companyName:
+            # Minimal fallback with company name
+            company_summary_value = f"{lead.companyName} is the lead record for {lead.websiteUrl}."
+        else:
+            # Last resort
+            company_summary_value = f"Public positioning for {lead.websiteUrl} is sparse in the current crawl."
         company_refs = self._field_references(
             extraction=extraction,
             asset_cues=asset_cues,
@@ -1558,14 +1577,24 @@ class LeadRepository:
             else "Inferred from lead identity and sparse public content."
         )
 
-        value_proposition_signal = extraction.summary.positioningSummary or (
-            extraction.summary.serviceClues[0]
-            if extraction.summary.serviceClues
-            else ""
-        )
+        # Build value proposition from positioning or service clues
+        value_proposition_signal = extraction.summary.positioningSummary
+        if not value_proposition_signal or len(value_proposition_signal) < 40:
+            # Construct from service clues if positioning is weak
+            if extraction.summary.serviceClues:
+                primary_service = extraction.summary.serviceClues[0]
+                audience = (
+                    extraction.summary.audienceClues[0]
+                    if extraction.summary.audienceClues
+                    else "clients"
+                )
+                value_proposition_signal = (
+                    f"{lead.companyName or 'We'} helps {audience} with {primary_service.lower()}"
+                )
+
         value_proposition_value = (
             value_proposition_signal
-            if value_proposition_signal
+            if value_proposition_signal and len(value_proposition_signal) > 20
             else "The crawl did not expose a clear value proposition, so the operator should review the positioning before generation."
         )
         value_proposition_refs = self._field_references(

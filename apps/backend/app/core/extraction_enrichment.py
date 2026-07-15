@@ -205,27 +205,30 @@ async def _infer_positioning(llm: Any, company_name: str, content: str) -> str |
     """Use LLM to generate positioning summary from extracted text."""
     prompt = f"""You are analyzing extracted website content for "{company_name}".
 
-Based ONLY on the text below, write a 1-2 sentence positioning summary that captures:
-- What the company does
-- Who it serves
-- What makes it different (if apparent)
+Based ONLY on the text below, write a 2-3 sentence positioning summary that captures:
+- What the company does (specific services/products)
+- Who it serves (target audience/market)
+- What makes it different or valuable (unique value proposition if apparent)
 
 Rules:
 - Only state facts supported by the text
-- Keep it under 150 characters
+- Aim for 150-300 characters of meaningful content
 - Write in third person ("Company X provides...")
+- Be specific about services and value, not generic ("provides solutions")
 - Do NOT invent claims not in the text
 
 EXTRACTED CONTENT:
-{content[:4000]}
+{content[:6000]}
 
 Return ONLY the positioning summary text, no quotes, no JSON, no explanation."""
 
     try:
-        response = await llm.generate_text(prompt, temperature=0.3, max_tokens=200)
+        response = await llm.generate_text(prompt, temperature=0.3, max_tokens=300)
         result = response.strip().strip('"').strip("'")
-        if len(result) > 20:
-            return result[:300]
+        # Ensure meaningful length - if too short, it's likely just a title
+        if len(result) > 40:
+            return result[:400]
+        logger.warning("Positioning inference too short (%d chars): %s", len(result), result)
         return None
     except Exception as e:
         logger.warning("Positioning inference failed: %s", e)
