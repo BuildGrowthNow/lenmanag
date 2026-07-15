@@ -9,9 +9,8 @@ export function Topbar() {
       </div>
       <div className="flex items-center gap-2">
         <Badge>Allowlist auth</Badge>
-        <Badge className="bg-success/15 text-success">Phase 1 shell</Badge>
+        <Badge className="bg-success/15 text-success">Live preview ops</Badge>
       </div>
     </div>
   );
 }
-

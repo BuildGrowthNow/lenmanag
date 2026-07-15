@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SiteWorkspaceControls } from "@/components/site-workspace-controls";
+import { DisableOverrideButton } from "@/components/disable-override-button";
 import { getLead, getLeadBrief, getLeadExtraction } from "@/lib/api/leads";
 import { getSite } from "@/lib/api/sites";
 
@@ -82,6 +83,11 @@ export default async function SiteEditPage({ params }: { params: Promise<{ id: s
                       <div>Version: {override.version}</div>
                       <div>Created: {formatDateTime(override.createdAt)}</div>
                     </div>
+                    {override.status === "active" ? (
+                      <div className="mt-3">
+                        <DisableOverrideButton siteId={id} overrideId={override.id} />
+                      </div>
+                    ) : null}
                   </div>
                 ))
               ) : (

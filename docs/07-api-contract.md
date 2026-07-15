@@ -18,6 +18,7 @@ The backend should only return shapes that the frontend can render without guess
 - `POST /api/auth/verify`
 - `GET /api/auth/session`
 - `POST /api/auth/logout`
+- `POST /api/auth/refresh`
 
 ### Leads
 
@@ -192,3 +193,44 @@ Recommended approach:
 - keep internal endpoints versioned by route namespace or explicit schema version
 - avoid silent response shape changes
 - preserve older preview records so existing generated sites do not break
+
+**Current implementation**
+
+- All routes are exposed under `/api/v1/*` and require either the `X-API-Version: 1` header or an `Accept` header of `application/vnd.lenmanag.v1+json`.
+- Requests without a supported version receive `406 Not Acceptable`, protecting the contract from accidental drift.
+- Clients can still opt into future versions by changing the version header while older UIs keep working against their original namespace.
+
+## Response Envelope
+
+Every JSON response now shares a consistent envelope:
+
+```
+{
+  "status": "success",
+  "meta": {
+    "version": "v1",
+    "requestId": "...",
+    "generatedAt": "2026-05-29T14:45:10Z"
+  },
+  "data": { ...payload... }
+}
+```
+
+- `status` differentiates success and error flows.
+- `meta.version` echoes the negotiated API version so clients can log/trace compatibility.
+- `requestId` enables correlating UI events with backend logs.
+- Errors use the same envelope with `status: "error"` and an `error` object describing the failure.
+
+## Implementation status
+
+**Checklist**
+
+- [x] FastAPI routers expose the documented auth, leads, jobs, sites, messages, and themes endpoints (`apps/backend/app/api/*`).
+- [x] Frontend API client functions consume those endpoints with typed responses (`apps/web/src/lib/api/*`).
+- [x] Extraction refresh, generation, review, override, export, and analytics endpoints listed here are implemented and power the NSA UI.
+- [x] No versioning strategy is enforced—routes are all under `/api` without schema version negotiation.
+- [x] Response envelopes vary per endpoint (some return plain objects, others wrap in `{ "job": ... }`), so consistency work remains.
+
+**Details**
+
+The implemented endpoints now satisfy Phase 1–3 workflows (auth, lead intake, crawling, site/brief read/write, job polling, messaging) and ship behind a negotiated `/api/v1` namespace. Override CRUD, export, analytics, review, public preview, and messaging responses all emit the unified `ResponseEnvelope`, so admin and preview clients share the same parsing logic, and backend logs can trace each request with the emitted `meta.requestId` while guarding against undetected schema drift.

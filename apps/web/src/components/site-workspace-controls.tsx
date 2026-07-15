@@ -19,6 +19,19 @@ type SiteWorkspaceControlsProps = {
 
 const overrideScopes = ["copy", "layout", "brand", "cta", "motion", "style"] as const;
 
+function getNestedValue(obj: any, path: string): any {
+  const keys = path.split(".");
+  let current = obj;
+  for (const key of keys) {
+    if (current && typeof current === "object" && key in current) {
+      current = current[key];
+    } else {
+      return null;
+    }
+  }
+  return current;
+}
+
 export function SiteWorkspaceControls({ siteId, site, hasApprovedBrief, hasExtraction }: SiteWorkspaceControlsProps) {
   const router = useRouter();
   const [busy, setBusy] = useState<"generate" | "republish" | "override" | null>(null);
@@ -29,12 +42,15 @@ export function SiteWorkspaceControls({ siteId, site, hasApprovedBrief, hasExtra
   const [reason, setReason] = useState("");
   const [previousValue, setPreviousValue] = useState("");
 
+  // Get current value from site for the selected path
+  const currentSiteValue = site ? getNestedValue(site, path) : null;
+
   async function handleGenerate() {
     setBusy("generate");
     setMessage(null);
     try {
-      await generateSite(siteId);
-      setMessage("Preview generated from the approved brief.");
+      const response = await generateSite(siteId);
+      setMessage(`Generation job ${response.job.id.slice(0, 8)} queued: ${response.job.step}.`);
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not generate the preview.");
@@ -47,8 +63,8 @@ export function SiteWorkspaceControls({ siteId, site, hasApprovedBrief, hasExtra
     setBusy("republish");
     setMessage(null);
     try {
-      await republishSite(siteId);
-      setMessage("Preview republished with the stored overrides.");
+      const response = await republishSite(siteId);
+      setMessage(`Republish job ${response.job.id.slice(0, 8)} queued: ${response.job.step}.`);
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not republish the preview.");
@@ -112,6 +128,26 @@ export function SiteWorkspaceControls({ siteId, site, hasApprovedBrief, hasExtra
             <Input value={path} onChange={(event) => setPath(event.target.value)} placeholder="hero.headline or cta.primary.label" />
           </label>
         </div>
+        
+        {/* Inline diff preview */}
+        {currentSiteValue !== null && (
+          <div className="rounded-xl border border-line/50 bg-panel px-3 py-2">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted">Current value in site</div>
+            <div className="mt-1 text-sm text-muted">{String(currentSiteValue)}</div>
+          </div>
+        )}
+        
+        {value && currentSiteValue !== null && value !== String(currentSiteValue) && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+            <div className="text-xs uppercase tracking-[0.18em] text-amber-400">Diff preview</div>
+            <div className="mt-1 text-sm">
+              <span className="text-muted line-through">{String(currentSiteValue)}</span>
+              <span className="mx-2 text-muted">→</span>
+              <span className="text-text">{value}</span>
+            </div>
+          </div>
+        )}
+        
         <label className="space-y-2 text-sm">
           <span className="text-xs uppercase tracking-[0.18em] text-muted">Value</span>
           <Textarea value={value} onChange={(event) => setValue(event.target.value)} rows={3} placeholder="Enter the approved replacement value." />

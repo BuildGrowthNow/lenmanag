@@ -10,7 +10,6 @@ import type {
   LeadListResponse,
   LeadPatchPayload,
   PageInventoryResponse,
-  JobResponse,
   LeadUpsertPayload
 } from "@/lib/types";
 
@@ -58,10 +57,6 @@ export async function importLeads(file: File): Promise<LeadImportResponse> {
   const formData = new FormData();
   formData.append("file", file);
   return request("/api/leads/import", { method: "POST", body: formData });
-}
-
-export async function getJob(id: string): Promise<JobResponse | null> {
-  return safeRequest<JobResponse | null>(`/api/jobs/${id}`, null);
 }
 
 export async function startLeadExtraction(id: string): Promise<ExtractionJobResponse> {

@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 from app.schemas.brief import BriefEvidence, BriefSourceReference
 
 PaletteMode = Literal["zinc", "light", "colorful"]
-SiteReadinessStatus = Literal["blocked", "needs_review", "ready_for_review", "ready_to_publish", "published"]
+SiteReadinessStatus = Literal[
+    "blocked", "needs_review", "ready_for_review", "ready_to_publish", "published"
+]
 SiteQaStatus = Literal["pass", "warn", "fail"]
 OverrideScope = Literal["copy", "layout", "brand", "cta", "motion", "style"]
 OverrideSourceType = Literal["manual", "imported", "regenerated"]
@@ -16,7 +18,9 @@ OverrideStatus = Literal["active", "disabled"]
 ComparisonStatus = Literal["matched", "inferred", "missing", "mismatch"]
 RubricStatus = Literal["pass", "warn", "fail"]
 PublishApprovalState = Literal["pending", "approved", "blocked"]
-ReviewWorkflowState = Literal["not_reviewed", "in_review", "approved", "warned", "blocked"]
+ReviewWorkflowState = Literal[
+    "not_reviewed", "in_review", "approved", "warned", "blocked"
+]
 
 
 class SiteToken(BaseModel):
@@ -64,6 +68,7 @@ class SiteSection(BaseModel):
     body: str
     items: list[str] = Field(default_factory=list)
     ctaLabel: Optional[str] = None
+    componentId: Optional[str] = None
     evidence: BriefEvidence
 
 
@@ -152,6 +157,7 @@ class SiteReviewRequest(BaseModel):
 
 
 class SiteReviewPatchRequest(BaseModel):
+    browserPreviewUrl: Optional[str] = None
     outcome: Optional[SiteQaStatus] = None
     checklist: Optional[list[SiteReviewChecklistItem]] = None
     screenshots: Optional[list[SiteScreenshotMetadata]] = None
@@ -199,6 +205,12 @@ class SiteReviewQueueItem(BaseModel):
 class SiteReviewQueueResponse(BaseModel):
     items: list[SiteReviewQueueItem] = Field(default_factory=list)
     pagination: dict[str, int]
+    themeDiversity: dict[str, int] = Field(default_factory=dict)
+    paletteDiversity: dict[str, int] = Field(default_factory=dict)
+    motionDiversity: dict[str, int] = Field(default_factory=dict)
+    spacingDiversity: dict[str, int] = Field(default_factory=dict)
+    automationSummary: dict[str, int] = Field(default_factory=dict)
+    handoffReadySiteIds: list[str] = Field(default_factory=list)
 
 
 class SiteHandoffRecord(BaseModel):
@@ -234,8 +246,15 @@ class SiteExportMetadata(BaseModel):
     commitSha: Optional[str] = None
     exportPath: Optional[str] = None
     notes: Optional[str] = None
+    exportSyncStatus: Literal["synced", "out_of_sync", "needs_review"] = "synced"
+    lastSyncedAt: Optional[datetime] = None
     createdAt: datetime
     updatedAt: datetime
+
+
+class SiteExportRecord(SiteExportMetadata):
+    id: str
+    siteId: str
 
 
 class SiteQualityCheck(BaseModel):
@@ -253,6 +272,18 @@ class SiteComparisonEntry(BaseModel):
     status: ComparisonStatus
     reason: str
     evidence: Optional[BriefEvidence] = None
+
+
+class RefinementPromptRecord(BaseModel):
+    id: str
+    submittedAt: datetime
+    operatorId: str
+    promptText: str
+    resultVersionId: Optional[str] = None
+    status: str
+    qualityScore: Optional[int] = None
+    failureReason: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class GeneratedSiteVersion(BaseModel):
@@ -287,9 +318,19 @@ class GeneratedSiteVersion(BaseModel):
     latestReviewId: Optional[str] = None
     handoffRecordId: Optional[str] = None
     diversityNotes: list[str] = Field(default_factory=list)
+    diversityScore: int = Field(
+        default=50, description="0-100 score based on theme/palette uniqueness in batch"
+    )
+    layoutHash: str = Field(
+        default="", description="Hash of layout for duplicate detection"
+    )
     previewSlug: str
     previewUrl: str
     overrideCount: int
+    refinementPromptId: Optional[str] = None
+    promptHistory: list[RefinementPromptRecord] = Field(default_factory=list)
+    isManuallyRefined: bool = False
+    improvementRecommendations: dict[str, Any] | None = None
     createdAt: datetime
     updatedAt: datetime
     publishedAt: Optional[datetime] = None
@@ -326,11 +367,22 @@ class GeneratedSite(BaseModel):
     latestReviewId: Optional[str] = None
     handoffRecordId: Optional[str] = None
     diversityNotes: list[str] = Field(default_factory=list)
+    diversityScore: int = Field(
+        default=50, description="0-100 score based on theme/palette uniqueness in batch"
+    )
+    layoutHash: str = Field(
+        default="", description="Hash of layout for duplicate detection"
+    )
     previewSlug: str
     previewUrl: str
     overrideCount: int
     overrides: list[SiteOverrideRecord] = Field(default_factory=list)
+    overrideDiffs: list[dict[str, Any]] = Field(default_factory=list)
     exportMetadata: Optional[SiteExportMetadata] = None
+    refinementPromptId: Optional[str] = None
+    promptHistory: list[RefinementPromptRecord] = Field(default_factory=list)
+    isManuallyRefined: bool = False
+    improvementRecommendations: dict[str, Any] | None = None
     createdAt: datetime
     updatedAt: datetime
     publishedAt: Optional[datetime] = None
@@ -385,6 +437,7 @@ class SiteExportRequest(BaseModel):
 
 class SiteGenerateRequest(BaseModel):
     force: bool = False
+    refinementPromptId: Optional[str] = None
 
 
 class SiteOverrideCreateRequest(BaseModel):

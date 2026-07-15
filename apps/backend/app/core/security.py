@@ -7,12 +7,14 @@ from typing import Any, Dict, Optional
 
 from app.core.config import get_settings
 
+settings = get_settings()
+
 SESSION_COOKIE_NAME = "lenquant_session"
-SESSION_TTL_SECONDS = 60 * 60 * 8
+SESSION_TTL_SECONDS = settings.session_cookie_max_age_seconds
 
 
 def _secret_bytes() -> bytes:
-    return get_settings().session_secret.encode("utf-8")
+    return settings.session_secret.encode("utf-8")
 
 
 def _sign(payload: str) -> str:

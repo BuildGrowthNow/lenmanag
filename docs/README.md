@@ -24,3 +24,8 @@ The core workflow is:
 - [09. Content Extraction and Site Brief](./09-content-extraction-and-site-brief.md)
 - [10. Design System and Variation Strategy](./10-design-system-and-variation-strategy.md)
 - [11. Operator Workflow and Edit Loop](./11-operator-workflow-and-edit-loop.md)
+- [12. Asset Capture and Preview Guardrails](./12-asset-capture-and-preview-guardrails.md)
+- [13. Source-to-Preview Traceability](./13-source-to-preview-traceability.md)
+- [14. Success Metrics and Analytics](./14-success-metrics-and-analytics.md)
+- [Phase 15 Implementation Prompt](./phase-15-implementation-prompt.md)
+- [Phase 16 Implementation Prompt](./phase-16-implementation-prompt.md)

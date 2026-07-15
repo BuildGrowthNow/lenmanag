@@ -115,3 +115,17 @@ The analytics model should leave room for:
 - A/B testing of hero variants
 - outreach source attribution
 - conversion funnel reporting
+
+## Implementation status
+
+**Checklist**
+
+- [x] Email allowlist auth implemented via FastAPI routes with audit logging and session cookies (`apps/backend/app/api/auth.py`).
+- [x] Next.js login form + middleware enforce the session requirement before allowing access to `/nsa` (`apps/web/src/app/login/login-form.tsx`, `apps/web/middleware.ts`).
+- [x] Session cookies are hardened for production and can be refreshed via `/api/auth/refresh` with configurable `secure`, `samesite`, domain, and max-age settings.
+- [x] Analytics repository code, ingestion endpoints, client instrumentation, and the `/nsa/analytics` dashboard are wired end-to-end.
+- [x] Admin events (lead create/merge/import, brief lifecycle, overrides, exports, messages, etc.) stream into analytics so operators can audit actions alongside preview telemetry.
+
+**Details**
+
+Authentication now sets `secure` session cookies (configurable via `.env`) and exposes a refresh route so long-lived operator sessions stay valid without re-login. Analytics events are ingested from previews, admin actions, and dashboards; the NSA analytics page renders the same aggregates returned by `/api/analytics/dashboard` and surfaces per-site/lead metrics sourced from `app/core/analytics.py`.

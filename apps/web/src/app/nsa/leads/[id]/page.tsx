@@ -10,6 +10,7 @@ import { LeadBriefReview } from "@/components/lead-brief-review";
 import { LeadExtractionControls } from "@/components/lead-extraction-controls";
 import { getLead, getLeadBrief, getLeadExtraction, getLeadPages } from "@/lib/api/leads";
 import { getSite } from "@/lib/api/sites";
+import { evaluateExtractionHealth } from "@/lib/extraction-health";
 import type { PageInventoryItem } from "@/lib/types";
 
 function statusLabel(status: string) {
@@ -132,7 +133,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const topCitations = extractionSnapshot?.sourceCitations.slice(0, 4) ?? [];
   const brandCues = extractionSnapshot?.brandAssetCues ?? [];
   const extractionGapItems = extractionSnapshot?.gapItems ?? [];
-  const hasExtraction = Boolean(extractionSnapshot && extractionSnapshot.version > 0);
+  const extractionHealth = evaluateExtractionHealth(extractionSnapshot);
 
   return (
     <PageFrame
@@ -252,7 +253,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         </Card>
 
         <div className="space-y-4">
-          <LeadBriefReview leadId={lead.id} brief={brief} hasExtraction={hasExtraction} />
+          <LeadBriefReview leadId={lead.id} brief={brief} extractionHealth={extractionHealth} />
 
           <Card>
             <CardHeader>
@@ -311,8 +312,15 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
           <Card>
             <CardHeader>
-              <CardTitle>Extraction review</CardTitle>
-              <CardDescription>Public website signals, crawl status, and missing-data gaps stay visible here so operators can trace the brief back to source material.</CardDescription>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle>Extraction review</CardTitle>
+                  <CardDescription>Public website signals, crawl status, and missing-data gaps stay visible here so operators can trace the brief back to source material.</CardDescription>
+                </div>
+                <Button asChild variant="secondary">
+                  <Link href={`/nsa/leads/${lead.id}/extraction`}>View page inventory</Link>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <LeadExtractionControls leadId={lead.id} extraction={extractionSnapshot} />

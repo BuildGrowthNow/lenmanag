@@ -170,3 +170,18 @@ Recommended route structure:
 - `/nsa/sites/[id]/edit`
 - `/sites/[slug]` for public preview rendering
 - `/sites/[slug]/[page]` only if multi-page previews are enabled later
+
+## Implementation status
+
+**Checklist**
+
+- [x] Monorepo layout with Next.js admin + FastAPI backend matches the documented component map (`apps/web`, `apps/backend`).
+- [x] Shared API router wiring all feature modules (`apps/backend/app/api/router.py`) reflects the routing model above.
+- [x] Mongo connection helpers exist and are used opportunistically (`app/core/mongo.py`), though optional for local development.
+- [x] Generated preview runtime + override/export layer are live via the public preview API (`/api/public/sites/[slug]`), client-side analytics instrumentation, and the admin export workspace.
+- [x] Background job/extraction orchestration now runs through the shared async queue (`app/core/job_queue.py`) so crawls are queued and reported via the jobs API.
+- [x] Analytics ingestion/storage pipeline is wired end-to-end: the preview runtime emits events, `/api/analytics` stores them, and the NSA analytics surfaces visualize the rollups.
+
+**Details**
+
+The foundation (admin app, backend services, schemas) mirrors the target architecture, so developers can build features against the documented contracts. Background crawls are now queued and executed asynchronously, updating the jobs endpoint as they progress. Operators can review and export live previews through the public renderer, override workspace, and export controls, while preview visitors trigger analytics that flow into the `/api/analytics` dashboard. The remaining architectural pieces—namely resilient generation workers beyond extraction and deeper multi-tenant publishing infrastructure—are the next focus to fully harden the system.

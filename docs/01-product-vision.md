@@ -112,3 +112,16 @@ That means:
 - site-specific content, branding, and layout choices stored as data
 - future static or edge deployment options derived from the same generator
 - manual edits stored as durable overrides so regenerated output stays in sync with operator changes
+
+## Implementation status
+
+**Checklist**
+
+- [x] Monorepo matches the single-codebase strategy (`apps/web` + `apps/backend` sharing schemas and API contracts).
+- [x] Operator workflow loop (lead intake → extraction → preview → outreach) exists end-to-end via the NSA workspaces (`apps/web/src/app/nsa/*`).
+- [x] Source-to-preview traceability doc that ties every dataset back to specific UI affordances (`docs/13-source-to-preview-traceability.md`).
+- [x] Success metrics + analytics instrumentation plan covering backend ingestion + frontend emitters (`docs/14-success-metrics-and-analytics.md`).
+
+**Details**
+
+The implemented features already trace back to this vision: operators can import leads, generate briefs/sites, and draft outreach copy inside the same shell. The new traceability doc explicitly links each Mongo collection + API to the NSA/public UI affordances, while the analytics instrumentation plan shows how `/api/analytics/*` endpoints, preview emitters, and the NSA dashboard work together to prove throughput, engagement, and differentiation without duplicating logic across frontend and backend.

@@ -1,0 +1,3521 @@
+{
+  "status": "success",
+  "meta": {
+    "version": "v1",
+    "requestId": "7fef565ead594c8abfb6110474788182",
+    "generatedAt": "2026-05-31T21:47:39.256029Z"
+  },
+  "data": {
+    "id": "a8dd9f7c1e1344c5b03b9e5bf82747aa",
+    "leadId": "a8dd9f7c1e1344c5b03b9e5bf82747aa",
+    "generationJobId": "57f638d091df4fefb4b6500ec4ae9f2d",
+    "briefId": "0d9ac9855d9d418684975fd9ae16626e",
+    "briefVersion": 2,
+    "version": 1,
+    "themeId": "signal-panel",
+    "themeKey": "signal-panel",
+    "themeName": "Signal Panel",
+    "themeRationale": "Selected Signal Panel because the source cues lean toward neutral surface with one high-contrast accent and the extracted tone matches a balanced layout.",
+    "paletteMode": "light",
+    "paletteRationale": "No strong chromatic cues were available, so the preview stays in a light palette with explicit inference labels.",
+    "brandTokens": {
+      "paletteMode": "light",
+      "primaryColor": {
+        "value": "#475569",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Derived from the selected palette and theme.",
+          "confidence": 36,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "secondaryColor": {
+        "value": "#64748b",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Derived from the selected palette and theme.",
+          "confidence": 34,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "accentColor": {
+        "value": "#334155",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Derived from the palette mode and theme direction.",
+          "confidence": 34,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "backgroundColor": {
+        "value": "#f8fafc",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Chosen to fit the selected palette mode.",
+          "confidence": 68,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "textColor": {
+        "value": "#0f172a",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Chosen to keep contrast readable in the selected palette mode.",
+          "confidence": 68,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "borderColor": {
+        "value": "#dbe4f0",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Chosen to keep the section framing legible without filling the page with decorative chrome.",
+          "confidence": 65,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "logoAsset": {
+        "value": "Logo candidate",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Captured from the public logo asset.",
+          "confidence": 74,
+          "references": [
+            {
+              "kind": "asset",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Logo candidate",
+              "excerpt": "https://cdn.sanity.io/images/lxxosb55/production/1ae36a29d17971f25a329818aafd81b472392e52-1021x756.svg",
+              "confidence": 74,
+              "evidenceType": null,
+              "assetType": "logo"
+            }
+          ]
+        }
+      },
+      "typography": {
+        "value": "geometric-sans + neutral-sans",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Derived from the selected theme pairing because the source typography cue was sparse.",
+          "confidence": 28,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "imageStyle": {
+        "value": "Image asset reference",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Captured from the public image cue.",
+          "confidence": 60,
+          "references": [
+            {
+              "kind": "asset",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Image asset reference",
+              "excerpt": "https://cdn.sanity.io/images/lxxosb55/production/943e8bbf8efabc34764ce0321304cefdf3e2b0e7-1200x675.webp",
+              "confidence": 60,
+              "evidenceType": null,
+              "assetType": "image"
+            }
+          ]
+        }
+      },
+      "visualTone": {
+        "value": "Tone cues suggest Logo candidate, Image asset reference.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Derived from the approved brief tone profile.",
+          "confidence": 81,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "motionIntensity": {
+        "value": "moderate",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Selected from the theme motion preset.",
+          "confidence": 70,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "layoutDensity": {
+        "value": "balanced",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Selected from the theme spacing style.",
+          "confidence": 70,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      }
+    },
+    "heroVariant": {
+      "headline": "Champion Well Drilling",
+      "subheadline": "Primary audience signals point to Audience not explicit in public metadata; review manually..",
+      "supportingLine": "Champion Well Drilling",
+      "primaryCta": "Contact us",
+      "secondaryCta": "Learn more",
+      "layout": "stacked-panel",
+      "visualTreatment": "neutral surface with one high-contrast accent",
+      "evidence": {
+        "sourceKind": "source_backed",
+        "inferenceLabel": "Derived from approved content and site signals",
+        "confidence": 84,
+        "references": [
+          {
+            "kind": "page",
+            "sourceUrl": "https://www.championwelldrilling.com/",
+            "label": "Page title",
+            "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+            "confidence": 86,
+            "evidenceType": "title",
+            "assetType": null
+          },
+          {
+            "kind": "page",
+            "sourceUrl": "https://www.championwelldrilling.com/",
+            "label": "Meta description",
+            "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+            "confidence": 80,
+            "evidenceType": "meta",
+            "assetType": null
+          },
+          {
+            "kind": "page",
+            "sourceUrl": "https://www.championwelldrilling.com/",
+            "label": "Primary heading",
+            "excerpt": "About Champion",
+            "confidence": 76,
+            "evidenceType": "heading",
+            "assetType": null
+          }
+        ]
+      }
+    },
+    "sectionStack": [
+      {
+        "kind": "header",
+        "title": "Header",
+        "eyebrow": null,
+        "headline": "Header",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "proof",
+        "title": "Proof",
+        "eyebrow": null,
+        "headline": "Proof",
+        "body": "Reviews",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 77,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "services",
+        "title": "Services",
+        "eyebrow": null,
+        "headline": "Services",
+        "body": "Our Service Areas",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 71,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "about",
+        "title": "About",
+        "eyebrow": null,
+        "headline": "About",
+        "body": "Are you tired of worrying about the safety and quality of your water?",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 71,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "footer",
+        "title": "Footer",
+        "eyebrow": null,
+        "headline": "Footer",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 47,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "services",
+        "title": "Services",
+        "eyebrow": null,
+        "headline": "Services",
+        "body": "About Champion",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "header",
+        "title": "Header",
+        "eyebrow": null,
+        "headline": "Header",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "unknown",
+        "title": "Unknown",
+        "eyebrow": null,
+        "headline": "Unknown",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 52,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "about",
+        "title": "About",
+        "eyebrow": null,
+        "headline": "About",
+        "body": "Are you tired of worrying about the safety and quality of your water?",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 71,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "about",
+        "title": "About",
+        "eyebrow": null,
+        "headline": "About",
+        "body": "Our Misson",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "footer",
+        "title": "Footer",
+        "eyebrow": null,
+        "headline": "Footer",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 47,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "header",
+        "title": "Header",
+        "eyebrow": null,
+        "headline": "Header",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "services",
+        "title": "Services",
+        "eyebrow": null,
+        "headline": "Services",
+        "body": "Iron Water Solutions",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 87,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "services",
+        "title": "Services",
+        "eyebrow": null,
+        "headline": "Services",
+        "body": "Three Main Types of Iron Found in Water",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "contact",
+        "title": "Contact",
+        "eyebrow": null,
+        "headline": "Contact",
+        "body": "Contact Champion Well Drilling Today",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 78,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "contact",
+        "title": "Contact",
+        "eyebrow": null,
+        "headline": "Contact",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 63,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "footer",
+        "title": "Footer",
+        "eyebrow": null,
+        "headline": "Footer",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 47,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "header",
+        "title": "Header",
+        "eyebrow": null,
+        "headline": "Header",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "unknown",
+        "title": "Unknown",
+        "eyebrow": null,
+        "headline": "Unknown",
+        "body": "Pumps & Tanks",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 84,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "contact",
+        "title": "Contact",
+        "eyebrow": null,
+        "headline": "Contact",
+        "body": "High-Quality Pump Systems",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "contact",
+        "title": "Contact",
+        "eyebrow": null,
+        "headline": "Contact",
+        "body": "Contact Us Today",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 76,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "contact",
+        "title": "Contact",
+        "eyebrow": null,
+        "headline": "Contact",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 63,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "footer",
+        "title": "Footer",
+        "eyebrow": null,
+        "headline": "Footer",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 47,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "header",
+        "title": "Header",
+        "eyebrow": null,
+        "headline": "Header",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "services",
+        "title": "Services",
+        "eyebrow": null,
+        "headline": "Services",
+        "body": "Exceptional Service & Maintenance Solutions",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 78,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "services",
+        "title": "Services",
+        "eyebrow": null,
+        "headline": "Services",
+        "body": "24-Hour Emergency Service",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "unknown",
+        "title": "Unknown",
+        "eyebrow": null,
+        "headline": "Unknown",
+        "body": "Let\u2019s Get Started",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 77,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "contact",
+        "title": "Contact",
+        "eyebrow": null,
+        "headline": "Contact",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 63,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "footer",
+        "title": "Footer",
+        "eyebrow": null,
+        "headline": "Footer",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 47,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "header",
+        "title": "Header",
+        "eyebrow": null,
+        "headline": "Header",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "services",
+        "title": "Services",
+        "eyebrow": null,
+        "headline": "Services",
+        "body": "Your Water Treatment Experts",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 80,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "services",
+        "title": "Services",
+        "eyebrow": null,
+        "headline": "Services",
+        "body": "Customized Solutions for Optimal Performance",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "unknown",
+        "title": "Unknown",
+        "eyebrow": null,
+        "headline": "Unknown",
+        "body": "Customized Water Testing and System Design",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 77,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "contact",
+        "title": "Contact",
+        "eyebrow": null,
+        "headline": "Contact",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 63,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "footer",
+        "title": "Footer",
+        "eyebrow": null,
+        "headline": "Footer",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 47,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "header",
+        "title": "Header",
+        "eyebrow": null,
+        "headline": "Header",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "services",
+        "title": "Services",
+        "eyebrow": null,
+        "headline": "Services",
+        "body": "The Ultimate Solution for Your Water Well Drilling Needs",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 87,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "unknown",
+        "title": "Unknown",
+        "eyebrow": null,
+        "headline": "Unknown",
+        "body": "Drilling Depths up to 400 Feet",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "unknown",
+        "title": "Unknown",
+        "eyebrow": null,
+        "headline": "Unknown",
+        "body": "Let\u2019s Get Started",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 77,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "contact",
+        "title": "Contact",
+        "eyebrow": null,
+        "headline": "Contact",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 63,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "footer",
+        "title": "Footer",
+        "eyebrow": null,
+        "headline": "Footer",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 47,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "header",
+        "title": "Header",
+        "eyebrow": null,
+        "headline": "Header",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "contact",
+        "title": "Contact",
+        "eyebrow": null,
+        "headline": "Contact",
+        "body": "Contact us",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "footer",
+        "title": "Footer",
+        "eyebrow": null,
+        "headline": "Footer",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 47,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "header",
+        "title": "Header",
+        "eyebrow": null,
+        "headline": "Header",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "unknown",
+        "title": "Unknown",
+        "eyebrow": null,
+        "headline": "Unknown",
+        "body": "TIPS & TRICKS",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 77,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "footer",
+        "title": "Footer",
+        "eyebrow": null,
+        "headline": "Footer",
+        "body": "",
+        "items": [],
+        "ctaLabel": null,
+        "componentId": "SectionStandard",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 47,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "proof",
+        "title": "Highlights",
+        "eyebrow": null,
+        "headline": "Highlights",
+        "body": "A few highlights worth noting.",
+        "items": [
+          "Page title: Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+          "Meta description: Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+          "Primary heading: About Champion"
+        ],
+        "ctaLabel": null,
+        "componentId": null,
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Highlights are drawn from approved source content.",
+          "confidence": 81,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "kind": "cta",
+        "title": "Get started",
+        "eyebrow": null,
+        "headline": "Lead with Contact Us and keep the next step simple.",
+        "body": "See how it works and decide if it fits your team.",
+        "items": [],
+        "ctaLabel": "Book",
+        "componentId": null,
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "CTA derived from approved conversion angle where available.",
+          "confidence": 83,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      }
+    ],
+    "ctaStrategy": {
+      "primary": {
+        "label": "Book",
+        "href": "#contact",
+        "rationale": "Lead with Contact Us and keep the next step simple.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Lead with Contact Us and keep the next step simple.",
+          "confidence": 83,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "secondary": {
+        "label": "Learn more",
+        "href": "#sections",
+        "rationale": "Offer a lower-friction path for exploration.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Offer a lower-friction path for exploration.",
+          "confidence": 73,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      "footer": {
+        "label": "Contact us",
+        "href": "#contact",
+        "rationale": "Provide a clear contact path for interested visitors.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Provide a clear contact path for interested visitors.",
+          "confidence": 58,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      }
+    },
+    "qualityScore": 95,
+    "readinessStatus": "ready_for_review",
+    "qaStatus": "warn",
+    "reviewRubric": [
+      {
+        "key": "placeholder_free",
+        "label": "Placeholder-free preview",
+        "status": "pass",
+        "notes": "No placeholder copy, fake metrics, or demo filler is present in the generated sections.",
+        "evidence": null
+      },
+      {
+        "key": "brand_traceability",
+        "label": "Brand traceability",
+        "status": "warn",
+        "notes": "Brand tokens are mostly inferred because the source cues were sparse.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Derived from the selected palette and theme.",
+          "confidence": 36,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "key": "palette_fit",
+        "label": "Palette mode fit",
+        "status": "pass",
+        "notes": "The preview uses the light palette because the source visual language supported it.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Chosen to fit the selected palette mode.",
+          "confidence": 68,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "key": "cta_clarity",
+        "label": "CTA clarity",
+        "status": "pass",
+        "notes": "A primary CTA and a lower-friction secondary CTA are visible in the preview.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Inferred from CTA patterns and service language.",
+          "confidence": 83,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "key": "screenshot_ready",
+        "label": "Screenshot QA ready",
+        "status": "pass",
+        "notes": "The preview can be reviewed in-browser and captured for visual QA; low-confidence sources should be inspected before publish.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Inferred from CTA patterns and service language.",
+          "confidence": 83,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      }
+    ],
+    "comparisonEntries": [
+      {
+        "label": "Hero direction",
+        "sourceValue": "Use the strongest public positioning statement as the hero anchor: Homepage title: Champion Well Drilling | Expert Well Drilling & Water Services in Michiana Meta description: Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+        "generatedValue": "Champion Well Drilling",
+        "status": "inferred",
+        "reason": "Hero copy is derived from the approved brief and the extracted positioning cues.",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Derived from approved content and site signals",
+          "confidence": 84,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "label": "Conversion angle",
+        "sourceValue": "Lead with Contact Us and keep the next step simple.",
+        "generatedValue": "Book",
+        "status": "matched",
+        "reason": "The CTA strategy is a source-safe translation of the approved conversion angle.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Lead with Contact Us and keep the next step simple.",
+          "confidence": 83,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "label": "Theme selection",
+        "sourceValue": "Tone cues suggest Logo candidate, Image asset reference.",
+        "generatedValue": "Signal Panel",
+        "status": "inferred",
+        "reason": "Balanced layout with distinct content blocks, a confident CTA bar, and a practical conversion rhythm.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Derived from the approved brief tone profile.",
+          "confidence": 81,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "label": "Palette mode",
+        "sourceValue": "Approved source citations and brand cues",
+        "generatedValue": "light",
+        "status": "inferred",
+        "reason": "Palette mode follows the extracted visual language and explicit source gaps.",
+        "evidence": {
+          "sourceKind": "inferred",
+          "inferenceLabel": "Chosen to fit the selected palette mode.",
+          "confidence": 68,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            }
+          ]
+        }
+      },
+      {
+        "label": "Section stack",
+        "sourceValue": "Hero, Proof and Trust, Services or Offerings, About / Point of View",
+        "generatedValue": "Header, Proof, Services, About",
+        "status": "inferred",
+        "reason": "The section stack mirrors the approved section recommendations while staying source-safe.",
+        "evidence": {
+          "sourceKind": "source_backed",
+          "inferenceLabel": "Generated from Visual Critique redesign plan.",
+          "confidence": 92,
+          "references": [
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Page title",
+              "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+              "confidence": 86,
+              "evidenceType": "title",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Meta description",
+              "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+              "confidence": 80,
+              "evidenceType": "meta",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "Primary heading",
+              "excerpt": "About Champion",
+              "confidence": 76,
+              "evidenceType": "heading",
+              "assetType": null
+            },
+            {
+              "kind": "page",
+              "sourceUrl": "https://www.championwelldrilling.com/",
+              "label": "CTA text",
+              "excerpt": "Contact Us",
+              "confidence": 78,
+              "evidenceType": "cta",
+              "assetType": null
+            }
+          ]
+        }
+      }
+    ],
+    "sourceTraceability": [
+      {
+        "kind": "page",
+        "sourceUrl": "https://www.championwelldrilling.com/",
+        "label": "Page title",
+        "excerpt": "Champion Well Drilling | Expert Well Drilling & Water Services in Michiana",
+        "confidence": 86,
+        "evidenceType": "title",
+        "assetType": null
+      },
+      {
+        "kind": "page",
+        "sourceUrl": "https://www.championwelldrilling.com/",
+        "label": "Meta description",
+        "excerpt": "Discover top-tier water & well services with Champion Well Drilling. Serving Michiana for 30+ years with free estimates and 24-hour emergency service.",
+        "confidence": 80,
+        "evidenceType": "meta",
+        "assetType": null
+      },
+      {
+        "kind": "page",
+        "sourceUrl": "https://www.championwelldrilling.com/",
+        "label": "Primary heading",
+        "excerpt": "About Champion",
+        "confidence": 76,
+        "evidenceType": "heading",
+        "assetType": null
+      },
+      {
+        "kind": "page",
+        "sourceUrl": "https://www.championwelldrilling.com/",
+        "label": "CTA text",
+        "excerpt": "Contact Us",
+        "confidence": 78,
+        "evidenceType": "cta",
+        "assetType": null
+      },
+      {
+        "kind": "page",
+        "sourceUrl": "https://www.championwelldrilling.com/",
+        "label": "Section 1",
+        "excerpt": "Services Well Drilling Top-notch well drilling services for commercial, residential, and agricultural purposes. Learn More Services & Maintenance 24-hour emergency service, priority service for farms and animals, and a q",
+        "confidence": 92,
+        "evidenceType": "section",
+        "assetType": null
+      },
+      {
+        "kind": "page",
+        "sourceUrl": "https://www.championwelldrilling.com/",
+        "label": "Reviews",
+        "excerpt": "Reviews Very informative and professional excellent service and very fast came the same day i called and fixed my problem the next day great job guys All the guys were extremely friendly and knowledgeable and were most w",
+        "confidence": 77,
+        "evidenceType": "section",
+        "assetType": null
+      },
+      {
+        "kind": "page",
+        "sourceUrl": "https://www.championwelldrilling.com/",
+        "label": "Our Service Areas",
+        "excerpt": "Our Service Areas Proudly Serving the Michiana Area Champion Well Drilling, Inc. is dedicated to providing unparalleled water well services to the Michiana and Northern Indiana areas. Our mission is to deliver reliable a",
+        "confidence": 71,
+        "evidenceType": "section",
+        "assetType": null
+      },
+      {
+        "kind": "page",
+        "sourceUrl": "https://www.championwelldrilling.com/",
+        "label": "Are you tired of worrying about the safety and quality of your water?",
+        "excerpt": "Are you tired of worrying about the safety and quality of your water? Let Champion Well Drilling be your solution. Don't settle for anything less than Champion; contact us now! Let's get started",
+        "confidence": 71,
+        "evidenceType": "section",
+        "assetType": null
+      }
+    ],
+    "missingRequirements": [
+      "sitemap_unavailable"
+    ],
+    "sourceAttribution": {
+      "leadId": "a8dd9f7c1e1344c5b03b9e5bf82747aa",
+      "sourceType": "manual",
+      "sourceRef": null,
+      "companyName": "LenQuant",
+      "websiteUrl": "https://championwelldrilling.com",
+      "normalizedDomain": "championwelldrilling.com",
+      "extractionId": "314090e8dd1b47198c98268a30bf38d4",
+      "extractionVersion": 1,
+      "briefId": "0d9ac9855d9d418684975fd9ae16626e",
+      "briefVersion": 2,
+      "themeKey": "signal-panel",
+      "paletteMode": "light"
+    },
+    "browserReviewState": "not_reviewed",
+    "publishApprovalState": "pending",
+    "screenshotRefs": [],
+    "latestReviewId": null,
+    "handoffRecordId": null,
+    "diversityNotes": [
+      "Theme and palette are derived from the source cues and remain traceable to extracted evidence."
+    ],
+    "diversityScore": 50,
+    "layoutHash": "a6d0d51000275ca78c1c3b1cab3b5e2a13323ce15cf5f4a6fc72797b6b195987",
+    "previewSlug": "a8dd9f7c1e1344c5b03b9e5bf82747aa",
+    "previewUrl": "/sites/a8dd9f7c1e1344c5b03b9e5bf82747aa",
+    "overrideCount": 0,
+    "overrides": [],
+    "overrideDiffs": [],
+    "exportMetadata": null,
+    "refinementPromptId": null,
+    "promptHistory": [],
+    "isManuallyRefined": false,
+    "improvementRecommendations": null,
+    "createdAt": "2026-05-31T21:43:18.053000",
+    "updatedAt": "2026-05-31T21:43:18.053000",
+    "publishedAt": null
+  },
+  "error": null
+}

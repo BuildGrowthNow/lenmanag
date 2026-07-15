@@ -191,3 +191,96 @@ Later versions can add:
 - design benchmark scoring against premium reference sites
 - batch-level diversity scoring
 - automatic image style synthesis
+
+## Implementation status
+
+**Checklist**
+
+- [x] Theme + palette selection stored as structured data on every `GeneratedSite`, with overrides persisting across regenerations (`app/core/sites.py`, `apps/web/src/app/nsa/sites/[id]/page.tsx`).
+- [x] Theme diversity enforcement: generator now enforces minimum-spread rules with scoring + guardrails.
+  - **Backend changes completed:**
+    - File: `apps/backend/app/core/sites.py`
+    - Added `_check_theme_diversity_constraint(current_batch_sites: list[GeneratedSite], proposed_theme_key: str, proposed_palette_mode: PaletteMode) -> tuple[bool, str]` that:
+      - Counts theme distribution in the current batch (last 50 sites)
+      - Enforces minimum spread: no single theme should exceed 40% of the batch
+      - Enforces palette diversity: no single palette mode should exceed 60% of the batch
+      - Returns (allowed, reason) tuple
+    - Modified `site_repository.queue_generation_job()` to call this constraint checker before generation
+    - If constraint fails, raises a ValueError with the reason message that the API surface can surface to the operator
+    - Added `diversityScore: int` (0-100) field to `GeneratedSite` and `GeneratedSiteVersion` schemas in `apps/backend/app/schemas/site.py`
+    - Updated `_quality_score()` function in `sites.py` to include diversityScore in the overall quality calculation
+    - Added `_compute_diversity_score()` function to calculate diversity based on theme/palette rarity in batch
+  - **Frontend changes completed:**
+    - File: `apps/web/src/app/nsa/sites/[id]/page.tsx`
+    - Added "Diversity Score" card section that displays the diversityScore with a progress bar
+    - Shows diversity notes from `site.diversityNotes` array
+    - Displays warning if diversityScore < 60 suggesting the operator consider theme variation
+    - File: `apps/web/src/lib/types.ts`
+    - Updated `GeneratedSite` and `GeneratedSiteVersion` types to include `diversityScore` and `diversityNotes` fields
+  - **What already exists:**
+    - `list_review_queue()` in `sites.py` already computes `themeDiversity` and `paletteDiversity` counts
+    - `SiteReviewQueueResponse` schema includes `themeDiversity` and `paletteDiversity` fields
+    - Theme library is defined in `THEME_LIBRARY` constant with 4 themes
+
+- [x] Palette and motion variation metrics surfaced to operators with per-batch reporting.
+  - **Backend changes completed:**
+    - File: `apps/backend/app/core/sites.py`
+    - Extended `list_review_queue()` to include motion and spacing diversity metrics:
+      - Added `motionDiversity: dict[str, int]` field to `SiteReviewQueueResponse` schema (counts sites by motionPreset from theme library)
+      - Added `spacingDiversity: dict[str, int]` field (counts sites by spacingStyle from theme library)
+    - Added new endpoint `GET /api/sites/diversity-report` that returns:
+      - Batch-level metrics for the last 100 sites
+      - Theme distribution with percentages
+      - Palette distribution with percentages
+      - Motion distribution with percentages
+      - Spacing distribution with percentages
+      - Duplicate detection count (sites with identical theme+palette combinations)
+    - File: `apps/backend/app/api/sites.py`
+    - Added the new diversity report endpoint handler
+    - File: `apps/backend/app/schemas/site.py`
+    - Updated `SiteReviewQueueResponse` schema to include `motionDiversity` and `spacingDiversity` fields
+  - **Frontend changes completed:**
+    - File: `apps/web/src/components/site-review-queue.tsx`
+    - Updated "Design diversity coverage" card to display motion and spacing metrics alongside themes and palettes
+    - File: `apps/web/src/lib/types.ts`
+    - Updated `SiteReviewQueueResponse` type to include `motionDiversity` and `spacingDiversity` fields
+    - File: `apps/web/src/lib/api/sites.ts`
+    - Added `getDiversityReport()` API client function
+  - **What already exists:**
+    - `THEME_LIBRARY` in `sites.py` includes motionPreset and spacingStyle for each theme
+    - `GeneratedSite` schema stores themeKey and paletteMode
+    - Review queue already has themeDiversity and paletteDiversity counts
+
+- [x] Operator workspace exposes hero variant, section stack, brand tokens, and rationale so design decisions remain transparent (`apps/web/src/app/nsa/sites/[id]/page.tsx`).
+- [ ] Automated screenshot comparison + duplicate-layout detection (QA queue relies on manual review today).
+  - **Backend changes completed:**
+    - File: `apps/backend/app/core/screenshot_comparator.py` (new module)
+    - Created `ScreenshotComparator` class with methods:
+      - `compute_layout_hash(site: GeneratedSite) -> str` - hashes section stack, hero variant, and theme key for duplicate detection
+      - `detect_duplicate_layout(site_a: GeneratedSite, site_b: GeneratedSite) -> float` - returns similarity score (0-1)
+      - `compare_layout_screenshot(site_id: str, reference_url: str) -> dict[str, Any]` - placeholder for screenshot comparison (not yet implemented)
+    - File: `apps/backend/app/schemas/site.py`
+    - Added `layoutHash: str` field to `GeneratedSite` and `GeneratedSiteVersion` schemas for duplicate detection
+    - File: `apps/backend/app/core/sites.py`
+    - Integrated `ScreenshotComparator` into `SiteRepository` class
+    - Added layout hash computation during generation in `run_generation_job()`
+    - Stored `layoutHash` in both version and site documents
+  - **Frontend changes completed:**
+    - File: `apps/web/src/app/nsa/sites/[id]/page.tsx`
+    - Added "Screenshot Comparison" card showing:
+      - Layout hash for duplicate detection
+      - Latest screenshot metadata (if available)
+    - File: `apps/web/src/lib/types.ts`
+    - Updated `GeneratedSite` and `GeneratedSiteVersion` types to include `layoutHash` field
+    - Added missing fields to `GeneratedSite` type: `sourceAttribution`, `browserReviewState`, `publishApprovalState`, `screenshotRefs`, `latestReviewId`, `handoffRecordId`
+  - **What still needs to be done:**
+    - Add dependency on screenshot library (e.g., `playwright` or `selenium`) in `apps/backend/pyproject.toml`
+    - Implement actual screenshot capture automation in generation pipeline
+    - Implement visual diff algorithm for screenshot comparison
+    - Modify `list_review_queue()` to flag potential duplicates (similarity > 0.85)
+    - Add "Potential Duplicates" column or badge to review queue UI
+    - Add filter to show only duplicate-flagged sites
+  - **What already exists:**
+    - `SiteScreenshotMetadata` schema exists in `app/schemas/site.py` with fields for url, dimensions, contentHash
+    - `GeneratedSite` has `screenshotRefs: list[SiteScreenshotMetadata]` field
+    - Review queue has `screenshotCount` field

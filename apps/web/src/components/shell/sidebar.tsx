@@ -8,7 +8,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-full flex-col gap-6 border-r border-line bg-panel/80 p-5 backdrop-blur">
       <div className="space-y-2">
-        <Badge className="bg-white/6">Internal Operator Shell</Badge>
+        <Badge className="bg-white/6">Operator Workspace</Badge>
         <div>
           <div style={{ fontFamily: "var(--font-heading)" }} className="text-lg font-semibold text-text">
             LenQuant

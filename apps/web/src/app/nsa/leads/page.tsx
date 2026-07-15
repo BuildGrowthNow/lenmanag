@@ -14,7 +14,8 @@ import { LoadingState } from "@/components/state/loading-state";
 import { PageFrame } from "@/components/shell/page-frame";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { archiveLead, createLead, getJob, importLeads, listLeads } from "@/lib/api/leads";
+import { archiveLead, createLead, importLeads, listLeads } from "@/lib/api/leads";
+import { getJob } from "@/lib/api/jobs";
 import type { JobResponse, LeadImportResponse, LeadListItem, LeadListResponse, LeadStatus } from "@/lib/types";
 
 const PAGE_SIZE = 25;

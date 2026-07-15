@@ -15,7 +15,7 @@ const body = Manrope({
 
 export const metadata: Metadata = {
   title: "LenQuant Website Fabric",
-  description: "Internal operator shell for lead discovery and premium website fulfillment."
+  description: "Internal operator workspace for lead discovery and premium website fulfillment."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import asyncio
 
 from app.core.leads import lead_repository
+from app.core.mongo import get_database
 from app.core.sites import site_repository, THEME_LIBRARY
 from app.schemas.lead import LeadUpsertRequest
 from app.schemas.site import SiteOverrideCreateRequest
@@ -9,8 +10,8 @@ from app.schemas.site import SiteOverrideCreateRequest
 
 def test_operator_theme_override_applied():
     async def run_test():
-        # Create a lead
-        req = LeadUpsertRequest(companyName="Test Co", websiteUrl="https://example.com")
+        # Create a lead on a distinct domain to avoid cross-test collisions
+        req = LeadUpsertRequest(companyName="Test Co", websiteUrl="https://override.example.com")
         action = await lead_repository.create_lead(req)
         lead = action.lead
         site_id = lead.id
@@ -48,7 +49,8 @@ def test_operator_theme_override_applied():
             "createdAt": now,
             "updatedAt": now,
         }
-        lead_repository._extractions.setdefault(site_id, []).append(extraction_doc)
+        database = get_database()
+        await database["site_extractions"].insert_one(extraction_doc)
 
         # Create and approve a brief so generation is allowed
         brief = await lead_repository.create_brief(site_id)
@@ -77,5 +79,16 @@ def test_operator_theme_override_applied():
         # Overrides persisted and overrideCount updated
         assert site.overrideCount >= 1
         assert any(o.path == "themeKey" and o.value == "signal-panel" for o in site.overrides)
+
+        # Disable override and ensure it is removed from subsequent generations
+        disabled = await site_repository.disable_override(site_id, created.id)
+        assert disabled is not None
+        assert disabled.status == "disabled"
+
+        site_after_disable = await site_repository.generate_site(site_id)
+        assert site_after_disable is not None
+        assert site_after_disable.overrideCount == 0
+        assert all(o.status == "active" for o in site_after_disable.overrides)
+        assert all(o.path != "themeKey" for o in site_after_disable.overrides)
 
     asyncio.run(run_test())

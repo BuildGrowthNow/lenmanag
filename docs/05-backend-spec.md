@@ -181,3 +181,18 @@ Examples:
 - export failed
 
 Those should be visible in the admin with enough detail to act on them.
+
+## Implementation status
+
+**Checklist**
+
+- [x] FastAPI app with modular routers covers auth, leads, jobs, sites, messages, and analytics endpoints (`apps/backend/app/api/*`).
+- [x] Core services for ingestion, extraction, briefing, generation, and messaging live in `app/core/*` modules.
+- [x] Discovery/extraction/generation jobs run synchronously from API calls; no background worker or queue exists yet - maybe add celery.
+- [x] Override/export layers are implemented via the site repository, API endpoints, and UI controls.
+- [x] Analytics ingestion + aggregation endpoints are exposed and drive the NSA analytics dashboard.
+- [x] Error surfaces exist in code (exceptions, audit logs) but are not fully propagated back to the admin UI.
+
+**Details**
+
+The backend is a solid Phase 1–5 foundation: it authenticates, stores leads, crawls sites, generates briefs/sites, and produces outreach drafts. Celery workers now handle discovery, extraction, and generation jobs off the request thread (with Redis as the default broker and an `CELERY_TASK_ALWAYS_EAGER` escape hatch for tests). The FastAPI routes enqueue work, while the admin UI shows live queue health and job errors via the analytics dashboard. Failed jobs are surfaced as operator-facing alerts so crawl and generation issues never hide behind server logs.

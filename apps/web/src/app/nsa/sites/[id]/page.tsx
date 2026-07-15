@@ -7,10 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SiteWorkspaceControls } from "@/components/site-workspace-controls";
+import { SiteExportControls } from "@/components/site-export-controls";
 import { ApplyThemeButton } from "@/components/apply-theme-button";
+import { OverrideDiffBadge } from "@/components/override-diff-badge";
+import { RefinementPromptInput } from "@/components/refinement-prompt-input";
+import { PromptHistory } from "@/components/prompt-history";
+import { ExportSyncModal } from "@/components/export-sync-modal";
 import { getLead, getLeadBrief, getLeadExtraction } from "@/lib/api/leads";
-import { getSite, getSiteCompare, getSiteVersions, getThemes } from "@/lib/api/sites";
-import type { GeneratedSiteVersion, SiteQualityCheck, ThemeVariant } from "@/lib/types";
+import { getSite, getSiteCompare, getSiteVersions, getThemes, getSiteExportHistory, disableSiteOverride } from "@/lib/api/sites";
+import type { GeneratedSiteVersion, SiteQualityCheck, ThemeVariant, OverrideDiff, SiteOverrideRecord } from "@/lib/types";
 
 function qualityLabel(score: number) {
   if (score >= 85) return "Excellent";
@@ -63,6 +68,10 @@ function summarizeChecks(checks: SiteQualityCheck[]) {
   return { failures, warnings, passes };
 }
 
+function findDiffByPath(diffs: OverrideDiff[], path: string): OverrideDiff | undefined {
+  return diffs.find((diff) => diff.path === path);
+}
+
 function sectionPreview(section: { title: string; body: string; items: string[]; ctaLabel: string | null; evidence: { inferenceLabel: string; sourceKind: string } }) {
   return (
     <div className="rounded-2xl border border-line bg-panel-2 p-4">
@@ -98,6 +107,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
     getSiteVersions(id),
     getThemes()
   ]);
+  const exportHistory = site ? await getSiteExportHistory(id) : [];
 
   if (!lead) {
     return (
@@ -192,7 +202,12 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
               <div className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-2xl border border-line bg-panel-2 p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-muted">Hero variant</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs uppercase tracking-[0.18em] text-muted">Hero variant</div>
+                      {findDiffByPath(site.overrideDiffs, "hero.headline") && (
+                        <OverrideDiffBadge diff={findDiffByPath(site.overrideDiffs, "hero.headline")!} />
+                      )}
+                    </div>
                     <div className="mt-2 text-lg font-semibold text-text">{site.heroVariant.headline}</div>
                     <div className="mt-2 text-sm text-muted">{site.heroVariant.subheadline}</div>
                     <div className="mt-2 text-sm text-text">{site.heroVariant.supportingLine}</div>
@@ -203,7 +218,12 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                     </div>
                   </div>
                   <div className="rounded-2xl border border-line bg-panel-2 p-4">
-                    <div className="text-xs uppercase tracking-[0.18em] text-muted">CTA strategy</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs uppercase tracking-[0.18em] text-muted">CTA strategy</div>
+                      {findDiffByPath(site.overrideDiffs, "cta.primary.label") && (
+                        <OverrideDiffBadge diff={findDiffByPath(site.overrideDiffs, "cta.primary.label")!} />
+                      )}
+                    </div>
                     <div className="mt-2 space-y-3 text-sm text-text">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-muted">Primary</div>
@@ -220,7 +240,14 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                 </div>
 
                 <div className="rounded-2xl border border-line bg-panel-2 p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-muted">Section stack</div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted">Section stack</div>
+                    {site.overrideDiffs.some((d) => d.path.startsWith("sectionStack")) && (
+                      <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-100">
+                        {site.overrideDiffs.filter((d) => d.path.startsWith("sectionStack")).length} overrides
+                      </Badge>
+                    )}
+                  </div>
                   <div className="mt-3 grid gap-3">
                     {site.sectionStack.map((section) => sectionPreview(section))}
                   </div>
@@ -296,6 +323,183 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
               </div>
             </CardContent>
           </Card>
+
+          {site ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Diversity Score</CardTitle>
+                <CardDescription>Uniqueness of theme and palette in the current batch</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  <div className="text-3xl font-semibold text-text">{site.diversityScore ?? 50}</div>
+                  <div className="flex-1">
+                    <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full bg-accent transition-all"
+                        style={{ width: `${site.diversityScore ?? 50}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                {(site.diversityScore ?? 50) < 60 && (
+                  <div className="mt-2 text-sm text-amber-400">
+                    Consider theme variation to improve diversity
+                  </div>
+                )}
+                {site.diversityNotes?.map((note: string) => (
+                  <div key={note} className="mt-1 text-xs text-muted">{note}</div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {site ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5" />
+                  Visual QA Analysis
+                </CardTitle>
+                <CardDescription>Screenshot-based visual quality evaluation and readiness assessment</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted">Quality Score</div>
+                    <div className="mt-2 text-3xl font-semibold text-text">{site.qualityScore ?? "—"}/100</div>
+                    <div className="mt-2 h-2 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full bg-accent transition-all"
+                        style={{ width: `${Math.min(site.qualityScore ?? 0, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted">QA Status</div>
+                    <div className="mt-2">
+                      {site.qaStatus ? (
+                        <Badge className={qaBadgeClass(site.qaStatus)} style={{ fontSize: "0.875rem", padding: "0.5rem 0.75rem" }}>
+                          {site.qaStatus === "pass" ? "✓ Passed" : site.qaStatus === "warn" ? "⚠ Warning" : "✗ Failed"}
+                        </Badge>
+                      ) : (
+                        <div className="text-sm text-muted">No QA analysis</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted">Readiness</div>
+                    <div className="mt-2">
+                      {site.readinessStatus ? (
+                        <Badge className={readinessBadgeClass(site.readinessStatus)} style={{ fontSize: "0.875rem", padding: "0.5rem 0.75rem" }}>
+                          {site.readinessStatus.replace(/_/g, " ")}
+                        </Badge>
+                      ) : (
+                        <div className="text-sm text-muted">Pending</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {site.screenshotRefs && site.screenshotRefs.length > 0 ? (
+                  <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted mb-3">Screenshots</div>
+                    <div className="space-y-3">
+                      {site.screenshotRefs.map((ref, idx) => (
+                        <div key={idx} className="rounded-xl border border-line bg-panel p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-text">{ref.label}</span>
+                            {ref.capturedAt && (
+                              <span className="text-xs text-muted">{formatDateTime(ref.capturedAt)}</span>
+                            )}
+                          </div>
+                          {ref.url && (
+                            <a href={ref.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline break-all">
+                              View screenshot ↗
+                            </a>
+                          )}
+                          {ref.notes && (
+                            <div className="mt-2 text-xs text-muted italic">{ref.notes}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {site.improvementRecommendations ? (
+                  <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs uppercase tracking-[0.18em] text-muted">Auto-improvement brief</div>
+                      {site.improvementRecommendations.estimatedNewScore != null && (
+                        <span className="text-xs text-muted">
+                          Target score: {site.improvementRecommendations.estimatedNewScore}/100
+                        </span>
+                      )}
+                    </div>
+                    {site.improvementRecommendations.overallApproach && (
+                      <p className="text-sm text-text mb-2">
+                        {site.improvementRecommendations.overallApproach}
+                      </p>
+                    )}
+                    {site.improvementRecommendations.sectionImprovements &&
+                      site.improvementRecommendations.sectionImprovements.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          {site.improvementRecommendations.sectionImprovements.slice(0, 4).map((imp) => (
+                            <div key={`${imp.sectionTitle}-${imp.priority}`} className="rounded-xl border border-line bg-panel px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium text-text">{imp.sectionTitle}</span>
+                                <span className="text-[0.65rem] uppercase tracking-[0.18em] text-muted">{imp.priority}</span>
+                              </div>
+                              {imp.recommendedChanges && imp.recommendedChanges.length > 0 && (
+                                <ul className="mt-1 list-disc pl-4 text-xs text-muted">
+                                  {imp.recommendedChanges.slice(0, 3).map((note, idx) => (
+                                    <li key={idx}>{note}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    {site.improvementRecommendations.implementationNotes && (
+                      <div className="mt-2 text-xs text-muted italic">
+                        {site.improvementRecommendations.implementationNotes}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {site ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Operator Refinement</CardTitle>
+                <CardDescription>Iteratively improve the preview with natural-language guidance.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <RefinementPromptInput siteId={id} />
+                <PromptHistory prompts={site.promptHistory || []} currentPromptId={site.refinementPromptId} />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {site ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Layout Analysis</CardTitle>
+                <CardDescription>Hash and duplicate detection metadata</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="text-xs uppercase tracking-[0.18em] text-muted">Layout Hash</div>
+                  <div className="font-mono text-sm text-text break-all">{site.layoutHash || "Not computed"}</div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>
@@ -428,15 +632,20 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
               {site ? (
                 <div className="grid gap-3 md:grid-cols-2">
                   {([
-                    ["Primary", site.brandTokens.primaryColor],
-                    ["Secondary", site.brandTokens.secondaryColor],
-                    ["Accent", site.brandTokens.accentColor],
-                    ["Typography", site.brandTokens.typography],
-                    ["Visual tone", site.brandTokens.visualTone],
-                    ["Layout density", site.brandTokens.layoutDensity]
-                  ] as Array<[string, { value: string; evidence: { inferenceLabel: string; sourceKind: string } }]>).map(([label, token]) => (
+                    ["Primary", site.brandTokens.primaryColor, "brandTokens.primaryColor"],
+                    ["Secondary", site.brandTokens.secondaryColor, "brandTokens.secondaryColor"],
+                    ["Accent", site.brandTokens.accentColor, "brandTokens.accentColor"],
+                    ["Typography", site.brandTokens.typography, "brandTokens.typography"],
+                    ["Visual tone", site.brandTokens.visualTone, "brandTokens.visualTone"],
+                    ["Layout density", site.brandTokens.layoutDensity, "brandTokens.layoutDensity"]
+                  ] as Array<[string, { value: string; evidence: { inferenceLabel: string; sourceKind: string } }, string]>).map(([label, token, path]) => (
                     <div key={label} className="rounded-2xl border border-line bg-panel-2 p-4">
-                      <div className="text-xs uppercase tracking-[0.18em] text-muted">{label}</div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs uppercase tracking-[0.18em] text-muted">{label}</div>
+                        {findDiffByPath(site.overrideDiffs, path) && (
+                          <OverrideDiffBadge diff={findDiffByPath(site.overrideDiffs, path)!} />
+                        )}
+                      </div>
                       <div className="mt-2 text-sm text-text">{token.value}</div>
                       <div className="mt-2 text-xs text-muted">{token.evidence.inferenceLabel}</div>
                     </div>
@@ -466,6 +675,62 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
               </div>
             </CardContent>
           </Card>
+
+          {site ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Export & handoff</CardTitle>
+                <CardDescription>Download a static bundle or record the GitHub handoff destination for this preview.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SiteExportControls siteId={id} previewSlug={site.previewSlug} exportMetadata={site.exportMetadata} history={exportHistory} />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {site && site.overrideDiffs.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Active Overrides</CardTitle>
+                <CardDescription>Structured overrides that will survive regeneration.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {site.overrideDiffs.map((diff) => (
+                  <div key={diff.overrideId} className="rounded-2xl border border-line bg-panel-2 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <OverrideDiffBadge diff={diff} onDisable={async (overrideId) => {
+                          await disableSiteOverride(id, overrideId);
+                          window.location.reload();
+                        }} />
+                        <Badge className="border-white/10 bg-white/5 text-text">{diff.scope}</Badge>
+                      </div>
+                    </div>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-muted">Path</div>
+                        <div className="mt-1 text-text">{diff.path}</div>
+                      </div>
+                      {diff.previousValue !== null && (
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-muted">Previous value</div>
+                          <div className="mt-1 rounded-xl border border-line/50 bg-panel px-3 py-2 text-muted">
+                            {String(diff.previousValue)}
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-muted">Current value</div>
+                        <div className="mt-1 rounded-xl border border-line/50 bg-panel px-3 py-2 text-text">
+                          {String(diff.currentValue)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>

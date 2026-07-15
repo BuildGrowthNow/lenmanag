@@ -38,3 +38,7 @@ class LoginResponse(BaseModel):
     status: Literal["active", "denied"]
     message: str
 
+
+class LogoutResponse(BaseModel):
+    status: Literal["logged_out"]
+

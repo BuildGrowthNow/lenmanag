@@ -160,3 +160,119 @@ An export should explicitly state one of these outcomes:
 - client-ready version
 
 That makes it obvious whether the exported code is meant for internal iteration or final delivery.
+
+## Implementation status
+
+**Checklist**
+
+- [x] Structured override APIs + UI for copy/layout/theme edits with regeneration hooks (`app/api/sites.py#create_override`, `apps/web/src/components/site-workspace-controls.tsx`).
+- [x] Version history + compare view so operators can diff regenerated previews before/after overrides (`/api/sites/{id}/versions`, `apps/web/src/app/nsa/sites/[id]/compare/page.tsx`).
+- [ ] Inline override diffing inside the site workspace (current compare view is separate; inline annotations still pending).
+  - **Backend changes needed:**
+    - File: `apps/backend/app/core/sites.py`
+    - Add a new method to `SiteRepository`:
+      - `get_override_diff(site_id: str) -> list[dict[str, Any]]` that returns:
+        - All active overrides for the site
+        - For each override, include: current value, previous value, path, scope, and the field's current value in the generated site
+        - A computed diff showing what changed (e.g., unified diff format or before/after comparison)
+    - Extend `GeneratedSite` schema in `apps/backend/app/schemas/site.py` to include:
+      - `activeOverrides: list[SiteOverrideRecord]` - pre-filtered to only active overrides
+      - `overrideDiffs: list[dict[str, Any]]` - computed diff for each override
+    - Modify `get_site()` to populate these fields by calling the new diff method
+  - **Frontend changes needed:**
+    - File: `apps/web/src/app/nsa/sites/[id]/page.tsx`
+    - Add inline diff annotations next to fields that have overrides:
+      - In the "Hero variant" card, show diff badge if `hero.headline` has an override
+      - In the "Section stack" card, show diff badge for sections with overrides
+      - In the "Brand tokens" card, show diff badge for tokens with overrides
+      - In the "CTA strategy" card, show diff badge for CTA overrides
+    - Create a new component `apps/web/src/components/override-diff-badge.tsx` that:
+      - Shows a small diff icon badge next to overridden fields
+      - On hover/click, shows a tooltip with before/after values
+      - Links to the override record for editing/disabling
+    - Add a new card section "Active Overrides" that lists all overrides with:
+      - Path, scope, and value
+      - Diff visualization (before → after)
+      - Disable button calling the disable override API
+    - File: `apps/web/src/components/site-workspace-controls.tsx`
+    - Add inline diff preview when creating an override:
+      - Show the current value of the field being overridden
+      - Show a live preview of what the new value will look like
+      - Display a diff highlighting the changes
+  - **What already exists:**
+    - `SiteOverrideRecord` schema stores previousValue and currentValue
+    - `GeneratedSite.overrides` field contains all override records
+    - `SiteWorkspaceControls` component has override creation form
+    - Separate compare view exists at `/nsa/sites/[id]/compare/page.tsx`
+  - **What needs to be done:**
+    - Add backend diff computation logic
+    - Extend site schema with override diff fields
+    - Build inline diff badge component
+    - Add inline diff annotations throughout the site workspace
+    - Add live diff preview in override creation form
+    - Create dedicated "Active Overrides" card
+
+- [x] Export + bundle recording with commit metadata for local/GitHub handoff (`app/api/sites.py#recordSiteExport`, `apps/web/src/components/site-export-card.tsx`).
+- [ ] Post-export sync guidance surfaced in UI (documentation describes workflow but UI lacks reminders to convert local edits back into structured overrides).
+  - **Backend changes needed:**
+    - File: `apps/backend/app/core/sites.py`
+    - Add a new field `exportSyncStatus: str` to `SiteExportMetadata` schema with values: `synced`, `out_of_sync`, `needs_review`
+    - Add a new field `lastSyncedAt: datetime | None` to track when local edits were last synced back
+    - Add a new method `mark_export_out_of_sync(site_id: str, export_id: str)` that:
+      - Sets the export's syncStatus to `out_of_sync`
+      - Records a timestamp
+      - Adds a note explaining why (e.g., "Local edits detected after export")
+    - Modify `add_export_metadata()` to initialize syncStatus as `synced`
+    - Add a new endpoint `POST /api/sites/{site_id}/export/{export_id}/sync` that:
+      - Accepts a payload of local edits (path, value pairs)
+      - Converts them into structured override records
+      - Updates the export's syncStatus back to `synced`
+      - Returns the created override records
+  - **Frontend changes needed:**
+    - File: `apps/web/src/components/site-export-controls.tsx`
+    - Add a "Sync Status" indicator showing:
+      - Green checkmark for `synced`
+      - Yellow warning for `out_of_sync`
+      - Blue info for `needs_review`
+    - When export status is `out_of_sync`, show a warning banner:
+      - "Local edits detected. Sync changes back to structured overrides to preserve them in regeneration."
+      - Button to "Sync Local Edits" that opens a modal
+    - Create a new component `apps/web/src/components/export-sync-modal.tsx` that:
+      - Shows a list of detected local edits (if we can detect them, or manual entry)
+      - Allows operator to select which edits to sync back
+      - Converts selected edits to override records via the sync API
+      - Shows confirmation after successful sync
+    - File: `apps/web/src/app/nsa/sites/[id]/page.tsx`
+    - In the "Export & handoff" card, show sync status prominently
+    - Add a reminder note: "After making local edits, sync them back to preserve them in future regenerations."
+    - Add a "Sync Edits" button when status is `out_of_sync`
+  - **What already exists:**
+    - `SiteExportMetadata` schema exists with exportType, repoUrl, branch, commitSha
+    - Export history is tracked in `site_exports` collection
+    - Export controls component exists with export form
+  - **What needs to be done:**
+    - Add sync status tracking to export metadata
+    - Create sync endpoint to convert local edits to overrides
+    - Build sync status indicator in export controls
+    - Create sync modal for converting local edits
+    - Add guidance reminders in the site workspace
+    - Implement detection of local edits (if feasible) or manual entry
+  - **Implementation status:**
+    - ✅ COMPLETED - Phase 11 implementation completed successfully
+    - ✅ Backend: Added `get_override_diff()` method to SiteRepository
+    - ✅ Backend: Extended GeneratedSite schema with overrideDiffs field
+    - ✅ Backend: Modified get_site() to populate override diffs
+    - ✅ Backend: Extended SiteExportMetadata schema with exportSyncStatus and lastSyncedAt fields
+    - ✅ Backend: Added mark_export_out_of_sync() method
+    - ✅ Backend: Added sync_export_edits() method
+    - ✅ Backend: Added /api/sites/{id}/export/{export_id}/sync endpoint
+    - ✅ Frontend: Added OverrideDiff type to types.ts
+    - ✅ Frontend: Created override-diff-badge.tsx component
+    - ✅ Frontend: Added inline diff annotations in site workspace page
+    - ✅ Frontend: Added Active Overrides card section
+    - ✅ Frontend: Added diff preview in site-workspace-controls
+    - ✅ Frontend: Updated SiteExportMetadata type with sync status fields
+    - ✅ Frontend: Added syncExportEdits() API function
+    - ✅ Frontend: Added sync status indicator in export controls
+    - ✅ Frontend: Created export-sync-modal.tsx component
+    - ✅ Frontend: Integrated sync guidance with "Sync Local Edits" button in export controls

@@ -17,11 +17,14 @@ AnalyticsEventType = Literal[
     "admin_action",
     "lead_created",
     "lead_imported",
+    "lead_merged",
     "site_generated",
     "site_republished",
     "site_override_applied",
+    "site_override_disabled",
     "site_export_created",
     "message_draft_edited",
+    "message_draft_created",
     "message_marked_ready",
     "site_opened",
     "brief_approved",
@@ -67,6 +70,15 @@ class AnalyticsEventCreateRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class AnalyticsRecentError(BaseModel):
+    id: str
+    leadId: Optional[str] = None
+    jobType: str
+    step: str
+    errorMessage: Optional[str] = None
+    updatedAt: datetime
+
+
 class AnalyticsSummary(BaseModel):
     totalEvents: int
     totalPageViews: int
@@ -83,6 +95,7 @@ class AnalyticsSummary(BaseModel):
     topSources: list[dict[str, Any]] = Field(default_factory=list)
     referrers: list[dict[str, Any]] = Field(default_factory=list)
     messageAttribution: list[dict[str, Any]] = Field(default_factory=list)
+    recentErrors: list[AnalyticsRecentError] = Field(default_factory=list)
     updatedAt: datetime
 
 

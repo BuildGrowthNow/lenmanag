@@ -4,20 +4,112 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from app.core.analytics import analytics_repository
 from app.core.leads import lead_repository
 from app.core.mongo import get_database
 from app.core.sites import site_repository
 from app.schemas.message import (
+    CtaVariant,
     MessageCopyResponse,
     MessageDraft,
     MessageDraftCreateRequest,
     MessageDraftListResponse,
     MessageDraftPatchRequest,
+    TonePreset,
 )
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def get_tone_presets() -> list[TonePreset]:
+    return [
+        TonePreset(
+            id="professional",
+            name="Professional",
+            description="Formal and business-focused tone",
+            example="I hope this message finds you well. I would like to discuss..."
+        ),
+        TonePreset(
+            id="casual",
+            name="Casual",
+            description="Relaxed and conversational tone",
+            example="Hey! Just wanted to reach out about..."
+        ),
+        TonePreset(
+            id="urgent",
+            name="Urgent",
+            description="Time-sensitive and action-oriented tone",
+            example="Quick update - time is of the essence for..."
+        ),
+        TonePreset(
+            id="friendly",
+            name="Friendly",
+            description="Warm and approachable tone",
+            example="Hi there! I'm excited to share with you..."
+        ),
+    ]
+
+
+def get_cta_variants() -> list[CtaVariant]:
+    return [
+        CtaVariant(
+            id="primary",
+            name="Primary CTA",
+            description="Main call-to-action for the message",
+            label="Review the preview",
+            position="bottom"
+        ),
+        CtaVariant(
+            id="secondary",
+            name="Secondary CTA",
+            description="Alternative call-to-action",
+            label="See source notes",
+            position="bottom"
+        ),
+        CtaVariant(
+            id="tertiary",
+            name="Tertiary CTA",
+            description="Additional call-to-action option",
+            label="Learn more",
+            position="inline"
+        ),
+    ]
+
+
+def get_channel_config(channel: str) -> dict[str, Any]:
+    configs: dict[str, dict[str, Any]] = {
+        "whatsapp": {
+            "characterLimit": 1000,
+            "formatting": "plain",
+            "supportsHtml": False,
+            "supportsLinks": True,
+            "description": "WhatsApp message format"
+        },
+        "linkedin": {
+            "characterLimit": 3000,
+            "formatting": "markdown",
+            "supportsHtml": False,
+            "supportsLinks": True,
+            "description": "LinkedIn message format"
+        },
+        "email": {
+            "characterLimit": 10000,
+            "formatting": "html",
+            "supportsHtml": True,
+            "supportsLinks": True,
+            "description": "Email format"
+        },
+        "generic": {
+            "characterLimit": 5000,
+            "formatting": "plain",
+            "supportsHtml": False,
+            "supportsLinks": True,
+            "description": "Generic message format"
+        }
+    }
+    return configs.get(channel, configs["generic"])
 
 
 class MessageRepository:
@@ -77,10 +169,15 @@ class MessageRepository:
             briefId=brief.id,
             siteId=site.id if site else None,
             channel=request.channel,
+            deliveryChannel=request.channel if request.channel in ["whatsapp", "linkedin", "email"] else "email",
             subject=subject,
             body=body,
             tone=tone,
+            tonePreset=None,
+            customTone=None,
             angle=angle,
+            ctaVariant=None,
+            ctaPosition=None,
             ctaPrimaryLabel=cta_primary.label if cta_primary else "Review the preview",
             ctaPrimaryHref=cta_primary.href if cta_primary else "#contact",
             ctaSecondaryLabel=cta_secondary.label if cta_secondary else "See source notes",
@@ -96,8 +193,15 @@ class MessageRepository:
         database = get_database()
         if database is None:
             self._memory[draft.id] = draft.model_dump()
-            return draft
-        await database["message_drafts"].insert_one(draft.model_dump())
+        else:
+            await database["message_drafts"].insert_one(draft.model_dump())
+        await analytics_repository.record_admin_event(
+            event_type="message_draft_created",
+            event_name=f"Message draft created ({draft.channel})",
+            lead_id=lead_id,
+            site_id=draft.siteId,
+            metadata={"channel": draft.channel},
+        )
         return draft
 
     async def list_drafts(self, lead_id: str) -> MessageDraftListResponse:
@@ -125,11 +229,21 @@ class MessageRepository:
             updated["body"] = request.body.strip()
         if request.tone is not None:
             updated["tone"] = request.tone.strip()
+        if request.tonePreset is not None:
+            updated["tonePreset"] = request.tonePreset
+        if request.customTone is not None:
+            updated["customTone"] = request.customTone.strip()
         if request.angle is not None:
             updated["angle"] = request.angle.strip()
+        if request.ctaVariant is not None:
+            updated["ctaVariant"] = request.ctaVariant
+        if request.ctaPosition is not None:
+            updated["ctaPosition"] = request.ctaPosition
+        if request.deliveryChannel is not None:
+            updated["deliveryChannel"] = request.deliveryChannel
         content_changed = any(
             value is not None
-            for value in (request.subject, request.body, request.tone, request.angle)
+            for value in (request.subject, request.body, request.tone, request.angle, request.tonePreset, request.customTone, request.ctaVariant, request.ctaPosition)
         )
         if request.status is not None:
             updated["status"] = request.status
@@ -141,10 +255,108 @@ class MessageRepository:
             self._memory[draft_id] = updated
         else:
             await database["message_drafts"].update_one({"id": draft_id}, {"$set": updated})
-        return MessageDraft.model_validate(updated)
+        snapshot = MessageDraft.model_validate(updated)
+        if request.subject is not None or request.body is not None or request.tone is not None or request.angle is not None or request.status is not None:
+            await analytics_repository.record_admin_event(
+                event_type="message_draft_edited",
+                event_name="Message draft updated",
+                lead_id=snapshot.leadId,
+                site_id=snapshot.siteId,
+                metadata={"channel": snapshot.channel, "status": snapshot.status},
+            )
+        return snapshot
 
     async def mark_ready(self, draft_id: str) -> MessageDraft | None:
-        return await self.update_draft(draft_id, MessageDraftPatchRequest(status="ready"))
+        is_valid, errors = await self.validate_ready_status(draft_id)
+        if not is_valid:
+            raise ValueError(f"Cannot mark as ready: {', '.join(errors)}")
+        draft = await self.update_draft(draft_id, MessageDraftPatchRequest(status="ready"))
+        if draft is not None:
+            await analytics_repository.record_admin_event(
+                event_type="message_marked_ready",
+                event_name="Message draft marked ready",
+                lead_id=draft.leadId,
+                site_id=draft.siteId,
+                metadata={"channel": draft.channel},
+            )
+        return draft
+
+    async def mark_sent(self, draft_id: str) -> MessageDraft | None:
+        database = get_database()
+        if database is None:
+            doc = self._memory.get(draft_id)
+        else:
+            doc = await database["message_drafts"].find_one({"id": draft_id})
+        if doc is None:
+            return None
+        draft = MessageDraft.model_validate(doc)
+        if draft.status != "ready":
+            raise ValueError("Can only mark sent messages as ready")
+        draft = await self.update_draft(draft_id, MessageDraftPatchRequest(status="sent"))
+        if draft is not None:
+            await analytics_repository.record_admin_event(
+                event_type="message_marked_sent",
+                event_name="Message draft marked sent",
+                lead_id=draft.leadId,
+                site_id=draft.siteId,
+                metadata={"channel": draft.channel},
+            )
+        return draft
+
+    async def reset_to_draft(self, draft_id: str) -> MessageDraft | None:
+        draft = await self.update_draft(draft_id, MessageDraftPatchRequest(status="draft"))
+        if draft is not None:
+            await analytics_repository.record_admin_event(
+                event_type="message_reset_to_draft",
+                event_name="Message draft reset to draft",
+                lead_id=draft.leadId,
+                site_id=draft.siteId,
+                metadata={"channel": draft.channel},
+            )
+        return draft
+
+    async def validate_ready_status(self, draft_id: str) -> tuple[bool, list[str]]:
+        database = get_database()
+        if database is None:
+            doc = self._memory.get(draft_id)
+        else:
+            doc = await database["message_drafts"].find_one({"id": draft_id})
+        if doc is None:
+            return False, ["Draft not found"]
+        draft = MessageDraft.model_validate(doc)
+        errors = []
+        if not draft.subject or not draft.subject.strip():
+            errors.append("Subject is required")
+        if not draft.body or not draft.body.strip():
+            errors.append("Body is required")
+        if not draft.ctaPrimaryHref:
+            errors.append("Primary CTA link is required")
+        return len(errors) == 0, errors
+
+    async def get_preview_context(self, draft_id: str) -> dict[str, Any] | None:
+        database = get_database()
+        if database is None:
+            doc = self._memory.get(draft_id)
+        else:
+            doc = await database["message_drafts"].find_one({"id": draft_id})
+        if doc is None:
+            return None
+        draft = MessageDraft.model_validate(doc)
+        brief = await lead_repository.get_brief(draft.leadId)
+        site = await site_repository.get_site(draft.leadId)
+        return {
+            "draftId": draft.id,
+            "leadId": draft.leadId,
+            "briefSummary": brief.valuePropositionSummary.value if brief else None,
+            "sitePreviewUrl": site.previewUrl if site else None,
+            "sitePreviewSlug": site.previewSlug if site else None,
+            "ctaPrimaryLabel": draft.ctaPrimaryLabel,
+            "ctaPrimaryHref": draft.ctaPrimaryHref,
+            "ctaSecondaryLabel": draft.ctaSecondaryLabel,
+            "ctaSecondaryHref": draft.ctaSecondaryHref,
+            "calendlyUrl": draft.calendlyUrl,
+            "exportUrl": draft.exportUrl
+        }
 
     async def get_copy(self, draft_id: str, channel: str | None = None) -> MessageCopyResponse | None:
         await self._maybe_ensure_indexes()

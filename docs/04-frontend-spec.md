@@ -238,3 +238,17 @@ Examples:
 - The edit surface must persist changes as override records and never rely on rendered HTML as the system of record.
 - No generated visual should depend on frontend-only assumptions about brand colors, typography, or images.
 - Missing information must render as explicit admin review states, not placeholder UI or fake preview content.
+
+## Implementation status
+
+**Checklist**
+
+- [x] Next.js admin shell, navigation, and primary workspaces (`/nsa`, `/nsa/leads`, `/nsa/sites/[id]`, `/nsa/messages`) exist and match the documented surfaces.
+- [x] Shared design system + gradients + shadcn primitives implemented in `apps/web/src/components/*` with premium styling.
+- [x] Lead detail, analytics, and edit workspaces now surface deep inspection tools (extraction review + citations on lead detail, fully wired analytics dashboard, structured override editor on `/nsa/sites/[id]/edit`).
+- [x] Generated preview renderer (public `/sites/[slug]`) ships with the live redesign experience, traceability sidebars, and analytics instrumentation.
+- [x] Operator diff/export controls are wired: override panels list versioned records/previews and export cards allow recording + downloading bundles.
+
+**Details**
+
+The current frontend now covers the Phase 4 expectations: lead detail exposes extraction review + citation drilling, the analytics workspace renders real dashboard data, the edit workspace provides structured override/diff tooling, and the public preview renderer is shipping with traceability + instrumentation. Remaining gaps live in later phases (preview QA automation, deeper diff tooling), but the Phase 4 UI surfaces are production-ready.

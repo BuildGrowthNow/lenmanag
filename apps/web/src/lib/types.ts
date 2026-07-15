@@ -6,6 +6,18 @@ export type SessionUser = {
   role: "operator" | "admin";
 };
 
+export type ExtractionHealth = {
+  hasExtraction: boolean;
+  crawlStatus: ExtractionStatus;
+  updatedAt: string | null;
+  version: number;
+  ageHours: number | null;
+  isStale: boolean;
+  isRunning: boolean;
+  isFailed: boolean;
+  blockReason: string | null;
+};
+
 export type SessionResponse = {
   authenticated: boolean;
   user: SessionUser | null;
@@ -22,8 +34,11 @@ export type DashboardSummary = {
   ctaClicks: number;
   recentErrors: Array<{
     id: string;
-    label: string;
-    detail: string;
+    leadId: string | null;
+    jobType: string;
+    step: string;
+    errorMessage: string | null;
+    updatedAt: string;
   }>;
 };
 
@@ -36,7 +51,9 @@ export type ExtractionStatus = "idle" | "queued" | "running" | "partial" | "comp
 export type SitemapStatus = "unknown" | "found" | "missing" | "blocked" | "error";
 export type PageStatus = "discovered" | "crawled" | "failed" | "blocked";
 export type PageSource = "homepage" | "sitemap" | "internal_link";
-export type EvidenceType = "title" | "meta" | "heading" | "cta" | "logo" | "color" | "image" | "typography" | "sitemap";
+export type EvidenceType = "title" | "meta" | "heading" | "cta" | "logo" | "color" | "image" | "typography" | "sitemap" | "section" | "asset" | "visual";
+export type AssetKind = "logo" | "image" | "stylesheet" | "script" | "font" | "icon" | "video" | "unknown";
+export type ExtractedSectionType = "header" | "hero" | "services" | "proof" | "about" | "process" | "pricing" | "gallery" | "contact" | "footer" | "unknown";
 
 export type PageCitation = {
   pageUrl: string;
@@ -55,17 +72,66 @@ export type BrandAssetCue = {
   note: string | null;
 };
 
+export type ExtractedAsset = {
+  kind: AssetKind;
+  url: string;
+  label: string | null;
+  source: string | null;
+};
+
+export type ExtractedSection = {
+  id: string;
+  index: number;
+  type: ExtractedSectionType;
+  tagName: string;
+  selector: string | null;
+  heading: string | null;
+  text: string;
+  html?: string | null;
+  ctas: string[];
+  imageUrls: string[];
+  assetUrls: string[];
+  improvementNotes: string[];
+  confidence: number;
+  screenshotUrl: string | null;
+  boundingBox: Record<string, number> | null;
+  computedStyles?: Record<string, string> | null;
+};
+
+export type PageVisualCapture = {
+  desktopScreenshotUrl: string | null;
+  mobileScreenshotUrl: string | null;
+  capturedAt: string | null;
+  width: number | null;
+  height: number | null;
+  error: string | null;
+};
+
 export type PageInventoryItem = {
   url: string;
   source: PageSource;
   status: PageStatus;
   title: string | null;
+  meta?: Record<string, string>;
   summary: string | null;
+  cleanedText?: string | null;
   depth: number;
   ctaCount: number;
   confidence: number;
   citations: PageCitation[];
   errors: string[];
+  rawHtml?: string | null;
+  rawHtmlRef?: string | null;
+  rawHtmlHash?: string | null;
+  rawHtmlBytes?: number;
+  rawHtmlTruncated?: boolean;
+  fonts?: string[];
+  colors?: string[];
+  headings?: string[];
+  links?: string[];
+  sections?: ExtractedSection[];
+  assets?: ExtractedAsset[];
+  visualCapture?: PageVisualCapture | null;
 };
 
 export type ExtractionSummary = {
@@ -94,10 +160,18 @@ export type ExtractionSnapshot = {
   pageInventory: PageInventoryItem[];
   sourceCitations: PageCitation[];
   brandAssetCues: BrandAssetCue[];
+  assetManifest?: ExtractedAsset[];
+  sectionInventory?: ExtractedSection[];
+  visualCaptureSummary?: Record<string, number>;
   sitemapUrls: string[];
   confidenceScore: number;
   gapItems: string[];
   errors: string[];
+  crawlBudgetUsed?: number;
+  crawlBudgetLimit?: number;
+  crawlTimeElapsedSeconds?: number | null;
+  assetCacheStats?: Record<string, number>;
+  assetRetentionDays?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -154,6 +228,38 @@ export type BriefProofPoint = {
   evidence: BriefEvidence;
 };
 
+export type SectionImprovement = {
+  sectionTitle: string;
+  currentIssues: string[];
+  recommendedChanges: string[];
+  priority: "high" | "medium" | "low";
+};
+
+export type ImprovementRecommendations = {
+  overallApproach?: string;
+  sectionImprovements?: SectionImprovement[];
+  estimatedNewScore?: number;
+  implementationNotes?: string;
+};
+
+export type VisualCritique = {
+  sectionType: string;
+  originalStrengths: string[];
+  originalWeaknesses: string[];
+  redesignGoal: string;
+  contentToReuse: string[];
+  contentToRewrite: string[];
+  recommendedComponent: string;
+  visualDirection: string;
+  confidence: number;
+};
+
+export type VisualRedesignBrief = {
+  pageUrl: string;
+  critiques: VisualCritique[];
+  artDirection: string;
+};
+
 export type SiteBrief = {
   id: string;
   leadId: string;
@@ -170,6 +276,7 @@ export type SiteBrief = {
   recommendedHero: BriefTextRecommendation;
   recommendedSections: BriefSectionRecommendation[];
   proofPoints: BriefProofPoint[];
+  visualRedesign?: VisualRedesignBrief[];
   sourceCitations: BriefSourceReference[];
   brandAssetProvenance: BriefSourceReference[];
   confidenceScore: number;
@@ -235,6 +342,7 @@ export type SiteSection = {
   body: string;
   items: string[];
   ctaLabel: string | null;
+  componentId?: string | null;
   evidence: BriefEvidence;
 };
 
@@ -279,6 +387,16 @@ export type SiteOverrideRecord = {
   updatedAt: string;
 };
 
+export type OverrideDiff = {
+  overrideId: string;
+  path: string;
+  scope: OverrideScope;
+  previousValue: any;
+  currentValue: any;
+  siteCurrentValue: any;
+  diffType: "changed" | "added" | "removed";
+};
+
 export type SiteExportMetadata = {
   exportType: string;
   repoUrl: string | null;
@@ -286,8 +404,24 @@ export type SiteExportMetadata = {
   commitSha: string | null;
   exportPath: string | null;
   notes: string | null;
+  exportSyncStatus: "synced" | "out_of_sync" | "needs_review";
+  lastSyncedAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type SiteExportRecord = SiteExportMetadata & {
+  id: string;
+  siteId: string;
+};
+
+export type SiteExportPayload = {
+  exportType: string;
+  repoUrl?: string | null;
+  branch?: string | null;
+  commitSha?: string | null;
+  exportPath?: string | null;
+  notes?: string | null;
 };
 
 export type SiteQualityCheck = {
@@ -335,6 +469,12 @@ export type GeneratedSiteVersion = {
   previewSlug: string;
   previewUrl: string;
   overrideCount: number;
+  diversityNotes: string[];
+  diversityScore: number;
+  layoutHash: string;
+  refinementPromptId: string | null;
+  promptHistory?: RefinementPromptRecord[];
+  improvementRecommendations?: ImprovementRecommendations | null;
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
@@ -364,11 +504,38 @@ export type GeneratedSite = {
   comparisonEntries: SiteComparisonEntry[];
   sourceTraceability: BriefSourceReference[];
   missingRequirements: string[];
+  sourceAttribution: {
+    leadId: string;
+    sourceType: string | null;
+    sourceRef: string | null;
+    companyName: string | null;
+    websiteUrl: string | null;
+    normalizedDomain: string | null;
+    extractionId: string | null;
+    extractionVersion: number | null;
+    briefId: string | null;
+    briefVersion: number | null;
+    themeKey: string | null;
+    paletteMode: PaletteMode | null;
+  } | null;
+  browserReviewState: "not_reviewed" | "in_review" | "approved" | "warned" | "blocked";
+  publishApprovalState: "pending" | "approved" | "blocked";
+  screenshotRefs: SiteScreenshotMetadata[];
+  latestReviewId: string | null;
+  handoffRecordId: string | null;
+  diversityNotes: string[];
+  diversityScore: number;
+  layoutHash: string;
   previewSlug: string;
   previewUrl: string;
   overrideCount: number;
   overrides: SiteOverrideRecord[];
+  overrideDiffs: OverrideDiff[];
   exportMetadata: SiteExportMetadata | null;
+  refinementPromptId: string | null;
+  promptHistory?: RefinementPromptRecord[];
+  isManuallyRefined?: boolean;
+  improvementRecommendations?: ImprovementRecommendations | null;
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
@@ -480,6 +647,31 @@ export type SiteReviewQueueResponse = {
     limit: number;
     offset: number;
   };
+  themeDiversity: Record<string, number>;
+  paletteDiversity: Record<string, number>;
+  motionDiversity: Record<string, number>;
+  spacingDiversity: Record<string, number>;
+  automationSummary: {
+    ready: number;
+    needsReview: number;
+    blocked: number;
+    regenerationBacklog: number;
+  };
+  handoffReadySiteIds: string[];
+};
+
+export type RefinementPromptStatus = "pending" | "success" | "failed";
+
+export type RefinementPromptRecord = {
+  id: string;
+  submittedAt: string;
+  operatorId: string;
+  promptText: string;
+  resultVersionId: string | null;
+  status: RefinementPromptStatus;
+  qualityScore: number | null;
+  failureReason: string | null;
+  notes: string | null;
 };
 
 export type SiteReviewResponse = {
@@ -514,6 +706,7 @@ export type SiteHandoffRecord = {
 
 export type SiteGeneratePayload = {
   force?: boolean;
+  refinementPromptId?: string | null;
 };
 
 export type SiteReviewPayload = {
@@ -561,6 +754,149 @@ export type JobQueueHealthResponse = {
   updatedAt: string;
 };
 
+export type AnalyticsEventType =
+  | "page_view"
+  | "hero_cta_click"
+  | "secondary_cta_click"
+  | "contact_click"
+  | "calendly_click"
+  | "section_exposure"
+  | "form_interaction"
+  | "outbound_link_click"
+  | "admin_action"
+  | "lead_created"
+  | "lead_imported"
+  | "lead_merged"
+  | "site_generated"
+  | "site_republished"
+  | "site_override_applied"
+  | "site_override_disabled"
+  | "site_export_created"
+  | "message_draft_created"
+  | "message_draft_edited"
+  | "message_marked_ready"
+  | "site_opened"
+  | "brief_approved"
+  | "brief_edited"
+  | "theme_variant_changed"
+  | "generation_regenerated";
+
+export type AnalyticsEventPayload = {
+  siteId?: string;
+  leadId?: string;
+  sessionId?: string;
+  visitorFingerprint?: string;
+  themeKey?: string;
+  variantKey?: string;
+  messageId?: string;
+  messageChannel?: string;
+  eventType: AnalyticsEventType;
+  eventName: string;
+  pagePath?: string;
+  referrer?: string;
+  utm?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+export type AnalyticsSummary = {
+  totalEvents: number;
+  totalPageViews: number;
+  totalCTAClicks: number;
+  totalOutboundClicks: number;
+  totalCalendlyClicks: number;
+  totalSectionExposures: number;
+  totalFormInteractions: number;
+  uniqueSessions: number;
+  totalSites: number;
+  totalLeads: number;
+  eventsByType: Record<string, number>;
+  topPages: Array<{ pagePath: string; count: number }>;
+  topSources: Array<{ value: string; count: number }>;
+  referrers: Array<{ referrer: string; count: number }>;
+  messageAttribution: Array<{ value: string; count: number }>;
+  recentErrors: Array<{
+    id: string;
+    leadId: string | null;
+    jobType: string;
+    step: string;
+    errorMessage: string | null;
+    updatedAt: string;
+  }>;
+  updatedAt: string;
+};
+
+export type AnalyticsSiteMetrics = {
+  siteId: string;
+  leadId: string | null;
+  themeKey: string | null;
+  variantKey: string | null;
+  pageViews: number;
+  uniqueSessions: number;
+  heroCtaClicks: number;
+  secondaryCtaClicks: number;
+  contactClicks: number;
+  ctaClicks: number;
+  outboundClicks: number;
+  calendlyClicks: number;
+  sectionExposures: number;
+  formInteractions: number;
+  messageAttributedVisits: number;
+  timeOnPageSeconds: number | null;
+  referrers: Array<{ referrer: string; count: number }>;
+  updatedAt: string;
+};
+
+export type AnalyticsLeadMetrics = {
+  leadId: string;
+  siteId: string | null;
+  themeKey: string | null;
+  visits: number;
+  uniqueSessions: number;
+  heroCtaClicks: number;
+  secondaryCtaClicks: number;
+  contactClicks: number;
+  ctaClicks: number;
+  bookedCalls: number;
+  outboundClicks: number;
+  formInteractions: number;
+  messageAttributedVisits: number;
+  referrers: Array<{ referrer: string; count: number }>;
+  updatedAt: string;
+};
+
+export type AnalyticsVariantMetrics = {
+  variantKey: string;
+  themeKey: string | null;
+  siteId: string | null;
+  leadId: string | null;
+  pageViews: number;
+  uniqueSessions: number;
+  ctaClicks: number;
+  outboundClicks: number;
+  calendlyClicks: number;
+  updatedAt: string;
+};
+
+export type AnalyticsMessageMetrics = {
+  channel: string;
+  messageId: string | null;
+  leadId: string | null;
+  siteId: string | null;
+  visits: number;
+  ctaClicks: number;
+  calendlyClicks: number;
+  outboundClicks: number;
+  updatedAt: string;
+};
+
+export type AnalyticsDashboardResponse = {
+  summary: AnalyticsSummary;
+  siteMetrics: AnalyticsSiteMetrics[];
+  leadMetrics: AnalyticsLeadMetrics[];
+  variantMetrics: AnalyticsVariantMetrics[];
+  messageMetrics: AnalyticsMessageMetrics[];
+};
+
 export type SiteOverrideCreatePayload = {
   scope: OverrideScope;
   path: string;
@@ -570,7 +906,37 @@ export type SiteOverrideCreatePayload = {
   sourceType?: OverrideSourceType;
 };
 
-export type MessageDraftStatus = "draft" | "edited" | "ready";
+export type MessageDraftStatus = "draft" | "edited" | "ready" | "sent" | "failed";
+export type DeliveryChannel = "whatsapp" | "linkedin" | "email" | "generic";
+
+export type TonePreset = {
+  id: string;
+  name: string;
+  description: string;
+  example: string;
+};
+
+export type CtaVariant = {
+  id: string;
+  name: string;
+  description: string;
+  label: string;
+  position: string;
+};
+
+export type PreviewContextResponse = {
+  draftId: string;
+  leadId: string;
+  briefSummary: string | null;
+  sitePreviewUrl: string | null;
+  sitePreviewSlug: string | null;
+  ctaPrimaryLabel: string | null;
+  ctaPrimaryHref: string | null;
+  ctaSecondaryLabel: string | null;
+  ctaSecondaryHref: string | null;
+  calendlyUrl: string | null;
+  exportUrl: string | null;
+};
 
 export type MessageDraft = {
   id: string;
@@ -578,10 +944,15 @@ export type MessageDraft = {
   briefId: string;
   siteId: string | null;
   channel: string;
+  deliveryChannel: DeliveryChannel;
   subject: string;
   body: string;
   tone: string;
+  tonePreset: string | null;
+  customTone: string | null;
   angle: string;
+  ctaVariant: string | null;
+  ctaPosition: string | null;
   ctaPrimaryLabel: string | null;
   ctaPrimaryHref: string | null;
   ctaSecondaryLabel: string | null;
@@ -624,7 +995,13 @@ export type MessageDraftPatchPayload = {
   subject?: string | null;
   body?: string | null;
   tone?: string | null;
+  tonePreset?: string | null;
+  customTone?: string | null;
   angle?: string | null;
+  ctaVariant?: string | null;
+  ctaPosition?: string | null;
+  deliveryChannel?: DeliveryChannel;
+  calendlyUrl?: string | null;
   status?: MessageDraftStatus;
 };
 

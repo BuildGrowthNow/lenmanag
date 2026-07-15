@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 from uuid import uuid4
 
 from app.core.mongo import get_database
 from app.schemas.analytics import (
+    AnalyticsEventType,
     AnalyticsDashboardResponse,
     AnalyticsEvent,
     AnalyticsEventCreateRequest,
@@ -15,6 +16,7 @@ from app.schemas.analytics import (
     AnalyticsVariantMetrics,
     AnalyticsSiteMetrics,
     AnalyticsSummary,
+    AnalyticsRecentError,
 )
 
 
@@ -34,6 +36,7 @@ class AnalyticsRepository:
     def __init__(self) -> None:
         self._memory_ready = False
         self._memory: list[dict[str, Any]] = []
+        self._retention_days = 45
 
     async def _maybe_ensure_indexes(self) -> None:
         database = get_database()
@@ -67,9 +70,39 @@ class AnalyticsRepository:
         database = get_database()
         if database is None:
             self._memory.append(event.model_dump())
+            await self._enforce_retention()
             return event
         await database["analytics_events"].insert_one(event.model_dump())
+        await self._enforce_retention(database)
         return event
+
+    async def record_admin_event(
+        self,
+        *,
+        event_type: AnalyticsEventType,
+        event_name: str,
+        site_id: str | None = None,
+        lead_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> AnalyticsEvent:
+        request = AnalyticsEventCreateRequest(
+            siteId=site_id,
+            leadId=lead_id,
+            eventType=event_type,
+            eventName=event_name,
+            metadata=metadata or {},
+        )
+        return await self.ingest_event(request)
+
+    def _retention_cutoff(self) -> datetime:
+        return _now() - timedelta(days=self._retention_days)
+
+    async def _enforce_retention(self, database=None) -> None:
+        cutoff = self._retention_cutoff()
+        if database is None:
+            self._memory = [event for event in self._memory if event.get("createdAt") and event["createdAt"] >= cutoff]
+            return
+        await database["analytics_events"].delete_many({"createdAt": {"$lt": cutoff}})
 
     async def _events(self) -> list[dict[str, Any]]:
         database = get_database()
@@ -124,6 +157,21 @@ class AnalyticsRepository:
         sources = Counter(self._event_source(event) for event in events if self._event_source(event))
         referrers = Counter(event.get("referrer") for event in events if event.get("referrer"))
         message_attribution = Counter(self._message_key(event) for event in events if self._message_key(event))
+        from app.core.leads import lead_repository
+
+        recent_errors_data = await lead_repository.recent_job_errors(limit=8)
+        recent_errors = [
+            AnalyticsRecentError(
+                id=item.get("id", ""),
+                leadId=item.get("leadId"),
+                jobType=str(item.get("jobType", "unknown")),
+                step=str(item.get("step", "")),
+                errorMessage=item.get("errorMessage"),
+                updatedAt=_utc(item.get("updatedAt")) or _now(),
+            )
+            for item in recent_errors_data
+        ]
+
         summary = AnalyticsSummary(
             totalEvents=total_events,
             totalPageViews=total_page_views,
@@ -140,6 +188,7 @@ class AnalyticsRepository:
             topSources=self._sorted_counter_items(sources),
             referrers=[{"referrer": ref, "count": count} for ref, count in referrers.most_common(10)],
             messageAttribution=self._sorted_counter_items(message_attribution),
+            recentErrors=recent_errors,
             updatedAt=_now(),
         )
         return AnalyticsDashboardResponse(

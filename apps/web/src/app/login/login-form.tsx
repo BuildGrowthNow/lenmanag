@@ -23,7 +23,7 @@ export function LoginForm() {
             LenQuant admin access
           </CardTitle>
           <CardDescription>
-            Sign in with an approved operator email. This shell is internal only and protected by allowlist validation.
+            Sign in with an approved operator email. This workspace is internal only and protected by allowlist validation.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -61,7 +61,7 @@ export function LoginForm() {
               }
             }}
           >
-            {busy ? "Checking allowlist..." : "Enter shell"}
+            {busy ? "Checking allowlist..." : "Enter workspace"}
           </Button>
         </CardContent>
       </Card>

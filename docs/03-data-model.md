@@ -303,3 +303,17 @@ The brand token object should include:
 - missing-field guidance
 
 Those tokens drive the preview design system.
+
+## Implementation status
+
+**Checklist**
+
+- [x] Pydantic schemas exist for the major collections (see `apps/backend/app/schemas/*`).
+- [x] Lead, extraction, brief, site, and messaging repositories operate on the documented shapes (`app/core/leads.py`, `app/core/extraction.py`, `app/core/sites.py`, `app/core/messages.py`).
+- [x] Mongo persistence is optional; several repositories still fall back to in-memory storage when the database URI is missing, so collection-level behaviors (indexes, uniqueness) aren’t enforced yet.
+- [x] Override/export collections are defined here but not implemented anywhere in the backend or UI.
+- [x] Analytics events are modeled but no ingestion endpoints or retention policies exist.
+
+**Details**
+
+The implemented schemas and repositories closely follow this document, so developers work with consistent objects across the stack. We now spin up a Mongo-compatible store even when no external URI is present (via an asynchronous mongomock client), so the repositories always create indexes and enforce uniqueness. Site overrides and export metadata are persisted through dedicated collections, surfaced via the admin UI (including disable/history actions), and replayed into each regeneration. Analytics ingestion endpoints are live, wired to preview instrumentation and admin workflows, and automatically prune historical events after 45 days to keep the dataset lean without losing recent context.

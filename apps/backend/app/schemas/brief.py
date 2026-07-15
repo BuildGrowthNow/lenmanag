@@ -46,6 +46,22 @@ class BriefProofPoint(BaseModel):
     evidence: BriefEvidence
 
 
+class VisualCritique(BaseModel):
+    sectionType: str
+    originalStrengths: list[str] = Field(default_factory=list)
+    originalWeaknesses: list[str] = Field(default_factory=list)
+    redesignGoal: str
+    contentToReuse: list[str] = Field(default_factory=list)
+    contentToRewrite: list[str] = Field(default_factory=list)
+    recommendedComponent: str
+    visualDirection: str
+    confidence: int
+
+class VisualRedesignBrief(BaseModel):
+    pageUrl: str
+    critiques: list[VisualCritique] = Field(default_factory=list)
+    artDirection: str = "minimal-luxe"
+
 class SiteBrief(BaseModel):
     id: str
     leadId: str
@@ -62,6 +78,7 @@ class SiteBrief(BaseModel):
     recommendedHero: BriefTextRecommendation
     recommendedSections: list[BriefSectionRecommendation] = Field(default_factory=list)
     proofPoints: list[BriefProofPoint] = Field(default_factory=list)
+    visualRedesign: list[VisualRedesignBrief] = Field(default_factory=list)
     sourceCitations: list[BriefSourceReference] = Field(default_factory=list)
     brandAssetProvenance: list[BriefSourceReference] = Field(default_factory=list)
     confidenceScore: int

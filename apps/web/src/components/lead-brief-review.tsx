@@ -3,7 +3,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { approveLeadBrief, createLeadBrief, updateLeadBrief } from "@/lib/api/leads";
+import { approveLeadBrief, createLeadBrief, refreshLeadExtraction, startLeadExtraction, updateLeadBrief } from "@/lib/api/leads";
+import { sendAnalyticsEvent } from "@/lib/analytics";
+import { extractionAgeLabel as formatExtractionAge, formatDateTime as formatExtractionDate } from "@/lib/extraction-health";
+import type { ExtractionHealth } from "@/lib/extraction-health";
 import type { SiteBrief } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 type LeadBriefReviewProps = {
   leadId: string;
   brief: SiteBrief | null;
-  hasExtraction: boolean;
+  extractionHealth: ExtractionHealth;
 };
 
 type BriefFormState = {
@@ -70,23 +73,81 @@ function confidenceLabel(confidence: number) {
   return "Low";
 }
 
-export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefReviewProps) {
+export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefReviewProps) {
   const router = useRouter();
   const [form, setForm] = useState<BriefFormState>(() => briefToForm(brief));
   const [busyAction, setBusyAction] = useState<"create" | "save" | "approve" | null>(null);
+  const [extractionBusy, setExtractionBusy] = useState<"start" | "refresh" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const { hasExtraction, blockReason, ageHours, updatedAt } = extractionHealth;
+  const editingLocked = Boolean(blockReason);
+  const extractionAge = formatExtractionAge(ageHours);
+  const extractionUpdatedAt = formatExtractionDate(updatedAt);
+  const extractionWarning = blockReason ? (
+    <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+      <div className="font-medium text-amber-50">{blockReason}</div>
+      {extractionUpdatedAt ? (
+        <div className="mt-1 text-xs text-amber-100/80">
+          Last extraction: {extractionUpdatedAt}
+          {extractionAge ? <span className="ml-1">({extractionAge})</span> : null}
+        </div>
+      ) : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button type="button" variant="secondary" onClick={() => void handleExtractionRefresh()} disabled={extractionBusy !== null}>
+          {extractionBusy
+            ? extractionBusy === "refresh"
+              ? "Refreshing crawl..."
+              : "Starting crawl..."
+            : hasExtraction
+              ? "Refresh extraction"
+              : "Start extraction"}
+        </Button>
+      </div>
+    </div>
+  ) : null;
 
   useEffect(() => {
     setForm(briefToForm(brief));
     setMessage(null);
   }, [brief]);
 
+  async function handleExtractionRefresh() {
+    const mode: "start" | "refresh" = hasExtraction ? "refresh" : "start";
+    setExtractionBusy(mode);
+    setMessage(null);
+    try {
+      const result = mode === "refresh" ? await refreshLeadExtraction(leadId) : await startLeadExtraction(leadId);
+      setMessage(`${result.job.step}. ${result.extraction.pagesCrawled} page(s) crawled.`);
+      void sendAnalyticsEvent({
+        leadId,
+        eventType: "admin_action",
+        eventName: mode === "refresh" ? "Extraction refresh triggered from brief" : "Extraction started from brief",
+        metadata: { scope: "brief_editor", action: mode }
+      });
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to trigger extraction.");
+    } finally {
+      setExtractionBusy(null);
+    }
+  }
+
   async function handleCreateBrief() {
+    if (editingLocked) {
+      return;
+    }
     setBusyAction("create");
     setMessage(null);
     try {
       await createLeadBrief(leadId);
       setMessage("Brief generated from the latest extraction snapshot.");
+      void sendAnalyticsEvent({
+        leadId,
+        eventType: "brief_edited",
+        eventName: "Brief generated from editor",
+        metadata: { scope: "brief_editor" }
+      });
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not create the brief.");
@@ -97,7 +158,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!brief) {
+    if (editingLocked || !brief) {
       return;
     }
     setBusyAction("save");
@@ -114,6 +175,12 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
         reviewNotes: form.reviewNotes
       });
       setMessage("Brief saved as a new version.");
+      void sendAnalyticsEvent({
+        leadId,
+        eventType: "brief_edited",
+        eventName: "Brief saved from editor",
+        metadata: { scope: "brief_editor" }
+      });
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save the brief.");
@@ -123,7 +190,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
   }
 
   async function handleApprove() {
-    if (!brief) {
+    if (!brief || editingLocked) {
       return;
     }
     setBusyAction("approve");
@@ -131,6 +198,12 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
     try {
       await approveLeadBrief(leadId);
       setMessage("Brief approved.");
+      void sendAnalyticsEvent({
+        leadId,
+        eventType: "brief_approved",
+        eventName: "Brief approved from editor",
+        metadata: { scope: "brief_editor" }
+      });
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not approve the brief.");
@@ -147,6 +220,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
           <CardDescription>The brief is created from the latest extraction snapshot and stays versioned after every edit.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {extractionWarning}
           <div className="rounded-2xl border border-line bg-panel-2 p-4 text-sm text-text">
             <div className="text-xs uppercase tracking-[0.18em] text-muted">Status</div>
             <div className="mt-2">
@@ -156,7 +230,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Button type="button" onClick={() => void handleCreateBrief()} disabled={!hasExtraction || busyAction === "create"}>
+            <Button type="button" onClick={() => void handleCreateBrief()} disabled={!hasExtraction || busyAction === "create" || editingLocked}>
               {busyAction === "create" ? "Generating..." : "Create brief from extraction"}
             </Button>
           </div>
@@ -178,10 +252,12 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
             <Badge className={approvalBadgeClass(brief.approvalState)}>{brief.approvalState.replace("_", " ")}</Badge>
             <Badge>v{brief.version}</Badge>
             <Badge className={confidenceBadgeClass(brief.confidenceScore)}>{confidenceLabel(brief.confidenceScore)} confidence</Badge>
+            {editingLocked ? <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-100">Editing locked</Badge> : null}
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
+        {extractionWarning}
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl border border-line bg-panel-2 p-4 text-xs text-muted">
             <div className="uppercase tracking-[0.18em]">Source extraction</div>
@@ -218,6 +294,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
                 value={form.companySummary}
                 onChange={(event) => setForm((current) => ({ ...current, companySummary: event.target.value }))}
                 rows={4}
+                disabled={editingLocked}
               />
             </div>
 
@@ -233,6 +310,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
                 value={form.valuePropositionSummary}
                 onChange={(event) => setForm((current) => ({ ...current, valuePropositionSummary: event.target.value }))}
                 rows={3}
+                disabled={editingLocked}
               />
             </div>
 
@@ -248,6 +326,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
                 value={form.audienceHypothesis}
                 onChange={(event) => setForm((current) => ({ ...current, audienceHypothesis: event.target.value }))}
                 rows={3}
+                disabled={editingLocked}
               />
             </div>
 
@@ -263,6 +342,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
                 value={form.toneProfile}
                 onChange={(event) => setForm((current) => ({ ...current, toneProfile: event.target.value }))}
                 rows={3}
+                disabled={editingLocked}
               />
             </div>
 
@@ -278,6 +358,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
                 value={form.conversionAngle}
                 onChange={(event) => setForm((current) => ({ ...current, conversionAngle: event.target.value }))}
                 rows={3}
+                disabled={editingLocked}
               />
             </div>
 
@@ -293,6 +374,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
                 value={form.recommendedHero}
                 onChange={(event) => setForm((current) => ({ ...current, recommendedHero: event.target.value }))}
                 rows={3}
+                disabled={editingLocked}
               />
             </div>
 
@@ -306,6 +388,7 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
                 value={form.recommendedSections}
                 onChange={(event) => setForm((current) => ({ ...current, recommendedSections: event.target.value }))}
                 rows={4}
+                disabled={editingLocked}
               />
             </div>
 
@@ -316,14 +399,15 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
                 value={form.reviewNotes}
                 onChange={(event) => setForm((current) => ({ ...current, reviewNotes: event.target.value }))}
                 rows={3}
+                disabled={editingLocked}
               />
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={busyAction === "save"}>
+              <Button type="submit" disabled={busyAction === "save" || editingLocked}>
                 {busyAction === "save" ? "Saving..." : "Save new version"}
               </Button>
-              <Button type="button" variant="secondary" onClick={() => void handleApprove()} disabled={busyAction === "approve"}>
+              <Button type="button" variant="secondary" onClick={() => void handleApprove()} disabled={busyAction === "approve" || editingLocked}>
                 {busyAction === "approve" ? "Approving..." : "Approve brief"}
               </Button>
             </div>
@@ -331,6 +415,39 @@ export function LeadBriefReview({ leadId, brief, hasExtraction }: LeadBriefRevie
           </div>
 
           <div className="space-y-4">
+            {brief.visualRedesign && brief.visualRedesign.length > 0 && (
+              <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted">Visual Redesign Cues</div>
+                <div className="mt-3 space-y-4">
+                  {brief.visualRedesign.map((page, pageIndex) => (
+                    <div key={pageIndex} className="space-y-2">
+                      <div className="text-sm font-medium">Page: {page.pageUrl}</div>
+                      <Badge className="bg-primary/10 text-primary hover:bg-primary/20">Art Direction: {page.artDirection}</Badge>
+                      <div className="mt-2 space-y-2 pl-4 border-l-2 border-line">
+                        {page.critiques.map((critique, cIndex) => (
+                          <div key={cIndex} className="rounded-xl border border-line bg-panel px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge>{critique.sectionType}</Badge>
+                              <Badge className={confidenceBadgeClass(critique.confidence)}>{critique.confidence}%</Badge>
+                              <span className="text-sm text-text">Recommended Component: <span className="font-semibold">{critique.recommendedComponent}</span></span>
+                            </div>
+                            <div className="mt-2 space-y-1">
+                              {critique.redesignGoal && (
+                                <div className="text-sm text-text"><span className="text-muted text-xs uppercase mr-1">Goal:</span> {critique.redesignGoal}</div>
+                              )}
+                              {critique.contentToReuse.length > 0 && (
+                                <div className="text-sm text-text"><span className="text-muted text-xs uppercase mr-1">Reuse:</span> {critique.contentToReuse.join(", ")}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="rounded-2xl border border-line bg-panel-2 p-4">
               <div className="text-xs uppercase tracking-[0.18em] text-muted">Source citations</div>
               <div className="mt-3 space-y-2">

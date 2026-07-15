@@ -1,42 +1,89 @@
 import { API_BASE_URL } from "@/lib/constants";
 
+export const API_VERSION = "1";
+export const VERSION_HEADER_NAME = "X-API-Version";
+const VERSIONED_PATH_PREFIX = `/api/v${API_VERSION}`;
+export const VENDOR_MEDIA_TYPE = `application/vnd.lenmanag.v${API_VERSION}+json`;
+
 type RequestOptions = {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
 };
 
+export function versionedPath(path: string): string {
+  return normalizePath(path);
+}
+
 async function getServerCookieHeader(): Promise<string | null> {
   if (typeof window !== "undefined") {
     return null;
   }
   try {
-    const nextHeaders = await import("next/headers");
-    const store = nextHeaders.cookies();
-    const cookieHeader = store.getAll().map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+    const { cookies } = await import("next/headers");
+    type CookieStore = { getAll: () => { name: string; value: string }[] };
+    const store = await (cookies as unknown as () => Promise<CookieStore> | CookieStore)();
+    const cookieHeader = store
+      .getAll()
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
     return cookieHeader || null;
   } catch {
     return null;
   }
 }
 
+type ApiResponseEnvelope<T> = {
+  status: "success" | "error";
+  meta: { version: string; requestId: string; generatedAt: string };
+  data?: T;
+  error?: { code: string; message: string; details?: Record<string, unknown> };
+};
+
+function normalizePath(path: string): string {
+  if (!path.startsWith("/api")) {
+    return path;
+  }
+  if (path.startsWith(`${VERSIONED_PATH_PREFIX}`)) {
+    return path;
+  }
+  if (path === "/api") {
+    return VERSIONED_PATH_PREFIX;
+  }
+  if (path.startsWith("/api/")) {
+    const remainder = path.slice(5);
+    if (remainder.startsWith("v")) {
+      return `/api/${remainder}`;
+    }
+    return `${VERSIONED_PATH_PREFIX}/${remainder}`;
+  }
+  return path;
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
+  const payload: ApiResponseEnvelope<T> | null = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    const message = payload?.message || payload?.detail || response.statusText;
+    const message = payload?.error?.message || payload?.error?.code || (payload as unknown as { detail?: string })?.detail || response.statusText;
     throw new Error(message);
   }
-  return payload as T;
+  if (!payload || payload.status !== "success") {
+    const message = payload?.error?.message || "Unknown API error.";
+    throw new Error(message);
+  }
+  return payload.data as T;
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const serverCookieHeader = await getServerCookieHeader();
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const normalizedPath = normalizePath(path);
+  const response = await fetch(`${API_BASE_URL}${normalizedPath}`, {
     method: options.method || "GET",
     credentials: "include",
     headers: {
+      Accept: VENDOR_MEDIA_TYPE,
+      [VERSION_HEADER_NAME]: API_VERSION,
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(serverCookieHeader ? { Cookie: serverCookieHeader } : {}),
       ...(options.headers || {})

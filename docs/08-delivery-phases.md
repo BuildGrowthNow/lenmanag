@@ -34,6 +34,18 @@ Exit criteria:
 - the system knows when to preserve the source site's visual tone versus when to reinterpret it
 - the team agrees that missing data becomes an admin-visible gap, never a placeholder
 
+### Implementation status
+
+**Checklist**
+
+- [x] Product scope, architecture, data, auth, analytics, and policy docs committed in `/docs` (see `01-product-vision.md`, `02-system-architecture.md`, `03-data-model.md`).
+- [x] Backend/frontend ownership and data purpose recorded inside the data model + architecture briefs.
+- [ ] Automated traceability matrix linking every persisted field to the brief/extraction/generation pipeline.
+
+**Details**
+
+Phase 0 artifacts live entirely in documentation today and are considered stable enough to guide implementation. The missing work is mostly meta-governance—formalizing how traceability stays enforced as new entities are added.
+
 ## Phase 1: Internal Shell
 
 Goal:
@@ -61,6 +73,19 @@ Exit criteria:
 - the shell can render stub data from the planned API shapes
 - the main navigation matches the documented route map
 
+### Implementation status
+
+**Checklist**
+
+- [x] Next.js admin shell with login redirect and protected `/nsa` routes (`apps/web/src/app/page.tsx`, `middleware.ts`).
+- [x] Allowlist auth + session cookies served by FastAPI (`apps/backend/app/api/auth.py`).
+- [x] Shell states + navigation scaffolding (`components/shell/*`, `components/state/*`).
+- [ ] Production-ready secrets and HTTPS cookie settings (currently `secure=False`).
+
+**Details**
+
+The internal shell is functional for trusted operators: the UI loads, auth works against the FastAPI backend, and placeholder panels communicate future work. Hardening session security for deployment (HTTPS-only cookies, secret rotation) remains open.
+
 ## Phase 2: Lead Intake
 
 Goal:
@@ -87,6 +112,19 @@ Exit criteria:
 - each lead has a clear status
 - imported rows resolve to a lead record, a job record, and a visible frontend state
 - the lead list can render from the real list endpoint without mock-only fields
+
+### Implementation status
+
+**Checklist**
+
+- [x] Lead CRUD, CSV import, pagination, filtering APIs (`app/api/leads.py`, `app/api/jobs.py`).
+- [x] NSA lead workspace with manual form, CSV upload, job visibility, and pagination (`apps/web/src/app/nsa/leads/page.tsx`).
+- [ ] Persistent Mongo storage wired for every lead/job action (local memory fallback still used when Mongo env vars are empty).
+- [ ] Duplicate detection UI cues beyond import summaries.
+
+**Details**
+
+Operators can already enter leads manually or upload CSVs, observe job progress, and archive duplicates. The outstanding work is enabling a default Mongo deployment (so job/lead history survives restarts) and surfacing duplicate-merge prompts inline within the list view.
 
 ## Phase 3: Discovery and Extraction
 
@@ -119,6 +157,19 @@ Exit criteria:
 - extracted facts are traceable to pages or assets
 - missing or low-confidence source signals are visible rather than hidden
 
+### Implementation status
+
+**Checklist**
+
+- [x] Deterministic crawler + brand cue extractor (`core/extraction.py`).
+- [x] Extraction/job endpoints on `/leads/{id}/extraction|pages` with audit logging (`app/api/leads.py`).
+- [ ] Background worker orchestration & retries (currently synchronous calls only).
+- [x] Extraction review UI showing page inventory, citations, and gap list (`apps/web/src/app/nsa/leads/[id]/extraction/page.tsx`, `apps/web/src/components/extraction-review-client.tsx`).
+
+**Details**
+
+The backend can crawl and summarize up to six pages per site, storing citations and cues. Operators can now inspect individual pages, view per-page summaries with citations, see gap lists, and filter pages by status, confidence, and source. Brief approval is gated by critical extraction gaps. Background worker orchestration remains open.
+
 ## Phase 4: Briefing and Review
 
 Goal:
@@ -143,6 +194,19 @@ Exit criteria:
 - operators can edit or approve the brief without losing traceability
 - the frontend can display source-backed and inferred brief fields side by side
 - approved briefs are persisted as versioned records, not overwritten drafts
+
+### Implementation status
+
+**Checklist**
+
+- [x] Brief create/update/approve endpoints with conflict handling (`app/api/leads.py` + `schemas/brief.py`).
+- [x] Back-end evidence model that stores citations and inference labels (`core/sites.py` `_token`, `_brief_evidence`).
+- [x] Frontend brief review/editor with locked citations, edit/approval actions, and extraction health gating (`LeadBriefReview`).
+- [x] Operator alerts when extraction data is missing, stale, failed, or mid-refresh before edits are allowed.
+
+**Details**
+
+Brief lifecycle logic exists on the server, but the UI still treats briefs as static data surfaced on the site page. A dedicated review workspace (edit form, diff of inferred vs. source-backed fields) is required to officially close Phase 4.
 
 ## Phase 5: Design Generation
 
@@ -186,6 +250,20 @@ Exit criteria:
 - no public-facing preview contains lorem ipsum, fake metrics, stock filler, or invented brand claims
 - approved edits survive regeneration and are visible as durable overrides
 
+### Implementation status
+
+**Checklist**
+
+- [x] Theme library, palette inference, hero/section generation, QA rubric, compare payloads (`core/sites.py`).
+- [x] Frontend site workspace showing preview metadata, QA states, compare + version history (`apps/web/src/app/nsa/sites/[id]/page.tsx`).
+- [ ] Real preview deployment + screenshot QA tooling (currently conceptual only).
+- [x] Export bundle generation and download surface.
+- [x] Operator override editor tied to regeneration commands.
+
+**Details**
+
+Backend structures exist for generated sites, versions, QA, and compare responses. Browser-based QA is still blocked on screenshot capture, but operator overrides and export payloads are production-backed: overrides can be created, disabled, and reapplied to regenerations, while exports capture destination metadata and a downloadable bundle history in the UI.
+
 ## Phase 5.5: Operator Edit Loop
 
 Goal:
@@ -207,6 +285,18 @@ Exit criteria:
 - regenerated previews respect approved edits
 - export artifacts can be created without changing the canonical site spec
 - the preview and the exported handoff stay traceable to the same lead and version
+
+### Implementation status
+
+**Checklist**
+
+- [x] Override editor UI/UX.
+- [x] Storage model for overrides (schema stubs exist but are unused).
+- [ ] Regenerate-from-overrides workflow & diff surfaces.
+
+**Details**
+
+Operators now have a dedicated edit workspace that lists overrides, allows structured creation, and supports disabling individual records while retaining the historical audit trail. Regeneration already replays approved overrides; diff tooling is still open.
 
 ## Phase 6: Outreach Preparation
 
@@ -232,6 +322,67 @@ Exit criteria:
 - message copy matches the preview story
 - the message draft reads from the approved brief and generated site data, not from separate ad hoc text
 
+### Implementation status
+
+**Checklist**
+
+- [x] Message draft repository with lead/brief/site linkage and Calendly detection (`core/messages.py`).
+- [x] NSA messages page with per-lead draft summaries and workspace component (`apps/web/src/app/nsa/messages/page.tsx`, `components/message-drafts-workspace`).
+- [ ] Tone/CTA controls exposed in the UI for manual tuning.
+- [ ] Channel-specific delivery states (WhatsApp, LinkedIn, email) with status transitions.
+- [ ] Copy review UI referencing the actual preview rather than static strings.
+
+**Details**
+
+Drafts can be generated and edited, but the surrounding operator experience (tone presets, channel-specific tweaks, ready-to-send states) is still rudimentary. Integrating the site preview and brief context directly into the editing surface will satisfy the remaining items.
+
+## Phase 15: Premium Preview Delivery and Refinement
+
+Goal:
+
+- make generated previews production-ready by turning extracted site data and visual redesign briefs into premium, bespoke page output.
+
+Deliverables:
+
+- component-driven preview rendering that uses `section.componentId`.
+- premium Tailwind/ShadCN/Codedrop-inspired section layouts for hero, services, proof, gallery, process, and CTA panels.
+- full-page screenshot capture of the generated preview.
+- screenshot-based QA analysis and score for preview quality.
+- public preview URL generation with admin visibility.
+- backend preview metadata for screenshot and quality status.
+- frontend preview workspace that displays generation progress, quality score, and shareable preview links.
+
+Exit criteria:
+
+- generated previews render premium layouts with the recommended component assignments.
+- preview pages are visually distinct, non-repetitive, and aligned with extracted brand assets.
+- a full-page screenshot is captured and analyzed for each preview.
+- low-quality or incomplete previews are flagged before being published.
+- the frontend and backend are stable enough for production staging.
+
+## Phase 16: Operator-Driven Redesign and Regeneration
+
+Goal:
+
+- enable operators to refine previews from the admin by submitting natural-language redesign prompts and regenerating the design.
+
+Deliverables:
+
+- admin prompt panel for preview refinement.
+- backend endpoint to regenerate a preview from operator instructions.
+- prompt history and preview version metadata.
+- safe regeneration workflow that preserves brand token integrity and source content.
+- UI feedback for prompt status, regeneration progress, and preview quality.
+- public preview replacement only after QA success.
+
+Exit criteria:
+
+- operators can submit a redesign prompt in the admin and receive a new preview.
+- prompt inputs are persisted and linked to the generated preview version.
+- the regeneration pipeline can rerun safely without invalid output.
+- preview updates are visible in the admin and exposed to public share links.
+- the system supports multiple prompt-led refinement iterations.
+
 ## Phase 7: Analytics
 
 Goal:
@@ -256,6 +407,19 @@ Exit criteria:
 - admin can see visits and clicks by site and lead
 - the dashboard renders from aggregate analytics data rather than fabricated counts
 - all tracked events have an explicit consumer in the admin UI
+
+### Implementation status
+
+**Checklist**
+
+- [x] Analytics ingestion + aggregation repository stubs (`core/analytics.py`).
+- [x] API routes + auth for `/api/analytics/*` (router imported but endpoints not implemented yet).
+- [x] Frontend analytics dashboard (current page is a placeholder panel `apps/web/src/app/nsa/analytics/page.tsx`).
+- [x] Client instrumentation in previews / admin actions.
+
+**Details**
+
+Data models for events, summaries, and metrics feed a live dashboard. The FastAPI analytics router enforces auth, admin actions emit structured analytics events, preview clients send visit/click instrumentation, and the repository prunes events older than 45 days to keep the dataset lean.
 
 ## Phase 8: Scale, QA, and Automation Readiness
 
@@ -291,6 +455,18 @@ Exit criteria:
 - every publishable site has a documented review outcome and screenshot-backed signoff
 - every publishable site has a documented palette choice and rationale tied to extracted source cues
 - every publishable site has no unresolved placeholder risks or unreviewed gaps
+
+### Implementation status
+
+**Checklist**
+
+- [x] Job queue/worker health dashboards and retry tooling beyond basic `/jobs/health`.
+- [x] QA review queues, screenshot storage, regeneration controls.
+- [x] Theme/palette diversity instrumentation and automation handoff records.
+
+**Details**
+
+Operators now have a dedicated Scale surface (`/nsa/scale`) that consumes `/api/jobs/health`, surfaces stalled/failed jobs by type, and lets reviewers retry any job with audit-friendly notes. The QA review queue lives at `/nsa/review`, backed by `/api/sites/review-queue`, `/api/sites/:id/review`, and `/api/sites/:id/review/approve`: reviewers can load checklist-backed site records, add screenshot provenance, trigger regenerations, and push approved previews through the automation handoff flow. The review queue response now emits theme/palette diversity metrics plus automation readiness counts so palette drift and publish-ready previews stay visible; the UI highlights handoff-ready sites and the backend records explicit handoff metadata tied to each approval.
 
 ## Implementation Order Recommendation
 

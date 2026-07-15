@@ -113,3 +113,12 @@ Later versions can add:
 - language detection and localization hints
 - structured FAQ extraction
 - public review and testimonial parsing
+
+## Implementation status
+
+**Checklist**
+
+- [x] Deterministic crawler captures page inventory, citations, brand cues, and persists extraction snapshots with traceability (`apps/backend/app/core/extraction.py`, `app/core/leads.py`).
+- [x] Site brief builder produces `SiteBrief` objects with inference/confidence labels plus missing-field markers surfaced through `/api/leads/{id}/brief` and the NSA brief workspace (`apps/backend/app/core/sites.py`, `apps/web/src/components/lead-brief-review.tsx`).
+- [x] Admin extraction review surface exposing raw crawled pages, per-page summaries, and gap lists prior to brief approval (`apps/web/src/app/nsa/leads/[id]/extraction/page.tsx`, `apps/web/src/components/extraction-review-client.tsx`, `apps/backend/app/api/leads.py#get_pages`).
+- [x] Structured override pipeline persists operator changes and reapplies them during regeneration, keeping theme selections and rationale visible in the workspace (`app/core/sites.py#create_override`, `apps/web/src/components/site-workspace-controls.tsx`).
