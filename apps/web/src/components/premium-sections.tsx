@@ -48,7 +48,7 @@ export const HeroSplitEditorial: React.FC<ComponentProps> = ({
           {polish(section.headline)}
         </h1>
         <p className={`mt-8 text-xl leading-relaxed ${bodyTone}`}>
-          {polish(section.body || section.supportingLine || '')}
+          {polish(section.body || '')}
         </p>
       </div>
       <div
@@ -81,7 +81,7 @@ export const HeroCentered: React.FC<ComponentProps> = ({
       {polish(section.headline)}
     </h1>
     <p className={`mt-10 max-w-2xl text-xl md:text-2xl leading-relaxed ${bodyTone}`}>
-      {polish(section.body || section.supportingLine || '')}
+      {polish(section.body || '')}
     </p>
   </header>
 );

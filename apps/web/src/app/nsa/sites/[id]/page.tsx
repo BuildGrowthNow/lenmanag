@@ -379,7 +379,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                     <div className="text-xs uppercase tracking-[0.18em] text-muted">QA Status</div>
                     <div className="mt-2">
                       {site.qaStatus ? (
-                        <Badge className={qaBadgeClass(site.qaStatus)} style={{ fontSize: "0.875rem", padding: "0.5rem 0.75rem" }}>
+                        <Badge className={`${qaBadgeClass(site.qaStatus)} text-sm px-3 py-2`}>
                           {site.qaStatus === "pass" ? "✓ Passed" : site.qaStatus === "warn" ? "⚠ Warning" : "✗ Failed"}
                         </Badge>
                       ) : (
@@ -391,7 +391,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                     <div className="text-xs uppercase tracking-[0.18em] text-muted">Readiness</div>
                     <div className="mt-2">
                       {site.readinessStatus ? (
-                        <Badge className={readinessBadgeClass(site.readinessStatus)} style={{ fontSize: "0.875rem", padding: "0.5rem 0.75rem" }}>
+                        <Badge className={`${readinessBadgeClass(site.readinessStatus)} text-sm px-3 py-2`}>
                           {site.readinessStatus.replace(/_/g, " ")}
                         </Badge>
                       ) : (
