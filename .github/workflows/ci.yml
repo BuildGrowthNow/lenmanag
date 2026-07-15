@@ -101,7 +101,7 @@ jobs:
             git fetch origin main
             echo "Hard resetting to origin/main (discarding local changes)..."
             git reset --hard origin/main
-            git clean -fd
+            git clean -fd -e .env.production
             echo "Building Docker images..."
             docker compose build
             echo "Recreating containers..."
