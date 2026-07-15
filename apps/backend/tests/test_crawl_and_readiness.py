@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from typing import Any
 
-import pytest
 from unittest.mock import patch
 
 from app.core import extraction

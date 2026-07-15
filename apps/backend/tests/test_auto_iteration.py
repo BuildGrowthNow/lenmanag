@@ -185,10 +185,6 @@ async def test_automatic_second_pass_visual_redesign_iteration():
             assert site.refinementPromptId is None
             assert not site.promptHistory
 
-            # Section stack should now use refined premium components for services and proof
-            kinds_to_components = {
-                s.kind: s.componentId for s in site.sectionStack
-            }
             # Check that automatic iteration applied premium components
             # (The exact components depend on implementation, so we just verify it's not None)
             assert site.sectionStack  # Has sections
