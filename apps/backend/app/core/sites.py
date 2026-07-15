@@ -12,16 +12,14 @@ from io import BytesIO
 from typing import Any, cast
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
-
 from app.core.analytics import analytics_repository
 from app.core.color_system import generate_color_system
 from app.core.config import get_settings
 from app.core.industry_detection import detect_industry, get_industry_design_config
 from app.core.leads import lead_repository
+from app.core.llm import get_llm_client
 from app.core.mongo import get_database
 from app.core.screenshot_comparator import ScreenshotComparator
-from app.core.llm import get_llm_client
 from app.schemas.brief import SiteBrief, VisualCritique, VisualRedesignBrief
 from app.schemas.extraction import ExtractionSnapshot
 from app.schemas.lead import JobSummary
@@ -53,6 +51,8 @@ from app.schemas.site import (
     ThemeLibraryResponse,
     ThemeVariant,
 )
+
+logger = logging.getLogger(__name__)
 
 THEME_LIBRARY: list[dict[str, Any]] = [
     {
@@ -161,7 +161,6 @@ def _ensure_client_safe_cta(text: str) -> str:
         "see the source trace": "Learn more",
         "see source traceability": "Learn more",
         "review the brief": "Get started",
-        "review the preview": "Explore the preview",
     }
     lowered = (text or "").strip().lower()
     for k, v in replacements.items():
@@ -3209,7 +3208,7 @@ class SiteRepository:
         refs = _site_refs(brief, extraction)
 
         # Detect industry for enhanced color system and design customization
-        services_list = [s.name for s in getattr(brief, "recommendedSections", []) or []]
+        services_list = [s.title for s in getattr(brief, "recommendedSections", []) or []]
         content_snippets = [_text(extraction.summary.positioningSummary)]
         detected_industry, industry_confidence = detect_industry(
             company_name=_text(lead.companyName),
@@ -3437,7 +3436,6 @@ class SiteRepository:
 
         from app.core.awwwards_patterns import (
             get_patterns_for_industry,
-            build_pattern_context_for_llm,
             get_hero_pattern_recommendation,
         )
 
@@ -3477,9 +3475,6 @@ class SiteRepository:
         visual_redesign_briefs = []
         if settings.visual_redesign_enabled:
             try:
-                # Build pattern context for LLM
-                pattern_context = build_pattern_context_for_llm(detected_industry, "hero")
-
                 visual_redesign_briefs = await generate_visual_redesign_brief(
                     brief=brief,
                     extraction=extraction,
