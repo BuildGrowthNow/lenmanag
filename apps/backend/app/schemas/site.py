@@ -304,6 +304,7 @@ class GeneratedSiteVersion(BaseModel):
     heroVariant: HeroVariant
     sectionStack: list[SiteSection] = Field(default_factory=list)
     ctaStrategy: CtaStrategy
+    navigationConfig: Optional[dict[str, Any]] = None
     qualityScore: int
     readinessStatus: SiteReadinessStatus
     qaStatus: SiteQaStatus
@@ -353,6 +354,8 @@ class GeneratedSite(BaseModel):
     heroVariant: HeroVariant
     sectionStack: list[SiteSection] = Field(default_factory=list)
     ctaStrategy: CtaStrategy
+    navigationConfig: Optional[dict[str, Any]] = None
+    awwwardsPatternMetadata: Optional[dict[str, Any]] = None
     qualityScore: int
     readinessStatus: SiteReadinessStatus
     qaStatus: SiteQaStatus

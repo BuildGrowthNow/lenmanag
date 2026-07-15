@@ -29,7 +29,7 @@ export default async function SiteEditPage({ params }: { params: Promise<{ id: s
           title="Workspace source not found"
           description="Create or import the lead first, then generate a preview before editing overrides."
           action={
-            <Button asChild>
+            <Button>
               <Link href="/nsa/leads">Back to leads</Link>
             </Button>
           }

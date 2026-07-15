@@ -428,7 +428,7 @@ export default function PublicPreviewPage({ params }: { params: Promise<{ slug: 
             title="Preview not available"
             description="No website preview is available for this link yet. Please check the URL or create a preview from your workspace."
             action={
-              <Button asChild>
+              <Button>
                 <Link href="/nsa/leads">Back</Link>
               </Button>
             }
@@ -552,7 +552,7 @@ export default function PublicPreviewPage({ params }: { params: Promise<{ slug: 
             </p>
             <div className="mt-12 flex flex-wrap gap-4">
               <Button
-                asChild
+               
                 style={{ backgroundColor: dna.accentHue, color: "#fff" }}
                 className="hover:opacity-90 rounded-full px-8 py-3 text-lg border-none"
                 onClick={() => trackCta("hero_cta_click", ensureClientCta(site.ctaStrategy.primary.label), site.ctaStrategy.primary.href)}
@@ -562,7 +562,7 @@ export default function PublicPreviewPage({ params }: { params: Promise<{ slug: 
                 </Link>
               </Button>
               <Button
-                asChild
+               
                 variant="secondary"
                 className="rounded-full px-8 py-3 text-lg bg-transparent"
                 style={{ borderColor: dna.accentHue, borderWidth: '1px', borderStyle: 'solid', color: mode === 'light' ? '#0f172a' : '#fff' }}
@@ -614,7 +614,7 @@ export default function PublicPreviewPage({ params }: { params: Promise<{ slug: 
               </p>
               <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
                 <Button
-                  asChild
+                 
                   className="rounded-full px-8 py-3 text-lg hover:opacity-90 border-none"
                   style={{ backgroundColor: dna.accentHue, color: "#fff" }}
                   onClick={() => trackCta("hero_cta_click", ensureClientCta(site.ctaStrategy.primary.label), site.ctaStrategy.primary.href)}
@@ -622,7 +622,7 @@ export default function PublicPreviewPage({ params }: { params: Promise<{ slug: 
                   <Link href={site.ctaStrategy.primary.href}>{ensureClientCta(site.ctaStrategy.primary.label)}</Link>
                 </Button>
                 <Button
-                  asChild
+                 
                   variant="secondary"
                   className="rounded-full px-8 py-3 text-lg bg-transparent hover:bg-black/5"
                   style={{ borderColor: dna.accentHue, borderWidth: '1px', borderStyle: 'solid', color: mode === 'light' ? '#0f172a' : '#fff' }}

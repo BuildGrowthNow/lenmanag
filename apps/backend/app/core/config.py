@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     auth_allowlist_domains: str = ""
     backend_cors_origins: str = "http://localhost:3000,http://localhost:3002"
     session_cookie_secure: bool = True
-    session_cookie_samesite: str = "lax"
+    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     session_cookie_domain: str | None = None
     session_cookie_max_age_seconds: int = 60 * 60 * 8
     celery_broker_url: str = "redis://localhost:6379/0"

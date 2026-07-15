@@ -21,7 +21,7 @@ export default async function SiteBriefPage({ params }: { params: Promise<{ id: 
           title="Lead source not found"
           description="Create or import a lead first, then generate extraction data and a site brief from the workspace."
           action={
-            <Button asChild>
+            <Button>
               <Link href="/nsa/leads">Back to leads</Link>
             </Button>
           }
@@ -75,10 +75,10 @@ export default async function SiteBriefPage({ params }: { params: Promise<{ id: 
               <div className="rounded-2xl border border-line bg-panel-2 p-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-muted">Workspace links</div>
                 <div className="mt-3 flex flex-wrap gap-3">
-                  <Button asChild>
+                  <Button>
                     <Link href={`/nsa/leads/${lead.id}`}>Open lead workspace</Link>
                   </Button>
-                  <Button asChild variant="secondary">
+                  <Button variant="secondary">
                     <Link href={`/nsa/sites/${lead.id}`}>Open site workspace</Link>
                   </Button>
                 </div>
@@ -104,7 +104,7 @@ export default async function SiteBriefPage({ params }: { params: Promise<{ id: 
             title="Brief data not yet generated"
             description="Run extraction and create the brief from the lead workspace before review can begin."
             action={
-              <Button asChild>
+              <Button>
                 <Link href={`/nsa/leads/${lead.id}`}>Go to lead workspace</Link>
               </Button>
             }

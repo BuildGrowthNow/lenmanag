@@ -58,9 +58,9 @@ export default async function ExtractionReviewPage({ params }: { params: Promise
         title="Lead not found"
         description="The lead record does not exist."
       >
-        <Button asChild>
-          <Link href="/nsa/leads">Back to leads</Link>
-        </Button>
+        <Link href="/nsa/leads">
+          <Button>Back to leads</Button>
+        </Link>
       </PageFrame>
     );
   }
@@ -168,10 +168,10 @@ export default async function ExtractionReviewPage({ params }: { params: Promise
             <CardDescription>Jump back to the lead workspace or other related surfaces.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
-            <Button asChild>
+            <Button>
               <Link href={`/nsa/leads/${leadId}`}>Back to lead workspace</Link>
             </Button>
-            <Button asChild variant="secondary">
+            <Button variant="secondary">
               <Link href={`/nsa/leads/${leadId}/extraction`}>Refresh extraction review</Link>
             </Button>
           </CardContent>

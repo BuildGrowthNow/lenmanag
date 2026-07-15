@@ -119,9 +119,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           title="Lead not found"
           description="The ID does not map to a stored lead record yet. Return to the intake list and create or import a lead."
           action={
-            <Button asChild>
-              <Link href="/nsa/leads">Back to leads</Link>
-            </Button>
+            <Link href="/nsa/leads"><Button>Back to leads</Button></Link>
           }
         />
       </PageFrame>
@@ -288,10 +286,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-3">
-                    <Button asChild>
+                    <Button>
                       <Link href={`/nsa/sites/${lead.id}`}>Open site workspace</Link>
                     </Button>
-                    <Button asChild variant="secondary">
+                    <Button variant="secondary">
                       <Link href={`/sites/${site.previewSlug}`}>Open preview</Link>
                     </Button>
                   </div>
@@ -301,7 +299,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                   title="Preview not generated yet"
                   description="Approve the brief, then generate the preview site from the generated-site workspace."
                   action={
-                    <Button asChild>
+                    <Button>
                       <Link href={`/nsa/sites/${lead.id}`}>Go to site workspace</Link>
                     </Button>
                   }
@@ -317,7 +315,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                   <CardTitle>Extraction review</CardTitle>
                   <CardDescription>Public website signals, crawl status, and missing-data gaps stay visible here so operators can trace the brief back to source material.</CardDescription>
                 </div>
-                <Button asChild variant="secondary">
+                <Button variant="secondary">
                   <Link href={`/nsa/leads/${lead.id}/extraction`}>View page inventory</Link>
                 </Button>
               </div>
@@ -552,10 +550,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               <CardDescription>Jump back to the intake queue or archive the record if needed.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
-              <Button asChild>
-                <Link href="/nsa/leads">Back to leads</Link>
-              </Button>
-              <Button asChild variant="secondary">
+              <Link href="/nsa/leads"><Button>Back to leads</Button></Link>
+              <Button variant="secondary">
                 <Link href={`/nsa/leads/${lead.id}`}>Refresh detail view</Link>
               </Button>
             </CardContent>

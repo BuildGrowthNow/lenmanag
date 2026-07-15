@@ -472,7 +472,7 @@ export default function LeadsPage() {
                       ) : null}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {item.leadId ? (
-                          <Button asChild variant="secondary">
+                          <Button variant="secondary">
                             <Link href={`/nsa/leads/${item.leadId}`}>
                               <Link2 className="mr-2 h-4 w-4" />
                               Open lead
@@ -628,7 +628,7 @@ export default function LeadsPage() {
                         )}
                       </div>
                       <div className="flex flex-col items-start gap-2">
-                        <Button asChild variant="secondary">
+                        <Button variant="secondary">
                           <Link href={`/nsa/leads/${lead.id}`}>Open</Link>
                         </Button>
                         <Button type="button" variant="ghost" onClick={() => void archiveSelectedLead(lead.id)}>

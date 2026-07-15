@@ -28,5 +28,5 @@ class ResponseEnvelope(GenericModel, Generic[T]):
     error: Optional[ResponseError] = None
 
 
-def success_response(data: T | None, *, meta: ResponseMeta) -> ResponseEnvelope[T | None]:
+def success_response(data: T, *, meta: ResponseMeta) -> ResponseEnvelope[T]:
     return ResponseEnvelope(status="success", meta=meta, data=data)

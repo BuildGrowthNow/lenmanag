@@ -14,10 +14,10 @@ export function UnauthorizedState() {
           This control plane is internal only. The email used for login must be on the approved allowlist before the session can be created.
         </p>
         <div className="mt-6 flex gap-3">
-          <Button asChild>
+          <Button>
             <Link href="/login">Try another email</Link>
           </Button>
-          <Button variant="secondary" asChild>
+          <Button variant="secondary">
             <Link href="/">Home</Link>
           </Button>
         </div>

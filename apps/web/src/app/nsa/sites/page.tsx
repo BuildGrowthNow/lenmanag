@@ -76,10 +76,10 @@ export default async function SitesPage() {
                       </CardDescription>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button asChild variant="secondary">
+                      <Button variant="secondary">
                         <Link href={`/nsa/sites/${site.id}`}>Open spec</Link>
                       </Button>
-                      <Button asChild>
+                      <Button>
                         <Link href={previewPath} target="_blank">
                           <ExternalLink className="mr-2 h-4 w-4" />
                           Preview
@@ -115,7 +115,7 @@ export default async function SitesPage() {
           title="No generated websites yet"
           description="Generate a preview from an approved lead brief and it will appear in this website library."
           action={
-            <Button asChild>
+            <Button>
               <Link href="/nsa/leads">Go to leads</Link>
             </Button>
           }

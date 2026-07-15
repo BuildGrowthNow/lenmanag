@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Apex Digital Solutions - Full-service web development agency specializing in custom applications, cloud infrastructure, and digital transformation.">
+    <meta name="keywords" content="web development, cloud infrastructure, digital transformation, custom applications, UI/UX design">
+    <meta name="author" content="Apex Digital Solutions">
+    <meta property="og:title" content="Apex Digital Solutions - Web Development Agency">
+    <meta property="og:description" content="Transform your business with cutting-edge web solutions. Custom development, cloud architecture, and strategic consulting.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="http://ec2-32-194-123-142.compute-1.amazonaws.com:8090">
+    <title>Apex Digital Solutions - Web Development Agency</title>
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Apex Digital Solutions",
+        "url": "http://ec2-32-194-123-142.compute-1.amazonaws.com:8090",
+        "description": "Full-service web development agency",
+        "foundingDate": "2018",
+        "numberOfEmployees": "45",
+        "services": ["Custom Web Development", "Cloud Infrastructure", "UI/UX Design", "Digital Strategy Consulting", "E-Commerce Solutions", "API Development"],
+        "contactPoint": {
+            "@type": "ContactPoint",
+            "telephone": "+1-555-0142",
+            "email": "hello@apexdigital.solutions"
+        }
+    }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a2e; background: #fafbfc; }
+        .loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a2e; display: flex; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.5s; }
+        .loading-screen.hidden { opacity: 0; pointer-events: none; }
+        .loader { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #6c63ff; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+        .animate-in { animation: fadeInUp 0.6s ease forwards; opacity: 0; }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
+        header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 1rem 2rem; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 20px rgba(0,0,0,0.1); }
+        nav { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.5rem; font-weight: 700; background: linear-gradient(135deg, #6c63ff, #48c6ef); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-links { display: flex; gap: 2rem; list-style: none; }
+        .nav-links a { color: rgba(255,255,255,0.8); text-decoration: none; transition: color 0.3s; }
+        .nav-links a:hover { color: #6c63ff; }
+        .hero { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: white; padding: 6rem 2rem; text-align: center; position: relative; overflow: hidden; }
+        .hero::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 30% 50%, rgba(108,99,255,0.1) 0%, transparent 50%); }
+        .hero h1 { font-size: 3.5rem; margin-bottom: 1.5rem; line-height: 1.2; }
+        .hero p { font-size: 1.3rem; opacity: 0.9; max-width: 600px; margin: 0 auto 2rem; }
+        .cta-button { display: inline-block; padding: 1rem 2.5rem; background: linear-gradient(135deg, #6c63ff, #48c6ef); color: white; text-decoration: none; border-radius: 50px; font-weight: 600; transition: transform 0.3s, box-shadow 0.3s; border: none; cursor: pointer; font-size: 1.1rem; }
+        .cta-button:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(108,99,255,0.3); }
+        .section { padding: 5rem 2rem; max-width: 1200px; margin: 0 auto; }
+        .section-title { text-align: center; font-size: 2.5rem; margin-bottom: 1rem; color: #1a1a2e; }
+        .section-subtitle { text-align: center; color: #666; font-size: 1.1rem; margin-bottom: 3rem; max-width: 600px; margin-left: auto; margin-right: auto; }
+        .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; }
+        .service-card { background: white; border-radius: 16px; padding: 2.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.05); transition: transform 0.3s, box-shadow 0.3s; border: 1px solid #eee; }
+        .service-card:hover { transform: translateY(-5px); box-shadow: 0 10px 40px rgba(0,0,0,0.1); }
+        .service-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+        .service-card h3 { font-size: 1.3rem; margin-bottom: 0.75rem; color: #1a1a2e; }
+        .service-card p { color: #666; line-height: 1.7; }
+        .process-section { background: #f0f2f5; padding: 5rem 2rem; }
+        .process-steps { display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem; max-width: 1200px; margin: 0 auto; }
+        .process-step { text-align: center; flex: 1; min-width: 200px; max-width: 250px; position: relative; }
+        .step-number { width: 60px; height: 60px; background: linear-gradient(135deg, #6c63ff, #48c6ef); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; margin: 0 auto 1rem; }
+        .process-step h3 { margin-bottom: 0.5rem; color: #1a1a2e; }
+        .process-step p { color: #666; font-size: 0.95rem; }
+        .testimonials { background: white; }
+        .testimonial-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; max-width: 1200px; margin: 0 auto; }
+        .testimonial-card { background: #f8f9fa; border-radius: 16px; padding: 2rem; position: relative; }
+        .testimonial-card::before { content: '\201C'; position: absolute; top: 1rem; left: 1.5rem; font-size: 4rem; color: #6c63ff; opacity: 0.2; font-family: Georgia, serif; }
+        .testimonial-text { font-style: italic; color: #444; line-height: 1.8; margin-bottom: 1.5rem; padding-top: 1rem; }
+        .testimonial-author { display: flex; align-items: center; gap: 1rem; }
+        .author-avatar { width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #6c63ff, #48c6ef); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; }
+        .author-info h4 { color: #1a1a2e; }
+        .author-info p { color: #666; font-size: 0.9rem; }
+        .team-section { padding: 5rem 2rem; }
+        .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; max-width: 1200px; margin: 0 auto; }
+        .team-card { text-align: center; background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .team-avatar { width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, #6c63ff, #48c6ef); margin: 0 auto 1rem; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: 700; }
+        .team-card h3 { color: #1a1a2e; margin-bottom: 0.25rem; }
+        .team-card .role { color: #6c63ff; font-size: 0.9rem; margin-bottom: 0.75rem; }
+        .team-card p { color: #666; font-size: 0.9rem; }
+        .tabs-section { background: #f8f9fa; padding: 5rem 2rem; }
+        .tabs-container { max-width: 800px; margin: 0 auto; }
+        .tab-buttons { display: flex; gap: 0; border-bottom: 2px solid #e0e0e0; margin-bottom: 2rem; }
+        .tab-btn { padding: 1rem 2rem; border: none; background: none; cursor: pointer; font-size: 1rem; color: #666; position: relative; transition: color 0.3s; }
+        .tab-btn.active { color: #6c63ff; }
+        .tab-btn.active::after { content: ''; position: absolute; bottom: -2px; left: 0; right: 0; height: 2px; background: #6c63ff; }
+        .tab-content { display: none; animation: fadeInUp 0.4s ease; }
+        .tab-content.active { display: block; }
+        .tab-content h3 { margin-bottom: 1rem; color: #1a1a2e; }
+        .tab-content p { color: #666; line-height: 1.8; }
+        .tab-content ul { list-style: none; padding: 0; }
+        .tab-content ul li { padding: 0.5rem 0; color: #444; padding-left: 1.5rem; position: relative; }
+        .tab-content ul li::before { content: '\2192'; position: absolute; left: 0; color: #6c63ff; }
+        .accordion-section { padding: 5rem 2rem; max-width: 800px; margin: 0 auto; }
+        .accordion-item { border: 1px solid #e0e0e0; border-radius: 12px; margin-bottom: 1rem; overflow: hidden; background: white; }
+        .accordion-header { padding: 1.25rem 1.5rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; color: #1a1a2e; transition: background 0.3s; }
+        .accordion-header:hover { background: #f8f9fa; }
+        .accordion-icon { transition: transform 0.3s; font-size: 1.2rem; }
+        .accordion-item.open .accordion-icon { transform: rotate(45deg); }
+        .accordion-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; }
+        .accordion-item.open .accordion-body { max-height: 300px; padding: 0 1.5rem 1.5rem; }
+        .accordion-body p { color: #666; line-height: 1.7; }
+        .stats-section { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 4rem 2rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; max-width: 1000px; margin: 0 auto; text-align: center; }
+        .stat-item h2 { font-size: 3rem; background: linear-gradient(135deg, #6c63ff, #48c6ef); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .stat-item p { color: rgba(255,255,255,0.7); margin-top: 0.5rem; }
+        .cta-section { text-align: center; padding: 5rem 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .cta-section h2 { font-size: 2.5rem; margin-bottom: 1rem; }
+        .cta-section p { font-size: 1.2rem; opacity: 0.9; margin-bottom: 2rem; }
+        footer { background: #0d0d1a; color: rgba(255,255,255,0.7); padding: 3rem 2rem; }
+        .footer-content { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; }
+        .footer-col h3 { color: white; margin-bottom: 1rem; }
+        .footer-col ul { list-style: none; }
+        .footer-col ul li { margin-bottom: 0.5rem; }
+        .footer-col ul li a { color: rgba(255,255,255,0.6); text-decoration: none; transition: color 0.3s; }
+        .footer-col ul li a:hover { color: #6c63ff; }
+        .footer-bottom { text-align: center; padding-top: 2rem; margin-top: 2rem; border-top: 1px solid rgba(255,255,255,0.1); max-width: 1200px; margin-left: auto; margin-right: auto; }
+    </style>
+</head>
+<body>
+    <!-- Loading screen visible before JS renders -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loader"></div>
+    </div>
+
+    <!-- App root - empty until JS renders content -->
+    <div id="app"></div>
+
+    <script>
+    // Simulate a React-like SPA that renders everything via JavaScript
+    // No content exists in the HTML - it's all injected dynamically
+
+    const AppData = {
+        company: {
+            name: "Apex Digital Solutions",
+            tagline: "Transforming Ideas Into Digital Reality",
+            description: "We are a full-service web development agency that combines cutting-edge technology with creative design to deliver exceptional digital experiences.",
+            phone: "+1 (555) 014-2839",
+            email: "hello@apexdigital.solutions",
+            address: "742 Innovation Drive, Suite 300, San Francisco, CA 94102"
+        },
+        services: [
+            { icon: "🚀", title: "Custom Web Development", description: "Bespoke web applications built with modern frameworks like React, Vue, and Next.js. Scalable architecture designed for growth." },
+            { icon: "☁️", title: "Cloud Infrastructure", description: "AWS, GCP, and Azure solutions with auto-scaling, CI/CD pipelines, and infrastructure-as-code for reliable deployments." },
+            { icon: "🎨", title: "UI/UX Design", description: "User-centered design that converts. Wire-framing, prototyping, and pixel-perfect interfaces that delight users." },
+            { icon: "📊", title: "Digital Strategy Consulting", description: "Data-driven strategies to optimize your digital presence. SEO, analytics, and conversion rate optimization." },
+            { icon: "🛒", title: "E-Commerce Solutions", description: "End-to-end online store development with payment integration, inventory management, and seamless checkout experiences." },
+            { icon: "🔗", title: "API Development & Integration", description: "RESTful and GraphQL APIs, third-party integrations, microservices architecture, and real-time data synchronization." }
+        ],
+        process: [
+            { step: 1, title: "Discovery", description: "We dive deep into your business goals, target audience, and technical requirements." },
+            { step: 2, title: "Strategy", description: "Our team crafts a comprehensive roadmap with timelines, milestones, and deliverables." },
+            { step: 3, title: "Design", description: "Interactive prototypes and visual designs that bring your vision to life." },
+            { step: 4, title: "Development", description: "Agile development with bi-weekly sprints, code reviews, and continuous integration." },
+            { step: 5, title: "Launch & Support", description: "Seamless deployment with monitoring, maintenance, and ongoing optimization." }
+        ],
+        testimonials: [
+            { text: "Apex Digital transformed our outdated platform into a modern, high-performing application. Our conversion rate increased by 340% within three months of launch.", author: "Sarah Chen", role: "CTO, TechVentures Inc.", initials: "SC" },
+            { text: "The team's expertise in cloud architecture saved us over $50,000 annually in infrastructure costs while improving our application's response time by 60%.", author: "Marcus Rodriguez", role: "VP Engineering, DataFlow Systems", initials: "MR" },
+            { text: "Working with Apex was a game-changer. Their UI/UX team redesigned our entire product, and user engagement metrics went through the roof. Truly exceptional work.", author: "Jennifer Walsh", role: "Product Director, CreativeHub", initials: "JW" }
+        ],
+        team: [
+            { name: "Alexandra Kim", role: "Founder & CEO", bio: "15+ years in tech leadership. Previously VP at Google Cloud. Stanford CS graduate.", initials: "AK" },
+            { name: "David Okonkwo", role: "Head of Engineering", bio: "Former principal engineer at Stripe. Expert in distributed systems and microservices.", initials: "DO" },
+            { name: "Maria Gonzalez", role: "Design Director", bio: "Award-winning designer. Led design teams at Airbnb and Figma. Passionate about accessibility.", initials: "MG" },
+            { name: "James Mitchell", role: "Cloud Architect", bio: "AWS Solutions Architect Professional. Built infrastructure serving 100M+ daily requests.", initials: "JM" }
+        ],
+        tabs: {
+            technologies: { title: "Technologies We Use", items: ["React / Next.js / Vue.js for frontend development", "Node.js / Python / Go for backend services", "PostgreSQL / MongoDB / Redis for data storage", "AWS / GCP / Azure for cloud infrastructure", "Docker / Kubernetes for containerization", "Terraform / Ansible for infrastructure-as-code"] },
+            methodology: { title: "Our Methodology", content: "We follow an agile-first approach with two-week sprints, daily standups, and continuous delivery. Our code review process ensures quality, while automated testing provides confidence in every release. We believe in transparency — clients have real-time access to project boards, burndown charts, and deployment logs." },
+            industries: { title: "Industries We Serve", items: ["Financial Services & Fintech", "Healthcare & Life Sciences", "E-Commerce & Retail", "Education & EdTech", "Media & Entertainment", "SaaS & Enterprise Software"] }
+        },
+        faq: [
+            { question: "What is your typical project timeline?", answer: "Project timelines vary based on scope and complexity. A typical web application takes 8-16 weeks from discovery to launch. We provide detailed timelines during our proposal phase and use agile methodologies to ensure on-time delivery." },
+            { question: "Do you offer ongoing maintenance and support?", answer: "Yes, we offer comprehensive maintenance packages including 24/7 monitoring, security updates, performance optimization, and feature enhancements. Our support team ensures your application runs smoothly post-launch." },
+            { question: "What technologies do you specialize in?", answer: "We specialize in modern JavaScript frameworks (React, Next.js, Vue), backend technologies (Node.js, Python, Go), cloud platforms (AWS, GCP, Azure), and database systems (PostgreSQL, MongoDB). We choose the best stack for each project's unique requirements." },
+            { question: "How do you handle project communication?", answer: "We use a combination of Slack for daily communication, weekly video calls for progress updates, and project management tools like Linear for task tracking. Clients have full visibility into project progress at all times." }
+        ],
+        stats: [
+            { value: "200+", label: "Projects Delivered" },
+            { value: "98%", label: "Client Satisfaction" },
+            { value: "45", label: "Team Members" },
+            { value: "12", label: "Industry Awards" }
+        ]
+    };
+
+    // Simulated async data fetching (like a real SPA would do)
+    function fetchData() {
+        return new Promise((resolve) => {
+            setTimeout(() => resolve(AppData), 800);
+        });
+    }
+
+    // Component rendering functions (simulating React components)
+    function renderHeader(data) {
+        return '<header><nav><div class="logo">' + data.company.name + '</div><ul class="nav-links"><li><a href="#services">Services</a></li><li><a href="#process">Process</a></li><li><a href="#testimonials">Testimonials</a></li><li><a href="#team">Team</a></li><li><a href="#faq">FAQ</a></li><li><a href="#contact" class="cta-button" style="padding: 0.5rem 1.5rem; font-size: 0.9rem;">Get Started</a></li></ul></nav></header>';
+    }
+
+    function renderHero(data) {
+        return '<section class="hero"><div class="animate-in"><h1>' + data.company.tagline + '</h1><p>' + data.company.description + '</p><a href="#contact" class="cta-button">Start Your Project</a><span style="display: inline-block; margin-left: 1rem; color: rgba(255,255,255,0.7);">or <a href="#services" style="color: #48c6ef;">explore our services</a></span></div></section>';
+    }
+
+    function renderServices(data) {
+        var cards = data.services.map(function(s, i) {
+            return '<article class="service-card animate-in delay-' + ((i % 4) + 1) + '"><div class="service-icon">' + s.icon + '</div><h3>' + s.title + '</h3><p>' + s.description + '</p></article>';
+        }).join('');
+        return '<section class="section" id="services"><h2 class="section-title">Our Services</h2><p class="section-subtitle">Comprehensive digital solutions tailored to your business needs</p><div class="services-grid">' + cards + '</div></section>';
+    }
+
+    function renderProcess(data) {
+        var steps = data.process.map(function(p) {
+            return '<div class="process-step animate-in delay-' + p.step + '"><div class="step-number">' + p.step + '</div><h3>' + p.title + '</h3><p>' + p.description + '</p></div>';
+        }).join('');
+        return '<section class="process-section" id="process"><h2 class="section-title">Our Process</h2><p class="section-subtitle">A proven methodology that delivers results</p><div class="process-steps">' + steps + '</div></section>';
+    }
+
+    function renderTestimonials(data) {
+        var cards = data.testimonials.map(function(t) {
+            return '<article class="testimonial-card"><p class="testimonial-text">' + t.text + '</p><div class="testimonial-author"><div class="author-avatar">' + t.initials + '</div><div class="author-info"><h4>' + t.author + '</h4><p>' + t.role + '</p></div></div></article>';
+        }).join('');
+        return '<section class="section testimonials" id="testimonials"><h2 class="section-title">What Our Clients Say</h2><p class="section-subtitle">Do not just take our word for it - hear from the teams we have worked with</p><div class="testimonial-grid">' + cards + '</div></section>';
+    }
+
+    function renderTeam(data) {
+        var cards = data.team.map(function(t) {
+            return '<article class="team-card animate-in"><div class="team-avatar">' + t.initials + '</div><h3>' + t.name + '</h3><p class="role">' + t.role + '</p><p>' + t.bio + '</p></article>';
+        }).join('');
+        return '<section class="team-section" id="team"><h2 class="section-title">Meet Our Team</h2><p class="section-subtitle">Talented professionals passionate about technology and innovation</p><div class="team-grid">' + cards + '</div></section>';
+    }
+
+    function renderTabs(data) {
+        var techItems = data.tabs.technologies.items.map(function(i) { return '<li>' + i + '</li>'; }).join('');
+        var indItems = data.tabs.industries.items.map(function(i) { return '<li>' + i + '</li>'; }).join('');
+        return '<section class="tabs-section" id="capabilities"><h2 class="section-title">Our Capabilities</h2><p class="section-subtitle">Deep expertise across technologies, methodologies, and industries</p><div class="tabs-container"><div class="tab-buttons"><button class="tab-btn active" data-tab="technologies">Technologies</button><button class="tab-btn" data-tab="methodology">Methodology</button><button class="tab-btn" data-tab="industries">Industries</button></div><div class="tab-content active" id="tab-technologies"><h3>' + data.tabs.technologies.title + '</h3><ul>' + techItems + '</ul></div><div class="tab-content" id="tab-methodology"><h3>' + data.tabs.methodology.title + '</h3><p>' + data.tabs.methodology.content + '</p></div><div class="tab-content" id="tab-industries"><h3>' + data.tabs.industries.title + '</h3><ul>' + indItems + '</ul></div></div></section>';
+    }
+
+    function renderFAQ(data) {
+        var items = data.faq.map(function(f) {
+            return '<div class="accordion-item"><div class="accordion-header"><span>' + f.question + '</span><span class="accordion-icon">+</span></div><div class="accordion-body"><p>' + f.answer + '</p></div></div>';
+        }).join('');
+        return '<section class="accordion-section" id="faq"><h2 class="section-title">Frequently Asked Questions</h2><p class="section-subtitle">Everything you need to know about working with us</p>' + items + '</section>';
+    }
+
+    function renderStats(data) {
+        var items = data.stats.map(function(s) {
+            return '<div class="stat-item"><h2>' + s.value + '</h2><p>' + s.label + '</p></div>';
+        }).join('');
+        return '<section class="stats-section"><div class="stats-grid">' + items + '</div></section>';
+    }
+
+    function renderCTA(data) {
+        return '<section class="cta-section" id="contact"><h2>Ready to Transform Your Digital Presence?</h2><p>Let us discuss how we can help you achieve your goals</p><a href="mailto:' + data.company.email + '" class="cta-button" style="background: white; color: #667eea;">Schedule a Free Consultation</a><p style="margin-top: 1.5rem; opacity: 0.8; font-size: 0.95rem;">Or call us at ' + data.company.phone + '</p></section>';
+    }
+
+    function renderFooter(data) {
+        var serviceLinks = data.services.map(function(s) { return '<li><a href="#services">' + s.title + '</a></li>'; }).join('');
+        return '<footer><div class="footer-content"><div class="footer-col"><h3>' + data.company.name + '</h3><p style="margin-top: 0.5rem; line-height: 1.7;">' + data.company.address + '</p><p style="margin-top: 0.5rem;">' + data.company.email + '</p><p>' + data.company.phone + '</p></div><div class="footer-col"><h3>Services</h3><ul>' + serviceLinks + '</ul></div><div class="footer-col"><h3>Company</h3><ul><li><a href="#team">About Us</a></li><li><a href="#team">Our Team</a></li><li><a href="#testimonials">Case Studies</a></li><li><a href="#contact">Careers</a></li><li><a href="#faq">FAQ</a></li><li><a href="#contact">Contact</a></li></ul></div></div><div class="footer-bottom"><p>&copy; 2024 ' + data.company.name + '. All rights reserved. | Privacy Policy | Terms of Service</p></div></footer>';
+    }
+
+    // Initialize interactive elements after render
+    function initInteractivity() {
+        // Tabs
+        document.querySelectorAll('.tab-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+                document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+                btn.classList.add('active');
+                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Accordion
+        document.querySelectorAll('.accordion-header').forEach(function(header) {
+            header.addEventListener('click', function() {
+                var item = header.parentElement;
+                var wasOpen = item.classList.contains('open');
+                document.querySelectorAll('.accordion-item').forEach(function(i) { i.classList.remove('open'); });
+                if (!wasOpen) item.classList.add('open');
+            });
+        });
+
+        // Intersection Observer for animations
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.style.animationPlayState = 'running';
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.animate-in').forEach(function(el) {
+            el.style.animationPlayState = 'paused';
+            observer.observe(el);
+        });
+    }
+
+    // Main app initialization - simulates SPA boot
+    async function initApp() {
+        var data = await fetchData();
+
+        var appHTML = renderHeader(data) + renderHero(data) + renderServices(data) + renderStats(data) + renderProcess(data) + renderTabs(data) + renderTestimonials(data) + renderTeam(data) + renderFAQ(data) + renderCTA(data) + renderFooter(data);
+
+        document.getElementById('app').innerHTML = appHTML;
+        document.getElementById('loadingScreen').classList.add('hidden');
+
+        // Initialize interactive components
+        initInteractivity();
+
+        // Simulate lazy-loaded content (additional data that loads after initial render)
+        setTimeout(function() {
+            var lazySection = document.createElement('section');
+            lazySection.className = 'section';
+            lazySection.id = 'lazy-loaded';
+            lazySection.innerHTML = '<div style="background: #f0f2f5; border-radius: 16px; padding: 2rem; text-align: center;"><h3 style="color: #1a1a2e; margin-bottom: 1rem;">Latest Blog Posts</h3><div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;"><article style="background: white; padding: 1.5rem; border-radius: 12px; text-align: left;"><h4 style="color: #1a1a2e; margin-bottom: 0.5rem;">The Future of Serverless Architecture</h4><p style="color: #666; font-size: 0.9rem;">Exploring how serverless computing is reshaping modern application development and reducing operational overhead.</p><span style="color: #6c63ff; font-size: 0.85rem; margin-top: 0.5rem; display: block;">June 15, 2024 - 8 min read</span></article><article style="background: white; padding: 1.5rem; border-radius: 12px; text-align: left;"><h4 style="color: #1a1a2e; margin-bottom: 0.5rem;">Design Systems at Scale</h4><p style="color: #666; font-size: 0.9rem;">How we built a component library that serves 12 products and 50+ developers across our organization.</p><span style="color: #6c63ff; font-size: 0.85rem; margin-top: 0.5rem; display: block;">June 8, 2024 - 12 min read</span></article><article style="background: white; padding: 1.5rem; border-radius: 12px; text-align: left;"><h4 style="color: #1a1a2e; margin-bottom: 0.5rem;">Optimizing React Performance</h4><p style="color: #666; font-size: 0.9rem;">Practical strategies for reducing bundle size, improving rendering speed, and delivering better user experiences.</p><span style="color: #6c63ff; font-size: 0.85rem; margin-top: 0.5rem; display: block;">May 29, 2024 - 10 min read</span></article></div></div>';
+            var ctaSection = document.getElementById('contact');
+            if (ctaSection) {
+                ctaSection.parentElement.insertBefore(lazySection, ctaSection);
+            }
+        }, 1500);
+    }
+
+    // Boot the application
+    document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>

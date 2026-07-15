@@ -9,13 +9,15 @@ import zipfile
 from collections import Counter
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
 from app.core.analytics import analytics_repository
+from app.core.color_system import generate_color_system
 from app.core.config import get_settings
+from app.core.industry_detection import detect_industry, get_industry_design_config
 from app.core.leads import lead_repository
 from app.core.mongo import get_database
 from app.core.screenshot_comparator import ScreenshotComparator
@@ -562,19 +564,15 @@ def _site_refs(
     brief: SiteBrief, extraction: ExtractionSnapshot
 ) -> list[dict[str, Any]]:
     refs = [
-        _page_reference_from_citation(
-            citation.model_dump() if hasattr(citation, "model_dump") else citation
-        )
+        _page_reference_from_citation(citation.model_dump())
         for citation in extraction.sourceCitations
     ]
     refs.extend(
-        _asset_reference_from_cue(
-            cue.model_dump() if hasattr(cue, "model_dump") else cue
-        )
+        _asset_reference_from_cue(cue.model_dump())
         for cue in extraction.brandAssetCues
     )
     refs.extend(
-        citation.model_dump() if hasattr(citation, "model_dump") else citation
+        citation.model_dump()
         for citation in brief.sourceCitations
     )
     return _dedupe_refs(refs)
@@ -587,24 +585,25 @@ def _brand_tokens(
     brief: SiteBrief,
     extraction: ExtractionSnapshot,
     refs: list[dict[str, Any]],
+    industry: str | None = None,
 ) -> dict[str, Any]:
     color_cues = [
-        cue.model_dump() if hasattr(cue, "model_dump") else cue
+        cue.model_dump()
         for cue in extraction.brandAssetCues
         if cue.assetType == "color"
     ]
     logo_cues = [
-        cue.model_dump() if hasattr(cue, "model_dump") else cue
+        cue.model_dump()
         for cue in extraction.brandAssetCues
         if cue.assetType == "logo"
     ]
     typography_cues = [
-        cue.model_dump() if hasattr(cue, "model_dump") else cue
+        cue.model_dump()
         for cue in extraction.brandAssetCues
         if cue.assetType == "typography"
     ]
     image_cues = [
-        cue.model_dump() if hasattr(cue, "model_dump") else cue
+        cue.model_dump()
         for cue in extraction.brandAssetCues
         if cue.assetType == "image"
     ]
@@ -633,7 +632,52 @@ def _brand_tokens(
             "accent": "#f97316",
         },
     }[palette_mode]
+
+    # Extract source colors for enhanced color system generation
+    source_colors = []
     if color_cues:
+        for cue in color_cues[:3]:
+            color_val = _text(cue["value"])
+            if color_val and color_val.startswith("#"):
+                source_colors.append(color_val)
+
+    # Detect industry design config mood
+    # Map to valid industry for color system (narrower type than industry_detection)
+    valid_industries = {"creative_agency", "saas", "legal_finance", "ecommerce_fashion", "consulting", "real_estate", "health_wellness", "tech"}
+    industry_for_config = cast(Any, industry) if industry in valid_industries else "tech"
+    industry_config = get_industry_design_config(industry_for_config) if industry else {}
+    mood = industry_config.get("color_palette_mood", "professional")
+    dark_mode = palette_mode != "light"
+
+    # Generate enhanced color system
+    try:
+        color_system = generate_color_system(
+            source_colors=source_colors,
+            industry=cast(Any, industry) if industry in valid_industries else "tech",
+            mood=mood,
+            dark_mode=dark_mode,
+        )
+    except Exception as e:
+        logger.warning(f"Color system generation failed, using defaults: {e}")
+        color_system = None
+
+    # Use enhanced color system if available, otherwise fall back to original logic
+    if color_system:
+        primary_value = color_system["primary"]
+        secondary_value = color_system["secondary"]
+        accent_value = color_system["accent"]
+        primary_refs = [_asset_reference_from_cue(color_cues[0])] if color_cues else color_reference
+        secondary_refs = (
+            [_asset_reference_from_cue(color_cues[1])]
+            if len(color_cues) > 1
+            else color_reference
+        )
+        accent_refs = (
+            [_asset_reference_from_cue(color_cues[2])]
+            if len(color_cues) > 2
+            else color_reference
+        )
+    elif color_cues:
         first = color_cues[0]
         primary_value = _text(first["value"])
         primary_refs = [_asset_reference_from_cue(first)]
@@ -812,6 +856,8 @@ def _brand_tokens(
             confidence=70,
             references=refs[:2],
         ),
+        # Enhanced color system fields
+        "enhancedColorSystem": color_system if color_system else {},
     }
 
 
@@ -3161,33 +3207,285 @@ class SiteRepository:
             extraction,
         )
         refs = _site_refs(brief, extraction)
+
+        # Detect industry for enhanced color system and design customization
+        services_list = [s.name for s in getattr(brief, "recommendedSections", []) or []]
+        content_snippets = [_text(extraction.summary.positioningSummary)]
+        detected_industry, industry_confidence = detect_industry(
+            company_name=_text(lead.companyName),
+            mission=_text(brief.companySummary.value),
+            services=services_list,
+            content_snippets=content_snippets,
+        )
+        logger.info(
+            f"Detected industry: {detected_industry} (confidence: {industry_confidence:.2f})"
+        )
+
         brand_tokens = _brand_tokens(
             palette_mode=palette_mode,
             theme=theme,
             brief=brief,
             extraction=extraction,
             refs=refs,
+            industry=detected_industry,
         )
         hero = _hero_variant(brief=brief, extraction=extraction, theme=theme, refs=refs)
         sections = _section_stack(brief=brief, extraction=extraction, refs=refs)
         cta_strategy = _cta_strategy(brief=brief, extraction=extraction, refs=refs)
-        
-        # Generate visual redesign brief
+
+        # Apply content rewriting and creative copy generation (Phase 2)
         await lead_repository._update_job(
-            job_id, progress=50, step="Generating visual redesign brief"
+            job_id, progress=45, step="Enhancing content with creative copy"
         )
-        
+
+        from app.core.content_rewriter import rewrite_hero_section
+        from app.core.creative_copy import generate_creative_headline, generate_creative_cta
+
+        brand_tone = " ".join(extraction.summary.toneClues[:3]) or brief.toneProfile.value
+        content_enhancement_enabled = getattr(settings, "content_enhancement_enabled", True)
+
+        if content_enhancement_enabled:
+            try:
+                # Option 1: LLM-based rewriting (more natural but requires LLM)
+                rewritten_hero = await rewrite_hero_section(
+                    hero_data={
+                        "headline": hero.get("headline", ""),
+                        "subheadline": hero.get("subheadline", ""),
+                        "cta": cta_strategy.get("primaryCta", {}).get("label", "Get Started"),
+                    },
+                    industry=detected_industry,
+                    company_name=_text(lead.companyName),
+                    mission=_text(brief.companySummary.value),
+                    brand_tone=brand_tone,
+                )
+
+                # Update hero with rewritten content
+                if "headline" in rewritten_hero:
+                    hero["headline"] = rewritten_hero["headline"]
+                    hero["headline_rewrite_meta"] = rewritten_hero.get("headline_meta", {})
+
+                if "subheadline" in rewritten_hero:
+                    hero["subheadline"] = rewritten_hero["subheadline"]
+                    hero["subheadline_rewrite_meta"] = rewritten_hero.get("subheadline_meta", {})
+
+                if "cta" in rewritten_hero:
+                    cta_strategy["primaryCta"]["label"] = rewritten_hero["cta"]
+                    cta_strategy["primaryCta"]["rewrite_meta"] = rewritten_hero.get("cta_meta", {})
+
+                logger.info(f"LLM content rewriting completed for {lead.companyName}")
+
+            except Exception as e:
+                logger.warning(f"LLM rewriting failed: {e}, falling back to template-based generation")
+
+                # Option 2: Template-based creative copy (fast, no LLM needed)
+                try:
+                    creative_headline = await generate_creative_headline(
+                        company_name=_text(lead.companyName),
+                        mission=_text(brief.companySummary.value),
+                        industry=detected_industry,
+                        brand_tone=brand_tone,
+                        positioning=_text(extraction.summary.positioningSummary),
+                        prefer_bold=theme["name"] in ["editorial-frame", "color-study"],
+                    )
+
+                    creative_cta = await generate_creative_cta(
+                        industry=detected_industry,
+                        context="primary",
+                        brand_tone=brand_tone,
+                    )
+
+                    # Use creative copy if confidence is high
+                    if creative_headline.get("confidence", 0) >= 75:
+                        hero["headline"] = creative_headline["headline"]
+                        hero["creative_headline_meta"] = creative_headline
+
+                    if creative_cta.get("confidence", 0) >= 80:
+                        cta_strategy["primaryCta"]["label"] = creative_cta["text"]
+                        cta_strategy["primaryCta"]["creative_cta_meta"] = creative_cta
+
+                    logger.info(f"Template-based creative copy completed for {lead.companyName}")
+
+                except Exception as fallback_error:
+                    logger.warning(f"Creative copy generation also failed: {fallback_error}, using original content")
+        else:
+            logger.info("Content enhancement disabled, using original content")
+
+        # Phase 3: Hero variant selection and configuration (new feature)
+        await lead_repository._update_job(
+            job_id, progress=47, step="Selecting hero variant and navigation"
+        )
+
+        from app.core.hero_variants import select_hero_variant, generate_hero_config
+        from app.core.navigation import generate_navigation, add_scroll_behavior
+
+        # Detect available assets for hero selection
+        has_video = any(
+            cue.assetType == "video" for cue in extraction.brandAssetCues
+        )
+        has_product_image = any(
+            cue.assetType == "image" and "product" in cue.label.lower()
+            for cue in extraction.brandAssetCues
+        )
+        has_multiple_images = sum(
+            1 for cue in extraction.brandAssetCues if cue.assetType == "image"
+        ) >= 3
+
+        # Determine brand personality from tone
+        tone_lower = brand_tone.lower() if brand_tone else ""
+        if any(word in tone_lower for word in ["bold", "vibrant", "dynamic", "energetic"]):
+            brand_personality = "bold"
+        elif any(word in tone_lower for word in ["minimal", "clean", "simple", "refined"]):
+            brand_personality = "minimal"
+        elif any(word in tone_lower for word in ["creative", "innovative", "artistic", "experimental"]):
+            brand_personality = "creative"
+        else:
+            brand_personality = "professional"
+
+        # Select best hero variant
+        hero_variant_key, hero_variant_config = select_hero_variant(
+            industry=detected_industry,
+            has_video=has_video,
+            has_product_image=has_product_image,
+            has_multiple_images=has_multiple_images,
+            brand_personality=brand_personality,
+        )
+
+        # Collect assets for hero config
+        hero_assets = {}
+        if has_video:
+            video_cues = [c for c in extraction.brandAssetCues if c.assetType == "video"]
+            if video_cues:
+                hero_assets["video_url"] = video_cues[0].value
+
+        if has_product_image:
+            product_images = [
+                c for c in extraction.brandAssetCues
+                if c.assetType == "image" and "product" in c.label.lower()
+            ]
+            if product_images:
+                hero_assets["product_image"] = product_images[0].value
+
+        if has_multiple_images:
+            image_cues = [c for c in extraction.brandAssetCues if c.assetType == "image"]
+            hero_assets["carousel_images"] = [c.value for c in image_cues[:5]]
+            hero_assets["mosaic_images"] = [c.value for c in image_cues[:8]]
+
+        # Add hero image if available
+        hero_image_cues = [
+            c for c in extraction.brandAssetCues
+            if c.assetType == "image" and any(
+                keyword in c.label.lower()
+                for keyword in ["hero", "banner", "background", "header"]
+            )
+        ]
+        if hero_image_cues:
+            hero_assets["hero_image"] = hero_image_cues[0].value
+        elif has_multiple_images:
+            # Use first available image as hero fallback
+            image_cues = [c for c in extraction.brandAssetCues if c.assetType == "image"]
+            if image_cues:
+                hero_assets["hero_image"] = image_cues[0].value
+
+        # Generate complete hero configuration
+        enhanced_hero_config = generate_hero_config(
+            variant_key=hero_variant_key,
+            headline=hero.get("headline", ""),
+            subheadline=hero.get("subheadline", ""),
+            cta_text=cta_strategy.get("primaryCta", {}).get("label", "Get Started"),
+            cta_href=cta_strategy.get("primaryCta", {}).get("href", "#contact"),
+            colors=brand_tokens.get("enhancedColorSystem", {}),
+            assets=hero_assets,
+        )
+
+        # Merge enhanced hero config into hero object
+        hero.update({
+            "variant_key": hero_variant_key,
+            "variant_config": enhanced_hero_config,
+            "variant_meta": {
+                "selection_reason": f"Selected {hero_variant_key} for {detected_industry} with {brand_personality} personality",
+                "has_video": has_video,
+                "has_product_image": has_product_image,
+                "brand_personality": brand_personality,
+            }
+        })
+
+        logger.info(f"Selected hero variant: {hero_variant_key} for {lead.companyName}")
+
+        # Phase 4: Navigation generation
+        logo_url = None
+        logo_cues = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
+        if logo_cues:
+            logo_url = logo_cues[0].value
+
+        navigation_config = generate_navigation(
+            sections=sections,
+            industry=detected_industry,
+            logo_url=logo_url,
+            company_name=_text(lead.companyName),
+            theme="dark" if palette_mode == "zinc" else "light",
+        )
+
+        # Add scroll behavior to navigation
+        navigation_config = add_scroll_behavior(navigation_config)
+
+        logger.info(f"Generated navigation with {len(navigation_config['items'])} items, style: {navigation_config['style']}")
+
+        # Phase 5: Awwwards pattern integration
+        await lead_repository._update_job(
+            job_id, progress=48, step="Loading Awwwards-inspired patterns"
+        )
+
+        from app.core.awwwards_patterns import (
+            get_patterns_for_industry,
+            build_pattern_context_for_llm,
+            get_hero_pattern_recommendation,
+        )
+
+        # Get relevant patterns for this industry
+        awwwards_patterns = get_patterns_for_industry(detected_industry)
+        logger.info(f"Loaded {len(awwwards_patterns)} Awwwards patterns for {detected_industry}")
+
+        # Get hero pattern recommendation based on assets
+        hero_pattern_recommendation = get_hero_pattern_recommendation(
+            industry=detected_industry,
+            available_assets={
+                "has_video": has_video,
+                "has_product_image": has_product_image,
+                "has_hero_images": bool(hero_image_cues),
+                "image_count": sum(1 for c in extraction.brandAssetCues if c.assetType == "image"),
+            }
+        )
+
+        # Store pattern metadata for frontend usage
+        pattern_metadata = {
+            "industry": detected_industry,
+            "pattern_count": len(awwwards_patterns),
+            "hero_pattern_recommendation": {
+                "name": hero_pattern_recommendation["name"],
+                "description": hero_pattern_recommendation["description"],
+            },
+            "available_pattern_categories": list(set(p.get("category") for p in awwwards_patterns)),
+        }
+
+        # Generate visual redesign brief (with pattern context)
+        await lead_repository._update_job(
+            job_id, progress=50, step="Generating visual redesign brief with pattern guidance"
+        )
+
         from app.core.visual_redesign import generate_visual_redesign_brief
-        
+
         visual_redesign_briefs = []
         if settings.visual_redesign_enabled:
             try:
+                # Build pattern context for LLM
+                pattern_context = build_pattern_context_for_llm(detected_industry, "hero")
+
                 visual_redesign_briefs = await generate_visual_redesign_brief(
                     brief=brief,
                     extraction=extraction,
                     client_brand=brand_tokens,
                 )
-                logger.info(f"Generated {len(visual_redesign_briefs)} redesign briefs")
+                logger.info(f"Generated {len(visual_redesign_briefs)} redesign briefs with pattern guidance")
                 # Update brief with visual redesign
                 await lead_repository.update_brief_visual_redesign(
                     lead_id=site_id,
@@ -3307,6 +3605,36 @@ class SiteRepository:
                 section.get("componentId"),
             )
 
+        # Phase 6: Calculate quality metrics and uniqueness scores
+        await lead_repository._update_job(
+            job_id, progress=52, step="Calculating quality metrics"
+        )
+
+        from app.core.site_quality_metrics import calculate_overall_quality_score
+
+        # Build site object for quality assessment
+        site_for_quality = {
+            "themeName": theme["name"],
+            "heroVariant": hero_variant_key,
+            "paletteMode": palette_mode,
+            "colors": applied_tokens.get("enhancedColorSystem", {}),
+            "typography": applied_tokens.get("typography", {}),
+            "sections": applied_sections,
+            "navigationConfig": navigation_config,
+        }
+
+        # Calculate comprehensive quality metrics
+        quality_metrics = calculate_overall_quality_score(site_for_quality)
+        logger.info(
+            f"Quality metrics: overall={quality_metrics['overall_score']}, "
+            f"grade={quality_metrics['grade']}, "
+            f"color_diversity={quality_metrics['metrics']['color_diversity']['score']}, "
+            f"animation_coverage={quality_metrics['metrics']['animation_coverage']['score']}"
+        )
+
+        # Store quality metrics in brand tokens for reference
+        applied_tokens["qualityMetrics"] = quality_metrics
+
         quality_score = _quality_score(
             brief=brief,
             extraction=extraction,
@@ -3353,6 +3681,8 @@ class SiteRepository:
             heroVariant=applied_hero,
             sectionStack=applied_sections,
             ctaStrategy=applied_cta,
+            navigationConfig=navigation_config,
+            awwwardsPatternMetadata=pattern_metadata,
             qualityScore=0,
             readinessStatus="blocked",
             qaStatus="fail",
@@ -3443,6 +3773,7 @@ class SiteRepository:
             "heroVariant": applied_hero,
             "sectionStack": applied_sections,
             "ctaStrategy": applied_cta,
+            "navigationConfig": navigation_config,
             "qualityScore": quality_score,
             "readinessStatus": readiness_status,
             "qaStatus": qa_status,
@@ -3492,6 +3823,7 @@ class SiteRepository:
             "heroVariant": applied_hero,
             "sectionStack": applied_sections,
             "ctaStrategy": applied_cta,
+            "navigationConfig": navigation_config,
             "qualityScore": quality_score,
             "readinessStatus": readiness_status,
             "qaStatus": qa_status,
@@ -3754,7 +4086,7 @@ class SiteRepository:
         from app.core.tasks import run_site_generation_job_task
 
         payload = request.model_dump() if request else None
-        run_site_generation_job_task.delay(
+        run_site_generation_job_task.delay(  # type: ignore[attr-defined]
             site_id=site_id, job_id=job_id, request_payload=payload
         )
 
@@ -4136,8 +4468,8 @@ class SiteRepository:
             "leadId": site.leadId,
             "version": site.version,
             "status": status,
-            "sourceAttribution": site.sourceAttribution.model_dump()
-            if hasattr(site.sourceAttribution, "model_dump")
+            "sourceAttribution": site.sourceAttribution.model_dump()  # type: ignore[union-attr]
+            if site.sourceAttribution and hasattr(site.sourceAttribution, "model_dump")
             else site.sourceAttribution,
             "previewSlug": site.previewSlug,
             "previewUrl": site.previewUrl,

@@ -8,7 +8,7 @@ export function ErrorState({ title, description }: { title: string; description:
       <h2 className="text-lg font-semibold">{title}</h2>
       <p className="mt-2 max-w-2xl leading-6 text-muted">{description}</p>
       <div className="mt-5">
-        <Button asChild variant="secondary">
+        <Button variant="secondary">
           <Link href="/nsa">Return to dashboard</Link>
         </Button>
       </div>

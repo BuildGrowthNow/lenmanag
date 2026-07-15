@@ -65,8 +65,8 @@ async def login(payload: LoginRequest, response: Response, request: Request) -> 
     email = _normalize_email(str(payload.email))
     if not allowed:
         await write_audit_log(None, "auth", email, "login_denied", after={"reason": reason})
-        payload = LoginResponse(authenticated=False, user=None, status="denied", message="Access denied. This email is not on the admin allowlist.")
-        return success_response(payload, meta=response_meta(request))
+        denied_response = LoginResponse(authenticated=False, user=None, status="denied", message="Access denied. This email is not on the admin allowlist.")
+        return success_response(denied_response, meta=response_meta(request))
 
     token = create_session_token(email=email, name=payload.name)
     _set_session_cookie(response, token)
@@ -78,14 +78,14 @@ async def login(payload: LoginRequest, response: Response, request: Request) -> 
 @router.get("/session", response_model=ResponseEnvelope[SessionResponse])
 async def session(request: Request, session_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> ResponseEnvelope[SessionResponse]:
     if not session_cookie:
-        payload = SessionResponse(authenticated=False, user=None, status="inactive")
-        return success_response(payload, meta=response_meta(request))
-    payload = decode_session_token(session_cookie)
-    if payload is None:
-        payload = SessionResponse(authenticated=False, user=None, status="inactive")
-        return success_response(payload, meta=response_meta(request))
-    user = SessionUser(email=payload["email"], name=payload["name"], role=payload["role"])
-    expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        inactive_response = SessionResponse(authenticated=False, user=None, status="inactive")
+        return success_response(inactive_response, meta=response_meta(request))
+    token_payload = decode_session_token(session_cookie)
+    if token_payload is None:
+        inactive_response = SessionResponse(authenticated=False, user=None, status="inactive")
+        return success_response(inactive_response, meta=response_meta(request))
+    user = SessionUser(email=token_payload["email"], name=token_payload["name"], role=token_payload["role"])
+    expires_at = datetime.fromtimestamp(token_payload["exp"], tz=timezone.utc)
     return success_response(SessionResponse(authenticated=True, user=user, status="active", expiresAt=expires_at), meta=response_meta(request))
 
 
@@ -102,7 +102,7 @@ async def refresh_session(request: Request, response: Response, session_cookie: 
     expires_at = None
     if refreshed_payload and refreshed_payload.get("exp"):
         expires_at = datetime.fromtimestamp(refreshed_payload["exp"], tz=timezone.utc)
-    user = SessionUser(email=payload["email"], name=payload.get("name"), role=payload.get("role", "operator"))
+    user = SessionUser(email=payload["email"], name=payload.get("name") or payload["email"].split("@")[0], role=payload.get("role", "operator"))
     return success_response(SessionResponse(authenticated=True, user=user, status="active", expiresAt=expires_at), meta=response_meta(request))
 
 

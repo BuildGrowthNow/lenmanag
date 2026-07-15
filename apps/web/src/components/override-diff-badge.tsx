@@ -80,7 +80,7 @@ export function OverrideDiffBadge({ diff, onDisable }: OverrideDiffBadgeProps) {
             {onDisable && (
               <div className="pt-2">
                 <Button
-                  variant="danger"
+                  variant="destructive"
                   className="w-full"
                   onClick={() => {
                     onDisable(diff.overrideId);

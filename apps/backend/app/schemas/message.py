@@ -100,8 +100,8 @@ class PreviewContextResponse(BaseModel):
     ctaPrimaryHref: str | None
     ctaSecondaryLabel: str | None
     ctaSecondaryHref: str | None
-    calendlyUrl: str | null
-    exportUrl: str | null
+    calendlyUrl: str | None
+    exportUrl: str | None
 
 
 class MessageCopyResponse(BaseModel):

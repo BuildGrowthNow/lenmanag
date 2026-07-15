@@ -545,7 +545,7 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                           {draft.tone} · {draft.angle}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-3">
-                          <Button asChild variant="secondary">
+                          <Button variant="secondary">
                             <Link href={`/nsa/leads/${entry.lead.id}`}>Open lead</Link>
                           </Button>
                           <Button type="button" variant="ghost" disabled={pendingLeadId === draft.id} onClick={() => void handleCopy(draft.id)}>

@@ -120,7 +120,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
           title="Site source not found"
           description="The workspace needs a lead record before the generator can build a preview site."
           action={
-            <Button asChild>
+            <Button>
               <Link href="/nsa/leads">Back to leads</Link>
             </Button>
           }
@@ -316,7 +316,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                   hasExtraction={hasExtraction}
                 />
                 <div className="flex flex-wrap gap-3">
-                  <Button asChild variant="secondary">
+                  <Button variant="secondary">
                     <Link href={`/nsa/sites/${id}/brief`}>Open brief review</Link>
                   </Button>
                 </div>
@@ -738,16 +738,16 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
               <CardDescription>Jump between the source lead, the brief, the preview, and the edit workspace.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
-              <Button asChild>
+              <Button>
                 <Link href={`/nsa/leads/${lead.id}`}>Back to lead</Link>
               </Button>
-              <Button asChild variant="secondary">
+              <Button variant="secondary">
                 <Link href={`/sites/${site?.previewSlug || id}`} target="_blank">
                   Open preview
                   <ExternalLink className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="secondary">
+              <Button variant="secondary">
                 <Link href={`/nsa/sites/${id}/edit`}>
                   Edit workspace
                   <Sparkles className="ml-2 h-4 w-4" />
