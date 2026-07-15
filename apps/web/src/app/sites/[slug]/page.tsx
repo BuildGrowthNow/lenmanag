@@ -457,35 +457,7 @@ export default function PublicPreviewPage({ params }: { params: Promise<{ slug: 
         style={{ background: paletteBackground(mode), color: textColor }}
       >
         <div className="mx-auto max-w-7xl">
-          {/* Quality Score Badge */}
-          {site.qualityScore !== undefined && (
-            <div className="mb-8 flex items-center gap-3">
-              <div className={`inline-flex items-center gap-2 rounded-full px-4 py-2 border ${
-                mode === "light"
-                  ? "border-green-200 bg-green-50"
-                  : "border-green-900/30 bg-green-950/20"
-              }`}>
-                <span className={`text-sm font-semibold ${
-                  mode === "light" ? "text-green-700" : "text-green-300"
-                }`}>
-                  ✓ Quality Score: {site.qualityScore}/100
-                </span>
-              </div>
-              {site.qaStatus && (
-                <div className={`text-xs font-medium uppercase tracking-wide px-3 py-1.5 rounded-full border ${
-                  site.qaStatus === "pass"
-                    ? mode === "light"
-                      ? "border-blue-200 bg-blue-50 text-blue-700"
-                      : "border-blue-900/30 bg-blue-950/20 text-blue-300"
-                    : mode === "light"
-                      ? "border-amber-200 bg-amber-50 text-amber-700"
-                      : "border-amber-900/30 bg-amber-950/20 text-amber-300"
-                }`}>
-                  {site.qaStatus === "pass" ? "Production Ready" : "Pending Review"}
-                </div>
-              )}
-            </div>
-          )}
+          {/* Quality Score Badge - Hidden on public preview */}
 
           {/* Screenshot Preview (optional) */}
           {site.screenshotRefs && site.screenshotRefs.length > 0 && (
