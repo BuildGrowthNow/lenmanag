@@ -84,6 +84,7 @@ class PageSignals:
     font_family: str | None = None
     h1: list[str] = field(default_factory=list)
     h2: list[str] = field(default_factory=list)
+    h3: list[str] = field(default_factory=list)
     ctas: list[str] = field(default_factory=list)
     images: list[str] = field(default_factory=list)
     links: list[tuple[str, str]] = field(default_factory=list)
@@ -336,7 +337,9 @@ class _SignalParser(HTMLParser):
             return
         if self._text_target:
             self._text_buffer.append(text)
-        elif self._current_tag in {"body", "main", "section", "article"}:
+        # Capture ALL visible text content (not just specific containers)
+        # This ensures we get text from divs, paragraphs, spans, etc.
+        if self._current_tag not in {"script", "style", "noscript", "head"}:
             self.signals.body_text.append(text)
         if self._section_stack and self._current_tag not in {
             "script",
@@ -872,6 +875,19 @@ def _collect_audience_clues(text_chunks: Iterable[str]) -> list[str]:
         "for contractors",
         "for founders",
         "for brands",
+        "for developers",
+        "for creators",
+        "for marketers",
+        "for retailers",
+        "for platforms",
+        "for saas",
+        "for e-commerce",
+        "for healthcare",
+        "for finance",
+        "for restaurants",
+        "for freelancers",
+        "for small business",
+        "for professionals",
     ]:
         if phrase in joined:
             clues.append(phrase.title())
@@ -1308,8 +1324,28 @@ def crawl_website(
                         break
                 except Exception as e:
                     logger.warning(f"Asset download failed: {e}")
-            if signals.h1:
-                service_clues.extend(signals.h1[:2])
+            if url == homepage_url:
+                if signals.h1:
+                    service_clues.extend(signals.h1[:2])
+                if signals.h2:
+                    service_clues.extend(signals.h2[:4])
+            else:
+                if signals.h1:
+                    service_clues.extend(signals.h1[:1])
+                if signals.h2:
+                    service_clues.extend(signals.h2[:2])
+
+            for section in page_data.get("sections", []):
+                if section.get("type") == "services":
+                    heading = section.get("heading")
+                    if heading and heading not in service_clues:
+                        service_clues.append(heading)
+                    section_text = section.get("text") or ""
+                    for line in section_text.split("\n")[:5]:
+                        line = line.strip()
+                        if 3 < len(line) < 60 and line[0].isupper():
+                            service_clues.append(line)
+
             if signals.ctas:
                 cta_clues.extend(signals.ctas[:3])
             body_text_for_audience.extend(signals.body_text[:10])
@@ -1433,7 +1469,7 @@ def crawl_website(
         )
     )
 
-    service_clues = list(dict.fromkeys(service_clues[:4]))
+    service_clues = list(dict.fromkeys(service_clues[:12]))
     cta_clues = list(dict.fromkeys(cta_clues[:4]))
     tone_clues = list(dict.fromkeys(tone_clues))
     audience_clues = _collect_audience_clues(body_text_for_audience)

@@ -13,6 +13,7 @@ from uuid import uuid4
 from app.core.analytics import analytics_repository
 from app.core.config import get_settings
 from app.core.extraction import crawl_website
+from app.core.extraction_enrichment import enrich_extraction, validate_extraction_content
 from app.core.mongo import get_database
 from app.schemas.brief import (
     BriefSourceKind,
@@ -95,6 +96,53 @@ def _missing_fields(lead: dict[str, Any]) -> list[str]:
     if not lead.get("websiteUrl"):
         missing.append("websiteUrl")
     return missing
+
+
+def _sanitize_section_title(title: str) -> str | None:
+    """
+    Convert internal section titles to public-friendly versions.
+    Returns None if section should be dropped from public view.
+    """
+    lowered = title.lower().strip()
+
+    # Direct mappings for internal terms
+    mappings = {
+        "brand cues": "Our Brand",
+        "conversion path": "Get Started",
+        "cta pattern": "Next Steps",
+        "open questions": None,
+        "missing requirements": None,
+        "gap items": None,
+        "services or offerings": "Services",
+        "proof and trust": "Results",
+        "about / point of view": "About",
+        "packages or pricing": "Pricing",
+        "work / gallery": "Portfolio",
+        "contact path": "Contact",
+    }
+
+    if lowered in mappings:
+        return mappings[lowered]
+
+    # Drop sections with operator terms
+    operator_terms = [
+        "operator",
+        "admin",
+        "review",
+        "gap",
+        "missing",
+        "requirements",
+        "questions",
+        "cues",
+        "extraction",
+        "source notes",
+        "traceability",
+    ]
+    if any(term in lowered for term in operator_terms):
+        return None
+
+    # Return title with proper capitalization
+    return title.title()
 
 
 def _unique_by_key(items: list[dict[str, Any]], key_fn) -> list[dict[str, Any]]:
@@ -1663,9 +1711,13 @@ class LeadRepository:
             section_type = str(source_section.get("type") or "unknown")
             if section_type in {"hero", "header", "footer", "unknown"}:
                 continue
-            title = section_type_labels.get(
+            raw_title = section_type_labels.get(
                 section_type, source_section.get("heading") or "Source Section"
             )
+            # Sanitize title for public display
+            title = _sanitize_section_title(raw_title)
+            if title is None:
+                continue  # Skip sections with internal-only titles
             key = title.lower()
             if key in seen_section_titles:
                 continue
@@ -1694,7 +1746,7 @@ class LeadRepository:
         if extraction.summary.serviceClues:
             section_items.append(
                 _brief_section_recommendation(
-                    title="Services or Offerings",
+                    title=_sanitize_section_title("Services or Offerings") or "Services",
                     rationale=f"Surface the public service signal: {extraction.summary.serviceClues[0]}.",
                     source_kind="inferred",
                     inference_label="Inferred from service-oriented page language.",
@@ -1708,27 +1760,29 @@ class LeadRepository:
                 )
             )
         if extraction.brandAssetCues:
-            section_items.append(
-                _brief_section_recommendation(
-                    title="Brand cues",
-                    rationale="Carry the extracted logo, color, or typography signal into the visual hierarchy.",
-                    source_kind="source_backed",
-                    inference_label="Supported by captured public brand assets.",
-                    confidence=self._brief_confidence(
-                        *(cue["confidence"] for cue in asset_cues), floor=54
-                    ),
-                    references=self._field_references(
-                        extraction=extraction,
-                        asset_cues=asset_cues,
-                        include_assets=True,
-                        limit=3,
-                    ),
+            sanitized_title = _sanitize_section_title("Brand cues")
+            if sanitized_title:  # Only add if not filtered out
+                section_items.append(
+                    _brief_section_recommendation(
+                        title=sanitized_title,
+                        rationale="Carry the extracted logo, color, or typography signal into the visual hierarchy.",
+                        source_kind="source_backed",
+                        inference_label="Supported by captured public brand assets.",
+                        confidence=self._brief_confidence(
+                            *(cue["confidence"] for cue in asset_cues), floor=54
+                        ),
+                        references=self._field_references(
+                            extraction=extraction,
+                            asset_cues=asset_cues,
+                            include_assets=True,
+                            limit=3,
+                        ),
+                    )
                 )
-            )
         if extraction.summary.ctaClues:
             section_items.append(
                 _brief_section_recommendation(
-                    title="Conversion path",
+                    title=_sanitize_section_title("Conversion path") or "Get Started",
                     rationale=f"Make the primary CTA pattern explicit: {extraction.summary.ctaClues[0]}.",
                     source_kind="inferred",
                     inference_label="Inferred from CTA wording and placement cues.",
@@ -1742,18 +1796,20 @@ class LeadRepository:
                 )
             )
         if extraction.gapItems:
-            section_items.append(
-                _brief_section_recommendation(
-                    title="Open questions",
+            sanitized_gap_title = _sanitize_section_title("Open questions")
+            if sanitized_gap_title:  # Only add if not filtered out
+                section_items.append(
+                    _brief_section_recommendation(
+                        title=sanitized_gap_title,
                     rationale="Keep unresolved source gaps visible so the operator can review them before generation starts.",
                     source_kind="inferred",
                     inference_label="Derived from extraction gap items.",
                     confidence=self._brief_confidence(
                         60, extraction.confidenceScore, floor=45
                     ),
-                    references=[],
+                        references=[],
+                    )
                 )
-            )
 
         proof_points: list[dict[str, Any]] = []
         for reference in source_refs[:4]:
@@ -2270,6 +2326,27 @@ class LeadRepository:
                 error_message=str(exc),
             )
             return
+
+        # Phase 1: Validate + LLM-enrich extraction if content is sparse
+        is_valid, content_issues = validate_extraction_content(crawl_data)
+        if not is_valid:
+            logging.getLogger("lenquant.jobs").info(
+                "Extraction content sparse for %s: %s — running LLM enrichment",
+                lead_id,
+                content_issues,
+            )
+            await self._update_job(
+                job_id,
+                progress=60,
+                step="Enriching extraction with LLM analysis",
+                lead_ids=[lead_id],
+            )
+            try:
+                await enrich_extraction(crawl_data)
+            except Exception as enrich_err:
+                logging.getLogger("lenquant.jobs").warning(
+                    "LLM enrichment failed: %s", enrich_err
+                )
 
         now = _now()
         previous_doc = await self._latest_extraction_doc(lead_id)

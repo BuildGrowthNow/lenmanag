@@ -1804,13 +1804,33 @@ def _quality_score(
             if screenshot_qa_score is not None:
                 screenshot_qa_score = min(screenshot_qa_score, 30)
 
-        # Detect repeated section titles – treat as a hard failure
+        # Detect excessive section duplication (>40% repeated is a failure)
         section_titles = [
             _text(s.get("title", "")).strip().lower() for s in site_sections if s.get("title")
         ]
-        if section_titles and len(section_titles) != len(set(section_titles)):
-            logger.warning("Repeated sections detected. Returning quality score of 0.")
-            return 0
+        if section_titles:
+            unique_count = len(set(section_titles))
+            total_count = len(section_titles)
+            unique_ratio = unique_count / total_count if total_count > 0 else 1.0
+
+            if unique_ratio < 0.6:  # Less than 60% unique = quality fail
+                logger.warning(
+                    "Excessive section duplication detected (%s unique / %s total = %.1f%%). Returning quality score of 0.",
+                    unique_count,
+                    total_count,
+                    unique_ratio * 100,
+                )
+                return 0
+            elif unique_ratio < 0.8:  # 60-80% unique = warning, cap score
+                logger.warning(
+                    "Some section duplication detected (%s unique / %s total = %.1f%%). Capping quality score.",
+                    unique_count,
+                    total_count,
+                    unique_ratio * 100,
+                )
+                # Will cap the final score at 70 later
+                if screenshot_qa_score is not None:
+                    screenshot_qa_score = min(screenshot_qa_score, 70)
 
     # Sanity-check unusually high screenshot QA scores
     if screenshot_qa_score is not None and screenshot_qa_score >= 80:
@@ -3715,9 +3735,14 @@ class SiteRepository:
                     if slug := doc.get("previewSlug"):
                         existing_slugs.add(slug)
 
-        friendly_slug = _generate_friendly_slug(
-            _text(lead.companyName) or "site", existing_slugs
+        company_name_for_slug = _text(lead.companyName) or "site"
+        logger.info(
+            "Generating friendly slug from company name: %s (existing slugs count: %d)",
+            company_name_for_slug,
+            len(existing_slugs),
         )
+        friendly_slug = _generate_friendly_slug(company_name_for_slug, existing_slugs)
+        logger.info("Generated friendly slug: %s", friendly_slug)
 
         # Compute layout hash for duplicate detection
         temp_site = GeneratedSite(
@@ -3854,8 +3879,8 @@ class SiteRepository:
             "diversityNotes": _diversity_notes(current, theme, palette_mode, refs),
             "diversityScore": diversity_score,
             "layoutHash": layout_hash,
-            "previewSlug": site_id,
-            "previewUrl": f"/sites/{site_id}",
+            "previewSlug": current.previewSlug if current else friendly_slug,
+            "previewUrl": f"/sites/{current.previewSlug if current else friendly_slug}",
             "overrideCount": len(overrides),
             "refinementPromptId": refinement_prompt_id,
             "createdAt": now,
@@ -3904,8 +3929,8 @@ class SiteRepository:
             "diversityNotes": _diversity_notes(current, theme, palette_mode, refs),
             "diversityScore": diversity_score,
             "layoutHash": layout_hash,
-            "previewSlug": site_id,
-            "previewUrl": f"/sites/{site_id}",
+            "previewSlug": current.previewSlug if current else friendly_slug,
+            "previewUrl": f"/sites/{current.previewSlug if current else friendly_slug}",
             "overrideCount": len(overrides),
             "overrides": overrides,
             "exportMetadata": None,

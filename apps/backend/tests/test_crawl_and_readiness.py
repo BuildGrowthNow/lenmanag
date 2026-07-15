@@ -68,6 +68,8 @@ def test_crawl_website_sitemap_priority_and_budget(caplog):
                 # Attributes used by _extract_page_summary
                 self.meta_description = ""
                 self.h1 = []
+                self.h2 = []
+                self.h3 = []
                 self.ctas = []
                 self.sections = []
                 self.assets = []
@@ -171,6 +173,8 @@ def test_crawl_website_no_sitemap_falls_back_to_internal_links():
                 self.font_family = None
                 self.meta_description = ""
                 self.h1 = []
+                self.h2 = []
+                self.h3 = []
                 self.ctas = []
                 self.sections = []
                 self.assets = []
@@ -263,6 +267,8 @@ def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only
             self.font_family = None
             self.meta_description = ""
             self.h1 = []
+            self.h2 = []
+            self.h3 = []
             self.ctas = []
             self.sections = []
             self.assets = []

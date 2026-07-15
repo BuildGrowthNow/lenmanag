@@ -103,6 +103,57 @@ class VisualRedesignAnalyzer:
     def __init__(self):
         self.gemini = get_llm_client()
 
+    def _validate_and_fix_component_id(
+        self, component_id: str | None, section_type: str
+    ) -> str:
+        """
+        Validate component ID and fix common errors.
+        Returns a valid component ID, converting PascalCase if needed.
+        """
+        if not component_id:
+            return self._fallback_component_for_section(section_type)
+
+        valid_ids = {c["id"] for c in self.AVAILABLE_COMPONENTS}
+
+        # Already valid
+        if component_id in valid_ids:
+            return component_id
+
+        # Try converting PascalCase to kebab-case
+        # "HeroSplitEditorial" -> "hero-split-editorial"
+        import re
+        kebab = re.sub(r'(?<!^)(?=[A-Z])', '-', component_id).lower()
+        if kebab in valid_ids:
+            logger.warning(f"Fixed component ID: {component_id} -> {kebab}")
+            return kebab
+
+        # Try common misspellings/variations
+        normalized = component_id.lower().replace("_", "-")
+        if normalized in valid_ids:
+            logger.warning(f"Fixed component ID: {component_id} -> {normalized}")
+            return normalized
+
+        # Invalid - use fallback
+        logger.error(
+            f"Invalid component ID: {component_id}, using fallback for section type {section_type}"
+        )
+        return self._fallback_component_for_section(section_type)
+
+    def _fallback_component_for_section(self, section_type: str) -> str:
+        """Return safe default component for section type."""
+        fallbacks = {
+            "hero": "hero-split-editorial",
+            "services": "services-bento",
+            "proof": "proof-carousel",
+            "about": "hero-split-editorial",
+            "process": "timeline-vertical",
+            "pricing": "features-comparison",
+            "gallery": "gallery-masonry",
+            "contact": "cta-banner",
+            "cta": "cta-banner",
+        }
+        return fallbacks.get(section_type, "services-bento")
+
     def _build_section_analysis_prompt(
         self,
         section: ExtractedSection,
@@ -132,8 +183,10 @@ CLIENT BRAND:
 - Typography: {client_brand.get('typography', {}).get('value', 'sans-serif')}
 - Motion: {client_brand.get('motionIntensity', {}).get('value', 'subtle')}
 
-AVAILABLE COMPONENTS:
+AVAILABLE COMPONENTS (use exact kebab-case IDs):
 {components_list}
+
+IMPORTANT: Return component IDs in kebab-case format (e.g., "hero-split-editorial" NOT "HeroSplitEditorial")
 
 DESIGN REQUIREMENTS:
 - AVOID generic card layouts without interactivity
@@ -191,15 +244,12 @@ Return ONLY valid JSON (no markdown, no explanation):
             
             data = self.gemini.extract_json_from_response(response)
             
-            # Validate componentId
-            valid_ids = {c["id"] for c in self.AVAILABLE_COMPONENTS}
-            if data.get("recommendedComponent") not in valid_ids:
-                logger.warning(
-                    f"Invalid componentId: {data.get('recommendedComponent')}, "
-                    f"falling back to default"
-                )
-                data["recommendedComponent"] = "services-grid"
-            
+            # Validate and fix componentId
+            component_id = self._validate_and_fix_component_id(
+                data.get("recommendedComponent"), section.type
+            )
+            data["recommendedComponent"] = component_id
+
             return VisualCritique(**data)
         
         except Exception as e:
@@ -209,7 +259,7 @@ Return ONLY valid JSON (no markdown, no explanation):
                 sectionType=section.type,
                 redesignGoal="Improve visual presentation",
                 contentToReuse=section.ctas[:2] if section.ctas else [],
-                recommendedComponent="services-grid",
+                recommendedComponent=self._fallback_component_for_section(section.type),
                 visualDirection="Clean, professional layout",
                 confidence=40,
             )
