@@ -975,11 +975,15 @@ def _map_section_kind_to_component_id(kind: str) -> str:
     """
     value = _text(kind).lower()
     if not value:
-        return "services-grid"
-
-    # Services / offerings / capabilities
-    if any(token in value for token in ["service", "offering", "feature", "capability"]):
         return "services-bento"
+
+    # Stats / metrics / numbers
+    if any(token in value for token in ["stat", "metric", "number", "count", "achievement", "result"]):
+        return "stats-counter"
+
+    # Services / offerings / capabilities - prefer interactive
+    if any(token in value for token in ["service", "offering", "feature", "capability"]):
+        return "services-tabs"
 
     # Proof / testimonials / results / social proof
     if any(
@@ -988,7 +992,6 @@ def _map_section_kind_to_component_id(kind: str) -> str:
             "proof",
             "testimonial",
             "review",
-            "result",
             "highlight",
             "case",
             "trust",
@@ -1037,6 +1040,10 @@ def _map_section_kind_to_component_id(kind: str) -> str:
     ):
         return "editorial-feature"
 
+    # Comparison / plans
+    if any(token in value for token in ["comparison", "compare", "versus", "vs", "plan"]):
+        return "features-comparison"
+
     # CTA / contact / booking / pricing
     if any(
         token in value
@@ -1048,11 +1055,11 @@ def _map_section_kind_to_component_id(kind: str) -> str:
             "quote",
             "pricing",
         ]
-    ): 
+    ):
         return "cta-banner"
 
-    # Default safe fallback
-    return "services-grid"
+    # Default safe fallback - interactive bento
+    return "services-bento"
 
 
 def _section_stack(

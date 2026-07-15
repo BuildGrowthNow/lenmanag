@@ -435,7 +435,106 @@ def _fetch_url(url: str) -> tuple[str, str, dict[str, str]]:
         return body, final_url, headers
 
 
+def _playwright_fetch(url: str) -> dict[str, Any] | None:
+    """Fetch a page using Playwright to get JS-rendered content.
+    Returns None if Playwright is unavailable so caller can fall back."""
+    if not get_settings().extraction_enable_visual_capture:
+        return None
+    try:
+        sync_playwright = importlib.import_module("playwright.sync_api").sync_playwright
+    except Exception:
+        return None
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            page = browser.new_page(
+                viewport={"width": 1440, "height": 900},
+                user_agent=USER_AGENT,
+            )
+            response = page.goto(url, wait_until="networkidle", timeout=20000)
+            final_url = page.url
+            status = response.status if response else 0
+
+            rendered_html = page.content()
+
+            page_data = page.evaluate("""
+            () => {
+                const getStyle = (el, prop) => window.getComputedStyle(el)[prop];
+                const sections = Array.from(document.querySelectorAll('header, main > section, section, article, footer'));
+                return {
+                    meta: Array.from(document.querySelectorAll('meta')).reduce((acc, meta) => {
+                        const name = meta.getAttribute('name') || meta.getAttribute('property');
+                        if (name) acc[name] = meta.getAttribute('content');
+                        return acc;
+                    }, {}),
+                    cleanedText: document.body ? document.body.innerText : "",
+                    fonts: Array.from(new Set(Array.from(document.querySelectorAll('*')).slice(0, 500).map(el => getStyle(el, 'fontFamily')))),
+                    colors: Array.from(new Set(
+                        Array.from(document.querySelectorAll('*')).slice(0, 500).map(el => getStyle(el, 'backgroundColor'))
+                        .concat(Array.from(document.querySelectorAll('*')).slice(0, 500).map(el => getStyle(el, 'color')))
+                    )),
+                    headings: Array.from(document.querySelectorAll('h1, h2, h3, h4')).map(el => el.innerText),
+                    links: Array.from(document.querySelectorAll('a[href]')).map(el => ({href: el.href, text: el.innerText.trim()})).filter(l => l.href),
+                    images: Array.from(document.querySelectorAll('img[src]')).map(el => ({src: el.src, alt: el.alt || ''})),
+                    sectionsData: sections.map((sec, idx) => ({
+                        index: idx,
+                        tagName: sec.tagName.toLowerCase(),
+                        id: sec.id || '',
+                        className: sec.className || '',
+                        html: sec.outerHTML.slice(0, 8000),
+                        text: sec.innerText.slice(0, 2000),
+                        headings: Array.from(sec.querySelectorAll('h1,h2,h3,h4')).map(h => h.innerText),
+                        ctas: Array.from(sec.querySelectorAll('a, button')).filter(el =>
+                            /contact|get started|book|demo|quote|learn more|consult|schedule|call|talk|sign up|try|free/i.test(el.innerText)
+                        ).map(el => el.innerText.trim()),
+                        images: Array.from(sec.querySelectorAll('img[src]')).map(el => el.src),
+                        computedStyles: {
+                            backgroundColor: getStyle(sec, 'backgroundColor'),
+                            color: getStyle(sec, 'color'),
+                            fontFamily: getStyle(sec, 'fontFamily'),
+                            padding: getStyle(sec, 'padding'),
+                        }
+                    }))
+                };
+            }
+            """)
+
+            page.close()
+            browser.close()
+
+            if status >= 400:
+                return {
+                    "ok": False,
+                    "body": rendered_html,
+                    "finalUrl": final_url,
+                    "headers": {},
+                    "error": f"http_{status}",
+                    "pageData": page_data,
+                    "renderedByPlaywright": True,
+                }
+
+            return {
+                "ok": True,
+                "body": rendered_html,
+                "finalUrl": final_url,
+                "headers": {},
+                "error": None,
+                "pageData": page_data,
+                "renderedByPlaywright": True,
+            }
+    except Exception as exc:
+        logger.warning("Playwright fetch failed for %s: %s", url, exc)
+        return None
+
+
 def _safe_fetch(url: str) -> dict[str, Any]:
+    # Try Playwright first to get JS-rendered content
+    pw_result = _playwright_fetch(url)
+    if pw_result is not None:
+        return pw_result
+
+    # Fallback to urllib for raw HTML
     try:
         body, final_url, headers = _fetch_url(url)
         return {
@@ -444,6 +543,7 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "finalUrl": final_url,
             "headers": headers,
             "error": None,
+            "renderedByPlaywright": False,
         }
     except HTTPError as exc:
         return {
@@ -452,6 +552,7 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "finalUrl": url,
             "headers": {},
             "error": f"http_{exc.code}",
+            "renderedByPlaywright": False,
         }
     except URLError as exc:
         return {
@@ -460,6 +561,7 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "finalUrl": url,
             "headers": {},
             "error": f"url_{getattr(exc, 'reason', 'fetch_failed')}",
+            "renderedByPlaywright": False,
         }
     except Exception as exc:  # pragma: no cover - network edge cases
         return {
@@ -468,6 +570,7 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "finalUrl": url,
             "headers": {},
             "error": str(exc),
+            "renderedByPlaywright": False,
         }
 
 
@@ -1071,6 +1174,33 @@ def crawl_website(
         crawled_count += 1
         page_data = _extract_page_summary(url, result["body"] or "", source, depth)
         signals: PageSignals = page_data.pop("signals")
+
+        # Enrich with Playwright pageData if available
+        if result.get("renderedByPlaywright") and result.get("pageData"):
+            pw_data = result["pageData"]
+            page_data["renderedByPlaywright"] = True
+            page_data["meta"] = pw_data.get("meta", {})
+            page_data["cleanedText"] = pw_data.get("cleanedText", "")
+            page_data["fonts"] = pw_data.get("fonts", [])
+            page_data["colors"] = list(set(pw_data.get("colors", [])))
+            page_data["headings"] = pw_data.get("headings", [])
+            page_data["playwrightLinks"] = pw_data.get("links", [])
+            page_data["playwrightImages"] = pw_data.get("images", [])
+
+            # Enrich sections with Playwright-extracted data
+            pw_sections = pw_data.get("sectionsData", [])
+            for section in page_data.get("sections", []):
+                section_index = section.get("index")
+                pw_section = next((s for s in pw_sections if s.get("index") == section_index), None)
+                if pw_section:
+                    section["html"] = pw_section.get("html", "")
+                    section["text"] = pw_section.get("text", section.get("text", ""))
+                    section["playwrightHeadings"] = pw_section.get("headings", [])
+                    section["playwrightCtas"] = pw_section.get("ctas", [])
+                    section["computedStyles"] = pw_section.get("computedStyles", {})
+                    if pw_section.get("images"):
+                        section["imageUrls"] = list(dict.fromkeys(section.get("imageUrls", []) + pw_section["images"]))
+
         page_inventory.append(page_data)
         source_citations.extend(page_data["citations"])
         for asset in page_data.get("assets", []):

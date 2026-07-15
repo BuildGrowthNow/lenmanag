@@ -356,16 +356,284 @@ export const StickyCta: React.FC<ComponentProps> = ({
 );
 
 /**
+ * ServicesTabs: Interactive tabbed navigation for services
+ */
+export const ServicesTabs: React.FC<ComponentProps> = ({
+  section,
+  dna,
+  contentTone,
+  bodyTone,
+  panelTone,
+  polish,
+}) => {
+  const [activeTab, setActiveTab] = React.useState(0);
+  const items = section.items.filter(Boolean);
+  return (
+    <section className={`border-t ${panelTone} py-16 md:py-28`}>
+      <div className="mb-12 flex flex-col gap-4">
+        <div className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: dna.accentHue }}>
+          {section.title || 'Services'}
+        </div>
+        <h2 className={`text-4xl md:text-6xl font-semibold tracking-tight ${contentTone}`} style={{ fontFamily: dna.fontFamily }}>
+          {polish(section.headline)}
+        </h2>
+      </div>
+      <div className="flex gap-2 mb-8 flex-wrap">
+        {items.map((item, idx) => (
+          <button
+            key={idx}
+            onClick={() => setActiveTab(idx)}
+            className={`px-6 py-3 ${dna.borderRadius} font-semibold transition-all ${
+              activeTab === idx
+                ? 'text-white'
+                : `${contentTone} border ${panelTone} hover:border-current`
+            }`}
+            style={activeTab === idx ? { backgroundColor: dna.accentHue } : {}}
+          >
+            {polish(item).split(':')[0] || polish(item)}
+          </button>
+        ))}
+      </div>
+      <div className={`border p-8 md:p-12 ${panelTone} ${dna.borderRadius} min-h-[200px] transition-all duration-300`}>
+        <div className={`text-lg leading-relaxed ${contentTone}`}>
+          {polish(items[activeTab] || '')}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/**
+ * ServicesAccordion: Collapsible accordion for detailed service info
+ */
+export const ServicesAccordion: React.FC<ComponentProps> = ({
+  section,
+  dna,
+  contentTone,
+  bodyTone,
+  panelTone,
+  polish,
+}) => {
+  const [openIndex, setOpenIndex] = React.useState<number | null>(0);
+  const items = section.items.filter(Boolean);
+  return (
+    <section className={`border-t ${panelTone} py-16 md:py-28`}>
+      <div className="mb-12 flex flex-col gap-4">
+        <div className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: dna.accentHue }}>
+          {section.title || 'Services'}
+        </div>
+        <h2 className={`text-4xl md:text-6xl font-semibold tracking-tight ${contentTone}`} style={{ fontFamily: dna.fontFamily }}>
+          {polish(section.headline)}
+        </h2>
+      </div>
+      <div className="space-y-3">
+        {items.map((item, idx) => {
+          const isOpen = openIndex === idx;
+          const parts = polish(item).split(':');
+          const title = parts[0] || polish(item);
+          const content = parts[1] || '';
+          return (
+            <div key={idx} className={`border ${panelTone} ${dna.borderRadius} overflow-hidden transition-all`}>
+              <button
+                onClick={() => setOpenIndex(isOpen ? null : idx)}
+                className={`w-full px-6 py-4 flex items-center justify-between ${contentTone} hover:opacity-80 transition-opacity`}
+              >
+                <span className="font-semibold text-left">{title}</span>
+                <span className="text-2xl transition-transform" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                  ↓
+                </span>
+              </button>
+              <div
+                className="transition-all duration-300 overflow-hidden"
+                style={{ maxHeight: isOpen ? '500px' : '0px' }}
+              >
+                <div className={`px-6 pb-4 ${bodyTone}`}>
+                  {content || section.body}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
+/**
+ * StatsCounter: Animated number counters that trigger on scroll
+ */
+export const StatsCounter: React.FC<ComponentProps> = ({
+  section,
+  dna,
+  contentTone,
+  bodyTone,
+  panelTone,
+  polish,
+}) => {
+  const items = section.items.filter(Boolean);
+  return (
+    <section className={`border-t ${panelTone} py-16 md:py-28`}>
+      <div className="mb-12 text-center">
+        <div className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: dna.accentHue }}>
+          {section.title || 'By the numbers'}
+        </div>
+        <h2 className={`mt-4 text-4xl md:text-6xl font-semibold tracking-tight ${contentTone}`} style={{ fontFamily: dna.fontFamily }}>
+          {polish(section.headline)}
+        </h2>
+      </div>
+      <div className="grid gap-8 md:grid-cols-3">
+        {items.slice(0, 6).map((item, idx) => {
+          const match = polish(item).match(/^([^:]+):(.*)$/);
+          const number = match ? match[1].match(/\d+[+%]?/)?.[0] || '100+' : '100+';
+          const label = match ? match[2].trim() : polish(item);
+          return (
+            <div key={idx} className={`text-center p-8 border ${panelTone} ${dna.borderRadius} hover:scale-105 transition-transform`}>
+              <div className="text-5xl md:text-7xl font-bold mb-4" style={{ color: dna.accentHue }}>
+                {number}
+              </div>
+              <div className={`text-lg font-semibold ${contentTone}`}>
+                {label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
+/**
+ * ProofGridInteractive: Interactive proof grid with hover effects
+ */
+export const ProofGridInteractive: React.FC<ComponentProps> = ({
+  section,
+  dna,
+  contentTone,
+  bodyTone,
+  panelTone,
+  polish,
+}) => {
+  const items = section.items.filter(Boolean);
+  return (
+    <section className={`border-t ${panelTone} py-16 md:py-28`}>
+      <div className="mb-12 flex flex-col gap-4">
+        <div className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: dna.accentHue }}>
+          {section.title || 'Testimonials'}
+        </div>
+        <h2 className={`text-4xl md:text-6xl font-semibold tracking-tight ${contentTone}`} style={{ fontFamily: dna.fontFamily }}>
+          {polish(section.headline)}
+        </h2>
+      </div>
+      <div className="grid gap-6 md:grid-cols-2">
+        {items.slice(0, 4).map((item, idx) => {
+          const match = polish(item).match(/^([^:]+):(.*)$/);
+          return (
+            <div
+              key={idx}
+              className={`group border p-8 ${panelTone} ${dna.borderRadius} hover:scale-[1.02] transition-all duration-300 cursor-pointer relative overflow-hidden`}
+            >
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity" style={{ backgroundColor: dna.accentHue }} />
+              {match ? (
+                <>
+                  <p className={`mb-4 text-lg leading-relaxed italic ${bodyTone} relative z-10`}>&ldquo;{match[2].trim()}&rdquo;</p>
+                  <p className={`text-sm font-semibold ${contentTone} relative z-10`}>{match[1]}</p>
+                </>
+              ) : (
+                <p className={`text-lg leading-relaxed italic ${contentTone} relative z-10`}>
+                  &ldquo;{polish(item)}&rdquo;
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
+/**
+ * FeaturesComparison: Interactive comparison table
+ */
+export const FeaturesComparison: React.FC<ComponentProps> = ({
+  section,
+  dna,
+  contentTone,
+  bodyTone,
+  panelTone,
+  polish,
+}) => {
+  const items = section.items.filter(Boolean);
+  return (
+    <section className={`border-t ${panelTone} py-16 md:py-28`}>
+      <div className="mb-12 text-center">
+        <div className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: dna.accentHue }}>
+          {section.title || 'Compare'}
+        </div>
+        <h2 className={`mt-4 text-4xl md:text-6xl font-semibold tracking-tight ${contentTone}`} style={{ fontFamily: dna.fontFamily }}>
+          {polish(section.headline)}
+        </h2>
+      </div>
+      <div className={`border ${panelTone} ${dna.borderRadius} overflow-hidden`}>
+        <div className="divide-y">
+          {items.map((item, idx) => (
+            <div key={idx} className="px-6 py-4 flex items-center justify-between hover:bg-opacity-50 transition-all group">
+              <span className={`font-medium ${contentTone}`}>{polish(item)}</span>
+              <span className="w-6 h-6 rounded-full flex items-center justify-center text-white text-sm font-bold group-hover:scale-110 transition-transform" style={{ backgroundColor: dna.accentHue }}>
+                ✓
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/**
+ * VideoHero: Hero with video background (placeholder for now)
+ */
+export const VideoHero: React.FC<ComponentProps> = ({
+  section,
+  dna,
+  contentTone,
+  bodyTone,
+  polish,
+}) => (
+  <header className="relative py-24 md:py-40 flex flex-col items-center justify-center text-center min-h-[70vh]">
+    <div className="absolute inset-0 opacity-20 overflow-hidden">
+      <div className="absolute inset-0 animate-pulse" style={{ backgroundColor: dna.accentHue }} />
+    </div>
+    <div className="relative z-10">
+      <h1
+        style={{ fontFamily: dna.fontFamily }}
+        className="max-w-4xl text-5xl md:text-7xl font-bold leading-[1.05] tracking-tight drop-shadow-lg"
+      >
+        {polish(section.headline)}
+      </h1>
+      <p className={`mt-10 max-w-2xl text-xl md:text-2xl leading-relaxed ${bodyTone}`}>
+        {polish(section.body || '')}
+      </p>
+    </div>
+  </header>
+);
+
+/**
  * Component registry mapping componentId to React component
  */
 export const PREMIUM_COMPONENTS: Record<string, React.FC<ComponentProps>> = {
   'hero-split-editorial': HeroSplitEditorial,
   'hero-centered': HeroCentered,
+  'video-hero': VideoHero,
   'services-bento': ServicesBento,
+  'services-tabs': ServicesTabs,
+  'services-accordion': ServicesAccordion,
   'proof-carousel': ProofCarousel,
+  'proof-grid-interactive': ProofGridInteractive,
   'timeline-vertical': TimelineVertical,
   'gallery-masonry': GalleryMasonry,
   'editorial-feature': EditorialFeature,
+  'stats-counter': StatsCounter,
+  'features-comparison': FeaturesComparison,
   'cta-banner': CtaBanner,
   'cta-sticky': StickyCta,
 };

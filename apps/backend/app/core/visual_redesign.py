@@ -18,57 +18,86 @@ class VisualRedesignAnalyzer:
         {
             "id": "hero-split-editorial",
             "name": "Split Editorial Hero",
-            "description": "Split layout with editorial feel, image on right",
+            "description": "Split layout with editorial feel, image on right, scroll-triggered animations",
+            "interactivity": "scroll-reveal, hover-lift",
         },
         {
             "id": "hero-centered",
             "name": "Centered Hero",
-            "description": "Centered hero with headline, subheading, and primary CTA",
+            "description": "Centered hero with headline, subheading, and primary CTA with gradient background",
+            "interactivity": "animated-gradient, pulse-cta",
         },
         {
             "id": "services-bento",
-            "name": "Bento Services",
-            "description": "2x3 grid bento layout for services/features",
+            "name": "Interactive Bento Grid",
+            "description": "2x3 bento grid with hover effects, expandable cards, and micro-interactions",
+            "interactivity": "hover-expand, stagger-reveal, card-tilt",
         },
         {
-            "id": "services-grid",
-            "name": "Simple Services Grid",
-            "description": "Clean 3-column grid",
+            "id": "services-tabs",
+            "name": "Tabbed Services",
+            "description": "Interactive tab navigation for services with smooth transitions",
+            "interactivity": "tab-switching, slide-transitions",
+        },
+        {
+            "id": "services-accordion",
+            "name": "Service Accordion",
+            "description": "Collapsible accordion sections for detailed service info",
+            "interactivity": "expand-collapse, smooth-accordion",
         },
         {
             "id": "proof-carousel",
-            "name": "Testimonial Carousel",
-            "description": "Scrollable testimonials with motion",
+            "name": "Auto-rotating Carousel",
+            "description": "Auto-rotating testimonials with drag controls and pagination",
+            "interactivity": "auto-rotate, drag-scroll, dot-navigation",
         },
         {
-            "id": "proof-grid",
-            "name": "Proof Grid",
-            "description": "2x2 grid of proof points",
+            "id": "proof-grid-interactive",
+            "name": "Interactive Proof Grid",
+            "description": "Grid with hover overlays, quote expansions, and filter buttons",
+            "interactivity": "hover-overlay, modal-expand, filter-animation",
         },
         {
             "id": "gallery-masonry",
-            "name": "Masonry Gallery",
-            "description": "Premium image grid with masonry layout",
+            "name": "Lightbox Gallery",
+            "description": "Masonry grid with hover zoom and lightbox modal on click",
+            "interactivity": "hover-zoom, lightbox-modal, lazy-load",
         },
         {
             "id": "timeline-vertical",
-            "name": "Vertical Timeline",
-            "description": "Step-by-step process with timeline",
+            "name": "Animated Timeline",
+            "description": "Vertical timeline with scroll-triggered progress line animation",
+            "interactivity": "scroll-progress, fade-in-sequence",
         },
         {
-            "id": "editorial-feature",
-            "name": "Editorial Feature",
-            "description": "Large featured section with image, headline, body, and bullet points",
+            "id": "stats-counter",
+            "name": "Animated Stats Counter",
+            "description": "Number counters that animate from 0 when scrolled into view",
+            "interactivity": "count-up-animation, scroll-trigger",
+        },
+        {
+            "id": "features-comparison",
+            "name": "Feature Comparison Table",
+            "description": "Interactive comparison table with toggle switches and highlights",
+            "interactivity": "toggle-columns, row-highlight, sticky-header",
+        },
+        {
+            "id": "video-hero",
+            "name": "Video Background Hero",
+            "description": "Hero section with background video and overlay content",
+            "interactivity": "video-background, parallax-scroll",
         },
         {
             "id": "cta-banner",
-            "name": "CTA Banner",
-            "description": "High-impact CTA section with headline and action",
+            "name": "Animated CTA Banner",
+            "description": "High-impact CTA with animated gradient and pulse effect",
+            "interactivity": "gradient-animation, button-pulse",
         },
         {
             "id": "cta-sticky",
-            "name": "Sticky CTA",
-            "description": "Sticky footer CTA that appears during scroll",
+            "name": "Sticky Slide-in CTA",
+            "description": "CTA that slides in from bottom after scroll threshold",
+            "interactivity": "scroll-trigger-slide, dismiss-animation",
         },
     ]
 
@@ -88,7 +117,7 @@ class VisualRedesignAnalyzer:
             for c in self.AVAILABLE_COMPONENTS
         )
 
-        prompt = f"""You are a premium web designer analyzing a website section for redesign.
+        prompt = f"""You are a premium, interactive web designer analyzing a website section for redesign.
 
 SECTION #{section_index}
 - Type: {section.type}
@@ -107,25 +136,36 @@ CLIENT BRAND:
 AVAILABLE COMPONENTS:
 {components_list}
 
-TASK: Analyze this section and recommend the best premium component for redesign.
+DESIGN REQUIREMENTS:
+- AVOID generic card layouts without interactivity
+- PRIORITIZE components with hover effects, animations, and user interactions
+- For service sections: prefer tabs, accordions, or interactive bento grids over static cards
+- For proof/testimonials: use carousels, filterable grids, or expandable quote cards
+- For stats/metrics: use animated counters that trigger on scroll
+- For features: use comparison tables, toggle switches, or expandable feature lists
+- Add motion: scroll-triggered reveals, hover lifts, gradient animations, smooth transitions
+- If content is rich enough, choose the MORE interactive variant
+
+TASK: Analyze this section and recommend the MOST INTERACTIVE premium component that fits the content.
 
 Consider:
-1. Section type and content
-2. Client brand identity
-3. Visual hierarchy and layout
-4. Premium design principles
-5. Uniqueness and bespoke feel
+1. Section type and content richness
+2. Opportunity for interactivity (tabs, accordions, carousels, counters, toggles)
+3. Engagement potential - how can users interact with this?
+4. Scroll-triggered animations and micro-interactions
+5. Avoiding static "card grid" patterns unless content is minimal
+6. Premium design principles: motion, depth, responsiveness
 
 Return ONLY valid JSON (no markdown, no explanation):
 {{
   "sectionType": "{section.type}",
   "originalStrengths": ["strength1", "strength2"],
   "originalWeaknesses": ["weakness1", "weakness2"],
-  "redesignGoal": "What to improve",
+  "redesignGoal": "What to improve with interactivity",
   "contentToReuse": ["content1", "content2"],
   "contentToRewrite": ["content1"],
   "recommendedComponent": "component-id",
-  "visualDirection": "Description of visual treatment",
+  "visualDirection": "Description of interactive visual treatment with specific animations/interactions",
   "confidence": 85
 }}"""
         
