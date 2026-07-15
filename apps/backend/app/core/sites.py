@@ -3696,9 +3696,18 @@ class SiteRepository:
         existing_slugs: set[str] = set()
         if database is not None:
             cursor = database["generated_sites"].find({}, {"previewSlug": 1})
-            async for doc in cursor:
-                if slug := doc.get("previewSlug"):
-                    existing_slugs.add(slug)
+            # Handle both real MongoDB cursor and mock cursor
+            try:
+                async for doc in cursor:
+                    if slug := doc.get("previewSlug"):
+                        existing_slugs.add(slug)
+            except TypeError:
+                # Mock cursor doesn't support async iteration, use to_list
+                if hasattr(cursor, 'to_list'):
+                    docs = await cursor.to_list(length=None)
+                    for doc in docs:
+                        if slug := doc.get("previewSlug"):
+                            existing_slugs.add(slug)
         else:
             # In-memory mode: get from self._sites
             async with self._memory_lock:
