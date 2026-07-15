@@ -21,14 +21,19 @@ async function getServerCookieHeader(): Promise<string | null> {
   }
   try {
     const { cookies } = await import("next/headers");
-    type CookieStore = { getAll: () => { name: string; value: string }[] };
-    const store = await (cookies as unknown as () => Promise<CookieStore> | CookieStore)();
-    const cookieHeader = store
-      .getAll()
+    const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
+    const cookieHeader = allCookies
       .map((cookie) => `${cookie.name}=${cookie.value}`)
       .join("; ");
+    if (cookieHeader) {
+      console.log("[API Client] Server cookies found:", allCookies.map(c => c.name).join(", "));
+    } else {
+      console.log("[API Client] No server cookies found");
+    }
     return cookieHeader || null;
-  } catch {
+  } catch (error) {
+    console.error("[API Client] Failed to get server cookies:", error);
     return null;
   }
 }
