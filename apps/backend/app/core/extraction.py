@@ -1102,13 +1102,16 @@ def crawl_website(
             if _same_origin(canonical_url, candidate):
                 homepage_links.append(candidate)
     else:
+        # No sitemap found, fall back to internal links
         for href, anchor_text in homepage_signals.links:
             if not href:
                 continue
             candidate = urljoin(homepage_url, href)
             if _same_origin(canonical_url, candidate):
                 homepage_links.append(candidate)
-                discovered_urls.append((candidate, "internal_link", 1))
+                # Only add to discovered_urls if we don't have sitemap
+                if len(discovered_urls) < max_pages:
+                    discovered_urls.append((candidate, "internal_link", 1))
     discovered_map: dict[str, tuple[str, str, int]] = {}
     for url, source, depth in discovered_urls:
         discovered_map.setdefault(url, (url, source, depth))
@@ -1303,8 +1306,8 @@ def crawl_website(
                             total_bytes_downloaded += result_item.bytes or 0
                     if total_bytes_downloaded > settings.crawl_budget_bytes:
                         break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Asset download failed: {e}")
             if signals.h1:
                 service_clues.extend(signals.h1[:2])
             if signals.ctas:
@@ -1472,6 +1475,11 @@ def crawl_website(
         t = cue.get("assetType") or "unknown"
         if cue.get("cachedUri"):
             asset_cache_stats[t] = asset_cache_stats.get(t, 0) + 1
+
+    logger.info(
+        f"Crawl complete: {pages_crawled} pages crawled, {pages_discovered} discovered, "
+        f"status={crawl_status}, sitemap={sitemap_status}"
+    )
 
     return {
         "crawlStatus": crawl_status,
