@@ -33,6 +33,9 @@ AnalyticsEventType = Literal[
     "brief_edited",
     "theme_variant_changed",
     "generation_regenerated",
+    "master_brief_created",
+    "master_brief_refined",
+    "master_brief_approved",
 ]
 
 
