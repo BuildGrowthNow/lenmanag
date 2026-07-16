@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Navbar } from "@/components/landing/navbar";
+import { AnimatedHeroHeadline } from "@/components/landing/animated-hero-headline";
 import { SocialProofNotifications } from "@/components/landing/social-proof-notifications";
 import { AnimatedStats } from "@/components/landing/animated-stats";
 import { FloatingMockup } from "@/components/landing/floating-mockup";
@@ -215,33 +216,27 @@ export default function SitesLandingPage() {
         <section className="relative px-6 pt-20 pb-32">
           <div className="max-w-7xl mx-auto">
             <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-4 py-2 mb-8 mx-auto w-fit bg-yellow-500/10 border border-yellow-500/20 rounded-full"
+            >
+              <Sparkles className="w-4 h-4 text-yellow-500" />
+              <span className="text-sm font-medium text-yellow-500">
+                Premium Website Generation
+              </span>
+            </motion.div>
+
+            <div className="mb-12">
+              <AnimatedHeroHeadline />
+            </div>
+
+            <motion.div
+              className="flex justify-center"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              className="text-center"
+              transition={{ delay: 0.8, duration: 0.5 }}
             >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: "spring" }}
-                className="inline-flex items-center gap-2 px-4 py-2 mb-8 bg-yellow-500/10 border border-yellow-500/20 rounded-full"
-              >
-                <Sparkles className="w-4 h-4 text-yellow-500" />
-                <span className="text-sm font-medium text-yellow-500">
-                  Premium Website Generation
-                </span>
-              </motion.div>
-
-              <h1 className="text-6xl md:text-8xl font-bold mb-6 bg-gradient-to-r from-white via-yellow-100 to-white bg-clip-text text-transparent">
-                Master Design
-                <br />
-                <span className="text-yellow-500">$1,000 • 3 Days</span>
-              </h1>
-
-              <p className="text-xl md:text-2xl text-slate-300 mb-12 max-w-3xl mx-auto">
-                Premium, custom-crafted websites built by design experts. No compromises. No delays. Just masterfully executed results.
-              </p>
-
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
