@@ -10,8 +10,6 @@ from app.schemas.brief import (
     MasterBrief,
     MasterBriefApprovalRequest,
     MasterBriefRefinementRequest,
-    SiteBrief,
-    SiteBriefPatchRequest,
 )
 from app.schemas.extraction import (
     ExtractionJobResponse,
@@ -204,89 +202,6 @@ async def get_pages(
     if pages is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     return success_response(pages, meta=response_meta(http_request))
-
-
-@router.get("/{lead_id}/brief", response_model=ResponseEnvelope[SiteBrief | None])
-async def get_brief(
-    lead_id: str, http_request: Request, _user_id: CurrentUserId
-) -> ResponseEnvelope[SiteBrief | None]:
-    brief = await lead_repository.get_brief(lead_id)
-    return success_response(brief, meta=response_meta(http_request))
-
-
-@router.post("/{lead_id}/brief", response_model=ResponseEnvelope[SiteBrief])
-async def create_brief(
-    lead_id: str, http_request: Request, user_id: CurrentUserId
-) -> ResponseEnvelope[SiteBrief]:
-    try:
-        brief = await lead_repository.create_brief(lead_id)
-    except ValueError as exc:
-        if str(exc) == "brief_requires_extraction":
-            raise HTTPException(
-                status_code=409,
-                detail="Create a site extraction before generating a brief.",
-            ) from exc
-        raise
-    if brief is None:
-        raise HTTPException(status_code=404, detail="Lead not found.")
-    await write_audit_log(
-        user_id, "lead", lead_id, "site_brief_create", after=brief.model_dump()
-    )
-    return success_response(brief, meta=response_meta(http_request))
-
-
-@router.patch("/{lead_id}/brief", response_model=ResponseEnvelope[SiteBrief])
-async def update_brief(
-    lead_id: str,
-    payload: SiteBriefPatchRequest,
-    http_request: Request,
-    user_id: CurrentUserId,
-) -> ResponseEnvelope[SiteBrief]:
-    try:
-        brief = await lead_repository.update_brief(lead_id, payload)
-    except ValueError as exc:
-        if str(exc) == "brief_requires_extraction":
-            raise HTTPException(
-                status_code=409,
-                detail="Create a site extraction before updating the brief.",
-            ) from exc
-        raise
-    if brief is None:
-        raise HTTPException(status_code=404, detail="Brief not found.")
-    await write_audit_log(
-        user_id, "lead", lead_id, "site_brief_update", after=brief.model_dump()
-    )
-    return success_response(brief, meta=response_meta(http_request))
-
-
-@router.post("/{lead_id}/brief/approve", response_model=ResponseEnvelope[SiteBrief])
-async def approve_brief(
-    lead_id: str, http_request: Request, user_id: CurrentUserId
-) -> ResponseEnvelope[SiteBrief]:
-    try:
-        brief = await lead_repository.approve_brief(lead_id, approved_by=user_id)
-    except ValueError as exc:
-        if str(exc) == "brief_requires_extraction":
-            raise HTTPException(
-                status_code=409,
-                detail="Create a site extraction before approving the brief.",
-            ) from exc
-        if str(exc) == "brief_requires_critical_gaps_resolved":
-            raise HTTPException(
-                status_code=409,
-                detail="Resolve critical extraction gaps before approving the brief.",
-            ) from exc
-        raise
-    if brief is None:
-        raise HTTPException(status_code=404, detail="Brief not found.")
-    await write_audit_log(
-        user_id,
-        "lead",
-        lead_id,
-        "site_brief_approve",
-        after=brief.model_dump(),
-    )
-    return success_response(brief, meta=response_meta(http_request))
 
 
 # Master Brief Endpoints (AI-Native)

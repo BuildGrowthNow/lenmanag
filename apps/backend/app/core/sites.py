@@ -2771,8 +2771,7 @@ class SiteRepository:
         )
         # Prefer master brief for attribution, fall back to legacy brief
         master_brief = await lead_repository.get_master_brief(site_id)
-        legacy_brief = await lead_repository.get_brief(site_id)
-        brief_for_attribution = master_brief or legacy_brief
+        brief_for_attribution = master_brief
 
         source_attribution = _site_source_attribution(
             lead=await lead_repository.get_lead(site_id),
@@ -3008,7 +3007,7 @@ class SiteRepository:
 
         # Check for master brief first (AI-native generation), fall back to legacy brief
         master_brief = await lead_repository.get_master_brief(site_id)
-        brief = await lead_repository.get_brief(site_id)
+        brief = await lead_repository.get_master_brief(site_id)
 
         # Allow generation if EITHER master brief OR legacy brief is approved
         has_approved_brief = (
@@ -3073,12 +3072,8 @@ class SiteRepository:
                         brief=brief, refinement=refinement
                     )
                     if updated_visual:
-                        await lead_repository.update_brief_visual_redesign(
-                            lead_id=site_id,
-                            visual_redesign_briefs=updated_visual,
-                        )
-                        # Refresh brief snapshot so section stack sees the refined redesign
-                        brief = await lead_repository.get_brief(site_id) or brief
+                        # Visual redesign now handled in master brief generation
+                        brief = await lead_repository.get_master_brief(site_id) or brief
             except Exception as exc:  # pragma: no cover - defensive logging path
                 logging.getLogger(__name__).error(
                     "Failed to apply refinement prompt %s for site %s: %s",
@@ -3115,7 +3110,7 @@ class SiteRepository:
                                 lead_id=site_id,
                                 visual_redesign_briefs=updated_visual,
                             )
-                            brief = await lead_repository.get_brief(site_id) or brief
+                            brief = await lead_repository.get_master_brief(site_id) or brief
                 except Exception as exc:  # pragma: no cover - defensive logging path
                     logging.getLogger(__name__).error(
                         "Failed to apply automatic improvement refinement for site %s: %s",
@@ -3246,7 +3241,7 @@ class SiteRepository:
             master_brief is not None and master_brief.approvalState == "approved"
         )
 
-        brief = await lead_repository.get_brief(site_id)
+        brief = await lead_repository.get_master_brief(site_id)
         # Allow generation if EITHER master brief OR legacy brief is approved
         has_approved_brief = use_ai_generation or (
             brief is not None and brief.approvalState == "approved"
