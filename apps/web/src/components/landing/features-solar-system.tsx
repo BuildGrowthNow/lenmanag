@@ -20,6 +20,7 @@ const FEATURES = [
     description: "Visual appeal that captivates your visitors and builds trust",
     icon: Palette,
     line: 0,
+    position: 0,
   },
   {
     id: "performance",
@@ -27,6 +28,7 @@ const FEATURES = [
     description: "Better user experience and improved search rankings",
     icon: Zap,
     line: 0,
+    position: 1,
   },
   {
     id: "mobile",
@@ -34,6 +36,7 @@ const FEATURES = [
     description: "Works perfectly on phones and tablets for every customer",
     icon: Smartphone,
     line: 1,
+    position: 0,
   },
   {
     id: "easy",
@@ -41,6 +44,7 @@ const FEATURES = [
     description: "Update your site without coding knowledge required",
     icon: Sliders,
     line: 1,
+    position: 1,
   },
   {
     id: "support",
@@ -48,6 +52,7 @@ const FEATURES = [
     description: "Always here when you need help with your website",
     icon: Headphones,
     line: 2,
+    position: 0,
   },
   {
     id: "quality",
@@ -55,6 +60,7 @@ const FEATURES = [
     description: "Trusted by successful businesses worldwide",
     icon: Award,
     line: 2,
+    position: 1,
   },
   {
     id: "turnaround",
@@ -62,6 +68,7 @@ const FEATURES = [
     description: "Ready to launch in just 3 days guaranteed",
     icon: Clock,
     line: 3,
+    position: 0,
   },
   {
     id: "affordable",
@@ -69,6 +76,7 @@ const FEATURES = [
     description: "Enterprise-quality results without premium pricing",
     icon: DollarSign,
     line: 3,
+    position: 1,
   },
 ];
 
@@ -125,147 +133,148 @@ export function FeaturesSolarSystem() {
               </motion.div>
             </motion.div>
 
-            {/* Four pointing lines with rotating features */}
-            {LINES.map((line, lineIdx) => (
-              <div key={`line-${lineIdx}`}>
-                {/* Pointing line SVG */}
-                <svg
-                  className="absolute inset-0 w-full h-full pointer-events-none"
-                  viewBox="0 0 700 700"
-                >
-                  <line
-                    x1="350"
-                    y1="350"
-                    x2={350 + Math.cos((line.angle * Math.PI) / 180) * 280}
-                    y2={350 + Math.sin((line.angle * Math.PI) / 180) * 280}
-                    stroke="rgba(255, 255, 255, 0.1)"
-                    strokeWidth="1"
-                    strokeDasharray="4 6"
-                  />
-                  {/* Point indicator at the end */}
-                  <circle
-                    cx={350 + Math.cos((line.angle * Math.PI) / 180) * 280}
-                    cy={350 + Math.sin((line.angle * Math.PI) / 180) * 280}
-                    r="4"
-                    fill="rgba(234, 179, 8, 0.4)"
-                  />
-                </svg>
+            {/* Four pointing lines */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              viewBox="0 0 700 700"
+            >
+              {LINES.map((line, idx) => {
+                const x1 = 350;
+                const y1 = 350;
+                const x2 = 350 + Math.cos((line.angle * Math.PI) / 180) * 280;
+                const y2 = 350 + Math.sin((line.angle * Math.PI) / 180) * 280;
 
-                {/* Features on this line */}
-                {FEATURES.filter((f) => f.line === lineIdx).map(
-                  (feature, indexInLine) => {
-                    const distance = 120 + indexInLine * 90;
-                    const angle = (line.angle * Math.PI) / 180;
+                return (
+                  <g key={`line-${idx}`}>
+                    <line
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke="rgba(255, 255, 255, 0.1)"
+                      strokeWidth="1"
+                      strokeDasharray="4 6"
+                    />
+                    <circle
+                      cx={x2}
+                      cy={y2}
+                      r="4"
+                      fill="rgba(234, 179, 8, 0.4)"
+                    />
+                  </g>
+                );
+              })}
+            </svg>
 
-                    return (
-                      <motion.div
-                        key={feature.id}
-                        className="absolute"
-                        initial={{ opacity: 0, scale: 0 }}
-                        whileInView={{ opacity: 1, scale: 1 }}
-                        viewport={{ once: true }}
-                        animate={
-                          isHovering
-                            ? { opacity: 1, scale: 1 }
-                            : {
-                                opacity: 1,
-                                scale: 1,
-                                x: [
-                                  Math.cos(angle) * 120 + Math.cos(angle) * indexInLine * 90,
-                                  Math.cos(angle) * 280 + Math.cos(angle) * indexInLine * 90,
-                                  Math.cos(angle) * 120 + Math.cos(angle) * indexInLine * 90,
-                                ],
-                                y: [
-                                  Math.sin(angle) * 120 + Math.sin(angle) * indexInLine * 90,
-                                  Math.sin(angle) * 280 + Math.sin(angle) * indexInLine * 90,
-                                  Math.sin(angle) * 120 + Math.sin(angle) * indexInLine * 90,
-                                ],
-                              }
+            {/* Orbiting features on all lines */}
+            {FEATURES.map((feature, idx) => {
+              const line = LINES[feature.line];
+              const angle = (line.angle * Math.PI) / 180;
+              const isOdd = feature.position === 1;
+
+              return (
+                <motion.div
+                  key={feature.id}
+                  className="absolute"
+                  initial={{ opacity: 0, scale: 0 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  transition={{
+                    delay: idx * 0.05,
+                    duration: 0.5,
+                  }}
+                  viewport={{ once: true }}
+                  animate={
+                    isHovering
+                      ? {}
+                      : {
+                          x: isOdd
+                            ? [
+                                Math.cos(angle) * 150,
+                                Math.cos(angle) * 280,
+                                Math.cos(angle) * 150,
+                              ]
+                            : [
+                                Math.cos(angle) * 280,
+                                Math.cos(angle) * 150,
+                                Math.cos(angle) * 280,
+                              ],
+                          y: isOdd
+                            ? [
+                                Math.sin(angle) * 150,
+                                Math.sin(angle) * 280,
+                                Math.sin(angle) * 150,
+                              ]
+                            : [
+                                Math.sin(angle) * 280,
+                                Math.sin(angle) * 150,
+                                Math.sin(angle) * 280,
+                              ],
                         }
-                        transition={{
-                          opacity: {
-                            delay: lineIdx * 0.15 + indexInLine * 0.1,
-                            duration: 0.5,
-                          },
-                          scale: {
-                            delay: lineIdx * 0.15 + indexInLine * 0.1,
-                            duration: 0.5,
-                          },
-                          x: {
-                            duration: 8,
-                            repeat: Infinity,
-                            ease: "easeInOut",
-                            delay: indexInLine * 4,
-                          },
-                          y: {
-                            duration: 8,
-                            repeat: Infinity,
-                            ease: "easeInOut",
-                            delay: indexInLine * 4,
-                          },
-                        }}
-                        style={{
-                          left: "350px",
-                          top: "350px",
-                          transform: "translate(-50%, -50%)",
-                        }}
-                        onMouseEnter={() => {
-                          setHoveredFeature(feature.id);
-                          setIsHovering(true);
-                        }}
-                        onMouseLeave={() => {
-                          setHoveredFeature(null);
-                          setIsHovering(false);
-                        }}
-                      >
-                        <motion.button
-                          whileHover={{ scale: 1.2 }}
-                          whileTap={{ scale: 0.95 }}
-                          className={`w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
-                            hoveredFeature === feature.id
-                              ? "border-yellow-500 shadow-yellow-500/40"
-                              : "border-white/20 hover:border-yellow-500/60"
-                          }`}
-                        >
-                          <feature.icon
-                            className={`w-7 h-7 transition-colors ${
-                              hoveredFeature === feature.id
-                                ? "text-yellow-300"
-                                : "text-yellow-500"
-                            }`}
-                          />
-                        </motion.button>
-
-                        {/* Popover on Hover - horizontal, not rotated */}
-                        {hoveredFeature === feature.id && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.8, x: -10 }}
-                            animate={{ opacity: 1, scale: 1, x: 0 }}
-                            transition={{ duration: 0.15 }}
-                            className="absolute z-50 pointer-events-none"
-                            style={{
-                              left: "100%",
-                              top: "50%",
-                              transform: "translateY(-50%)",
-                              marginLeft: "12px",
-                            }}
-                          >
-                            <div className="px-4 py-3 rounded-xl bg-slate-900/95 border border-yellow-500/50 shadow-xl shadow-yellow-500/20 min-w-[220px] backdrop-blur-sm">
-                              <div className="text-sm font-bold text-yellow-400 mb-1">
-                                {feature.title}
-                              </div>
-                              <div className="text-xs text-slate-300 leading-relaxed">
-                                {feature.description}
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </motion.div>
-                    );
                   }
-                )}
-              </div>
-            ))}
+                  transition={{
+                    duration: 6,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                  style={{
+                    left: "350px",
+                    top: "350px",
+                    transform: "translate(-50%, -50%)",
+                  }}
+                  onMouseEnter={() => {
+                    setHoveredFeature(feature.id);
+                    setIsHovering(true);
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredFeature(null);
+                    setIsHovering(false);
+                  }}
+                >
+                  <motion.button
+                    whileHover={{ scale: 1.2 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
+                      hoveredFeature === feature.id
+                        ? "border-yellow-500 shadow-yellow-500/40"
+                        : "border-white/20 hover:border-yellow-500/60"
+                    }`}
+                  >
+                    <feature.icon
+                      className={`w-7 h-7 transition-colors ${
+                        hoveredFeature === feature.id
+                          ? "text-yellow-300"
+                          : "text-yellow-500"
+                      }`}
+                    />
+                  </motion.button>
+
+                  {/* Popover on Hover - horizontal, not rotated */}
+                  {hoveredFeature === feature.id && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute z-50 pointer-events-none"
+                      style={{
+                        left: "100%",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        marginLeft: "12px",
+                      }}
+                    >
+                      <div className="px-4 py-3 rounded-xl bg-slate-900/95 border border-yellow-500/50 shadow-xl shadow-yellow-500/20 min-w-[220px] backdrop-blur-sm">
+                        <div className="text-sm font-bold text-yellow-400 mb-1">
+                          {feature.title}
+                        </div>
+                        <div className="text-xs text-slate-300 leading-relaxed">
+                          {feature.description}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
         </div>
 
