@@ -373,8 +373,9 @@ interface Feature {
 
 4. **Contact**
    - Email: contact@lenquant.com
-   - Phone: (placeholder)
-   - Address: (placeholder)
+   - Phone: +18457211974
+   - Address: 510 South Main Street, South Bend, IN 46601
+   
 
 **Deliverables**:
 - Professional footer component

@@ -20,8 +20,8 @@ import { Navbar } from "@/components/landing/navbar";
 import { SocialProofNotifications } from "@/components/landing/social-proof-notifications";
 import { AnimatedStats } from "@/components/landing/animated-stats";
 import { FloatingMockup } from "@/components/landing/floating-mockup";
-import { BentoFeatures } from "@/components/landing/bento-features";
-import { LogoWall } from "@/components/landing/logo-wall";
+import { TrustedCompanies } from "@/components/landing/trusted-companies";
+import { FeaturesSolarSystem } from "@/components/landing/features-solar-system";
 import { ScreenshotCarousel } from "@/components/landing/screenshot-carousel";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
 import { FAQSection } from "@/components/landing/faq-section";
@@ -279,14 +279,14 @@ export default function SitesLandingPage() {
           </div>
         </section>
 
-        {/* Logo Wall */}
+        {/* Logo Wall - Trusted Companies */}
         <section id="trusted">
-          <LogoWall />
+          <TrustedCompanies />
         </section>
 
-        {/* Features Section */}
+        {/* Features Section - Solar System */}
         <section id="features">
-          <BentoFeatures />
+          <FeaturesSolarSystem />
         </section>
 
         {/* How It Works */}
