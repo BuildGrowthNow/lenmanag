@@ -182,18 +182,18 @@ export default function SitesLandingPage() {
       {/* Social Proof Notifications */}
       <SocialProofNotifications />
 
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-white overflow-hidden">
         {/* Animated Background */}
-        <div className="fixed inset-0 opacity-30">
+        <div className="fixed inset-0 opacity-30 pointer-events-none">
           <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
           <motion.div
             className="absolute top-0 -left-4 w-96 h-96 bg-yellow-500/30 rounded-full mix-blend-multiply filter blur-3xl"
             animate={{
-              x: [0, 100, 0],
-              y: [0, 50, 0],
+              x: [0, 150, -100, 50, 0],
+              y: [0, 80, -60, 40, 0],
             }}
             transition={{
-              duration: 20,
+              duration: 25,
               repeat: Infinity,
               ease: "easeInOut",
             }}
@@ -201,11 +201,23 @@ export default function SitesLandingPage() {
           <motion.div
             className="absolute top-0 right-4 w-96 h-96 bg-purple-500/20 rounded-full mix-blend-multiply filter blur-3xl"
             animate={{
-              x: [0, -100, 0],
-              y: [0, 100, 0],
+              x: [0, -150, 100, -50, 0],
+              y: [0, 100, -80, 50, 0],
             }}
             transition={{
-              duration: 25,
+              duration: 30,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
+          <motion.div
+            className="absolute bottom-0 left-1/2 w-80 h-80 bg-cyan-500/10 rounded-full mix-blend-multiply filter blur-3xl"
+            animate={{
+              x: [0, 80, -100, 40, 0],
+              y: [0, -60, 80, -40, 0],
+            }}
+            transition={{
+              duration: 28,
               repeat: Infinity,
               ease: "easeInOut",
             }}
@@ -435,12 +447,64 @@ export default function SitesLandingPage() {
                 </motion.div>
               ))}
             </div>
+
+            {/* CTA Button */}
+            <motion.div
+              className="flex justify-center mt-12"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              viewport={{ once: true }}
+            >
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button
+                  onClick={() =>
+                    document
+                      .getElementById("pricing")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }
+                  className="px-8 py-6 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-zinc-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
+                >
+                  Start Your Masterpiece
+                  <ArrowRight className="ml-2 w-5 h-5" />
+                </Button>
+              </motion.div>
+            </motion.div>
           </div>
         </section>
 
         {/* Testimonials Section */}
         <section id="testimonials">
           <TestimonialsSection />
+
+          {/* CTA After Testimonials */}
+          <motion.div
+            className="flex justify-center mt-12 px-6"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            viewport={{ once: true }}
+          >
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Button
+                onClick={() =>
+                  document
+                    .getElementById("pricing")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
+                className="px-8 py-6 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-zinc-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
+              >
+                Create Your Masterpiece Now
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Button>
+            </motion.div>
+          </motion.div>
         </section>
 
         {/* Pricing Configurator */}

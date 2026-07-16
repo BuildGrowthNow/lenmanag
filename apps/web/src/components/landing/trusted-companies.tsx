@@ -88,7 +88,7 @@ const COMPANIES = [
 
 export function TrustedCompanies() {
   return (
-    <section className="relative px-6 py-16 bg-slate-900/30">
+    <section className="relative px-6 py-16 bg-zinc-900/30">
       <div className="max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0 }}
@@ -113,14 +113,27 @@ export function TrustedCompanies() {
                 transition={{ delay: i * 0.1, duration: 0.5 }}
                 viewport={{ once: true }}
                 whileHover={{ scale: 1.05, y: -5 }}
-                className="flex flex-col items-center justify-center p-8 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/30 transition-all group"
+                className="flex flex-col items-center justify-center p-8 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/30 transition-all group relative overflow-hidden"
               >
-                <div className="mb-4 p-4 rounded-xl bg-white/5 group-hover:bg-yellow-500/10 transition-colors">
-                  <Icon />
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-white group-hover:text-yellow-500 transition-colors">
-                    {company.name}
+                <motion.div
+                  className="absolute inset-0 rounded-2xl bg-gradient-to-r from-yellow-500/0 via-yellow-500/10 to-yellow-500/0 pointer-events-none"
+                  animate={{
+                    opacity: [0.3, 0.6, 0.3],
+                  }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    delay: i * 0.2,
+                  }}
+                />
+                <div className="relative z-10">
+                  <div className="mb-4 p-4 rounded-xl bg-white/5 group-hover:bg-yellow-500/10 transition-colors">
+                    <Icon />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-white group-hover:text-yellow-500 transition-colors">
+                      {company.name}
+                    </div>
                   </div>
                 </div>
               </motion.div>

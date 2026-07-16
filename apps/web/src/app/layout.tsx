@@ -16,8 +16,37 @@ const body = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "LenQuant Website Fabric",
-  description: "Internal operator workspace for lead discovery and premium website fulfillment."
+  title: "Master Design - Premium Websites in 3 Days | Lenquant",
+  description: "Premium, custom-crafted websites delivered in 3 days for just $1,000. Master design, fast delivery, no compromises. Get your masterpiece today.",
+  icons: {
+    icon: "/favicon.svg",
+  },
+  keywords: "website design, web development, custom website, fast delivery, professional website, landing page, masterpiece",
+  openGraph: {
+    title: "Master Design - Premium Websites in 3 Days | Lenquant",
+    description: "Premium, custom-crafted websites delivered in 3 days for just $1,000. Master design, fast delivery, no compromises.",
+    type: "website",
+    url: "https://sites.lenquant.com",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Lenquant - Master Design Premium Websites",
+      },
+    ],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+      "max-video-preview": -1,
+    },
+  },
 };
 
 // Force dynamic rendering for all pages to support dynamic website generation
