@@ -1,0 +1,86 @@
+"use client";
+
+import { motion } from "framer-motion";
+import { Shield, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+
+export function RiskReversalBadge() {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <>
+      {/* Floating Badge - Follows on Scroll */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 1 }}
+        className="fixed right-6 bottom-20 z-20 max-w-xs"
+      >
+        <motion.button
+          onClick={() => setIsExpanded(!isExpanded)}
+          whileHover={{ scale: 1.05 }}
+          className="w-full p-4 rounded-xl bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/50 backdrop-blur-sm shadow-lg hover:shadow-xl transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <Shield className="w-5 h-5 text-green-400 flex-shrink-0" />
+            <div className="text-left">
+              <div className="text-xs font-bold text-green-400 uppercase">
+                100% Guarantee
+              </div>
+              <div className="text-sm font-semibold text-white">
+                Money-back promise
+              </div>
+            </div>
+          </div>
+
+          {isExpanded && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-3 pt-3 border-t border-green-500/30 space-y-2 text-left"
+            >
+              <div className="flex items-start gap-2 text-xs text-zinc-200">
+                <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                <span>7-day full refund guarantee</span>
+              </div>
+              <div className="flex items-start gap-2 text-xs text-zinc-200">
+                <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                <span>No questions asked</span>
+              </div>
+              <div className="flex items-start gap-2 text-xs text-zinc-200">
+                <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                <span>Risk-free trial period</span>
+              </div>
+            </motion.div>
+          )}
+        </motion.button>
+      </motion.div>
+
+      {/* Top Badge */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+        className="fixed top-20 left-6 z-20 hidden md:block"
+      >
+        <motion.div
+          animate={{
+            boxShadow: [
+              "0 0 20px rgba(34, 197, 94, 0.3)",
+              "0 0 40px rgba(34, 197, 94, 0.5)",
+              "0 0 20px rgba(34, 197, 94, 0.3)",
+            ],
+          }}
+          transition={{ duration: 2, repeat: Infinity }}
+          className="px-4 py-2 rounded-full bg-green-500/10 border border-green-500/50 backdrop-blur-sm flex items-center gap-2"
+        >
+          <Shield className="w-4 h-4 text-green-400" />
+          <span className="text-xs font-bold text-green-400">
+            100% Money-Back Guarantee
+          </span>
+        </motion.div>
+      </motion.div>
+    </>
+  );
+}
