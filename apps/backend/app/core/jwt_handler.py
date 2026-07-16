@@ -15,8 +15,8 @@ def create_access_token(user_id: str, email: str) -> str:
     payload = {
         "sub": user_id,
         "email": email,
-        "iat": now,
-        "exp": expires_at,
+        "iat": int(now.timestamp()),
+        "exp": int(expires_at.timestamp()),
     }
 
     token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
