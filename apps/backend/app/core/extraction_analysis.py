@@ -66,7 +66,7 @@ async def analyze_extraction(extraction: ExtractionSnapshot) -> dict[str, Any]:
             "Analysis complete: %d services, tone='%s', %d CTAs",
             len(cleaned_analysis.get("services", [])),
             cleaned_analysis.get("tone", "")[:50],
-            len(cleaned_analysis.get("primaryCTAs", []))
+            len(cleaned_analysis.get("primaryCTAs", [])),
         )
 
         return cleaned_analysis
@@ -126,20 +126,20 @@ def _build_analysis_prompt(context: dict[str, Any]) -> str:
     prompt = f"""You are analyzing a business website to extract semantic meaning for landing page generation.
 
 # Company Information
-Name: {context['company_name']}
-Website: {context['website_url']}
+Name: {context["company_name"]}
+Website: {context["website_url"]}
 
 # Homepage Content
-{context['homepage_text'][:6000]}
+{context["homepage_text"][:6000]}
 
 # Additional Page Content
-{context['additional_pages_text'][:3000]}
+{context["additional_pages_text"][:3000]}
 
 # Section Headings Found
-{chr(10).join(f"- {h}" for h in context['section_headings'][:15])}
+{chr(10).join(f"- {h}" for h in context["section_headings"][:15])}
 
 # All CTA Buttons/Links Found
-{chr(10).join(f"- {cta}" for cta in context['all_ctas'][:20])}
+{chr(10).join(f"- {cta}" for cta in context["all_ctas"][:20])}
 
 ---
 
@@ -208,8 +208,10 @@ def _validate_analysis(analysis: dict[str, Any]) -> dict[str, Any]:
             for c in analysis.get("primaryCTAs", [])
             if c and len(str(c).strip()) > 3
         ][:3],
-        "audience": str(analysis.get("audience", "")).strip()[:300] or "General audience",
-        "valueProposition": str(analysis.get("valueProposition", "")).strip()[:500] or "",
+        "audience": str(analysis.get("audience", "")).strip()[:300]
+        or "General audience",
+        "valueProposition": str(analysis.get("valueProposition", "")).strip()[:500]
+        or "",
         "positioning": str(analysis.get("positioning", "")).strip()[:1000] or "",
         "confidence": min(100, max(0, int(analysis.get("confidence", 50)))),
     }

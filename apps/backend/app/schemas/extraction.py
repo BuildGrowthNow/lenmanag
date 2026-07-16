@@ -131,6 +131,7 @@ class PageInventoryItem(BaseModel):
 
 class ExtractionAnalysis(BaseModel):
     """LLM-analyzed semantic data from extraction."""
+
     services: list[str] = Field(default_factory=list)
     tone: str = "Professional"
     primaryCTAs: list[str] = Field(default_factory=list)

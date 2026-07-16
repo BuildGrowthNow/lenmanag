@@ -600,7 +600,7 @@ class LeadRepository:
                 await self.approve_master_brief(
                     lead_id=lead_id,
                     approved_by="auto",
-                    notes="Auto-approved in pipeline"
+                    notes="Auto-approved in pipeline",
                 )
 
                 # WAIT for brief to be saved before advancing
@@ -1720,8 +1720,6 @@ class LeadRepository:
             updatedAt=_utc(doc["updatedAt"]) or _now(),
         )
 
-
-
     # Master Brief Methods (AI-Native)
 
     async def _latest_master_brief_doc(self, lead_id: str) -> dict[str, Any] | None:
@@ -2010,7 +2008,9 @@ class LeadRepository:
 
         try:
             # Convert crawl_data to ExtractionSnapshot for analysis
-            temp_snapshot = self._extraction_doc_to_snapshot({**crawl_data, "leadId": lead_id, "analysis": None})
+            temp_snapshot = self._extraction_doc_to_snapshot(
+                {**crawl_data, "leadId": lead_id, "analysis": None}
+            )
 
             # Run LLM analysis
             analysis_result = await analyze_extraction(temp_snapshot)
@@ -2018,18 +2018,20 @@ class LeadRepository:
             # Store analysis in crawl_data
             crawl_data["analysis"] = {
                 **analysis_result,
-                "analyzedAt": _now().isoformat()
+                "analyzedAt": _now().isoformat(),
             }
 
             logger.info(
                 "LLM analysis complete for %s: %d services, confidence=%d",
                 lead_id,
                 len(analysis_result.get("services", [])),
-                analysis_result.get("confidence", 0)
+                analysis_result.get("confidence", 0),
             )
 
         except Exception as analysis_err:
-            logger.warning("LLM analysis failed, continuing with extraction: %s", analysis_err)
+            logger.warning(
+                "LLM analysis failed, continuing with extraction: %s", analysis_err
+            )
             # Don't fail the job, just log and continue
             crawl_data["analysis"] = {
                 "services": [],
@@ -2039,7 +2041,7 @@ class LeadRepository:
                 "valueProposition": "",
                 "positioning": "",
                 "confidence": 0,
-                "analyzedAt": None
+                "analyzedAt": None,
             }
 
         now = _now()

@@ -3200,7 +3200,6 @@ class SiteRepository:
             )
             return await self.get_site(site_id)
 
-
     async def _dispatch_generation_job(
         self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None
     ) -> None:

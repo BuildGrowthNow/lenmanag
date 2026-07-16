@@ -1,6 +1,11 @@
 import pytest
 from datetime import datetime, timezone
-from app.core.extraction_analysis import analyze_extraction, _build_analysis_context, _validate_analysis, _empty_analysis
+from app.core.extraction_analysis import (
+    analyze_extraction,
+    _build_analysis_context,
+    _validate_analysis,
+    _empty_analysis,
+)
 from app.schemas.extraction import ExtractionSnapshot, ExtractionSummary
 
 
@@ -54,7 +59,7 @@ async def test_analyze_extraction_returns_valid_structure():
             "audience": "Small businesses",
             "valueProposition": "We help businesses grow",
             "positioning": "A company that helps businesses",
-            "confidence": 85
+            "confidence": 85,
         }
         mock_llm.return_value = mock_client
 

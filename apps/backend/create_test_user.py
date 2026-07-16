@@ -4,6 +4,7 @@
 import asyncio
 from app.core.users import UserRepository
 
+
 async def create_test_user():
     """Create test user for API testing."""
     repo = UserRepository()
@@ -25,12 +26,13 @@ async def create_test_user():
     print(f"  Password: {password}")
 
     # Also verify the user immediately for testing convenience
-    if user.get('verification_token'):
-        verified = await repo.verify_email(user['verification_token'])
+    if user.get("verification_token"):
+        verified = await repo.verify_email(user["verification_token"])
         if verified:
-            print(f"✓ Verified user email")
+            print("✓ Verified user email")
 
     return user
+
 
 if __name__ == "__main__":
     asyncio.run(create_test_user())

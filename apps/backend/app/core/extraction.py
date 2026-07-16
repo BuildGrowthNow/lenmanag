@@ -1389,51 +1389,58 @@ def crawl_website(
     homepage_url = homepage_result["finalUrl"]
     homepage_signals = _parse_html(homepage_result["body"])
     detected_url = homepage_url if homepage_url != canonical_url else None
-    
+
     # Build sitemap candidates list
     # 1. Custom sitemap URL from settings (if configured)
     # 2. Standard sitemap locations
     # 3. Compressed sitemap variants (.gz) if enabled
     sitemap_candidates: list[str] = []
-    
+
     # Add custom sitemap URL if configured
     if settings.sitemap_url:
         sitemap_candidates.append(settings.sitemap_url)
-    
+
     # Add standard sitemap locations
-    sitemap_candidates.extend([
-        urljoin(homepage_url, "/sitemap.xml"),
-        urljoin(homepage_url, "/sitemap_index.xml"),
-    ])
-    
+    sitemap_candidates.extend(
+        [
+            urljoin(homepage_url, "/sitemap.xml"),
+            urljoin(homepage_url, "/sitemap_index.xml"),
+        ]
+    )
+
     # Add .gz variants if enabled
     if settings.sitemap_gz_enabled:
-        sitemap_candidates.extend([
-            urljoin(homepage_url, "/sitemap.xml.gz"),
-            urljoin(homepage_url, "/sitemap_index.xml.gz"),
-        ])
-    
+        sitemap_candidates.extend(
+            [
+                urljoin(homepage_url, "/sitemap.xml.gz"),
+                urljoin(homepage_url, "/sitemap_index.xml.gz"),
+            ]
+        )
+
     sitemap_urls: list[str] = []
     sitemap_status = "missing"
     sitemap_errors: list[str] = []
-    
+
     for sitemap_url in sitemap_candidates:
         sitemap_result = _safe_fetch(sitemap_url)
         if not sitemap_result["ok"]:
             sitemap_errors.append(sitemap_result["error"] or "sitemap_fetch_failed")
             continue
-        
+
         # Handle compressed sitemaps
         sitemap_body = sitemap_result["body"] or ""
         if sitemap_url.endswith(".gz"):
             # Try to decompress
             try:
                 import gzip
-                sitemap_body = gzip.decompress(sitemap_body.encode('latin-1')).decode('utf-8')
+
+                sitemap_body = gzip.decompress(sitemap_body.encode("latin-1")).decode(
+                    "utf-8"
+                )
             except Exception:
                 # If decompression fails, try to parse as-is (some servers return uncompressed)
                 pass
-        
+
         parsed_urls = _parse_sitemap_urls(sitemap_body)
         if parsed_urls:
             sitemap_status = "found"
@@ -1447,13 +1454,14 @@ def crawl_website(
                         if nested_url.endswith(".gz"):
                             try:
                                 import gzip
-                                nested_body = gzip.decompress(nested_body.encode('latin-1')).decode('utf-8')
+
+                                nested_body = gzip.decompress(
+                                    nested_body.encode("latin-1")
+                                ).decode("utf-8")
                             except Exception:
                                 pass
                         if nested_result["ok"]:
-                            sitemap_urls.extend(
-                                _parse_sitemap_urls(nested_body)
-                            )
+                            sitemap_urls.extend(_parse_sitemap_urls(nested_body))
             break
     sitemap_urls = [
         url for url in dict.fromkeys(sitemap_urls) if _same_origin(canonical_url, url)

@@ -154,7 +154,9 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
 
     # Analysis confidence indicator
     if extraction.analysis and extraction.analysis.confidence > 0:
-        summary_parts.append(f"\n## Analysis Confidence: {extraction.analysis.confidence}%")
+        summary_parts.append(
+            f"\n## Analysis Confidence: {extraction.analysis.confidence}%"
+        )
 
     return "\n".join(summary_parts)
 
