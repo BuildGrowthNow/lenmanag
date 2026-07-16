@@ -31,9 +31,9 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 
 @router.post("", response_model=ResponseEnvelope[LeadActionResponse])
 async def create_lead(
+    user_id: CurrentUserId,
     payload: LeadUpsertRequest,
     http_request: Request,
-    user_id: CurrentUserId,
 ) -> ResponseEnvelope[LeadActionResponse]:
     result = await lead_repository.create_lead(payload, user_id=user_id)
     await write_audit_log(
@@ -48,8 +48,8 @@ async def create_lead(
 
 @router.post("/import", response_model=ResponseEnvelope[LeadImportResponse])
 async def import_leads(
-    http_request: Request,
     user_id: CurrentUserId,
+    http_request: Request,
     file: UploadFile = File(...),
 ) -> ResponseEnvelope[LeadImportResponse]:
     raw = await file.read()
@@ -71,8 +71,8 @@ async def import_leads(
 
 @router.get("", response_model=ResponseEnvelope[LeadListResponse])
 async def list_leads(
-    http_request: Request,
     user_id: CurrentUserId,
+    http_request: Request,
     q: str | None = None,
     status: str | None = None,
     limit: int = 25,
@@ -90,8 +90,8 @@ async def list_leads(
 @router.get("/{lead_id}", response_model=ResponseEnvelope[LeadDetail])
 async def get_lead(
     lead_id: str,
-    http_request: Request,
     user_id: CurrentUserId,
+    http_request: Request,
 ) -> ResponseEnvelope[LeadDetail]:
     lead = await lead_repository.get_lead(lead_id, user_id=user_id)
     if lead is None:
@@ -102,9 +102,9 @@ async def get_lead(
 @router.patch("/{lead_id}", response_model=ResponseEnvelope[LeadDetail])
 async def patch_lead(
     lead_id: str,
+    user_id: CurrentUserId,
     payload: LeadPatchRequest,
     http_request: Request,
-    user_id: CurrentUserId,
 ) -> ResponseEnvelope[LeadDetail]:
     lead = await lead_repository.update_lead(lead_id, payload, user_id=user_id)
     if lead is None:
@@ -122,8 +122,8 @@ async def patch_lead(
 @router.delete("/{lead_id}", response_model=ResponseEnvelope[LeadDetail])
 async def delete_lead(
     lead_id: str,
-    http_request: Request,
     user_id: CurrentUserId,
+    http_request: Request,
 ) -> ResponseEnvelope[LeadDetail]:
     lead = await lead_repository.delete_lead(lead_id, user_id=user_id)
     if lead is None:
@@ -144,8 +144,8 @@ async def delete_lead(
 )
 async def start_extraction(
     lead_id: str,
-    http_request: Request,
     user_id: CurrentUserId,
+    http_request: Request,
 ) -> ResponseEnvelope[ExtractionJobResponse]:
     result = await lead_repository.start_extraction(lead_id, refresh=False)
     if result is None:
@@ -166,8 +166,8 @@ async def start_extraction(
 )
 async def refresh_extraction(
     lead_id: str,
-    http_request: Request,
     user_id: CurrentUserId,
+    http_request: Request,
 ) -> ResponseEnvelope[ExtractionJobResponse]:
     result = await lead_repository.start_extraction(lead_id, refresh=True)
     if result is None:
@@ -186,7 +186,7 @@ async def refresh_extraction(
     "/{lead_id}/extraction", response_model=ResponseEnvelope[ExtractionSnapshot]
 )
 async def get_extraction(
-    lead_id: str, http_request: Request, _user_id: CurrentUserId
+    lead_id: str, _user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[ExtractionSnapshot]:
     extraction = await lead_repository.get_extraction(lead_id)
     if extraction is None:
@@ -196,7 +196,7 @@ async def get_extraction(
 
 @router.get("/{lead_id}/pages", response_model=ResponseEnvelope[PageInventoryResponse])
 async def get_pages(
-    lead_id: str, http_request: Request, _user_id: CurrentUserId
+    lead_id: str, _user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[PageInventoryResponse]:
     pages = await lead_repository.list_pages(lead_id)
     if pages is None:
@@ -212,8 +212,8 @@ async def get_pages(
 )
 async def get_master_brief(
     lead_id: str,
-    http_request: Request,
     _user_id: CurrentUserId,
+    http_request: Request,
 ) -> ResponseEnvelope[MasterBrief | None]:
     master_brief = await lead_repository.get_master_brief(lead_id)
     return success_response(master_brief, meta=response_meta(http_request))
@@ -222,8 +222,8 @@ async def get_master_brief(
 @router.post("/{lead_id}/master-brief", response_model=ResponseEnvelope[MasterBrief])
 async def create_master_brief(
     lead_id: str,
-    http_request: Request,
     user_id: CurrentUserId,
+    http_request: Request,
 ) -> ResponseEnvelope[MasterBrief]:
     try:
         master_brief = await lead_repository.create_master_brief(lead_id)
@@ -251,9 +251,9 @@ async def create_master_brief(
 )
 async def refine_master_brief(
     lead_id: str,
+    user_id: CurrentUserId,
     payload: MasterBriefRefinementRequest,
     http_request: Request,
-    user_id: CurrentUserId,
 ) -> ResponseEnvelope[MasterBrief]:
     try:
         master_brief = await lead_repository.refine_master_brief(
@@ -284,9 +284,9 @@ async def refine_master_brief(
 )
 async def approve_master_brief(
     lead_id: str,
+    user_id: CurrentUserId,
     payload: MasterBriefApprovalRequest,
     http_request: Request,
-    user_id: CurrentUserId,
 ) -> ResponseEnvelope[MasterBrief]:
     try:
         master_brief = await lead_repository.approve_master_brief(

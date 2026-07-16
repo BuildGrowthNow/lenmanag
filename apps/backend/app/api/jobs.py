@@ -18,7 +18,7 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 @router.get("/health", response_model=ResponseEnvelope[JobQueueHealthResponse])
 async def queue_health(
-    http_request: Request, _user_id: CurrentUserId
+    _user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[JobQueueHealthResponse]:
     return success_response(
         await lead_repository.get_queue_health(), meta=response_meta(http_request)
@@ -27,7 +27,7 @@ async def queue_health(
 
 @router.get("/{job_id}", response_model=ResponseEnvelope[JobResponse])
 async def get_job(
-    job_id: str, http_request: Request, _user_id: CurrentUserId
+    job_id: str, _user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[JobResponse]:
     job = await lead_repository.get_job(job_id)
     if job is None:
@@ -46,8 +46,8 @@ async def get_job(
 @router.post("/{job_id}/retry", response_model=ResponseEnvelope[JobResponse])
 async def retry_job(
     job_id: str,
-    http_request: Request,
     _user_id: CurrentUserId,
+    http_request: Request,
     payload: JobRetryRequest | None = None,
 ) -> ResponseEnvelope[JobResponse]:
     retry = await lead_repository.retry_job(job_id, request=payload)

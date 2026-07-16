@@ -53,7 +53,7 @@ async def create_message_draft(
     response_model=ResponseEnvelope[MessageDraftListResponse],
 )
 async def list_message_drafts(
-    lead_id: str, http_request: Request, _user_id: CurrentUserId
+    lead_id: str, _user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[MessageDraftListResponse]:
     return success_response(
         await message_repository.list_drafts(lead_id), meta=response_meta(http_request)
@@ -86,7 +86,7 @@ async def patch_message_draft(
     "/messages/{draft_id}/ready", response_model=ResponseEnvelope[MessageDraft]
 )
 async def mark_message_ready(
-    draft_id: str, http_request: Request, user_id: CurrentUserId
+    draft_id: str, user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[MessageDraft]:
     before = await message_repository.get_copy(draft_id)
     draft = await message_repository.mark_ready(draft_id)
@@ -127,21 +127,21 @@ async def copy_message_draft(
 
 @router.get("/messages/tone-presets", response_model=ResponseEnvelope[list[TonePreset]])
 async def get_tone_presets_endpoint(
-    http_request: Request, _user_id: CurrentUserId
+    _user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[list[TonePreset]]:
     return success_response(get_tone_presets(), meta=response_meta(http_request))
 
 
 @router.get("/messages/cta-variants", response_model=ResponseEnvelope[list[CtaVariant]])
 async def get_cta_variants_endpoint(
-    http_request: Request, _user_id: CurrentUserId
+    _user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[list[CtaVariant]]:
     return success_response(get_cta_variants(), meta=response_meta(http_request))
 
 
 @router.get("/messages/channels/{channel}/config")
 async def get_channel_config_endpoint(
-    channel: str, http_request: Request, _user_id: CurrentUserId
+    channel: str, _user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[dict]:
     return success_response(
         get_channel_config(channel), meta=response_meta(http_request)
@@ -152,7 +152,7 @@ async def get_channel_config_endpoint(
     "/messages/{draft_id}/mark-sent", response_model=ResponseEnvelope[MessageDraft]
 )
 async def mark_message_sent(
-    draft_id: str, http_request: Request, user_id: CurrentUserId
+    draft_id: str, user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[MessageDraft]:
     before = await message_repository.get_copy(draft_id)
     draft = await message_repository.mark_sent(draft_id)
@@ -173,7 +173,7 @@ async def mark_message_sent(
     "/messages/{draft_id}/reset-to-draft", response_model=ResponseEnvelope[MessageDraft]
 )
 async def reset_message_to_draft(
-    draft_id: str, http_request: Request, user_id: CurrentUserId
+    draft_id: str, user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[MessageDraft]:
     before = await message_repository.get_copy(draft_id)
     draft = await message_repository.reset_to_draft(draft_id)
@@ -195,7 +195,7 @@ async def reset_message_to_draft(
     response_model=ResponseEnvelope[PreviewContextResponse],
 )
 async def get_preview_context(
-    draft_id: str, http_request: Request, _user_id: CurrentUserId
+    draft_id: str, _user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[PreviewContextResponse]:
     context = await message_repository.get_preview_context(draft_id)
     if context is None:
