@@ -169,7 +169,7 @@ class MessageRepository:
             briefId=brief.id,
             siteId=site.id if site else None,
             channel=request.channel,
-            deliveryChannel=request.channel if request.channel in ["whatsapp", "linkedin", "email"] else "email",
+            deliveryChannel=request.channel if request.channel in ("whatsapp", "linkedin", "email", "generic") else "email",  # type: ignore[arg-type]
             subject=subject,
             body=body,
             tone=tone,
@@ -241,6 +241,8 @@ class MessageRepository:
             updated["ctaPosition"] = request.ctaPosition
         if request.deliveryChannel is not None:
             updated["deliveryChannel"] = request.deliveryChannel
+        if "calendlyUrl" in request.model_fields_set:
+            updated["calendlyUrl"] = request.calendlyUrl
         content_changed = any(
             value is not None
             for value in (request.subject, request.body, request.tone, request.angle, request.tonePreset, request.customTone, request.ctaVariant, request.ctaPosition)

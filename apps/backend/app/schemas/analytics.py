@@ -26,6 +26,8 @@ AnalyticsEventType = Literal[
     "message_draft_edited",
     "message_draft_created",
     "message_marked_ready",
+    "message_marked_sent",
+    "message_reset_to_draft",
     "site_opened",
     "brief_approved",
     "brief_edited",

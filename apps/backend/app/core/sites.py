@@ -3204,6 +3204,11 @@ class SiteRepository:
                 lead_ids=[site_id],
             )
             return None
+
+        # Check for master brief (AI generation support)
+        master_brief = await lead_repository.get_master_brief(site_id)
+        use_ai_generation = master_brief is not None and master_brief.approvalState == "approved"
+
         brief = await lead_repository.get_brief(site_id)
         if brief is None or brief.approvalState != "approved":
             raise ValueError("brief_not_approved")
@@ -3211,8 +3216,10 @@ class SiteRepository:
         if extraction is None or extraction.version <= 0:
             raise ValueError("extraction_required")
 
-        # High-level generation trace for debugging Phase 14 issues
+        # High-level generation trace
         logger.info("=== Starting site generation for %s ===", site_id)
+        if use_ai_generation:
+            logger.info("AI generation mode: Master brief %s approved", master_brief.id if master_brief else "unknown")
         logger.info(
             "Brief %s v%s with %d recommended sections",
             brief.id,
@@ -3842,6 +3849,38 @@ class SiteRepository:
         if violations:
             raise ValueError(f"blocked_language_found:{','.join(violations)}")
 
+        # AI Generation (Phase 3) - Generate TSX code if master brief is approved
+        ai_generation_result: dict[str, Any] | None = None
+        if use_ai_generation and master_brief:
+            logger.info("Starting AI-native code generation for site %s", site_id)
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id, progress=55, step="Generating landing page code with AI"
+            )
+
+            try:
+                from app.core.ai_site_generation import generate_with_retry
+
+                ai_generation_result = await generate_with_retry(
+                    master_brief=master_brief,
+                    extraction=extraction,
+                    site_id=site_id,
+                    max_retries=3,
+                )
+
+                if ai_generation_result["success"]:
+                    logger.info(
+                        f"AI generation successful: compiled to {ai_generation_result.get('compiledBundleUrl')}"
+                    )
+                else:
+                    logger.warning(
+                        f"AI generation failed: {ai_generation_result.get('error')}. "
+                        "Continuing with deterministic sections."
+                    )
+
+            except Exception as e:
+                logger.error(f"AI generation error: {e}", exc_info=True)
+                ai_generation_result = None
+
         version_id = uuid4().hex
 
         def _screenshot_ref_docs(current_site: GeneratedSite | None) -> list[dict[str, Any]]:
@@ -3913,6 +3952,11 @@ class SiteRepository:
             "updatedAt": now,
             # Auto-publish sites that meet quality threshold
             "publishedAt": now if readiness_status == "ready_to_publish" else None,
+            # AI generation fields (Phase 3)
+            "sourceCode": ai_generation_result.get("sourceCode") if ai_generation_result and "sourceCode" in ai_generation_result else None,
+            "compiledBundleUrl": ai_generation_result.get("compiledBundleUrl") if ai_generation_result and "compiledBundleUrl" in ai_generation_result else None,
+            "compilationStatus": ai_generation_result.get("compilationStatus", "pending") if ai_generation_result else None,
+            "compilationError": ai_generation_result.get("error") if ai_generation_result and "error" in ai_generation_result else None,
         }
         site_doc = {
             "id": site_id,
@@ -3967,8 +4011,13 @@ class SiteRepository:
             "updatedAt": now,
             # Auto-publish sites that meet quality threshold
             "publishedAt": now if readiness_status == "ready_to_publish" else None,
+            # AI generation fields (Phase 3)
+            "sourceCode": ai_generation_result.get("sourceCode") if ai_generation_result and "sourceCode" in ai_generation_result else None,
+            "compiledBundleUrl": ai_generation_result.get("compiledBundleUrl") if ai_generation_result and "compiledBundleUrl" in ai_generation_result else None,
+            "compilationStatus": ai_generation_result.get("compilationStatus", "pending") if ai_generation_result else None,
+            "compilationError": ai_generation_result.get("error") if ai_generation_result and "error" in ai_generation_result else None,
         }
-        
+
         # Run screenshot QA if enabled
         settings = get_settings()
         screenshot_qa_result: dict[str, Any] | None = None

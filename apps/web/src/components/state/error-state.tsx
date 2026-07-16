@@ -9,7 +9,7 @@ export function ErrorState({ title, description }: { title: string; description:
       <p className="mt-2 max-w-2xl leading-6 text-muted">{description}</p>
       <div className="mt-5">
         <Button variant="secondary">
-          <Link href="/nsa">Return to dashboard</Link>
+          <Link href="/app">Return to dashboard</Link>
         </Button>
       </div>
     </div>

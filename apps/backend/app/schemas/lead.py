@@ -9,6 +9,23 @@ LeadStatus = Literal["new", "needs_review", "archived"]
 JobStatus = Literal["queued", "running", "completed", "failed"]
 JobType = Literal["lead_import", "lead_create", "lead_merge", "site_crawl", "site_refresh", "site_generate", "site_republish"]
 
+# Pipeline stage reflects where a lead sits in the automation flow
+PipelineStage = Literal[
+    "new",
+    "extracting",
+    "extracted",
+    "briefing",
+    "brief_ready",
+    "generating",
+    "qa",
+    "ready",
+    "published",
+    "needs_attention",
+    "archived",
+]
+
+PipelineMode = Literal["auto", "manual"]
+
 
 class SourceReference(BaseModel):
     sourceType: LeadSourceType
@@ -62,11 +79,15 @@ class SourceAttribution(BaseModel):
 
 class LeadListItem(BaseModel):
     id: str
+    user_id: str
     sourceType: LeadSourceType
     companyName: Optional[str] = None
     websiteUrl: str
     normalizedDomain: str
     status: LeadStatus
+    pipelineStage: PipelineStage = "new"
+    pipelineMode: PipelineMode = "auto"
+    pipelineStatusDetail: Optional[str] = None
     industry: Optional[str] = None
     notes: Optional[str] = None
     missingFields: list[str] = Field(default_factory=list)
@@ -78,6 +99,7 @@ class LeadListItem(BaseModel):
 
 class LeadDetail(BaseModel):
     id: str
+    user_id: str
     sourceType: LeadSourceType
     sourceRef: Optional[str] = None
     sourceRefs: list[SourceReference] = Field(default_factory=list)
@@ -87,6 +109,9 @@ class LeadDetail(BaseModel):
     normalizedDomain: str
     detectedWebsiteUrl: Optional[str] = None
     status: LeadStatus
+    pipelineStage: PipelineStage = "new"
+    pipelineMode: PipelineMode = "auto"
+    pipelineStatusDetail: Optional[str] = None
     industry: Optional[str] = None
     notes: Optional[str] = None
     missingFields: list[str] = Field(default_factory=list)
@@ -103,6 +128,7 @@ class LeadUpsertRequest(BaseModel):
     websiteUrl: str
     industry: Optional[str] = None
     notes: Optional[str] = None
+    pipelineMode: PipelineMode = "auto"
 
 
 class LeadPatchRequest(BaseModel):
@@ -111,6 +137,8 @@ class LeadPatchRequest(BaseModel):
     industry: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[LeadStatus] = None
+    pipelineMode: Optional[PipelineMode] = None
+    pipelineStage: Optional[PipelineStage] = None
 
 
 class ImportRowResult(BaseModel):
@@ -124,9 +152,19 @@ class ImportRowResult(BaseModel):
     missingFields: list[str] = Field(default_factory=list)
 
 
+class PipelineSummary(BaseModel):
+    processing: int = 0
+    needs_attention: int = 0
+    brief_ready: int = 0
+    site_generated: int = 0
+    ready_to_publish: int = 0
+    published: int = 0
+
+
 class LeadListResponse(BaseModel):
     items: list[LeadListItem]
     pagination: dict[str, int]
+    pipelineSummary: Optional[PipelineSummary] = None
 
 
 class LeadActionResponse(BaseModel):

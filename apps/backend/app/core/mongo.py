@@ -110,7 +110,17 @@ class _AsyncMongoMockAdmin:
 def _build_client() -> AsyncIOMotorClient | _AsyncMongoMockClient:
     settings = get_settings()
     if settings.mongodb_uri:
-        return AsyncIOMotorClient(settings.mongodb_uri)
+        # Configure connection pool to prevent connection exhaustion
+        return AsyncIOMotorClient(
+            settings.mongodb_uri,
+            maxPoolSize=50,  # Maximum number of connections in pool
+            minPoolSize=10,  # Minimum number of connections maintained
+            maxIdleTimeMS=45000,  # Close idle connections after 45s
+            waitQueueTimeoutMS=10000,  # Wait up to 10s for connection from pool
+            serverSelectionTimeoutMS=5000,  # Timeout for server selection
+            connectTimeoutMS=10000,  # Timeout for socket connection
+            socketTimeoutMS=45000,  # Timeout for socket operations
+        )
     return _AsyncMongoMockClient()
 
 

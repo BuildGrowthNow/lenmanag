@@ -26,6 +26,7 @@ from prometheus_client import Counter, Histogram
 
 # Metrics
 from .config import get_settings
+from .audit import write_asset_audit_log
 
 DOWNLOAD_COUNTER = Counter("asset_download_total", "Total asset download attempts")
 DOWNLOAD_FAILURES = Counter("asset_download_failures_total", "Total failed asset downloads")
@@ -103,7 +104,7 @@ class AssetDownloader:
 
         return bytes_written
 
-    async def download_asset(self, url: str, lead_id: str) -> AssetDownloadResult:
+    async def download_asset(self, url: str, lead_id: str, actor_user_id: Optional[str] = None) -> AssetDownloadResult:
         res = AssetDownloadResult(source_url=url, success=False)
         if not self.settings.asset_download_enabled:
             res.error = "asset download disabled"
@@ -178,13 +179,38 @@ class AssetDownloader:
                         DOWNLOAD_BYTES.inc(int(res.bytes or 0))
                         DOWNLOAD_LATENCY.observe(__import__("time").time() - start)
 
-                        # if caller provides a crawl reservation elsewhere, they can record it; here we try to reserve if crawl id passed via headers
-                        # (integration code should call reserve_crawl_budget with a crawl id when available)
+                        # Audit log successful download
+                        await write_asset_audit_log(
+                            actor_user_id=actor_user_id,
+                            lead_id=lead_id,
+                            asset_url=url,
+                            action="asset_download",
+                            metadata={
+                                "bytes": stored_bytes,
+                                "contentType": res.content_type,
+                                "checksum": checksum,
+                                "storageUri": uri,
+                                "success": True,
+                            },
+                        )
 
                         return res
             except Exception as ex:
                 DOWNLOAD_FAILURES.inc()
                 res.error = str(ex)
+
+                # Audit log failed download
+                await write_asset_audit_log(
+                    actor_user_id=actor_user_id,
+                    lead_id=lead_id,
+                    asset_url=url,
+                    action="asset_download_failed",
+                    metadata={
+                        "error": str(ex),
+                        "success": False,
+                    },
+                )
+
                 return res
             finally:
                 if temp_f:

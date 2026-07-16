@@ -10,10 +10,10 @@ export async function getSession(): Promise<SessionResponse> {
   });
 }
 
-export async function login(email: string, name?: string) {
+export async function login(email: string, password: string) {
   return safeRequest("/api/auth/login", { authenticated: false, status: "denied", message: "Auth service unavailable." }, {
     method: "POST",
-    body: { email, name }
+    body: { email, password }
   });
 }
 

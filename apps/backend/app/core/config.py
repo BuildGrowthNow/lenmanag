@@ -14,8 +14,15 @@ class Settings(BaseSettings):
     mongodb_uri: str = ""
     mongodb_db_name: str = "lenquant"
     session_secret: str = "replace-me"
+    jwt_secret: str = "replace-with-a-secure-random-string"
+    jwt_algorithm: str = "HS256"
+    jwt_expiry_hours: int = 24 * 7  # 7 days
+    signup_code: str = ""
     auth_allowlist_emails: str = "operator@example.com"
     auth_allowlist_domains: str = ""
+    auth_admin_password: str = ""
+    resend_api_key: str = ""
+    resend_from_email: str = "noreply@lenquant.com"
     backend_cors_origins: str = "http://localhost:3000,http://localhost:3002"
     session_cookie_secure: bool = True
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
@@ -50,6 +57,9 @@ class Settings(BaseSettings):
     # Can be overridden via PREVIEW_BASE_URL env var when the frontend
     # runs on a non-default port or host.
     preview_base_url: str = "http://localhost:3000"
+
+    # Compiler service URL for TSX compilation
+    compiler_service_url: str = "http://localhost:3001"
 
     # Asset download / caching settings
     asset_download_enabled: bool = False

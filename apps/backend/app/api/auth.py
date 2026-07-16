@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hmac
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response
 
 from app.core.audit import write_audit_log
 from app.core.config import get_settings
+from app.core.rate_limiter import check_auth_rate_limit
 from app.core.security import SESSION_COOKIE_NAME, create_session_token, decode_session_token
 from app.core.versioning import response_meta
 from app.schemas.auth import AuthDecisionResponse, LoginRequest, LoginResponse, LogoutResponse, SessionResponse, SessionUser, VerificationRequest
@@ -54,23 +56,36 @@ def _is_allowlisted(email: str) -> tuple[bool, str | None]:
 
 @router.post("/verify", response_model=ResponseEnvelope[AuthDecisionResponse])
 async def verify_login(payload: VerificationRequest, request: Request) -> ResponseEnvelope[AuthDecisionResponse]:
+    check_auth_rate_limit(request, "auth:verify")
     allowed, reason = _is_allowlisted(payload.email)
     await write_audit_log(None, "auth", _normalize_email(str(payload.email)), "verify_login", after={"allowed": allowed, "reason": reason})
     return success_response(AuthDecisionResponse(allowed=allowed, reason=reason, email=payload.email), meta=response_meta(request))
 
 
+def _check_password(provided: str) -> bool:
+    expected = settings.auth_admin_password
+    if not expected:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+
+
 @router.post("/login", response_model=ResponseEnvelope[LoginResponse])
 async def login(payload: LoginRequest, response: Response, request: Request) -> ResponseEnvelope[LoginResponse]:
-    allowed, reason = _is_allowlisted(payload.email)
+    check_auth_rate_limit(request, "auth:login")
     email = _normalize_email(str(payload.email))
-    if not allowed:
-        await write_audit_log(None, "auth", email, "login_denied", after={"reason": reason})
-        denied_response = LoginResponse(authenticated=False, user=None, status="denied", message="Access denied. This email is not on the admin allowlist.")
+    allowed, reason = _is_allowlisted(payload.email)
+
+    # Check both conditions — give the same generic error either way to avoid
+    # leaking whether the email is on the allowlist or the password is wrong.
+    if not allowed or not _check_password(payload.password):
+        await write_audit_log(None, "auth", email, "login_denied", after={"reason": reason or "bad_password"})
+        denied_response = LoginResponse(authenticated=False, user=None, status="denied", message="Access denied. Check your email and password.")
         return success_response(denied_response, meta=response_meta(request))
 
-    token = create_session_token(email=email, name=payload.name)
+    name = email.split("@", 1)[0]
+    token = create_session_token(email=email, name=name)
     _set_session_cookie(response, token)
-    user = SessionUser(email=email, name=payload.name or email.split("@", 1)[0], role="operator")
+    user = SessionUser(email=email, name=name, role="operator")
     await write_audit_log(email, "auth", email, "login_success", after={"email": email})
     return success_response(LoginResponse(authenticated=True, user=user, status="active", message="Session created."), meta=response_meta(request))
 

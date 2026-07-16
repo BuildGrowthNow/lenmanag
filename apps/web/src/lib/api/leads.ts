@@ -33,8 +33,55 @@ function buildQuery(query: LeadListQuery = {}) {
 export async function listLeads(query: LeadListQuery = {}): Promise<LeadListResponse> {
   return safeRequest(`/api/leads${buildQuery(query)}`, {
     items: [],
-    pagination: { total: 0, limit: query.limit ?? 25, offset: query.offset ?? 0 }
+    pagination: { total: 0, limit: query.limit ?? 25, offset: query.offset ?? 0 },
+    pipelineSummary: null,
   });
+}
+
+/**
+ * Poll for lead updates at a regular interval.
+ * Useful for detecting extraction job completions.
+ *
+ * @param query - Query parameters for lead list
+ * @param callback - Called with updated results on each poll
+ * @param intervalMs - Polling interval in milliseconds (default: 5000)
+ * @returns cleanup function to stop polling
+ */
+export function pollLeadUpdates(
+  query: LeadListQuery = {},
+  callback: (results: LeadListResponse) => void,
+  intervalMs: number = 5000
+): () => void {
+  let active = true;
+  let timeoutId: NodeJS.Timeout | null = null;
+
+  const poll = async () => {
+    if (!active) return;
+
+    try {
+      const results = await listLeads(query);
+      if (active) {
+        callback(results);
+      }
+    } catch (error) {
+      console.error("Poll error:", error);
+    }
+
+    if (active) {
+      timeoutId = setTimeout(poll, intervalMs);
+    }
+  };
+
+  // Start polling
+  poll();
+
+  // Return cleanup function
+  return () => {
+    active = false;
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  };
 }
 
 export async function getLead(id: string): Promise<LeadDetail | null> {

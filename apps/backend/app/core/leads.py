@@ -11,6 +11,8 @@ from urllib.parse import urlparse, urlunparse
 from uuid import uuid4
 
 from app.core.analytics import analytics_repository
+from app.core.audit import write_brief_audit_log
+from app.core.checkpoint import TaskCheckpoint, resume_or_start_task
 from app.core.config import get_settings
 from app.core.extraction import crawl_website
 from app.core.extraction_enrichment import enrich_extraction, validate_extraction_content
@@ -313,6 +315,9 @@ def _lead_doc_to_detail(
         normalizedDomain=doc["normalizedDomain"],
         detectedWebsiteUrl=doc.get("detectedWebsiteUrl"),
         status=doc["status"],
+        pipelineStage=doc.get("pipelineStage", "new"),
+        pipelineMode=doc.get("pipelineMode", "auto"),
+        pipelineStatusDetail=doc.get("pipelineStatusDetail"),
         industry=doc.get("industry"),
         notes=doc.get("notes"),
         missingFields=list(doc.get("missingFields", [])),
@@ -335,6 +340,9 @@ def _lead_doc_to_list_item(
         websiteUrl=doc["websiteUrl"],
         normalizedDomain=doc["normalizedDomain"],
         status=doc["status"],
+        pipelineStage=doc.get("pipelineStage", "new"),
+        pipelineMode=doc.get("pipelineMode", "auto"),
+        pipelineStatusDetail=doc.get("pipelineStatusDetail"),
         industry=doc.get("industry"),
         notes=doc.get("notes"),
         missingFields=list(doc.get("missingFields", [])),
@@ -372,10 +380,12 @@ def _build_lead_doc(
     normalized_domain: str,
     industry: str | None,
     notes: str | None,
+    user_id: str,
 ) -> dict[str, Any]:
     now = _now()
     lead = {
         "id": uuid4().hex,
+        "user_id": user_id,
         "sourceType": source_type,
         "sourceRef": source_ref,
         "sourceRefs": [
@@ -400,6 +410,9 @@ def _build_lead_doc(
         "latestJobId": None,
         "latestExtractionId": None,
         "jobIds": [],
+        "pipelineStage": "new",
+        "pipelineMode": "auto",
+        "pipelineStatusDetail": None,
         "createdAt": now,
         "updatedAt": now,
         "archivedAt": None,
@@ -469,8 +482,9 @@ class LeadRepository:
         await database["site_briefs"].create_index("leadId")
         await database["site_briefs"].create_index([("leadId", 1), ("version", -1)])
 
-    async def create_lead(self, request: LeadUpsertRequest) -> LeadActionResponse:
+    async def create_lead(self, request: LeadUpsertRequest, user_id: str) -> LeadActionResponse:
         normalized_url, normalized_domain = _normalize_input_url(request.websiteUrl)
+        pipeline_mode = request.pipelineMode or "auto"
         incoming = _build_lead_doc(
             source_type="manual",
             source_ref=None,
@@ -480,7 +494,10 @@ class LeadRepository:
             normalized_domain=normalized_domain,
             industry=request.industry.strip() if request.industry else None,
             notes=request.notes.strip() if request.notes else None,
+            user_id=user_id,
         )
+        incoming["pipelineMode"] = pipeline_mode
+        incoming["pipelineStage"] = "new"
 
         await self._maybe_ensure_indexes()
         database = get_database()
@@ -489,6 +506,7 @@ class LeadRepository:
                 existing = self._find_duplicate_memory(normalized_domain)
                 if existing is not None:
                     merged = _merge_lead_doc(existing, incoming)
+                    merged["pipelineMode"] = pipeline_mode
                     self._memory[existing["id"]] = merged
                     lead = _lead_doc_to_detail(merged)
                     response = LeadActionResponse(
@@ -508,6 +526,12 @@ class LeadRepository:
                         message="Lead created.",
                     )
             await self._record_manual_lead_event(response, incoming["sourceType"])
+            # Auto-start extraction for new (non-merged) leads
+            if response.created:
+                asyncio.create_task(
+                    self._auto_start_extraction(response.lead.id),
+                    name=f"auto_extract:{response.lead.id}",
+                )
             return response
 
         existing = await database["leads"].find_one(
@@ -515,6 +539,7 @@ class LeadRepository:
         )
         if existing:
             merged = _merge_lead_doc(existing, incoming)
+            merged["pipelineMode"] = pipeline_mode
             await database["leads"].replace_one({"id": existing["id"]}, merged)
             response = LeadActionResponse(
                 lead=_lead_doc_to_detail(merged),
@@ -535,7 +560,135 @@ class LeadRepository:
             message="Lead created.",
         )
         await self._record_manual_lead_event(response, incoming["sourceType"])
+        # Auto-start extraction immediately
+        asyncio.create_task(
+            self._auto_start_extraction(response.lead.id),
+            name=f"auto_extract:{response.lead.id}",
+        )
         return response
+
+    async def _auto_start_extraction(self, lead_id: str) -> None:
+        """Start extraction automatically after lead creation."""
+        try:
+            await self._set_pipeline_stage(lead_id, "extracting")
+            await self.start_extraction(lead_id, refresh=False)
+        except Exception:
+            logging.getLogger("lenquant.pipeline").exception(
+                "Auto-extraction failed for lead %s", lead_id
+            )
+            await self._set_pipeline_stage(
+                lead_id, "needs_attention",
+                detail="Extraction could not be started automatically."
+            )
+
+    async def _set_pipeline_stage(
+        self,
+        lead_id: str,
+        stage: str,
+        *,
+        detail: str | None = None,
+    ) -> None:
+        """Persist pipelineStage (and optional statusDetail) for a lead."""
+        now = _now()
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                doc = self._memory.get(lead_id)
+                if doc is not None:
+                    doc["pipelineStage"] = stage
+                    doc["pipelineStatusDetail"] = detail
+                    doc["updatedAt"] = now
+        else:
+            await database["leads"].update_one(
+                {"id": lead_id},
+                {"$set": {
+                    "pipelineStage": stage,
+                    "pipelineStatusDetail": detail,
+                    "updatedAt": now,
+                }},
+            )
+
+    async def _get_pipeline_mode(self, lead_id: str) -> str:
+        """Return the pipelineMode for a lead (defaults to 'auto')."""
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                doc = self._memory.get(lead_id)
+                return doc.get("pipelineMode", "auto") if doc else "auto"
+        doc = await database["leads"].find_one({"id": lead_id}, {"pipelineMode": 1})
+        return (doc or {}).get("pipelineMode", "auto") if doc else "auto"
+
+    async def advance_pipeline_after_extraction(self, lead_id: str) -> None:
+        """Called after extraction completes — advance to brief generation if auto mode."""
+        mode = await self._get_pipeline_mode(lead_id)
+        extraction = await self.get_extraction(lead_id)
+        if extraction is None:
+            await self._set_pipeline_stage(lead_id, "needs_attention", detail="Extraction produced no snapshot.")
+            return
+
+        if extraction.crawlStatus == "failed":
+            await self._set_pipeline_stage(lead_id, "needs_attention", detail="Extraction failed.")
+            return
+
+        confidence = extraction.confidenceScore or 0
+        if confidence < 30:
+            await self._set_pipeline_stage(
+                lead_id, "needs_attention",
+                detail=f"Low extraction confidence ({confidence}%). Review the crawl before continuing.",
+            )
+            return
+
+        await self._set_pipeline_stage(lead_id, "extracted")
+
+        if mode == "auto":
+            # Auto mode: immediately generate brief
+            await self._set_pipeline_stage(lead_id, "briefing")
+            try:
+                brief = await self.create_brief(lead_id)
+                if brief is None:
+                    await self._set_pipeline_stage(lead_id, "needs_attention", detail="Brief generation returned no result.")
+                    return
+                # Auto-approve the brief
+                await self.approve_brief(lead_id, approved_by="auto")
+                await self.advance_pipeline_after_brief(lead_id)
+            except Exception:
+                logging.getLogger("lenquant.pipeline").exception(
+                    "Auto brief generation failed for lead %s", lead_id
+                )
+                await self._set_pipeline_stage(lead_id, "needs_attention", detail="Brief generation failed.")
+        else:
+            # Manual mode: pause at extracted — operator approves brief
+            await self._set_pipeline_stage(lead_id, "brief_ready")
+
+    async def advance_pipeline_after_brief(self, lead_id: str) -> None:
+        """Called after brief is approved — queue site generation."""
+        await self._set_pipeline_stage(lead_id, "generating")
+        try:
+            from app.core.sites import site_repository
+            from app.schemas.site import SiteGenerateRequest
+            job = await site_repository.queue_generation_job(lead_id)
+            if job is None:
+                await self._set_pipeline_stage(lead_id, "needs_attention", detail="Site generation could not be queued.")
+        except Exception:
+            logging.getLogger("lenquant.pipeline").exception(
+                "Auto site generation queue failed for lead %s", lead_id
+            )
+            await self._set_pipeline_stage(lead_id, "needs_attention", detail="Site generation failed to start.")
+
+    async def advance_pipeline_after_generation(self, lead_id: str, quality_score: int) -> None:
+        """Called after site generation completes — QA check and advance."""
+        await self._set_pipeline_stage(lead_id, "qa")
+        mode = await self._get_pipeline_mode(lead_id)
+        if mode == "auto":
+            threshold = 75
+            if quality_score >= threshold:
+                await self._set_pipeline_stage(lead_id, "ready", detail=f"QA passed with score {quality_score}/100.")
+            else:
+                await self._set_pipeline_stage(
+                    lead_id, "needs_attention",
+                    detail=f"QA score {quality_score}/100 is below threshold {threshold}. Review or regenerate.",
+                )
+        # Manual mode: stays in QA — operator reviews in Review queue
 
     def _find_duplicate_memory(self, normalized_domain: str) -> dict[str, Any] | None:
         for lead in self._memory.values():
@@ -547,16 +700,45 @@ class LeadRepository:
         return None
 
     async def import_csv(
-        self, *, file_name: str | None, csv_bytes: bytes
+        self, *, file_name: str | None, csv_bytes: bytes, user_id: str
     ) -> LeadImportResponse:
         await self._maybe_ensure_indexes()
-        text = csv_bytes.decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(text))
-        rows = [
-            row
-            for row in reader
-            if any((value or "").strip() for value in row.values())
-        ]
+
+        # Validation 1: File size limit (10MB max)
+        max_size = 10 * 1024 * 1024  # 10MB
+        if len(csv_bytes) > max_size:
+            raise ValueError(f"csv_too_large: File size {len(csv_bytes)} bytes exceeds {max_size} bytes limit")
+
+        # Validation 2: Detect encoding and decode safely
+        try:
+            text = csv_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            try:
+                text = csv_bytes.decode("latin-1")
+            except UnicodeDecodeError:
+                raise ValueError("csv_invalid_encoding: File must be UTF-8 or Latin-1 encoded")
+
+        # Validation 3: Check for suspicious content (potential CSV injection)
+        suspicious_prefixes = ["=", "+", "-", "@", "\t", "\r"]
+        if any(text.lstrip().startswith(prefix) for prefix in suspicious_prefixes):
+            raise ValueError("csv_suspicious_content: CSV file contains potentially malicious content")
+
+        # Validation 4: Parse CSV with size limits
+        try:
+            reader = csv.DictReader(io.StringIO(text))
+        except csv.Error as exc:
+            raise ValueError(f"csv_parse_error: {str(exc)}")
+
+        # Validation 5: Row count limit (1000 rows max)
+        max_rows = 1000
+        rows = []
+        for idx, row in enumerate(reader):
+            if idx >= max_rows:
+                raise ValueError(f"csv_too_many_rows: Maximum {max_rows} rows allowed")
+            # Only include rows with at least one non-empty value
+            if any((value or "").strip() for value in row.values()):
+                rows.append(row)
+
         if not rows:
             raise ValueError("csv_empty")
 
@@ -577,7 +759,7 @@ class LeadRepository:
         for index, row in enumerate(rows, start=1):
             try:
                 lead, created, merged, message = await self._import_row(
-                    row, source_ref=f"{file_name or 'csv'}:row:{index}"
+                    row, source_ref=f"{file_name or 'csv'}:row:{index}", user_id=user_id
                 )
                 if lead:
                     lead_ids.append(lead["id"])
@@ -655,7 +837,7 @@ class LeadRepository:
         return response
 
     async def _import_row(
-        self, row: dict[str, str], *, source_ref: str | None
+        self, row: dict[str, str], *, source_ref: str | None, user_id: str
     ) -> tuple[dict[str, Any] | None, bool, bool, str]:
         company_name = self._read_column(row, ["companyName", "company", "name"])
         website_value = self._read_column(
@@ -677,6 +859,7 @@ class LeadRepository:
             normalized_domain=normalized_domain,
             industry=industry.strip() if industry else None,
             notes=notes.strip() if notes else None,
+            user_id=user_id,
         )
 
         database = get_database()
@@ -771,7 +954,16 @@ class LeadRepository:
         status: str | None = None,
         limit: int = 25,
         offset: int = 0,
+        user_id: str | None = None,
     ) -> LeadListResponse:
+        # Validate pagination parameters
+        max_limit = 100
+        max_offset = 10000
+        if limit < 1 or limit > max_limit:
+            raise ValueError(f"limit must be between 1 and {max_limit}")
+        if offset < 0 or offset > max_offset:
+            raise ValueError(f"offset must be between 0 and {max_offset}")
+
         await self._maybe_ensure_indexes()
         database = get_database()
         if database is None:
@@ -780,12 +972,16 @@ class LeadRepository:
                     q=q, status=status, limit=limit, offset=offset
                 )
                 total = self._count_memory_leads(q=q, status=status)
+                summary = self._compute_pipeline_summary_memory()
                 return LeadListResponse(
                     items=items,
                     pagination={"total": total, "limit": limit, "offset": offset},
+                    pipelineSummary=summary,
                 )
 
         query: dict[str, Any] = {}
+        if user_id:
+            query["user_id"] = user_id
         if status:
             query["status"] = status
         if q:
@@ -805,8 +1001,11 @@ class LeadRepository:
         docs = await cursor.to_list(length=limit)
         total = await database["leads"].count_documents(query)
         items = [await self._lead_list_item_for_doc(doc, database) for doc in docs]
+        summary = await self._compute_pipeline_summary_db(database)
         return LeadListResponse(
-            items=items, pagination={"total": total, "limit": limit, "offset": offset}
+            items=items,
+            pagination={"total": total, "limit": limit, "offset": offset},
+            pipelineSummary=summary,
         )
 
     def _list_memory_leads(
@@ -834,6 +1033,74 @@ class LeadRepository:
     def _count_memory_leads(self, q: str | None, status: str | None) -> int:
         return len(self._list_memory_leads(q=q, status=status, limit=10**6, offset=0))
 
+    def _compute_pipeline_summary_memory(self):  # type: ignore[return]
+        from app.schemas.lead import PipelineSummary
+        counts = {
+            "processing": 0,
+            "needs_attention": 0,
+            "brief_ready": 0,
+            "site_generated": 0,
+            "ready_to_publish": 0,
+            "published": 0,
+        }
+        processing_stages = {"extracting", "extracted", "briefing", "generating", "qa"}
+        for doc in self._memory.values():
+            stage = doc.get("pipelineStage", "new")
+            if doc.get("status") == "archived":
+                continue
+            if stage in processing_stages:
+                counts["processing"] += 1
+            elif stage == "needs_attention":
+                counts["needs_attention"] += 1
+            elif stage == "brief_ready":
+                counts["brief_ready"] += 1
+            elif stage == "qa":
+                counts["site_generated"] += 1
+            elif stage == "ready":
+                counts["ready_to_publish"] += 1
+            elif stage == "published":
+                counts["published"] += 1
+        return PipelineSummary(**counts)
+
+    async def _compute_pipeline_summary_db(self, database):  # type: ignore[return]
+        from app.schemas.lead import PipelineSummary
+        pipeline_stages = [
+            "new", "extracting", "extracted", "briefing", "brief_ready",
+            "generating", "qa", "ready", "published", "needs_attention",
+        ]
+        counts = {
+            "processing": 0,
+            "needs_attention": 0,
+            "brief_ready": 0,
+            "site_generated": 0,
+            "ready_to_publish": 0,
+            "published": 0,
+        }
+        try:
+            agg = await database["leads"].aggregate([
+                {"$match": {"status": {"$ne": "archived"}}},
+                {"$group": {"_id": "$pipelineStage", "count": {"$sum": 1}}},
+            ]).to_list(length=len(pipeline_stages) + 5)
+            processing_stages = {"extracting", "extracted", "briefing", "generating"}
+            for entry in agg:
+                stage = entry.get("_id") or "new"
+                count = entry.get("count", 0)
+                if stage in processing_stages:
+                    counts["processing"] += count
+                elif stage == "needs_attention":
+                    counts["needs_attention"] += count
+                elif stage == "brief_ready":
+                    counts["brief_ready"] += count
+                elif stage == "qa":
+                    counts["site_generated"] += count
+                elif stage == "ready":
+                    counts["ready_to_publish"] += count
+                elif stage == "published":
+                    counts["published"] += count
+        except Exception:
+            pass
+        return PipelineSummary(**counts)
+
     async def _lead_list_item_for_doc(
         self, doc: dict[str, Any], database
     ) -> LeadListItem:
@@ -843,7 +1110,7 @@ class LeadRepository:
             latest_job = await database["jobs"].find_one({"id": latest_job_id})
         return _lead_doc_to_list_item(doc, latest_job)
 
-    async def get_lead(self, lead_id: str) -> LeadDetail | None:
+    async def get_lead(self, lead_id: str, user_id: str | None = None) -> LeadDetail | None:
         await self._maybe_ensure_indexes()
         database = get_database()
         if database is None:
@@ -854,7 +1121,10 @@ class LeadRepository:
                 jobs = self._jobs_for_lead_memory(lead_id)
                 return _lead_doc_to_detail(doc, jobs)
 
-        doc = await database["leads"].find_one({"id": lead_id})
+        query: dict[str, Any] = {"id": lead_id}
+        if user_id:
+            query["user_id"] = user_id
+        doc = await database["leads"].find_one(query)
         if doc is None:
             return None
         jobs_cursor = (
@@ -878,7 +1148,7 @@ class LeadRepository:
         return self._jobs.get(job_id)
 
     async def update_lead(
-        self, lead_id: str, patch: LeadPatchRequest
+        self, lead_id: str, patch: LeadPatchRequest, user_id: str | None = None
     ) -> LeadDetail | None:
         await self._maybe_ensure_indexes()
         database = get_database()
@@ -891,12 +1161,33 @@ class LeadRepository:
                 self._memory[lead_id] = updated
                 return _lead_doc_to_detail(updated, self._jobs_for_lead_memory(lead_id))
 
-        doc = await database["leads"].find_one({"id": lead_id})
+        query: dict[str, Any] = {"id": lead_id}
+        if user_id:
+            query["user_id"] = user_id
+        doc = await database["leads"].find_one(query)
         if doc is None:
             return None
+
+        # Optimistic locking: check version if provided
+        expected_version = getattr(patch, "expectedVersion", None)
+        if expected_version is not None:
+            current_version = int(doc.get("version", 1))
+            if current_version != expected_version:
+                raise ValueError(f"Concurrent modification detected. Expected version {expected_version}, found {current_version}")
+
         updated = self._apply_patch(doc, patch)
-        await database["leads"].replace_one({"id": lead_id}, updated)
-        return await self.get_lead(lead_id)
+
+        # Use version in query for atomic check-and-update
+        result = await database["leads"].replace_one(
+            {"id": lead_id, "version": doc.get("version", 1)},
+            updated
+        )
+
+        if result.matched_count == 0:
+            # Version mismatch - concurrent modification
+            raise ValueError("Concurrent modification detected. Please refresh and try again.")
+
+        return await self.get_lead(lead_id, user_id=user_id)
 
     def _apply_patch(
         self, doc: dict[str, Any], patch: LeadPatchRequest
@@ -919,6 +1210,10 @@ class LeadRepository:
                 updated["archivedAt"] = _now()
             elif updated.get("archivedAt"):
                 updated["archivedAt"] = None
+        if patch.pipelineMode is not None:
+            updated["pipelineMode"] = patch.pipelineMode
+        if patch.pipelineStage is not None:
+            updated["pipelineStage"] = patch.pipelineStage
         updated["missingFields"] = _missing_fields(updated)
         if updated["status"] != "archived":
             updated["status"] = (
@@ -930,8 +1225,8 @@ class LeadRepository:
         updated["updatedAt"] = _now()
         return updated
 
-    async def archive_lead(self, lead_id: str) -> LeadDetail | None:
-        return await self.update_lead(lead_id, LeadPatchRequest(status="archived"))
+    async def archive_lead(self, lead_id: str, user_id: str | None = None) -> LeadDetail | None:
+        return await self.update_lead(lead_id, LeadPatchRequest(status="archived"), user_id=user_id)
 
     async def create_job(
         self,
@@ -1269,8 +1564,8 @@ class LeadRepository:
             )
         return results
 
-    async def delete_lead(self, lead_id: str) -> LeadDetail | None:
-        return await self.archive_lead(lead_id)
+    async def delete_lead(self, lead_id: str, user_id: str | None = None) -> LeadDetail | None:
+        return await self.archive_lead(lead_id, user_id=user_id)
 
     async def search_jobs_for_lead(self, lead_id: str) -> list[JobSummary]:
         await self._maybe_ensure_indexes()
@@ -2175,7 +2470,7 @@ class LeadRepository:
         return snapshot
 
     async def update_brief(
-        self, lead_id: str, patch: SiteBriefPatchRequest
+        self, lead_id: str, patch: SiteBriefPatchRequest, actor_user_id: str | None = None
     ) -> SiteBrief | None:
         await self._maybe_ensure_indexes()
         lead = await self.get_lead(lead_id)
@@ -2187,6 +2482,13 @@ class LeadRepository:
         extraction = await self.get_extraction(lead_id)
         if extraction is None or extraction.version <= 0:
             raise ValueError("brief_requires_extraction")
+
+        # Capture before state for audit
+        before_state = {
+            "version": previous_brief.get("version"),
+            "approvalState": previous_brief.get("approvalState"),
+        }
+
         doc = self._build_brief_doc(
             lead=lead, extraction=extraction, previous_brief=previous_brief, patch=patch
         )
@@ -2198,6 +2500,22 @@ class LeadRepository:
         else:
             await database["site_briefs"].insert_one(doc)
             snapshot = self._brief_doc_to_snapshot(doc)
+
+        # Audit log the brief update
+        await write_brief_audit_log(
+            actor_user_id=actor_user_id,
+            lead_id=lead_id,
+            action="brief_update",
+            before=before_state,
+            after={
+                "version": snapshot.version,
+                "approvalState": snapshot.approvalState,
+            },
+            metadata={
+                "patchFields": list(patch.model_dump(exclude_unset=True).keys()) if hasattr(patch, "model_dump") else [],
+            },
+        )
+
         await self._record_brief_event(
             lead_id,
             event_type="brief_edited",
@@ -2207,21 +2525,21 @@ class LeadRepository:
         return snapshot
 
     async def update_brief_visual_redesign(
-        self, lead_id: str, visual_redesign_briefs: list
+        self, lead_id: str, visual_redesign_briefs: list, actor_user_id: str | None = None
     ) -> SiteBrief | None:
         """Update brief with visual redesign briefs."""
         await self._maybe_ensure_indexes()
         previous_brief = await self._latest_brief_doc(lead_id)
         if previous_brief is None:
             return None
-        
+
         # Update the brief document with visual redesign
         previous_brief["visualRedesign"] = [
             brief.model_dump() if hasattr(brief, "model_dump") else brief
             for brief in visual_redesign_briefs
         ]
         previous_brief["updatedAt"] = _now()
-        
+
         database = get_database()
         if database is None:
             async with self._memory_lock:
@@ -2234,7 +2552,17 @@ class LeadRepository:
                 {"_id": previous_brief["_id"]},
                 {"$set": {"visualRedesign": previous_brief["visualRedesign"], "updatedAt": previous_brief["updatedAt"]}},
             )
-        
+
+        # Audit log the visual redesign update
+        await write_brief_audit_log(
+            actor_user_id=actor_user_id,
+            lead_id=lead_id,
+            action="brief_visual_redesign_update",
+            metadata={
+                "redesignCount": len(visual_redesign_briefs),
+            },
+        )
+
         return self._brief_doc_to_snapshot(previous_brief)
 
     async def approve_brief(self, lead_id: str, approved_by: str) -> SiteBrief | None:
@@ -2290,6 +2618,169 @@ class LeadRepository:
         )
         return snapshot
 
+    # Master Brief Methods (AI-Native)
+
+    async def _latest_master_brief_doc(self, lead_id: str) -> dict[str, Any] | None:
+        """Get the latest master brief document from storage."""
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                briefs = self._memory.get("master_briefs", {}).get(lead_id, [])
+                return briefs[-1] if briefs else None
+        else:
+            doc = await database["master_briefs"].find_one(
+                {"leadId": lead_id},
+                sort=[("version", -1)],
+            )
+            return doc
+
+    async def get_master_brief(self, lead_id: str) -> "MasterBrief | None":
+        """Get the current master brief for a lead."""
+        from app.schemas.brief import MasterBrief
+
+        await self._maybe_ensure_indexes()
+        doc = await self._latest_master_brief_doc(lead_id)
+        if doc is None:
+            return None
+        return MasterBrief.model_validate(doc)
+
+    async def create_master_brief(self, lead_id: str) -> "MasterBrief | None":
+        """Generate a new AI master brief from extraction data."""
+        from app.core.master_brief import generate_master_brief
+
+        await self._maybe_ensure_indexes()
+        lead = await self.get_lead(lead_id)
+        if lead is None:
+            return None
+
+        extraction = await self.get_extraction(lead_id)
+        if extraction is None or extraction.version <= 0:
+            raise ValueError("brief_requires_extraction")
+
+        # Generate master brief using AI
+        master_brief = await generate_master_brief(
+            lead_id=lead_id,
+            extraction=extraction,
+        )
+
+        # Store in database
+        doc = master_brief.model_dump()
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                self._memory.setdefault("master_briefs", {}).setdefault(lead_id, []).append(doc)
+        else:
+            await database["master_briefs"].insert_one(doc)
+
+        await self._record_brief_event(
+            lead_id,
+            event_type="master_brief_created",
+            event_name="Master brief generated",
+            version=master_brief.version,
+        )
+
+        return master_brief
+
+    async def refine_master_brief(
+        self, lead_id: str, feedback: str
+    ) -> "MasterBrief | None":
+        """Refine master brief with user feedback."""
+        from app.core.master_brief import generate_master_brief
+
+        await self._maybe_ensure_indexes()
+        lead = await self.get_lead(lead_id)
+        if lead is None:
+            return None
+
+        previous_brief = await self.get_master_brief(lead_id)
+        if previous_brief is None:
+            raise ValueError("no_existing_brief")
+
+        extraction = await self.get_extraction(lead_id)
+        if extraction is None:
+            return None
+
+        # Regenerate with feedback
+        master_brief = await generate_master_brief(
+            lead_id=lead_id,
+            extraction=extraction,
+            feedback=feedback,
+            previous_brief=previous_brief,
+        )
+
+        # Store new version
+        doc = master_brief.model_dump()
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                self._memory.setdefault("master_briefs", {}).setdefault(lead_id, []).append(doc)
+        else:
+            await database["master_briefs"].insert_one(doc)
+
+        await self._record_brief_event(
+            lead_id,
+            event_type="master_brief_refined",
+            event_name="Master brief refined",
+            version=master_brief.version,
+        )
+
+        return master_brief
+
+    async def approve_master_brief(
+        self, lead_id: str, approved_by: str, notes: str | None = None
+    ) -> "MasterBrief | None":
+        """Approve the master brief to trigger site generation."""
+        from app.schemas.brief import MasterBrief
+
+        await self._maybe_ensure_indexes()
+        brief = await self.get_master_brief(lead_id)
+        if brief is None:
+            raise ValueError("no_existing_brief")
+
+        # Create new version with approved state
+        doc = brief.model_dump()
+        doc["approvalState"] = "approved"
+        doc["approvedAt"] = _now()
+        doc["approvedBy"] = approved_by
+        if notes:
+            doc["reviewNotes"] = notes
+        doc["updatedAt"] = _now()
+
+        # Store updated version
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                briefs = self._memory.setdefault("master_briefs", {}).setdefault(lead_id, [])
+                # Replace last version
+                if briefs:
+                    briefs[-1] = doc
+                else:
+                    briefs.append(doc)
+        else:
+            # Update in place
+            await database["master_briefs"].update_one(
+                {"id": brief.id},
+                {"$set": {
+                    "approvalState": "approved",
+                    "approvedAt": doc["approvedAt"],
+                    "approvedBy": approved_by,
+                    "reviewNotes": notes,
+                    "updatedAt": doc["updatedAt"],
+                }},
+            )
+
+        await self._record_brief_event(
+            lead_id,
+            event_type="master_brief_approved",
+            event_name="Master brief approved",
+            version=brief.version,
+        )
+
+        # Advance pipeline to generating
+        await self.advance_pipeline_after_brief(lead_id)
+
+        return MasterBrief.model_validate(doc)
+
     async def start_extraction(
         self, lead_id: str, *, refresh: bool = False
     ) -> ExtractionJobResponse | None:
@@ -2321,6 +2812,14 @@ class LeadRepository:
     async def run_extraction_job(
         self, *, lead_id: str, job_id: str, refresh: bool
     ) -> None:
+        # Initialize checkpointing
+        checkpoint = TaskCheckpoint(job_id, "extraction")
+
+        # Check for existing checkpoint
+        stage, progress, state = await resume_or_start_task(
+            job_id, "extraction", "start"
+        )
+
         lead = await self.get_lead(lead_id)
         if lead is None:
             await self._update_job(
@@ -2333,28 +2832,44 @@ class LeadRepository:
                 error_message="Lead not found",
             )
             return
-        await self._update_job(
-            job_id,
-            status="running",
-            progress=5,
-            step="Resolving public website",
-            lead_ids=[lead_id],
-        )
-        try:
-            crawl_data = await asyncio.to_thread(
-                crawl_website, lead.websiteUrl, lead_company_name=lead.companyName
-            )
-        except Exception as exc:  # pragma: no cover - network edge cases
+
+        # Resume from checkpoint if available
+        crawl_data = state.get("crawl_data") if stage != "start" else None
+
+        if crawl_data is None:
+            # Stage 1: Crawl website
             await self._update_job(
                 job_id,
-                status="failed",
-                progress=100,
-                step="Extraction worker failed",
-                finished=True,
+                status="running",
+                progress=5,
+                step="Resolving public website",
                 lead_ids=[lead_id],
-                error_message=str(exc),
             )
-            return
+            try:
+                crawl_data = await asyncio.to_thread(
+                    crawl_website, lead.websiteUrl, lead_company_name=lead.companyName
+                )
+
+                # Save checkpoint after crawl
+                await checkpoint.save_checkpoint(
+                    stage="crawled",
+                    progress=30,
+                    state={"crawl_data": crawl_data},
+                    metadata={"lead_id": lead_id},
+                )
+
+            except Exception as exc:  # pragma: no cover - network edge cases
+                await self._update_job(
+                    job_id,
+                    status="failed",
+                    progress=100,
+                    step="Extraction worker failed",
+                    finished=True,
+                    lead_ids=[lead_id],
+                    error_message=str(exc),
+                )
+                await checkpoint.delete_checkpoint()
+                return
 
         # Phase 1: Validate + LLM-enrich extraction if content is sparse
         is_valid, content_issues = validate_extraction_content(crawl_data)
@@ -2466,6 +2981,17 @@ class LeadRepository:
             lead_ids=[lead_id],
             error_message=error_message,
         )
+
+        # Delete checkpoint on successful completion
+        await checkpoint.delete_checkpoint()
+
+        # Advance the auto-pipeline after extraction completes
+        try:
+            await self.advance_pipeline_after_extraction(lead_id)
+        except Exception:  # pragma: no cover
+            logging.getLogger("lenquant.pipeline").exception(
+                "Pipeline advance after extraction failed for lead %s", lead_id
+            )
 
     async def _dispatch_extraction_job(
         self, *, job_id: str, lead_id: str, refresh: bool

@@ -35,13 +35,63 @@ def _run(coro):
         raise
 
 
-@celery_app.task(name="lenquant.jobs.run_extraction")
-def run_extraction_job_task(lead_id: str, job_id: str, refresh: bool) -> None:
-    _run(lead_repository.run_extraction_job(lead_id=lead_id, job_id=job_id, refresh=refresh))
+@celery_app.task(
+    name="lenquant.jobs.run_extraction",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,  # 10 minutes max
+    retry_jitter=True,
+    max_retries=3,
+)
+def run_extraction_job_task(self, lead_id: str, job_id: str, refresh: bool) -> None:
+    """Run extraction job with automatic retry on failure.
+
+    Retry policy:
+    - Max 3 retries
+    - Exponential backoff with jitter
+    - Max backoff: 10 minutes
+    """
+    try:
+        _run(lead_repository.run_extraction_job(lead_id=lead_id, job_id=job_id, refresh=refresh))
+    except Exception as exc:
+        # Log failure with context
+        import logging
+        logging.error(
+            f"Extraction job failed for lead {lead_id}, job {job_id}. "
+            f"Retry {self.request.retries}/{self.max_retries}",
+            exc_info=True
+        )
+        # Update job status to reflect failure
+        try:
+            _run(lead_repository._update_job(
+                job_id=job_id,
+                status="failed",
+                error_message=f"Extraction failed: {str(exc)}. Retry {self.request.retries}/{self.max_retries}",
+                finished=self.request.retries >= self.max_retries,
+            ))
+        except Exception:
+            pass  # Best effort
+        raise
 
 
-@celery_app.task(name="lenquant.jobs.run_site_generation")
-def run_site_generation_job_task(site_id: str, job_id: str, request_payload: dict | None = None) -> None:
+@celery_app.task(
+    name="lenquant.jobs.run_site_generation",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=900,  # 15 minutes max
+    retry_jitter=True,
+    max_retries=2,
+)
+def run_site_generation_job_task(self, site_id: str, job_id: str, request_payload: dict | None = None) -> None:
+    """Run site generation job with automatic retry on failure.
+
+    Retry policy:
+    - Max 2 retries (generation is expensive)
+    - Exponential backoff with jitter
+    - Max backoff: 15 minutes
+    """
     request = SiteGenerateRequest(**request_payload) if request_payload else None
 
     async def runner() -> None:
@@ -55,7 +105,17 @@ def run_site_generation_job_task(site_id: str, job_id: str, request_payload: dic
             site_id=site_id, job_id=job_id, request=request
         )
 
-    _run(runner())
+    try:
+        _run(runner())
+    except Exception as exc:
+        # Log failure with context
+        import logging
+        logging.error(
+            f"Site generation failed for site {site_id}, job {job_id}. "
+            f"Retry {self.request.retries}/{self.max_retries}",
+            exc_info=True
+        )
+        raise
 
 
 @celery_app.task(name="lenquant.jobs.purge_expired_assets")

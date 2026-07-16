@@ -12,6 +12,7 @@ DeliveryChannel = Literal["whatsapp", "linkedin", "email", "generic"]
 
 class MessageDraft(BaseModel):
     id: str
+    user_id: str
     leadId: str
     briefId: str
     siteId: Optional[str] = None
@@ -67,7 +68,23 @@ class MessageDraftPatchRequest(BaseModel):
     ctaVariant: Optional[str] = None
     ctaPosition: Optional[str] = None
     deliveryChannel: Optional[DeliveryChannel] = None
+    calendlyUrl: Optional[str] = None
     status: Optional[MessageStatus] = None
+
+    @field_validator("calendlyUrl")
+    @classmethod
+    def validate_calendly_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        try:
+            parsed = urlparse(v)
+            if not parsed.scheme or not parsed.netloc:
+                raise ValueError("Invalid URL format")
+            if "calendly" not in parsed.netloc.lower():
+                raise ValueError("URL must be a Calendly link")
+            return v
+        except Exception as e:
+            raise ValueError(f"Invalid Calendly URL: {e}")
 
 
 class MessageDraftListResponse(BaseModel):

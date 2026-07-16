@@ -83,6 +83,13 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const serverCookieHeader = await getServerCookieHeader();
   const normalizedPath = normalizePath(path);
+
+  // Get JWT token from localStorage (client-side only)
+  let authToken: string | null = null;
+  if (typeof window !== "undefined") {
+    authToken = localStorage.getItem("access_token");
+  }
+
   const response = await fetch(`${API_BASE_URL}${normalizedPath}`, {
     method: options.method || "GET",
     credentials: "include",
@@ -91,6 +98,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       [VERSION_HEADER_NAME]: API_VERSION,
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(serverCookieHeader ? { Cookie: serverCookieHeader } : {}),
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options.headers || {})
     },
     body:

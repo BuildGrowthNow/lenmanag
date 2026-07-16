@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    name: Optional[str] = None
+    password: str
 
 
 class VerificationRequest(BaseModel):

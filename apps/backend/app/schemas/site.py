@@ -332,6 +332,18 @@ class GeneratedSiteVersion(BaseModel):
     promptHistory: list[RefinementPromptRecord] = Field(default_factory=list)
     isManuallyRefined: bool = False
     improvementRecommendations: dict[str, Any] | None = None
+    sourceCode: Optional[str] = Field(
+        default=None, description="AI-generated TSX source code for compilation"
+    )
+    compiledBundleUrl: Optional[str] = Field(
+        default=None, description="URL to the compiled JavaScript bundle"
+    )
+    compilationStatus: Optional[str] = Field(
+        default=None, description="Status of compilation: pending, success, failed"
+    )
+    compilationError: Optional[str] = Field(
+        default=None, description="Error message if compilation failed"
+    )
     createdAt: datetime
     updatedAt: datetime
     publishedAt: Optional[datetime] = None
@@ -386,6 +398,18 @@ class GeneratedSite(BaseModel):
     promptHistory: list[RefinementPromptRecord] = Field(default_factory=list)
     isManuallyRefined: bool = False
     improvementRecommendations: dict[str, Any] | None = None
+    sourceCode: Optional[str] = Field(
+        default=None, description="AI-generated TSX source code for compilation"
+    )
+    compiledBundleUrl: Optional[str] = Field(
+        default=None, description="URL to the compiled JavaScript bundle"
+    )
+    compilationStatus: Optional[str] = Field(
+        default=None, description="Status of compilation: pending, success, failed"
+    )
+    compilationError: Optional[str] = Field(
+        default=None, description="Error message if compilation failed"
+    )
     createdAt: datetime
     updatedAt: datetime
     publishedAt: Optional[datetime] = None

@@ -42,7 +42,24 @@ class GCSAssetStorage:
         # fallback: treat as path
         return storage.Client.from_service_account_json(key, project=settings.asset_gcp_project)
 
+    def _validate_path_component(self, component: str) -> None:
+        """Validate path component to prevent path traversal attacks."""
+        if not component:
+            raise ValueError("Path component cannot be empty")
+
+        # Disallow path traversal sequences
+        forbidden = ["..", ".", "/", "\\", "\x00"]
+        for forbidden_str in forbidden:
+            if forbidden_str in component:
+                raise ValueError(f"Invalid path component: contains '{forbidden_str}'")
+
+        # Ensure it's alphanumeric with limited special chars
+        if not all(c.isalnum() or c in "-_" for c in component):
+            raise ValueError("Path component must be alphanumeric with hyphens/underscores only")
+
     def _blob_name(self, lead_id: str) -> str:
+        """Generate blob name with path traversal protection."""
+        self._validate_path_component(lead_id)
         return f"assets/{lead_id}/{uuid.uuid4().hex}"
 
     def _gcloud_retry(self):

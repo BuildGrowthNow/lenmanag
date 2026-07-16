@@ -47,6 +47,30 @@ export type LeadStatus = "new" | "needs_review" | "archived";
 export type JobStatus = "queued" | "running" | "completed" | "failed";
 export type LeadJobType = "lead_import" | "lead_create" | "lead_merge" | "site_crawl" | "site_refresh" | "site_generate" | "site_republish";
 
+export type PipelineStage =
+  | "new"
+  | "extracting"
+  | "extracted"
+  | "briefing"
+  | "brief_ready"
+  | "generating"
+  | "qa"
+  | "ready"
+  | "published"
+  | "needs_attention"
+  | "archived";
+
+export type PipelineMode = "auto" | "manual";
+
+export type PipelineSummary = {
+  processing: number;
+  needs_attention: number;
+  brief_ready: number;
+  site_generated: number;
+  ready_to_publish: number;
+  published: number;
+};
+
 export type ExtractionStatus = "idle" | "queued" | "running" | "partial" | "completed" | "failed";
 export type SitemapStatus = "unknown" | "found" | "missing" | "blocked" | "error";
 export type PageStatus = "discovered" | "crawled" | "failed" | "blocked";
@@ -775,6 +799,8 @@ export type AnalyticsEventType =
   | "message_draft_created"
   | "message_draft_edited"
   | "message_marked_ready"
+  | "message_marked_sent"
+  | "message_reset_to_draft"
   | "site_opened"
   | "brief_approved"
   | "brief_edited"
@@ -1030,6 +1056,9 @@ export type LeadListItem = {
   websiteUrl: string;
   normalizedDomain: string;
   status: LeadStatus;
+  pipelineStage: PipelineStage;
+  pipelineMode: PipelineMode;
+  pipelineStatusDetail: string | null;
   industry: string | null;
   notes: string | null;
   missingFields: string[];
@@ -1054,6 +1083,9 @@ export type LeadDetail = {
   normalizedDomain: string;
   detectedWebsiteUrl: string | null;
   status: LeadStatus;
+  pipelineStage: PipelineStage;
+  pipelineMode: PipelineMode;
+  pipelineStatusDetail: string | null;
   industry: string | null;
   notes: string | null;
   missingFields: string[];
@@ -1070,6 +1102,7 @@ export type LeadUpsertPayload = {
   websiteUrl: string;
   industry?: string | null;
   notes?: string | null;
+  pipelineMode?: PipelineMode;
 };
 
 export type LeadPatchPayload = {
@@ -1133,4 +1166,5 @@ export type LeadListResponse = {
     limit: number;
     offset: number;
   };
+  pipelineSummary: PipelineSummary | null;
 };

@@ -430,7 +430,7 @@ export default function PublicPreviewPage({ params }: { params: Promise<{ slug: 
             description="No website preview is available for this link yet. Please check the URL or create a preview from your workspace."
             action={
               <Button>
-                <Link href="/nsa/leads">Back</Link>
+                <Link href="/app/leads">Back</Link>
               </Button>
             }
           />
