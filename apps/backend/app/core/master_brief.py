@@ -87,28 +87,57 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
     # Company info
     summary_parts.append("## Company Information")
     summary_parts.append(f"Name: {extraction.summary.companyName or 'Unknown'}")
-    if extraction.summary.positioningSummary:
+
+    # Use analyzed positioning (not raw meta tags)
+    if extraction.analysis and extraction.analysis.positioning:
+        summary_parts.append(f"Positioning: {extraction.analysis.positioning}")
+    elif extraction.summary.positioningSummary:
         summary_parts.append(f"Positioning: {extraction.summary.positioningSummary}")
 
-    # Services
-    if extraction.summary.serviceClues:
+    # Use analyzed services (real descriptions, not headings)
+    if extraction.analysis and extraction.analysis.services:
+        summary_parts.append("\n## Services & Offerings")
+        for service in extraction.analysis.services[:8]:
+            summary_parts.append(f"- {service}")
+    elif extraction.summary.serviceClues:
         summary_parts.append("\n## Services")
         for service in extraction.summary.serviceClues[:10]:
             summary_parts.append(f"- {service}")
 
-    # Audience
-    if extraction.summary.audienceClues:
+    # Use analyzed audience (synthesized description)
+    if extraction.analysis and extraction.analysis.audience:
+        summary_parts.append("\n## Target Audience")
+        summary_parts.append(extraction.analysis.audience)
+    elif extraction.summary.audienceClues:
         summary_parts.append("\n## Target Audience")
         for audience in extraction.summary.audienceClues[:5]:
             summary_parts.append(f"- {audience}")
 
-    # Tone
-    if extraction.summary.toneClues:
+    # Use analyzed tone (synthesized description)
+    if extraction.analysis and extraction.analysis.tone:
+        summary_parts.append("\n## Tone & Voice")
+        summary_parts.append(extraction.analysis.tone)
+    elif extraction.summary.toneClues:
         summary_parts.append("\n## Tone & Voice")
         for tone in extraction.summary.toneClues[:3]:
             summary_parts.append(f"- {tone}")
 
-    # Brand assets
+    # Use analyzed primary CTAs
+    if extraction.analysis and extraction.analysis.primaryCTAs:
+        summary_parts.append("\n## Primary CTAs")
+        for cta in extraction.analysis.primaryCTAs:
+            summary_parts.append(f"- {cta}")
+    elif extraction.summary.ctaClues:
+        summary_parts.append("\n## CTA Buttons Found")
+        for cta in extraction.summary.ctaClues[:5]:
+            summary_parts.append(f"- {cta}")
+
+    # Use analyzed value proposition
+    if extraction.analysis and extraction.analysis.valueProposition:
+        summary_parts.append("\n## Value Proposition")
+        summary_parts.append(extraction.analysis.valueProposition)
+
+    # Brand assets (unchanged - these are fine)
     if extraction.brandAssetCues:
         summary_parts.append("\n## Brand Assets")
         colors = [c for c in extraction.brandAssetCues if c.assetType == "color"]
@@ -123,35 +152,18 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
         if fonts:
             summary_parts.append(f"Typography: {fonts[0].value}")
 
-    # Key content from sections
-    if hasattr(extraction, "sectionInventory") and extraction.sectionInventory:
-        summary_parts.append("\n## Key Content Sections")
-        for section in extraction.sectionInventory[:5]:
-            if hasattr(section, "model_dump"):
-                section_data = section.model_dump()
-            else:
-                section_data = dict(section) if hasattr(section, "__iter__") else {}
-            section_type = section_data.get("type", "unknown")
-            heading = section_data.get("heading", "")
-            if heading:
-                summary_parts.append(f"- {section_type.title()}: {heading}")
-
-    # Testimonials/proof
-    testimonial_count = sum(
-        1
-        for c in extraction.sourceCitations
-        if c.evidenceType and "testimonial" in c.evidenceType.lower()
-    )
-    if testimonial_count > 0:
-        summary_parts.append("\n## Social Proof")
-        summary_parts.append(f"Found {testimonial_count} testimonials/reviews")
+    # Analysis confidence indicator
+    if extraction.analysis and extraction.analysis.confidence > 0:
+        summary_parts.append(f"\n## Analysis Confidence: {extraction.analysis.confidence}%")
 
     return "\n".join(summary_parts)
 
 
 def _build_initial_prompt(extraction_summary: str) -> str:
     """Build the initial master brief generation prompt."""
-    prompt = f"""You are a landing page strategist. Given the following extracted data about a business, create a master brief for a high-converting landing page.
+    prompt = f"""You are a landing page strategist. Given the following ANALYZED data about a business, create a master brief for a high-converting landing page.
+
+IMPORTANT: This data has been pre-analyzed by AI. The services, tone, and audience descriptions are already synthesized - use them as-is, don't try to re-interpret them.
 
 {extraction_summary}
 
@@ -161,34 +173,37 @@ def _build_initial_prompt(extraction_summary: str) -> str:
 - The page must have a clear conversion goal
 - Choose 4-7 sections maximum
 - Be specific about visual direction - not generic
+- DO NOT generate empty or placeholder fields - every field must have real content
 
 ## Output Format
 Return a JSON object with this structure:
 {{
-  "businessGoal": "What this landing page should achieve",
-  "primaryAudience": "Who we're talking to",
-  "conversionAction": "The one thing we want them to do",
-  "valueProposition": "Why they should care (1-2 sentences)",
-  "toneAndVoice": "How we sound (casual/professional/bold/etc)",
-  "visualStyle": "Description of look/feel",
-  "colorStrategy": "How colors should be used",
+  "businessGoal": "What this landing page should achieve (specific, not generic)",
+  "primaryAudience": "Who we're talking to (use the analyzed audience data)",
+  "conversionAction": "The one thing we want them to do (use the primary CTA)",
+  "valueProposition": "Why they should care (use analyzed value prop, expand if needed)",
+  "toneAndVoice": "How we sound (use the analyzed tone)",
+  "visualStyle": "Description of look/feel (be specific, not 'clean and modern')",
+  "colorStrategy": "How colors should be used (specific strategy)",
   "motionLevel": "none|subtle|moderate|dramatic",
-  "specialEffects": ["3d-hero", "parallax-scroll"],
-  "headline": "Main hero headline",
-  "subheadline": "Supporting line",
+  "specialEffects": ["3d-hero", "parallax-scroll"] or [],
+  "headline": "Main hero headline (8 words max, compelling)",
+  "subheadline": "Supporting line (2 sentences max)",
   "sections": [
     {{
-      "purpose": "social-proof|services|process|cta|etc",
-      "headline": "Section headline",
-      "contentSummary": "What goes in this section",
-      "suggestedApproach": "testimonial carousel, bento grid, etc",
-      "contentPoints": ["key point 1", "key point 2"]
+      "purpose": "social-proof|services|process|cta|about|etc",
+      "headline": "Section headline (clear, specific)",
+      "contentSummary": "What goes in this section (detailed, not vague)",
+      "suggestedApproach": "testimonial carousel, bento grid, icon list, etc",
+      "contentPoints": ["key point 1 (specific)", "key point 2 (specific)", "key point 3"]
     }}
   ],
-  "ctaStrategy": "Primary + secondary CTAs approach",
-  "aiReasoning": "Why these choices were made",
+  "ctaStrategy": "Primary + secondary CTAs approach (be specific)",
+  "aiReasoning": "Why these choices were made based on the analyzed data",
   "confidenceScore": 85
 }}
+
+CRITICAL: Every field must be populated with real, specific content. No empty arrays, no generic descriptions, no "TBD" placeholders.
 
 Return ONLY valid JSON, no markdown formatting."""
 
@@ -288,14 +303,32 @@ def _build_master_brief_from_response(
         images = [c for c in extraction.brandAssetCues if c.assetType == "image"]
         brand_assets.imageUrls = [img.sourceUrl for img in images[:5]]
 
-    # Extract content
+    # Extract content - prefer analyzed data, fall back to keywords
     extracted_content: dict[str, list[str]] = {}
-    if extraction.summary.serviceClues:
+    if extraction.analysis and extraction.analysis.services:
+        extracted_content["services"] = extraction.analysis.services[:8]
+    elif extraction.summary.serviceClues:
         extracted_content["services"] = extraction.summary.serviceClues[:10]
-    if extraction.summary.audienceClues:
+
+    if extraction.analysis and extraction.analysis.audience:
+        extracted_content["audiences"] = [extraction.analysis.audience]
+    elif extraction.summary.audienceClues:
         extracted_content["audiences"] = extraction.summary.audienceClues[:5]
-    if extraction.summary.toneClues:
+
+    if extraction.analysis and extraction.analysis.tone:
+        extracted_content["tones"] = [extraction.analysis.tone]
+    elif extraction.summary.toneClues:
         extracted_content["tones"] = extraction.summary.toneClues[:3]
+
+    if extraction.analysis and extraction.analysis.primaryCTAs:
+        extracted_content["primaryCTAs"] = extraction.analysis.primaryCTAs[:3]
+    elif extraction.summary.ctaClues:
+        extracted_content["primaryCTAs"] = extraction.summary.ctaClues[:5]
+
+    if extraction.analysis and extraction.analysis.valueProposition:
+        extracted_content["valueProposition"] = [extraction.analysis.valueProposition]
+    if extraction.analysis and extraction.analysis.positioning:
+        extracted_content["positioning"] = [extraction.analysis.positioning]
 
     # Build sections
     sections = []
