@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Sparkles,
   CheckCircle2,
   ArrowRight,
   Clock,
@@ -21,15 +20,12 @@ import { SocialProofTicker } from "@/components/landing/social-proof-ticker";
 import { AnimatedHeroHeadline } from "@/components/landing/animated-hero-headline";
 import { SocialProofNotifications } from "@/components/landing/social-proof-notifications";
 import { AnimatedStats } from "@/components/landing/animated-stats";
-import { FloatingMockup } from "@/components/landing/floating-mockup";
 import { TrustedCompanies } from "@/components/landing/trusted-companies";
 import { FeaturesSolarSystem } from "@/components/landing/features-solar-system";
-import { ScreenshotCarousel } from "@/components/landing/screenshot-carousel";
 import { CaseStudiesCarousel } from "@/components/landing/case-studies-carousel";
 import { SocialWall } from "@/components/landing/social-wall";
 import { FAQSection } from "@/components/landing/faq-section";
 import { PricingConfigurator } from "@/components/landing/pricing-configurator";
-import { StickyCTABar } from "@/components/landing/sticky-cta-bar";
 import { RiskReversalBadge } from "@/components/landing/risk-reversal-badge";
 import { Footer } from "@/components/landing/footer";
 import { type SelectedAddOns } from "@/lib/pricing";
@@ -183,7 +179,6 @@ export default function SitesLandingPage() {
       {/* Conversion Features */}
       <SocialProofTicker />
       <RiskReversalBadge />
-      <StickyCTABar />
 
       {/* Navigation */}
       <Navbar />
@@ -236,18 +231,6 @@ export default function SitesLandingPage() {
         {/* Hero Section */}
         <section className="relative px-6 pt-20 pb-32">
           <div className="max-w-7xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-4 py-2 mb-8 mx-auto w-fit bg-yellow-500/10 border border-yellow-500/20 rounded-full"
-            >
-              <Sparkles className="w-4 h-4 text-yellow-500" />
-              <span className="text-sm font-medium text-yellow-500">
-                Premium Website Generation
-              </span>
-            </motion.div>
-
             <div className="mb-12">
               <AnimatedHeroHeadline />
             </div>
@@ -286,12 +269,6 @@ export default function SitesLandingPage() {
             >
               <AnimatedStats />
             </motion.div>
-
-            {/* Floating Mockup */}
-            <FloatingMockup />
-
-            {/* Screenshot Carousel */}
-            <ScreenshotCarousel />
           </div>
         </section>
 

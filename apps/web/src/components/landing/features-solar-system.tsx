@@ -88,26 +88,26 @@ export function FeaturesSolarSystem() {
           </p>
         </motion.div>
 
-        {/* Solar System Visualization */}
-        <div className="flex items-center justify-center">
-          <div className="relative w-full max-w-2xl aspect-square">
+        {/* Solar System Visualization - Desktop */}
+        <div className="hidden lg:flex items-center justify-center">
+          <div className="relative w-full max-w-3xl aspect-square">
             {/* Orbital Rings */}
             <svg
               className="absolute inset-0 w-full h-full pointer-events-none"
-              viewBox="0 0 500 500"
+              viewBox="0 0 600 600"
             >
               <circle
-                cx="250"
-                cy="250"
-                r="150"
+                cx="300"
+                cy="300"
+                r="220"
                 fill="none"
                 stroke="rgba(255, 255, 255, 0.05)"
                 strokeWidth="1"
               />
               <circle
-                cx="250"
-                cy="250"
-                r="100"
+                cx="300"
+                cy="300"
+                r="150"
                 fill="none"
                 stroke="rgba(255, 255, 255, 0.03)"
                 strokeWidth="1"
@@ -125,10 +125,10 @@ export function FeaturesSolarSystem() {
               <motion.div
                 animate={{ scale: [1, 1.05, 1] }}
                 transition={{ duration: 3, repeat: Infinity }}
-                className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center shadow-2xl shadow-yellow-500/50"
+                className="w-32 h-32 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center shadow-2xl shadow-yellow-500/50"
               >
                 <div className="text-center px-4">
-                  <div className="text-xs font-semibold text-slate-900 leading-tight">
+                  <div className="text-sm font-semibold text-slate-900 leading-tight">
                     Everything You Need
                   </div>
                 </div>
@@ -154,33 +154,35 @@ export function FeaturesSolarSystem() {
                     }}
                     viewport={{ once: true }}
                     style={{
+                      left: "50%",
+                      top: "50%",
                       transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
                     }}
                     onMouseEnter={() => setHoveredFeature(feature.id)}
                     onMouseLeave={() => setHoveredFeature(null)}
                   >
                     <motion.button
-                      whileHover={{ scale: 1.1 }}
+                      whileHover={{ scale: 1.15 }}
                       whileTap={{ scale: 0.95 }}
-                      className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-white/20 hover:border-yellow-500 shadow-lg flex items-center justify-center cursor-pointer transition-all group"
+                      className="w-20 h-20 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-white/20 hover:border-yellow-500 shadow-lg flex items-center justify-center cursor-pointer transition-all group relative"
                     >
-                      <feature.icon className="w-8 h-8 text-yellow-500 group-hover:text-yellow-300 transition-colors" />
+                      <feature.icon className="w-9 h-9 text-yellow-500 group-hover:text-yellow-300 transition-colors" />
                     </motion.button>
 
                     {/* Popover */}
                     {hoveredFeature === feature.id && (
                       <motion.div
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.8 }}
+                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.8, y: 10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute top-24 left-1/2 -translate-x-1/2 whitespace-nowrap z-20"
+                        className="absolute top-full mt-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
                       >
-                        <div className="px-4 py-3 rounded-lg bg-slate-900 border border-yellow-500/50 shadow-xl">
+                        <div className="px-5 py-3 rounded-lg bg-slate-900 border border-yellow-500/50 shadow-xl shadow-yellow-500/20 min-w-[250px]">
                           <div className="text-sm font-bold text-yellow-500 mb-1">
                             {feature.title}
                           </div>
-                          <div className="text-xs text-slate-300 max-w-xs">
+                          <div className="text-xs text-slate-300">
                             {feature.description}
                           </div>
                         </div>

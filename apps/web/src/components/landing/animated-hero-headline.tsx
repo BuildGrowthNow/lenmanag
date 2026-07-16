@@ -1,77 +1,86 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+
+const PHRASES = ["In 3 Days", "$1,000", "with a Master Design"];
 
 export function AnimatedHeroHeadline() {
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.15,
-        delayChildren: 0.3,
-      },
-    },
-  };
+  const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
+  const [displayedText, setDisplayedText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showCursor, setShowCursor] = useState(true);
 
-  const lineVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.8,
-        ease: "easeOut",
-      },
-    },
-  };
+  useEffect(() => {
+    const currentPhrase = PHRASES[currentPhraseIndex];
 
-  const highlightVariants = {
-    hidden: { opacity: 0, scale: 0.8 },
-    visible: {
-      opacity: 1,
-      scale: 1,
-      transition: {
-        duration: 0.6,
-        ease: "easeOut",
-      },
-    },
-  };
+    if (!isDeleting && displayedText === currentPhrase) {
+      const pauseTimer = setTimeout(() => {
+        if (currentPhraseIndex < PHRASES.length - 1) {
+          setIsDeleting(true);
+        }
+      }, 2000);
+      return () => clearTimeout(pauseTimer);
+    }
+
+    if (isDeleting && displayedText === "") {
+      setIsDeleting(false);
+      setCurrentPhraseIndex((prev) => (prev + 1) % PHRASES.length);
+      return;
+    }
+
+    const typingSpeed = isDeleting ? 50 : 100;
+    const timer = setTimeout(() => {
+      setDisplayedText(
+        isDeleting
+          ? currentPhrase.substring(0, displayedText.length - 1)
+          : currentPhrase.substring(0, displayedText.length + 1)
+      );
+    }, typingSpeed);
+
+    return () => clearTimeout(timer);
+  }, [displayedText, isDeleting, currentPhraseIndex]);
+
+  useEffect(() => {
+    const cursorTimer = setInterval(() => {
+      setShowCursor((prev) => !prev);
+    }, 500);
+    return () => clearInterval(cursorTimer);
+  }, []);
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="text-center"
-    >
-      <motion.div variants={lineVariants} className="mb-4">
+    <div className="text-center">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="mb-4"
+      >
         <h1 className="text-5xl md:text-7xl font-bold text-white">
-          Master
-        </h1>
-      </motion.div>
-
-      <motion.div variants={lineVariants} className="mb-6">
-        <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-white via-yellow-100 to-white bg-clip-text text-transparent">
-          Design
+          Your Website
         </h1>
       </motion.div>
 
       <motion.div
-        variants={highlightVariants}
-        className="inline-flex items-center gap-3 px-6 py-3 mb-8 bg-gradient-to-r from-yellow-500/10 to-yellow-500/5 border border-yellow-500/30 rounded-full backdrop-blur-sm"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+        className="mb-8 min-h-[60px] md:min-h-[80px] flex items-center justify-center"
       >
-        <span className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-300 bg-clip-text text-transparent">
-          $1,000
-        </span>
-        <span className="text-slate-400">•</span>
-        <span className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-300 bg-clip-text text-transparent">
-          3 Days
-        </span>
+        <h2 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500 bg-clip-text text-transparent">
+          {displayedText}
+          <span
+            className={`inline-block w-1 h-[1em] ml-1 bg-yellow-500 ${
+              showCursor ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        </h2>
       </motion.div>
 
       <motion.p
-        variants={lineVariants}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.4 }}
         className="text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto"
       >
         Premium, custom-crafted websites built by design experts.
@@ -80,6 +89,6 @@ export function AnimatedHeroHeadline() {
           No compromises. No delays. Just masterfully executed results.
         </span>
       </motion.p>
-    </motion.div>
+    </div>
   );
 }

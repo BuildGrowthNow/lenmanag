@@ -30,16 +30,15 @@ This document outlines a comprehensive 5-phase upgrade to the LenQuant landing p
 
 ## Phase 1: Navigation & Hero Section Enhancement
 
-### 1.1 Top Banner Z-Index Fix
+### 1.1 Top Banner  Fix
 **File**: `apps/web/src/components/landing/social-proof-ticker.tsx`
 
 **Requirements**:
-- Fix z-index so banner appears ABOVE navbar (not behind it)
-- Change z-index from z-40 to z-[60] or higher
-- Navbar should be z-50, banner should be z-[60]
+- Fix to banner appear on top of the navbar (not behind it or above it)
+
 
 **Deliverables**:
-- Banner displays above navbar without being hidden
+- Banner displays on top navbar without being hidden
 - No visual overlap issues
 
 ---
@@ -66,19 +65,18 @@ This document outlines a comprehensive 5-phase upgrade to the LenQuant landing p
 **Current State**: Static fade-in animation showing "Master Design • $1,000 • 3 Days"
 
 **New Requirements**:
-- Create typing animation effect
+- Create typing animation effect, static it will always be: 
+  "Your Website" below it:
 - Sequence should type:
-  1. "Your Website"
   2. "In 3 Days"  
   3. "$1,000"
-  4. "Master Design"
-- Each phrase should type out character by character
+  4. "with a Master Design"
+- Each phrase should type out character by character on the second line
 - Cursor blink effect while typing
 - Clean, modern typography
 - Mobile responsive sizing
 
 **Animation Sequence**:
-1. Type "Your Website" (pause)
 2. Type "In 3 Days" (pause)
 3. Type "$1,000" (pause)
 4. Type "Master Design" (pause)
@@ -118,6 +116,7 @@ This document outlines a comprehensive 5-phase upgrade to the LenQuant landing p
 - Responsive: wrap to multiple rows on mobile
 - Minimal spacing and padding
 - No background cards or borders
+- improve the svgs of the logos 
 
 **Deliverables**:
 - Smaller, horizontal trusted companies section
@@ -133,7 +132,7 @@ This document outlines a comprehensive 5-phase upgrade to the LenQuant landing p
 **Requirements**:
 - Replace flat grid layout with "solar system" visualization
 - Central circle with company value proposition
-- 6-8 points orbiting around the center (like planets)
+- 6-8 points orbiting around the center (like planets) - i just see 1 right now
 - Interactive: hover over a point to see tooltip/popover
 - Non-technical language focusing on benefits, not features
 - Smooth rotation animation
@@ -176,48 +175,28 @@ This document outlines a comprehensive 5-phase upgrade to the LenQuant landing p
 
 ## Phase 3: Process Timeline & Value Display
 
-### 3.1 Process Section Refinement
-**File**: Modify `apps/web/src/app/landing/page.tsx` (How It Works section)
 
-**Changes**:
-- Move timeline line BELOW the icons instead of above
-- Center the line properly between icon rows
-- Keep 4 phases but improve visual hierarchy
-- Ensure line is solid and visible on all breakpoints
-
-**Visual Structure**:
-```
-[Icon 01]  [Icon 02]  [Icon 03]  [Icon 04]
-[Title]    [Title]    [Title]    [Title]
-[Desc]     [Desc]     [Desc]     [Desc]
-
-=== Timeline Line (below icons, centered) ===
-```
-
-**Deliverables**:
-- Updated process section CSS
-- Repositioned timeline visualization
-- Mobile responsiveness maintained
-
----
-
-### 3.2 Everything Included - Technical Language Cleanup
+### 3.2 Everything Included - Technical Language Cleanup ✅ COMPLETED
 **File**: Modify `apps/web/src/app/landing/page.tsx` (What You Get section)
 
-**Current Items** (too technical):
-- "Mobile-responsive layout" → "Works perfectly on phones and tablets"
-- "Lightning-fast performance" → "Loads instantly so customers don't wait"
-- "Basic SEO optimization" → "Found easily on Google search"
-- "SSL certificate included" → "Secure and trusted by visitors"
-- "Contact forms & integrations" → "Connect with your customers easily"
-- "Social media integration" → "Share your success on social media"
-- "Premium hosting (1 year)" → "Fast, reliable hosting included for a year"
-- "Performance monitoring" → "We watch your site's health for you"
-- "Free minor updates (30 days)" → "Free small changes for 30 days after launch"
+**Status**: All changes implemented and verified
+
+**Completed Items** (benefit-focused language):
+- ✓ "Professional custom design built for your brand"
+- ✓ "Works perfectly on phones and tablets"
+- ✓ "Loads instantly so customers don't wait"
+- ✓ "Found easily on Google search"
+- ✓ "Secure and trusted by visitors"
+- ✓ "Connect with your customers easily"
+- ✓ "Share your success on social media"
+- ✓ "Fast, reliable hosting included for a year"
+- ✓ "We watch your site's health for you"
+- ✓ "Free small changes for 30 days after launch"
 
 **Deliverables**:
-- Simplified, benefit-focused language
-- Same features, clearer communication
+- ✓ Simplified, benefit-focused language
+- ✓ Same features, clearer communication
+- ✓ Production build successful
 
 ---
 
@@ -233,29 +212,14 @@ This document outlines a comprehensive 5-phase upgrade to the LenQuant landing p
 
 **New Pricing Structure**:
 
-#### Main Packages (ALL SAME CARD SIZE):
-1. **Basic Website** - $1,000 (one-time)
-   - 4-5 pages
+#### Main Package:
+1. **Professional Website** - $1,000 (one-time)
+   - Landing page
    - Beautiful design that matches your brand
    - Works perfectly on phones and tablets
    - Easy way for customers to contact you
-   - Found easily on Google search
 
-2. **Professional Website** - $2,500 (one-time)
-   - Up to 15 pages (much more content)
-   - Advanced custom design that stands out
-   - Works perfectly on phones and tablets
-   - Contact forms + connects to your tools
-   - SEO optimization + blog ready to publish
-   - Loads fast and performs great
-   - **REMOVE ANY MENTION OF HOSTING**
-
-3. **E-Commerce Site** - $3,500 (one-time)
-   - Sell products online
-   - Manage your inventory easily
-   - Accept payments securely
-   - Track orders and customers
-   - Customer account dashboard
+   this one card is bigger and align with the pricing on the right; the pricings below should be below the Professional Website and the pricing in a dropdown, the dropdown like faq should say: extra services
 
 #### Extra Services (Dropdown/Collapsible Section):
 - **Additional Pages** - $150 per page (one-time, up to 50 pages)
@@ -342,48 +306,6 @@ interface Feature {
 
 ---
 
-### 5.2 Enhanced Footer
-**File**: `apps/web/src/components/landing/footer.tsx` (existing component)
-
-**Requirements**:
-- Professional footer layout
-- Company information:
-  - Company name: Lenquant
-  - Link to: lenquant.com
-  - Address field: 510 South Main Street, South Bend, IN 46601
-  - Phone field: +18457211974
-- Quick links to main sections
-- Copyright and year
-- Responsive layout
-
-**Footer Sections**:
-1. **Company Info**
-   - Logo (if available) or text logo
-   - Brief description
-   - Contact info (address, phone)
-
-2. **Quick Links**
-   - Home
-   - Services - smooth scroll to the section
-   - Pricing - smooth scroll to the section
-   - Contact - open the email to contact@lenquant.com
-
-3. **Legal**
-   - Privacy Policy create the page and a good privacy policy - no placeholder
-   - Terms of Service create the page and a good terms and conditions - no placeholder
-
-4. **Contact**
-   - Email: contact@lenquant.com
-   - Phone: +18457211974
-   - Address: 510 South Main Street, South Bend, IN 46601
-
-
-**Deliverables**:
-- Professional footer component
-- Responsive layout
-- Company and contact information
-
----
 
 ### 5.2 Testimonials Wall - Complete Redesign
 **File**: `apps/web/src/components/landing/social-wall.tsx`
@@ -392,18 +314,19 @@ interface Feature {
 
 **CRITICAL ISSUES TO FIX**:
 1. **Bug**: Current implementation has bugs in the carousel
-2. **Images**: Need REAL client photos downloaded from internet (not SVG avatars)
+2. **Images**: Need client photos downloaded from internet (not SVG avatars - download human pictures from the internet and use them, random people)
 3. **Layout**: Should be 3 SEPARATE rows of carousels
 4. **Size**: Make cards SMALLER in height
-5. **Width**: Full page width, NO width limits
+5. **Width**: Full component/container width - 100%
 6. **Direction**: Some rows scroll left, some scroll right (alternating)
+7. on mouse hover, the carrossels stop and the testimonial that he hover zooms in and the others blur
 
 **New Requirements**:
 
 **3-Row Carousel System**:
-- Row 1: Scrolls LEFT → RIGHT (customers 1-4)
-- Row 2: Scrolls RIGHT → LEFT (customers 5-8)  
-- Row 3: Scrolls LEFT → RIGHT (customers 9-12)
+- Row 1: Scrolls LEFT → RIGHT (customers 1-8)
+- Row 2: Scrolls RIGHT → LEFT (customers 9-16)  
+- Row 3: Scrolls LEFT → RIGHT (customers 17-24)
 
 **Card Design**:
 - Height: Reduce by 30-40% (make smaller/more compact)
@@ -412,8 +335,8 @@ interface Feature {
 - Cards should be smaller overall
 
 **Client Images**:
-- Download 12 REAL person photos from internet
-- Use realistic business professional headshots
+- Download 24 REAL person photos from internet
+- Use headshots
 - Match gender to names (Sarah = female, Marcus = male, etc.)
 - Store in `public/clients/` directory
 - Format: JPG or PNG, optimized for web
@@ -433,197 +356,3 @@ interface Feature {
 - Fixed bugs in current implementation
 
 ---
-
-### 5.3 FAQ Cleanup
-**File**: `apps/web/src/components/landing/faq-section.tsx`
-
-**Changes**:
-- Remove all em-dashes (—) from FAQ answers
-- Remove all dashes (-) that are used as em-dashes
-- Keep technical jargon to minimum
-- Simplify explanations
-
-**Deliverables**:
-- Updated FAQ entries
-- Clean punctuation and language
-
----
-
-## Implementation Timeline
-
-### Week 1 - Phase 1 (Navigation & Hero)
-- Day 1-2: Build navbar component with smooth scroll
-- Day 3: Implement hero section with new mockup
-- Day 4-5: Create screenshot carousel with Awwwards images
-
-### Week 2 - Phase 2 (Social Proof & Features)
-- Day 1-2: Create custom SVG logos for companies
-- Day 3-4: Build trusted companies section
-- Day 5: Redesign features section with solar system visualization
-
-### Week 3 - Phase 3 (Process & Value)
-- Day 1-2: Refine process timeline layout
-- Day 3-4: Rewrite "Everything Included" section
-- Day 5: Polish and test responsive design
-
-### Week 4 - Phase 4 (Pricing)
-- Day 1-3: Redesign pricing component
-- Day 4-5: Update pricing data structure and integrate new services
-
-### Week 5 - Phase 5 (Footer & Cleanup)
-- Day 1-2: Build enhanced footer
-- Day 3: Clean up testimonials text
-- Day 4: Clean up FAQ text
-- Day 5: Final review, testing, and deployment
-
----
-
-## Technical Specifications
-
-### Dependencies
-- `framer-motion` (already installed) - for animations
-- `react-confetti` (install) - for confetti effect
-- `clsx` or `cn()` (already available) - for className management
-- `lucide-react` (already installed) - for icons
-
-### File Structure
-```
-apps/web/src/
-├── app/
-│   └── landing/
-│       ├── page.tsx (main landing page, updated)
-│       └── layout.tsx (existing)
-├── components/
-│   └── landing/
-│       ├── navbar.tsx (NEW)
-│       ├── hero-section.tsx (NEW - replaces part of page.tsx)
-│       ├── screenshot-carousel.tsx (NEW)
-│       ├── trusted-companies.tsx (NEW - replaces logo-wall.tsx)
-│       ├── features-solar-system.tsx (NEW - replaces bento-features.tsx)
-│       ├── footer.tsx (NEW)
-│       ├── pricing-configurator.tsx (UPDATED)
-│       ├── testimonials-section.tsx (UPDATED - text cleanup)
-│       ├── faq-section.tsx (UPDATED - text cleanup)
-│       ├── floating-mockup.tsx (can be deprecated or kept for reuse)
-│       └── ... (other existing components)
-└── public/
-    └── screenshots/
-        ├── award-site-1.webp (NEW - from Awwwards)
-        ├── award-site-2.webp (NEW)
-        ├── award-site-3.webp (NEW)
-        ├── award-site-4.webp (NEW)
-        ├── award-site-5.webp (NEW)
-        └── award-site-6.webp (NEW)
-```
-
-### Performance Considerations
-- Lazy load screenshot images
-- Use WebP format with PNG fallback
-- Optimize SVG logos for web
-- Implement intersection observer for animations
-- Debounce scroll events in navbar
-
-### Responsive Breakpoints
-- Mobile: < 640px (1 column, hamburger menu)
-- Tablet: 640px - 1024px (2 columns, horizontal nav)
-- Desktop: > 1024px (3-4 columns, full nav)
-
-### Browser Compatibility
-- Chrome/Edge (latest 2 versions)
-- Firefox (latest 2 versions)
-- Safari (latest 2 versions)
-- Mobile browsers (iOS Safari, Chrome Mobile)
-
----
-
-## Quality Checklist
-
-### Before Deployment
-- [ ] All links in navbar work and scroll smoothly
-- [ ] Hero section animations play correctly
-- [ ] Screenshot carousel rotates without issues
-- [ ] SVG logos render clearly at all sizes
-- [ ] Solar system features interactive on hover
-- [ ] Process timeline appears below icons correctly
-- [ ] Pricing cards display properly with new structure
-- [ ] Footer appears on all pages with correct info
-- [ ] All text is simplified and non-technical
-- [ ] No em-dashes or dashes in testimonials/FAQ
-- [ ] Mobile responsiveness tested on multiple devices
-- [ ] No ESLint warnings or errors
-- [ ] No TypeScript errors
-- [ ] Images optimized and loading fast
-- [ ] Animations smooth on 60fps
-
-### Post-Deployment
-- [ ] Test on production environment
-- [ ] Monitor performance metrics
-- [ ] Verify all tracking/analytics working
-- [ ] Check for console errors
-- [ ] Test conversion flow end-to-end
-- [ ] Gather user feedback
-
----
-
-## Success Metrics
-
-### User Experience
-- Page load time < 2 seconds
-- Smooth animations at 60fps
-- No layout shifts (CLS < 0.1)
-- Clear value proposition on first view
-- Easy navigation between sections
-
-### Engagement
-- Increased time on page
-- Higher click-through rate to pricing
-- More form submissions
-- Lower bounce rate
-
-### Conversion
-- Increased conversion rate to checkout
-- Higher average order value (add-ons)
-- Improved customer satisfaction
-
----
-
-## Notes & Considerations
-
-1. **Awwwards Screenshots**: Download from `www.awwwards.com` - screenshot award-winning sites randomly. Ensure you have rights to use the screenshots for demonstration purposes. Consider rotating them monthly for freshness.
-
-2. **SVG Logo Creation**: Use Figma, Illustrator, or create inline SVG components. Keep them simple and recognizable.
-
-3. **Confetti Animation**: Use `react-confetti` library or implement custom particle system. Ensure it doesn't impact performance.
-
-4. **Pricing**: Current structure is more flexible with the dropdown approach. Ensure backend supports these new service options.
-
-5. **Mobile First**: Test all changes on mobile first, then scale up to desktop.
-
-6. **Accessibility**: Ensure all interactive elements are keyboard accessible and screen-reader friendly.
-
-7. **SEO**: Update meta tags and structured data as needed. Maintain SEO value of all new components.
-
----
-
-## Rollback Plan
-
-If issues arise after deployment:
-1. Revert to previous commit: `git reset --hard <previous-commit-hash>`
-2. Redeploy via GitHub Actions (push to main)
-3. Investigate issue separately
-4. Create fix branch and test thoroughly before redeploying
-
----
-
-## Support & Questions
-
-For technical questions or clarifications about this implementation guide, refer to:
-- CLAUDE.md (project setup and conventions)
-- Component documentation in each file
-- Git history for similar implementations
-
----
-
-**Document Version**: 1.0  
-**Last Updated**: 2026-07-16  
-**Next Review**: After Phase 1 completion

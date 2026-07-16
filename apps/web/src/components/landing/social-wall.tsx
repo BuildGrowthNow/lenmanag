@@ -1,7 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Star } from "lucide-react";
 
 const CUSTOMERS = [
@@ -9,15 +8,15 @@ const CUSTOMERS = [
     id: 1,
     name: "Sarah",
     title: "Coffee Shop Owner",
-    avatar: "https://api.multiavatar.com/sarah_coffee.svg",
-    text: "Honestly, I was skeptical about the 3-day timeline. But they delivered exactly what I needed and my online orders have been crazy since launch. So worth it!",
+    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop&crop=face",
+    text: "Honestly, I was skeptical about the 3-day timeline. But they delivered exactly what I needed and my online orders have been crazy since launch.",
     rating: 5,
   },
   {
     id: 2,
     name: "Marcus",
     title: "Personal Trainer",
-    avatar: "https://api.multiavatar.com/marcus_trainer.svg",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&crop=face",
     text: "I was losing clients to gyms with better websites. This changed everything. Now people book sessions right from my site.",
     rating: 5,
   },
@@ -25,7 +24,7 @@ const CUSTOMERS = [
     id: 3,
     name: "Emma",
     title: "Interior Designer",
-    avatar: "https://api.multiavatar.com/emma_designer.svg",
+    avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80&h=80&fit=crop&crop=face",
     text: "The portfolio section is gorgeous. My clients are so impressed before we even meet. Definitely helped me land bigger projects.",
     rating: 5,
   },
@@ -33,7 +32,7 @@ const CUSTOMERS = [
     id: 4,
     name: "James",
     title: "Real Estate Agent",
-    avatar: "https://api.multiavatar.com/james_realtor.svg",
+    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&h=80&fit=crop&crop=face",
     text: "Not gonna lie, I'm not tech savvy but the site works perfectly. My listings look amazing and I'm getting more showings.",
     rating: 4,
   },
@@ -41,7 +40,7 @@ const CUSTOMERS = [
     id: 5,
     name: "Lisa",
     title: "Yoga Instructor",
-    avatar: "https://api.multiavatar.com/lisa_yoga.svg",
+    avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=80&h=80&fit=crop&crop=face",
     text: "Best investment for my business. Classes are booked solid and people keep mentioning how professional the website looks.",
     rating: 5,
   },
@@ -49,7 +48,7 @@ const CUSTOMERS = [
     id: 6,
     name: "David",
     title: "Contractor",
-    avatar: "https://api.multiavatar.com/david_build.svg",
+    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&h=80&fit=crop&crop=face",
     text: "Needed a site fast. They delivered. No complaints. My phone's ringing more now. That's all that matters.",
     rating: 4,
   },
@@ -57,7 +56,7 @@ const CUSTOMERS = [
     id: 7,
     name: "Rachel",
     title: "Wedding Planner",
-    avatar: "https://api.multiavatar.com/rachel_wedding.svg",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop&crop=face",
     text: "Clients love booking through the site. It makes me look so much more professional. I've doubled my business in 3 months.",
     rating: 5,
   },
@@ -65,7 +64,7 @@ const CUSTOMERS = [
     id: 8,
     name: "Michael",
     title: "Consultant",
-    avatar: "https://api.multiavatar.com/michael_consult.svg",
+    avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=80&h=80&fit=crop&crop=face",
     text: "The speed of delivery was insane. Quality is top-notch. I'm already recommending them to everyone I know.",
     rating: 5,
   },
@@ -73,7 +72,7 @@ const CUSTOMERS = [
     id: 9,
     name: "Jessica",
     title: "Freelance Writer",
-    avatar: "https://api.multiavatar.com/jessica_writer.svg",
+    avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=80&h=80&fit=crop&crop=face",
     text: "Honestly thought it would be generic but it's totally personalized to my brand. Love it. My rates went up.",
     rating: 5,
   },
@@ -81,7 +80,7 @@ const CUSTOMERS = [
     id: 10,
     name: "Alex",
     title: "Photography Studio",
-    avatar: "https://api.multiavatar.com/alex_photo.svg",
+    avatar: "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=80&h=80&fit=crop&crop=face",
     text: "Portfolio looks incredible. Getting inquiries from bigger clients now. Best money spent.",
     rating: 5,
   },
@@ -89,7 +88,7 @@ const CUSTOMERS = [
     id: 11,
     name: "Sophie",
     title: "Chef / Catering",
-    avatar: "https://api.multiavatar.com/sophie_chef.svg",
+    avatar: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=80&h=80&fit=crop&crop=face",
     text: "People can actually see my food now with great photos. Bookings went through the roof. Super happy.",
     rating: 5,
   },
@@ -97,185 +96,237 @@ const CUSTOMERS = [
     id: 12,
     name: "Tom",
     title: "Business Coach",
-    avatar: "https://api.multiavatar.com/tom_coach.svg",
-    text: "The testimonials section on my site converts like crazy. This was exactly what I needed. Legit.",
+    avatar: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=80&h=80&fit=crop&crop=face",
+    text: "The testimonials section on my site converts like crazy. This was exactly what I needed.",
     rating: 4,
+  },
+  {
+    id: 13,
+    name: "Olivia",
+    title: "Bakery Owner",
+    avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=80&h=80&fit=crop&crop=face",
+    text: "My customers can order online now. Sales jumped 40% in the first month. Totally worth every penny.",
+    rating: 5,
+  },
+  {
+    id: 14,
+    name: "Daniel",
+    title: "Lawyer",
+    avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=80&h=80&fit=crop&crop=face",
+    text: "Professional look that builds trust with potential clients. I get compliments on my site constantly.",
+    rating: 5,
+  },
+  {
+    id: 15,
+    name: "Nina",
+    title: "Florist",
+    avatar: "https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?w=80&h=80&fit=crop&crop=face",
+    text: "My arrangements look stunning on the site. Wedding inquiries tripled since the new site went live.",
+    rating: 5,
+  },
+  {
+    id: 16,
+    name: "Carlos",
+    title: "Auto Mechanic",
+    avatar: "https://images.unsplash.com/photo-1504257432389-52343af06ae3?w=80&h=80&fit=crop&crop=face",
+    text: "Finally have a site my customers can find me on. Appointments are way up. Simple and effective.",
+    rating: 4,
+  },
+  {
+    id: 17,
+    name: "Amanda",
+    title: "Dentist",
+    avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80&h=80&fit=crop&crop=face",
+    text: "Patients love being able to book online. The design is clean and trustworthy. Exactly what a medical practice needs.",
+    rating: 5,
+  },
+  {
+    id: 18,
+    name: "Ryan",
+    title: "Music Teacher",
+    avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=80&h=80&fit=crop&crop=face",
+    text: "Parents find me through Google now. Lesson bookings have never been higher. Great ROI.",
+    rating: 5,
+  },
+  {
+    id: 19,
+    name: "Maria",
+    title: "Spa Owner",
+    avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=80&h=80&fit=crop&crop=face",
+    text: "The relaxing design perfectly matches my brand. Clients say it makes them want to visit even before they arrive.",
+    rating: 5,
+  },
+  {
+    id: 20,
+    name: "Tyler",
+    title: "Landscaper",
+    avatar: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=80&h=80&fit=crop&crop=face",
+    text: "Before and after gallery on the site sells itself. Getting projects I never would have before.",
+    rating: 5,
+  },
+  {
+    id: 21,
+    name: "Priya",
+    title: "Accountant",
+    avatar: "https://images.unsplash.com/photo-1607746882042-944635dfe10e?w=80&h=80&fit=crop&crop=face",
+    text: "Tax season was so smooth with online scheduling. My clients love the convenience.",
+    rating: 5,
+  },
+  {
+    id: 22,
+    name: "Jake",
+    title: "Barber",
+    avatar: "https://images.unsplash.com/photo-1531891437562-4301cf35b7e4?w=80&h=80&fit=crop&crop=face",
+    text: "Walk-ins were fine, but now I'm booked solid every week. The site did that. Simple.",
+    rating: 4,
+  },
+  {
+    id: 23,
+    name: "Hannah",
+    title: "Pet Groomer",
+    avatar: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=80&h=80&fit=crop&crop=face",
+    text: "Pet parents trust me more with a professional site. Bookings are up 60%. Couldn't be happier.",
+    rating: 5,
+  },
+  {
+    id: 24,
+    name: "Brandon",
+    title: "Electrician",
+    avatar: "https://images.unsplash.com/photo-1548449112-96a38a643324?w=80&h=80&fit=crop&crop=face",
+    text: "My competitor had a website and I didn't. Now mine looks way better. Getting all the calls.",
+    rating: 5,
   },
 ];
 
-export function SocialWall() {
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
-  const [isScrolling, setIsScrolling] = useState(true);
-  const containerRef = useRef<HTMLDivElement>(null);
+const ROW_1 = CUSTOMERS.slice(0, 8);
+const ROW_2 = CUSTOMERS.slice(8, 16);
+const ROW_3 = CUSTOMERS.slice(16, 24);
 
-  useEffect(() => {
-    if (!containerRef.current || !isScrolling) return;
-
-    const container = containerRef.current;
-    let scrollAmount = 0;
-    const scrollSpeed = 1;
-
-    const interval = setInterval(() => {
-      scrollAmount += scrollSpeed;
-      if (container.scrollLeft >= container.scrollWidth - container.clientWidth) {
-        scrollAmount = 0;
-        container.scrollLeft = 0;
-      } else {
-        container.scrollLeft += scrollSpeed;
-      }
-    }, 30);
-
-    return () => clearInterval(interval);
-  }, [isScrolling]);
-
-  const StarRating = ({ rating }: { rating: number }) => (
-    <div className="flex gap-1">
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <div className="flex gap-0.5">
       {Array.from({ length: 5 }).map((_, i) => (
         <Star
           key={i}
-          size={16}
+          size={12}
           className={i < rating ? "fill-yellow-400 text-yellow-400" : "text-zinc-600"}
         />
       ))}
     </div>
   );
+}
+
+function CarouselRow({
+  customers,
+  direction,
+  speed,
+}: {
+  customers: typeof CUSTOMERS;
+  direction: "left" | "right";
+  speed: number;
+}) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const scrollPos = useRef(0);
+
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row) return;
+
+    const totalWidth = row.scrollWidth / 2;
+
+    const animate = () => {
+      if (hoveredId !== null) {
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      if (direction === "left") {
+        scrollPos.current += speed;
+        if (scrollPos.current >= totalWidth) {
+          scrollPos.current -= totalWidth;
+        }
+      } else {
+        scrollPos.current -= speed;
+        if (scrollPos.current <= 0) {
+          scrollPos.current += totalWidth;
+        }
+      }
+
+      row.style.transform = `translateX(-${scrollPos.current}px)`;
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    };
+  }, [direction, speed, hoveredId]);
+
+  const duplicated = [...customers, ...customers];
 
   return (
-    <section className="relative px-6 py-24 bg-zinc-900/50">
-      <div className="max-w-7xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          transition={{ duration: 0.8 }}
-          viewport={{ once: true }}
-          className="text-center mb-12"
-        >
-          <p className="text-yellow-500 text-sm font-bold uppercase mb-2">
-            From Real People
-          </p>
-          <h2 className="text-5xl font-bold text-white mb-4">
-            Meet Our <span className="text-yellow-500">Happy Clients</span>
-          </h2>
-          <p className="text-zinc-400 text-lg">
-            Scroll through real stories from people just like you
-          </p>
-        </motion.div>
-
-        {/* Scrolling Container */}
-        <div className="relative">
-          <motion.div
-            ref={containerRef}
-            onMouseEnter={() => setIsScrolling(false)}
-            onMouseLeave={() => setIsScrolling(true)}
-            className="flex gap-6 overflow-x-auto pb-6 scroll-smooth hide-scrollbar"
-            style={{ scrollBehavior: "smooth" }}
+    <div className="overflow-hidden w-full">
+      <div ref={rowRef} className="flex gap-4 will-change-transform">
+        {duplicated.map((customer, i) => (
+          <div
+            key={`${customer.id}-${i}`}
+            onMouseEnter={() => setHoveredId(customer.id)}
+            onMouseLeave={() => setHoveredId(null)}
+            className={`flex-shrink-0 w-72 p-4 rounded-xl border transition-all duration-300 ${
+              hoveredId === customer.id
+                ? "bg-white/15 border-yellow-500/50 scale-105 shadow-lg shadow-yellow-500/10 z-10"
+                : hoveredId !== null
+                  ? "bg-white/5 border-white/5 opacity-50 blur-[1px]"
+                  : "bg-white/5 border-white/10"
+            }`}
           >
-            {CUSTOMERS.map((customer, index) => (
-              <motion.div
-                key={customer.id}
-                onMouseEnter={() => setHoveredId(customer.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                animate={{
-                  scale: hoveredId === customer.id ? 1.1 : hoveredId ? 0.9 : 1,
-                  opacity: hoveredId === customer.id ? 1 : hoveredId ? 0.5 : 1,
-                }}
-                transition={{ duration: 0.3 }}
-                className="flex-shrink-0 w-80 group cursor-pointer"
-              >
-                <motion.div
-                  className="p-6 rounded-2xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 hover:border-yellow-500/50 transition-all h-full"
-                  whileHover={{
-                    boxShadow: "0 0 30px rgba(250, 204, 21, 0.2)",
-                  }}
-                >
-                  {/* Avatar and Info */}
-                  <div className="flex items-center gap-4 mb-4">
-                    <motion.div
-                      animate={{
-                        scale: hoveredId === customer.id ? 1.15 : 1,
-                      }}
-                      className="relative flex-shrink-0"
-                    >
-                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 p-0.5 overflow-hidden">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={customer.avatar}
-                          alt={customer.name}
-                          className="w-full h-full rounded-full object-cover bg-zinc-700"
-                        />
-                      </div>
-                      <motion.div
-                        animate={{
-                          scale: hoveredId === customer.id ? 1 : 0,
-                        }}
-                        className="absolute inset-0 rounded-full border-2 border-yellow-400"
-                      />
-                    </motion.div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border border-white/20">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={customer.avatar}
+                  alt={customer.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div>
+                <h4 className="font-semibold text-white text-sm">{customer.name}</h4>
+                <p className="text-xs text-zinc-400">{customer.title}</p>
+              </div>
+            </div>
+            <StarRating rating={customer.rating} />
+            <p className="text-zinc-300 text-xs leading-relaxed mt-2 line-clamp-3">
+              &quot;{customer.text}&quot;
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-                    <div>
-                      <h4 className="font-bold text-white text-lg">
-                        {customer.name}
-                      </h4>
-                      <p className="text-sm text-zinc-400">{customer.title}</p>
-                    </div>
-                  </div>
-
-                  {/* Stars */}
-                  <div className="mb-4">
-                    <StarRating rating={customer.rating} />
-                  </div>
-
-                  {/* Testimonial */}
-                  <motion.p
-                    animate={{
-                      opacity: hoveredId === customer.id ? 1 : 1,
-                    }}
-                    className="text-zinc-300 text-sm leading-relaxed italic"
-                  >
-                    &quot;{customer.text}&quot;
-                  </motion.p>
-
-                  {/* Hover Indicator */}
-                  <motion.div
-                    animate={{
-                      opacity: hoveredId === customer.id ? 1 : 0,
-                    }}
-                    className="mt-4 pt-4 border-t border-yellow-500/30 text-center"
-                  >
-                    <span className="text-xs text-yellow-500 font-semibold">
-                      ✓ Verified Customer
-                    </span>
-                  </motion.div>
-                </motion.div>
-              </motion.div>
-            ))}
-          </motion.div>
-
-          {/* Gradient Overlays */}
-          <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-zinc-950 to-transparent pointer-events-none z-10" />
-          <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-zinc-950 to-transparent pointer-events-none z-10" />
-        </div>
-
-        {/* Info Text */}
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="text-center text-zinc-400 text-sm mt-8"
-        >
-          Hover to zoom in • Scroll to see more • Real people, real results
-        </motion.p>
+export function SocialWall() {
+  return (
+    <section className="relative py-16 overflow-hidden">
+      <div className="text-center mb-10 px-6">
+        <p className="text-yellow-500 text-sm font-bold uppercase mb-2">
+          From Real People
+        </p>
+        <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
+          Meet Our <span className="text-yellow-500">Happy Clients</span>
+        </h2>
+        <p className="text-zinc-400 text-lg">
+          Real stories from people just like you
+        </p>
       </div>
 
-      <style jsx>{`
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
+      <div className="space-y-4">
+        <CarouselRow customers={ROW_1} direction="left" speed={0.5} />
+        <CarouselRow customers={ROW_2} direction="right" speed={0.4} />
+        <CarouselRow customers={ROW_3} direction="left" speed={0.6} />
+      </div>
     </section>
   );
 }

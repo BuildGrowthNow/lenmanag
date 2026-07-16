@@ -24,7 +24,7 @@ export function SocialProofTicker() {
   }, []);
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-40 bg-gradient-to-r from-yellow-500/95 to-orange-500/95 backdrop-blur-sm border-b-2 border-yellow-300 py-4 px-6 shadow-lg">
+    <div className="fixed top-0 left-0 right-0 z-[100] bg-gradient-to-r from-yellow-500/95 to-orange-500/95 backdrop-blur-sm border-b-2 border-yellow-300 py-4 px-6 shadow-lg">
       <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-4">
         {/* Social Proof */}
         <motion.div

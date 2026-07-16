@@ -4,75 +4,114 @@ import { motion } from "framer-motion";
 
 function TechVentureIcon() {
   return (
-    <svg viewBox="0 0 40 40" className="w-10 h-10">
-      <rect x="2" y="2" width="36" height="36" fill="none" stroke="#f59e0b" strokeWidth="1.5" rx="4"/>
-      <path d="M10 15 L20 5 L30 15" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx="20" cy="22" r="4" fill="#f59e0b"/>
+    <svg viewBox="0 0 32 32" className="w-8 h-8">
+      <defs>
+        <linearGradient id="techGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#f59e0b" />
+          <stop offset="100%" stopColor="#fbbf24" />
+        </linearGradient>
+      </defs>
+      <rect x="1" y="1" width="30" height="30" fill="none" stroke="url(#techGrad)" strokeWidth="2" rx="6"/>
+      <path d="M8 13 L16 6 L24 13" fill="none" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="16" cy="18" r="4" fill="#f59e0b"/>
+      <circle cx="16" cy="18" r="2" fill="#fbbf24"/>
     </svg>
   );
 }
 
 function CloudFirstIcon() {
   return (
-    <svg viewBox="0 0 40 40" className="w-10 h-10">
-      <path d="M8 20 Q8 12 16 12 Q18 6 24 6 Q32 6 32 14 Q32 14 32 14 Q38 14 38 20 Q38 25 32 28 L12 28 Q8 28 8 24 Z" fill="none" stroke="#06b6d4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <line x1="14" y1="22" x2="14" y2="28" stroke="#0891b2" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="20" y1="22" x2="20" y2="28" stroke="#0891b2" strokeWidth="1.5" strokeLinecap="round"/>
-      <line x1="26" y1="22" x2="26" y2="28" stroke="#0891b2" strokeWidth="1.5" strokeLinecap="round"/>
+    <svg viewBox="0 0 32 32" className="w-8 h-8">
+      <defs>
+        <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#06b6d4" />
+          <stop offset="100%" stopColor="#0891b2" />
+        </linearGradient>
+      </defs>
+      <path d="M6 16 Q6 10 12 10 Q13.5 5 18 5 Q24 5 24 11 Q28 11 28 16 Q28 20 24 22 L10 22 Q6 22 6 18 Z" fill="url(#cloudGrad)" opacity="0.2"/>
+      <path d="M6 16 Q6 10 12 10 Q13.5 5 18 5 Q24 5 24 11 Q28 11 28 16 Q28 20 24 22 L10 22 Q6 22 6 18 Z" fill="none" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <line x1="11" y1="17" x2="11" y2="22" stroke="#0891b2" strokeWidth="2" strokeLinecap="round"/>
+      <line x1="16" y1="17" x2="16" y2="22" stroke="#0891b2" strokeWidth="2" strokeLinecap="round"/>
+      <line x1="21" y1="17" x2="21" y2="22" stroke="#0891b2" strokeWidth="2" strokeLinecap="round"/>
     </svg>
   );
 }
 
 function DataFlowIcon() {
   return (
-    <svg viewBox="0 0 40 40" className="w-10 h-10">
-      <circle cx="10" cy="10" r="3" fill="#8b5cf6"/>
-      <circle cx="30" cy="10" r="3" fill="#8b5cf6"/>
-      <circle cx="10" cy="30" r="3" fill="#8b5cf6"/>
-      <circle cx="30" cy="30" r="3" fill="#8b5cf6"/>
-      <circle cx="20" cy="20" r="4" fill="#a78bfa"/>
-      <path d="M13 12 L17 18" stroke="#8b5cf6" strokeWidth="1.5" fill="none"/>
-      <path d="M27 12 L23 18" stroke="#8b5cf6" strokeWidth="1.5" fill="none"/>
-      <path d="M13 28 L17 22" stroke="#8b5cf6" strokeWidth="1.5" fill="none"/>
-      <path d="M27 28 L23 22" stroke="#8b5cf6" strokeWidth="1.5" fill="none"/>
+    <svg viewBox="0 0 32 32" className="w-8 h-8">
+      <defs>
+        <linearGradient id="dataGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#8b5cf6" />
+          <stop offset="100%" stopColor="#a78bfa" />
+        </linearGradient>
+      </defs>
+      <circle cx="8" cy="8" r="3" fill="url(#dataGrad)"/>
+      <circle cx="24" cy="8" r="3" fill="url(#dataGrad)"/>
+      <circle cx="8" cy="24" r="3" fill="url(#dataGrad)"/>
+      <circle cx="24" cy="24" r="3" fill="url(#dataGrad)"/>
+      <circle cx="16" cy="16" r="5" fill="#a78bfa"/>
+      <circle cx="16" cy="16" r="3" fill="#8b5cf6"/>
+      <path d="M10 10 L13 13" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M22 10 L19 13" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M10 22 L13 19" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M22 22 L19 19" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round"/>
     </svg>
   );
 }
 
 function GrowthLabsIcon() {
   return (
-    <svg viewBox="0 0 40 40" className="w-10 h-10">
-      <path d="M8 28 L15 18 L20 22 L32 8" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx="8" cy="28" r="2" fill="#10b981"/>
-      <circle cx="15" cy="18" r="2" fill="#10b981"/>
-      <circle cx="20" cy="22" r="2" fill="#10b981"/>
-      <circle cx="32" cy="8" r="2" fill="#10b981"/>
-      <line x1="32" y1="8" x2="35" y2="5" stroke="#10b981" strokeWidth="2" strokeLinecap="round"/>
-      <line x1="32" y1="8" x2="35" y2="8" stroke="#10b981" strokeWidth="2" strokeLinecap="round"/>
+    <svg viewBox="0 0 32 32" className="w-8 h-8">
+      <defs>
+        <linearGradient id="growthGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#059669" />
+          <stop offset="100%" stopColor="#10b981" />
+        </linearGradient>
+      </defs>
+      <path d="M4 24 L10 15 L15 19 L28 6" fill="none" stroke="url(#growthGrad)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="4" cy="24" r="2.5" fill="#10b981"/>
+      <circle cx="10" cy="15" r="2.5" fill="#10b981"/>
+      <circle cx="15" cy="19" r="2.5" fill="#10b981"/>
+      <circle cx="28" cy="6" r="2.5" fill="#10b981"/>
+      <path d="M23 6 L28 6 L28 11" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }
 
 function InnovateProIcon() {
   return (
-    <svg viewBox="0 0 40 40" className="w-10 h-10">
-      <circle cx="20" cy="24" r="10" fill="none" stroke="#f59e0b" strokeWidth="1.5"/>
-      <circle cx="20" cy="12" r="5" fill="none" stroke="#fbbf24" strokeWidth="2"/>
-      <path d="M16 28 L14 34 M24 28 L26 34 M20 34 L20 38" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round"/>
-      <circle cx="20" cy="12" r="2" fill="#fbbf24"/>
+    <svg viewBox="0 0 32 32" className="w-8 h-8">
+      <defs>
+        <linearGradient id="innovateGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#fbbf24" />
+          <stop offset="100%" stopColor="#f59e0b" />
+        </linearGradient>
+      </defs>
+      <circle cx="16" cy="12" r="6" fill="url(#innovateGrad)" opacity="0.2"/>
+      <circle cx="16" cy="12" r="6" fill="none" stroke="#fbbf24" strokeWidth="2"/>
+      <circle cx="16" cy="12" r="3" fill="#fbbf24"/>
+      <ellipse cx="16" cy="22" rx="8" ry="6" fill="none" stroke="#f59e0b" strokeWidth="2"/>
+      <path d="M12 24 L10 30 M20 24 L22 30 M16 28 L16 32" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round"/>
     </svg>
   );
 }
 
 function ScaleHubIcon() {
   return (
-    <svg viewBox="0 0 40 40" className="w-10 h-10">
-      <rect x="6" y="14" width="8" height="18" fill="none" stroke="#06b6d4" strokeWidth="1.5" rx="1"/>
-      <rect x="16" y="8" width="8" height="24" fill="none" stroke="#0891b2" strokeWidth="1.5" rx="1"/>
-      <rect x="26" y="2" width="8" height="30" fill="none" stroke="#06b6d4" strokeWidth="1.5" rx="1"/>
-      <circle cx="10" cy="32" r="1.5" fill="#06b6d4"/>
-      <circle cx="20" cy="32" r="1.5" fill="#06b6d4"/>
-      <circle cx="30" cy="32" r="1.5" fill="#06b6d4"/>
+    <svg viewBox="0 0 32 32" className="w-8 h-8">
+      <defs>
+        <linearGradient id="scaleGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" stopColor="#0891b2" />
+          <stop offset="100%" stopColor="#06b6d4" />
+        </linearGradient>
+      </defs>
+      <rect x="4" y="16" width="6" height="12" fill="url(#scaleGrad)" rx="1"/>
+      <rect x="13" y="10" width="6" height="18" fill="url(#scaleGrad)" rx="1"/>
+      <rect x="22" y="4" width="6" height="24" fill="url(#scaleGrad)" rx="1"/>
+      <circle cx="7" cy="28" r="1.5" fill="#06b6d4"/>
+      <circle cx="16" cy="28" r="1.5" fill="#06b6d4"/>
+      <circle cx="25" cy="28" r="1.5" fill="#06b6d4"/>
     </svg>
   );
 }
@@ -88,54 +127,39 @@ const COMPANIES = [
 
 export function TrustedCompanies() {
   return (
-    <section className="relative px-6 py-16 bg-zinc-900/30">
+    <section className="relative px-6 py-8 bg-zinc-900/30">
       <div className="max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           transition={{ duration: 0.8 }}
           viewport={{ once: true }}
-          className="text-center mb-12"
+          className="text-center mb-8"
         >
-          <p className="text-slate-400 text-sm uppercase tracking-wider mb-8">
-            Trusted by forward-thinking companies
+          <p className="text-slate-400 text-sm uppercase tracking-wider">
+            Trusted by Forward-Thinking Companies
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
           {COMPANIES.map((company, i) => {
             const Icon = company.icon;
             return (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1, duration: 0.5 }}
+                initial={{ opacity: 0, scale: 0.8 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.05, duration: 0.4 }}
                 viewport={{ once: true }}
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="flex flex-col items-center justify-center p-8 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/30 transition-all group relative overflow-hidden"
+                whileHover={{ scale: 1.05 }}
+                className="flex items-center gap-3 group cursor-pointer"
               >
-                <motion.div
-                  className="absolute inset-0 rounded-2xl bg-gradient-to-r from-yellow-500/0 via-yellow-500/10 to-yellow-500/0 pointer-events-none"
-                  animate={{
-                    opacity: [0.3, 0.6, 0.3],
-                  }}
-                  transition={{
-                    duration: 3,
-                    repeat: Infinity,
-                    delay: i * 0.2,
-                  }}
-                />
-                <div className="relative z-10">
-                  <div className="mb-4 p-4 rounded-xl bg-white/5 group-hover:bg-yellow-500/10 transition-colors">
-                    <Icon />
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-white group-hover:text-yellow-500 transition-colors">
-                      {company.name}
-                    </div>
-                  </div>
+                <div className="transition-transform group-hover:scale-110">
+                  <Icon />
                 </div>
+                <span className="text-slate-300 font-medium group-hover:text-yellow-500 transition-colors">
+                  {company.name}
+                </span>
               </motion.div>
             );
           })}
