@@ -122,7 +122,7 @@ export default function SitesLandingPage() {
           </motion.div>
           <h1 className="text-4xl font-bold mb-4">Payment Confirmed!</h1>
             <p className="text-xl text-slate-300 mb-6">
-              Thank you for your order. We've started working on your website.
+              Thank you for your order. We&apos;ve started working on your website.
             </p>
           <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-left space-y-3 mb-8">
             <div className="flex items-center gap-3">
@@ -546,7 +546,7 @@ export default function SitesLandingPage() {
                   Almost there!
                 </h3>
                 <p className="text-slate-400 mb-8">
-                  Tell us about your project and we'll redirect you to secure payment.
+                  Tell us about your project and we&apos;ll redirect you to secure payment.
                 </p>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
