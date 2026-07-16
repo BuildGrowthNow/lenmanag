@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SiteWorkspaceControls } from "@/components/site-workspace-controls";
 import { DisableOverrideButton } from "@/components/disable-override-button";
-import { getLead, getLeadBrief, getLeadExtraction } from "@/lib/api/leads";
+import { getLead, getLeadMasterBrief, getLeadExtraction } from "@/lib/api/leads";
 import { getSite } from "@/lib/api/sites";
 
 function formatDateTime(value: string | null | undefined) {
@@ -16,7 +16,7 @@ function formatDateTime(value: string | null | undefined) {
 
 export default async function SiteEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [lead, brief, extraction, site] = await Promise.all([getLead(id), getLeadBrief(id), getLeadExtraction(id), getSite(id)]);
+  const [lead, brief, extraction, site] = await Promise.all([getLead(id), getLeadMasterBrief(id), getLeadExtraction(id), getSite(id)]);
 
   if (!lead) {
     return (

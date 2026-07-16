@@ -13,7 +13,7 @@ import { ApplyThemeButton } from "@/components/apply-theme-button";
 import { OverrideDiffBadgeWrapper } from "@/components/override-diff-badge-wrapper";
 import { RefinementPromptInput } from "@/components/refinement-prompt-input";
 import { PromptHistory } from "@/components/prompt-history";
-import { getLead, getLeadBrief, getLeadExtraction } from "@/lib/api/leads";
+import { getLead, getLeadMasterBrief, getLeadExtraction } from "@/lib/api/leads";
 import {
   getSite,
   getSiteCompare,
@@ -549,7 +549,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
   const [lead, extraction, brief, site, compare, versions, themes] = await Promise.all([
     getLead(id),
     getLeadExtraction(id),
-    getLeadBrief(id),
+    getLeadMasterBrief(id),
     getSite(id),
     getSiteCompare(id),
     getSiteVersions(id),

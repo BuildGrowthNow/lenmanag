@@ -189,7 +189,7 @@ export function CaseStudiesCarousel() {
               transition={{ delay: 0.6 }}
               className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30"
             >
-              <p className="text-white italic">"{study.quote}"</p>
+              <p className="text-white italic">&quot;{study.quote}&quot;</p>
               <p className="text-sm text-zinc-400 mt-2">
                 — {study.clientName} Team
               </p>

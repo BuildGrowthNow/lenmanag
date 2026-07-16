@@ -231,7 +231,7 @@ export function SocialWall() {
                     }}
                     className="text-zinc-300 text-sm leading-relaxed italic"
                   >
-                    "{customer.text}"
+                    "                    &quot;{customer.text}&quot;"
                   </motion.p>
 
                   {/* Hover Indicator */}

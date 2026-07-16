@@ -7,12 +7,12 @@ import { LeadExtractionControls } from "@/components/lead-extraction-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getLead, getLeadBrief, getLeadExtraction } from "@/lib/api/leads";
+import { getLead, getLeadMasterBrief, getLeadExtraction } from "@/lib/api/leads";
 import { evaluateExtractionHealth, formatDateTime as formatExtractionDate } from "@/lib/extraction-health";
 
 export default async function SiteBriefPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [lead, brief, extraction] = await Promise.all([getLead(id), getLeadBrief(id), getLeadExtraction(id)]);
+  const [lead, brief, extraction] = await Promise.all([getLead(id), getLeadMasterBrief(id), getLeadExtraction(id)]);
 
   if (!lead) {
     return (

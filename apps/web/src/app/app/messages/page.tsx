@@ -1,6 +1,6 @@
 import { MessageDraftsWorkspace } from "@/components/message-drafts-workspace";
 import { PageFrame } from "@/components/shell/page-frame";
-import { getLead, getLeadBrief, listLeads } from "@/lib/api/leads";
+import { getLead, getLeadMasterBrief, listLeads } from "@/lib/api/leads";
 import { getSite } from "@/lib/api/sites";
 import { listMessageDrafts } from "@/lib/api/messages";
 
@@ -10,7 +10,7 @@ export default async function MessagesPage() {
     leads.items.map(async (lead) => {
       const [detail, brief, site, drafts] = await Promise.all([
         getLead(lead.id),
-        getLeadBrief(lead.id),
+        getLeadMasterBrief(lead.id),
         getSite(lead.id),
         listMessageDrafts(lead.id),
       ]);

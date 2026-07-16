@@ -18,7 +18,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-bold text-white mb-4">Introduction</h2>
             <p>
-              Lenquant ("we," "us," "our," or "Company") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website and use our services.
+              Lenquant (&quot;we,&quot; &quot;us,&quot; &quot;our,&quot; or &quot;Company&quot;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website and use our services.
             </p>
           </section>
 
@@ -96,7 +96,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-bold text-white mb-4">Policy Changes</h2>
             <p>
-              We may update this Privacy Policy from time to time. We will notify you of any changes by updating the "Last updated" date of this policy.
+              We may update this Privacy Policy from time to time. We will notify you of any changes by updating the &quot;Last updated&quot; date of this policy.
             </p>
           </section>
         </div>

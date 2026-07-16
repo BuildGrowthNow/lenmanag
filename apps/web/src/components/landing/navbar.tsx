@@ -2,28 +2,29 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import { Menu, X } from "lucide-react";
+
+const SECTIONS = [
+  { id: "trusted", label: "Trusted By" },
+  { id: "features", label: "What We Do" },
+  { id: "process", label: "Process" },
+  { id: "included", label: "Everything Included" },
+  { id: "testimonials", label: "Testimonials" },
+  { id: "pricing", label: "Pricing" },
+  { id: "faq", label: "FAQ" },
+];
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [isScrolled, setIsScrolled] = useState(false);
 
-  const sections = [
-    { id: "trusted", label: "Trusted By" },
-    { id: "features", label: "What We Do" },
-    { id: "process", label: "Process" },
-    { id: "included", label: "Everything Included" },
-    { id: "testimonials", label: "Testimonials" },
-    { id: "pricing", label: "Pricing" },
-    { id: "faq", label: "FAQ" },
-  ];
-
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
 
-      for (const section of sections) {
+      for (const section of SECTIONS) {
         const element = document.getElementById(section.id);
         if (element) {
           const rect = element.getBoundingClientRect();
@@ -60,13 +61,13 @@ export function Navbar() {
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           {/* Logo */}
-          <a href="/" className="text-2xl font-bold text-white">
+          <Link href="/" className="text-2xl font-bold text-white">
             Lenquant
-          </a>
+          </Link>
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-8">
-            {sections.map((section) => (
+            {SECTIONS.map((section) => (
               <button
                 key={section.id}
                 onClick={() => scrollToSection(section.id)}
@@ -105,7 +106,7 @@ export function Navbar() {
               className="md:hidden bg-slate-950/95 backdrop-blur-md border-b border-white/10"
             >
               <div className="px-6 py-4 space-y-3">
-                {sections.map((section) => (
+                {SECTIONS.map((section) => (
                   <button
                     key={section.id}
                     onClick={() => scrollToSection(section.id)}

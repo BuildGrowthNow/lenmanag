@@ -14,7 +14,7 @@ const MESSAGES: StickyMessage[] = [
   { text: "See how your website could look 🎨", section: "hero" },
   { text: "Get started for just $1,000 ✨", section: "features" },
   { text: "Join 500+ happy customers like you 🚀", section: "testimonials" },
-  { text: "Ready? Let's build your masterpiece 💪", section: "pricing" },
+  { text: "Ready? Let&apos;s build your masterpiece 💪", section: "pricing" },
 ];
 
 export function StickyCTABar() {
@@ -139,7 +139,7 @@ export function StickyCTABar() {
               </p>
 
               <p className="text-sm text-zinc-400 mb-6 font-semibold">
-                That's an extra $250-500 in your pocket
+                That&apos;s an extra $250-500 in your pocket
               </p>
 
               <div className="space-y-3">
@@ -159,7 +159,7 @@ export function StickyCTABar() {
                   onClick={() => setShowExitIntent(false)}
                   className="w-full px-6 py-2 text-zinc-400 hover:text-white transition-colors text-sm"
                 >
-                  Nah, I'll come back later
+                  Nah, I&apos;ll come back later
                 </button>
               </div>
 

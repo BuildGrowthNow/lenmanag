@@ -33,7 +33,7 @@ export function RiskReversalBadge() {
                 Zero Risk 🎯
               </div>
               <div className="text-sm font-semibold text-white">
-                Get your money back if you're not thrilled
+                Get your money back if you&apos;re not thrilled
               </div>
             </div>
           </div>
@@ -52,7 +52,7 @@ export function RiskReversalBadge() {
                 className="flex items-start gap-2 text-sm text-zinc-200"
               >
                 <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5 flex-shrink-0" />
-                <span>7 full days to decide. If it's not perfect, we refund everything.</span>
+                <span>7 full days to decide. If it&apos;s not perfect, we refund everything.</span>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
@@ -61,7 +61,7 @@ export function RiskReversalBadge() {
                 className="flex items-start gap-2 text-sm text-zinc-200"
               >
                 <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5 flex-shrink-0" />
-                <span>No explaining yourself. Just ask and it's done.</span>
+                <span>No explaining yourself. Just ask and it&apos;s done.</span>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
