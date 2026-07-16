@@ -26,6 +26,7 @@ import { ScreenshotCarousel } from "@/components/landing/screenshot-carousel";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
 import { FAQSection } from "@/components/landing/faq-section";
 import { PricingConfigurator } from "@/components/landing/pricing-configurator";
+import { Footer } from "@/components/landing/footer";
 import { type SelectedAddOns } from "@/lib/pricing";
 
 export default function SitesLandingPage() {
@@ -308,8 +309,6 @@ export default function SitesLandingPage() {
             </motion.div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
-              <div className="hidden lg:block absolute top-24 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent" />
-
               {[
                 {
                   step: "01",
@@ -366,6 +365,17 @@ export default function SitesLandingPage() {
               ))}
             </div>
 
+            {/* Timeline Line - Below Icons */}
+            <motion.div
+              initial={{ opacity: 0, scaleX: 0 }}
+              whileInView={{ opacity: 1, scaleX: 1 }}
+              transition={{ delay: 0.4, duration: 0.8 }}
+              viewport={{ once: true }}
+              className="hidden lg:flex justify-center mt-12 origin-left"
+            >
+              <div className="h-0.5 w-3/4 bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent" />
+            </motion.div>
+
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -406,16 +416,16 @@ export default function SitesLandingPage() {
 
             <div className="grid md:grid-cols-2 gap-4">
               {[
-                "Professional custom design",
-                "Mobile-responsive layout",
-                "Lightning-fast performance",
-                "Basic SEO optimization",
-                "SSL certificate included",
-                "Contact forms & integrations",
-                "Social media integration",
-                "Premium hosting (1 year)",
-                "Performance monitoring",
-                "Free minor updates (30 days)",
+                "Professional custom design built for your brand",
+                "Works perfectly on phones and tablets",
+                "Loads instantly so customers don't wait",
+                "Found easily on Google search",
+                "Secure and trusted by visitors",
+                "Connect with your customers easily",
+                "Share your success on social media",
+                "Fast, reliable hosting included for a year",
+                "We watch your site's health for you",
+                "Free small changes for 30 days after launch",
               ].map((item, i) => (
                 <motion.div
                   key={i}
@@ -610,16 +620,7 @@ export default function SitesLandingPage() {
         </section>
 
         {/* Footer */}
-        <footer className="relative px-6 py-12 border-t border-white/10">
-          <div className="max-w-7xl mx-auto text-center text-slate-400">
-            <p className="mb-2">
-              &copy; {new Date().getFullYear()} Lenquant. All rights reserved.
-            </p>
-            <p className="text-sm">
-              Premium websites delivered in 3 days or less.
-            </p>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </>
   );

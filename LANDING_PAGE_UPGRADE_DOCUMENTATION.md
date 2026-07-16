@@ -348,8 +348,8 @@ interface Feature {
 - Company information:
   - Company name: Lenquant
   - Link to: lenquant.com
-  - Address field (placeholder for actual address)
-  - Phone field (placeholder for actual phone)
+  - Address field: 510 South Main Street, South Bend, IN 46601
+  - Phone field: +18457211974
 - Quick links to main sections
 - Copyright and year
 - Responsive layout
@@ -362,20 +362,19 @@ interface Feature {
 
 2. **Quick Links**
    - Home
-   - Services
-   - Pricing
-   - Contact
+   - Services - smooth scroll to the section
+   - Pricing - smooth scroll to the section
+   - Contact - open the email to contact@lenquant.com
 
 3. **Legal**
-   - Privacy Policy (link)
-   - Terms of Service (link)
-   - Cookie Policy (link)
+   - Privacy Policy create the page and a good privacy policy - no placeholder
+   - Terms of Service create the page and a good terms and conditions - no placeholder
 
 4. **Contact**
    - Email: contact@lenquant.com
    - Phone: +18457211974
    - Address: 510 South Main Street, South Bend, IN 46601
-   
+
 
 **Deliverables**:
 - Professional footer component
