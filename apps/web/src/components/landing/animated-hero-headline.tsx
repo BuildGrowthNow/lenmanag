@@ -16,9 +16,7 @@ export function AnimatedHeroHeadline() {
 
     if (!isDeleting && displayedText === currentPhrase) {
       const pauseTimer = setTimeout(() => {
-        if (currentPhraseIndex < PHRASES.length - 1) {
-          setIsDeleting(true);
-        }
+        setIsDeleting(true);
       }, 2000);
       return () => clearTimeout(pauseTimer);
     }

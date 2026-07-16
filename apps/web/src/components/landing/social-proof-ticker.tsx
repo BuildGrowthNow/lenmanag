@@ -24,7 +24,7 @@ export function SocialProofTicker() {
   }, []);
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[100] bg-gradient-to-r from-yellow-500/95 to-orange-500/95 backdrop-blur-sm border-b-2 border-yellow-300 py-4 px-6 shadow-lg">
+    <div className="relative z-[100] bg-gradient-to-r from-emerald-900 to-blue-900 border-b-2 border-emerald-700 py-4 px-6 shadow-lg">
       <div className="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-4">
         {/* Social Proof */}
         <motion.div
@@ -33,18 +33,18 @@ export function SocialProofTicker() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 30 }}
           transition={{ duration: 0.5 }}
-          className="flex items-center gap-3 text-sm md:text-base font-bold text-zinc-900"
+          className="flex items-center gap-3 text-sm md:text-base font-bold text-white"
         >
           <motion.div
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 0.6 }}
             className="text-lg"
           >
-            ✨
+            🔥
           </motion.div>
           <span className="hidden sm:inline">{NOTIFICATIONS[currentIndex].name}</span>
           <span className="sm:hidden">Someone</span>
-          <span className="text-yellow-700">{NOTIFICATIONS[currentIndex].message}</span>
+          <span className="text-emerald-300">{NOTIFICATIONS[currentIndex].message}</span>
         </motion.div>
 
         {/* Scarcity Counter */}
@@ -68,7 +68,7 @@ export function SocialProofTicker() {
             transition={{ duration: 1, repeat: Infinity, repeatDelay: 1.5 }}
             className="w-3 h-3 rounded-full bg-red-500 shadow-lg"
           />
-          <span className="text-xs md:text-sm font-bold text-red-700">
+          <span className="text-xs md:text-sm font-bold text-red-300">
             Only 3 spots left - book fast! ⏱️
           </span>
         </motion.div>

@@ -14,7 +14,7 @@ export function RiskReversalBadge() {
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 1 }}
-        className="fixed right-6 bottom-20 z-20 max-w-xs"
+        className="fixed left-6 bottom-20 z-20 max-w-xs"
       >
         <motion.button
           onClick={() => setIsExpanded(!isExpanded)}
@@ -77,30 +77,6 @@ export function RiskReversalBadge() {
         </motion.button>
       </motion.div>
 
-      {/* Top Badge */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="fixed top-20 left-6 z-20 hidden md:block"
-      >
-        <motion.div
-          animate={{
-            boxShadow: [
-              "0 0 20px rgba(34, 197, 94, 0.3)",
-              "0 0 40px rgba(34, 197, 94, 0.5)",
-              "0 0 20px rgba(34, 197, 94, 0.3)",
-            ],
-          }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="px-4 py-2 rounded-full bg-green-500/10 border border-green-500/50 backdrop-blur-sm flex items-center gap-2"
-        >
-          <Shield className="w-4 h-4 text-green-400" />
-          <span className="text-xs font-bold text-green-400">
-            100% Money-Back Guarantee
-          </span>
-        </motion.div>
-      </motion.div>
     </>
   );
 }

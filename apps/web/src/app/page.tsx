@@ -11,6 +11,7 @@ import {
   Rocket,
   Users,
   PartyPopper,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -231,6 +232,31 @@ export default function SitesLandingPage() {
         {/* Hero Section */}
         <section className="relative px-6 pt-20 pb-32">
           <div className="max-w-7xl mx-auto">
+            {/* Money-Back Guarantee Badge */}
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex justify-center mb-6"
+            >
+              <motion.div
+                animate={{
+                  boxShadow: [
+                    "0 0 20px rgba(34, 197, 94, 0.3)",
+                    "0 0 40px rgba(34, 197, 94, 0.5)",
+                    "0 0 20px rgba(34, 197, 94, 0.3)",
+                  ],
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="px-5 py-2.5 rounded-full bg-green-500/10 border border-green-500/50 backdrop-blur-sm flex items-center gap-2"
+              >
+                <Shield className="w-4 h-4 text-green-400" />
+                <span className="text-sm font-bold text-green-400">
+                  100% Money-Back Guarantee
+                </span>
+              </motion.div>
+            </motion.div>
+
             <div className="mb-12">
               <AnimatedHeroHeadline />
             </div>

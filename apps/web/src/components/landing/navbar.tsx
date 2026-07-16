@@ -49,84 +49,75 @@ export function Navbar() {
   };
 
   return (
-    <>
-      <motion.nav
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          isScrolled
-            ? "bg-slate-950/80 backdrop-blur-md border-b border-white/10"
-            : "bg-transparent"
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="text-2xl font-bold text-white">
-            Lenquant
-          </Link>
+    <motion.nav
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`sticky top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        isScrolled
+          ? "bg-slate-950/80 backdrop-blur-md border-b border-white/10"
+          : "bg-transparent"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <Link href="/" className="text-2xl font-bold text-white">
+          Lenquant
+        </Link>
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-8">
-            {SECTIONS.map((section) => (
-              <button
-                key={section.id}
-                onClick={() => scrollToSection(section.id)}
-                className="text-sm text-slate-300 hover:text-yellow-500 transition-colors relative group"
-              >
-                {section.label}
-                {activeSection === section.id && (
-                  <motion.div
-                    layoutId="activeIndicator"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-yellow-500"
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  />
-                )}
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-yellow-500 scale-x-0 group-hover:scale-x-100 transform origin-left transition-transform duration-300" />
-              </button>
-            ))}
-          </div>
-
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-2 text-white hover:text-yellow-500 transition-colors"
-          >
-            {isOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+        <div className="hidden md:flex items-center gap-8">
+          {SECTIONS.map((section) => (
+            <button
+              key={section.id}
+              onClick={() => scrollToSection(section.id)}
+              className="text-sm text-slate-300 hover:text-yellow-500 transition-colors relative group"
+            >
+              {section.label}
+              {activeSection === section.id && (
+                <motion.div
+                  layoutId="activeIndicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-yellow-500"
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+              )}
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-yellow-500 scale-x-0 group-hover:scale-x-100 transform origin-left transition-transform duration-300" />
+            </button>
+          ))}
         </div>
 
-        {/* Mobile Menu */}
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="md:hidden bg-slate-950/95 backdrop-blur-md border-b border-white/10"
-            >
-              <div className="px-6 py-4 space-y-3">
-                {SECTIONS.map((section) => (
-                  <button
-                    key={section.id}
-                    onClick={() => scrollToSection(section.id)}
-                    className={`block w-full text-left py-2 px-3 rounded-lg transition-colors ${
-                      activeSection === section.id
-                        ? "bg-yellow-500/20 text-yellow-500"
-                        : "text-slate-300 hover:text-yellow-500"
-                    }`}
-                  >
-                    {section.label}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.nav>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="md:hidden p-2 text-white hover:text-yellow-500 transition-colors"
+        >
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
 
-      {/* Spacer for fixed nav */}
-      <div className="h-16" />
-    </>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="md:hidden bg-slate-950/95 backdrop-blur-md border-b border-white/10"
+          >
+            <div className="px-6 py-4 space-y-3">
+              {SECTIONS.map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => scrollToSection(section.id)}
+                  className={`block w-full text-left py-2 px-3 rounded-lg transition-colors ${
+                    activeSection === section.id
+                      ? "bg-yellow-500/20 text-yellow-500"
+                      : "text-slate-300 hover:text-yellow-500"
+                  }`}
+                >
+                  {section.label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.nav>
   );
 }
