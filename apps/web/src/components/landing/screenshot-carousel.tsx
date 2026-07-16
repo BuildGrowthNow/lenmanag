@@ -70,6 +70,7 @@ export function ScreenshotCarousel() {
                 transition={{ duration: 0.5 }}
                 className="absolute inset-0"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={SCREENSHOTS[current]}
                   alt={`Award-winning website example ${current + 1}`}

@@ -197,6 +197,7 @@ export function SocialWall() {
                       className="relative flex-shrink-0"
                     >
                       <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 p-0.5 overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={customer.avatar}
                           alt={customer.name}
@@ -231,7 +232,7 @@ export function SocialWall() {
                     }}
                     className="text-zinc-300 text-sm leading-relaxed italic"
                   >
-                    "                    &quot;{customer.text}&quot;"
+                    &quot;{customer.text}&quot;
                   </motion.p>
 
                   {/* Hover Indicator */}
