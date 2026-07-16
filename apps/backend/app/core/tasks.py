@@ -107,7 +107,7 @@ def run_site_generation_job_task(self, site_id: str, job_id: str, request_payloa
 
     try:
         _run(runner())
-    except Exception as exc:
+    except Exception:
         # Log failure with context
         import logging
         logging.error(

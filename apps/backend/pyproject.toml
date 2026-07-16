@@ -38,3 +38,15 @@ package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.pyright]
+typeCheckingMode = "standard"
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportAttributeAccessIssue = "warning"
+reportArgumentType = "warning"
+reportAssignmentType = "warning"
+reportReturnType = "warning"
+reportCallIssue = "warning"
+reportIndexIssue = "warning"
+reportFunctionMemberAccess = "warning"

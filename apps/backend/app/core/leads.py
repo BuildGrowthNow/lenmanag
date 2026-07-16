@@ -19,12 +19,14 @@ from app.core.extraction_enrichment import enrich_extraction, validate_extractio
 from app.core.mongo import get_database
 from app.schemas.brief import (
     BriefSourceKind,
+    MasterBrief,
     SiteBrief,
     SiteBriefPatchRequest,
 )
 from app.schemas.extraction import (
     ExtractionJobResponse,
     ExtractionSnapshot,
+    ExtractionSummary,
     PageInventoryResponse,
 )
 from app.schemas.job import JobQueueHealthItem, JobQueueHealthResponse
@@ -203,7 +205,7 @@ def _asset_reference_from_cue(cue: dict[str, Any] | Any) -> dict[str, Any]:
     }
 
 
-def _brief_asset_provenance(asset_cues: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _brief_asset_provenance(asset_cues: list[dict[str, Any] | Any]) -> list[dict[str, Any]]:
     return _unique_by_key(
         [_asset_reference_from_cue(cue) for cue in asset_cues], _brief_reference_key
     )
@@ -299,6 +301,7 @@ def _lead_doc_to_detail(
         latest_job = _job_doc_to_summary(jobs[0])
     return LeadDetail(
         id=str(doc["id"]),
+        user_id=str(doc.get("user_id", "")),
         sourceType=doc["sourceType"],
         sourceRef=doc.get("sourceRef"),
         sourceRefs=[
@@ -335,6 +338,7 @@ def _lead_doc_to_list_item(
 ) -> LeadListItem:
     return LeadListItem(
         id=str(doc["id"]),
+        user_id=str(doc.get("user_id", "")),
         sourceType=doc["sourceType"],
         companyName=doc.get("companyName"),
         websiteUrl=doc["websiteUrl"],
@@ -665,7 +669,6 @@ class LeadRepository:
         await self._set_pipeline_stage(lead_id, "generating")
         try:
             from app.core.sites import site_repository
-            from app.schemas.site import SiteGenerateRequest
             job = await site_repository.queue_generation_job(lead_id)
             if job is None:
                 await self._set_pipeline_stage(lead_id, "needs_attention", detail="Site generation could not be queued.")
@@ -912,8 +915,10 @@ class LeadRepository:
     async def _record_brief_event(
         self, lead_id: str, *, event_type: str, event_name: str, version: int
     ) -> None:
+        from typing import cast
+        from ..schemas.analytics import AnalyticsEventType
         await analytics_repository.record_admin_event(
-            event_type=event_type,
+            event_type=cast(AnalyticsEventType, event_type),
             event_name=event_name,
             lead_id=lead_id,
             metadata={"briefVersion": version},
@@ -1643,16 +1648,16 @@ class LeadRepository:
             pagesCrawled=0,
             canonicalWebsiteUrl=lead.websiteUrl,
             detectedWebsiteUrl=lead.detectedWebsiteUrl,
-            summary={
-                "companyName": lead.companyName,
-                "canonicalWebsiteUrl": lead.websiteUrl,
-                "detectedWebsiteUrl": lead.detectedWebsiteUrl,
-                "positioningSummary": None,
-                "audienceClues": [],
-                "serviceClues": [],
-                "ctaClues": [],
-                "toneClues": [],
-            },
+            summary=ExtractionSummary(
+                companyName=lead.companyName,
+                canonicalWebsiteUrl=lead.websiteUrl,
+                detectedWebsiteUrl=lead.detectedWebsiteUrl,
+                positioningSummary=None,
+                audienceClues=[],
+                serviceClues=[],
+                ctaClues=[],
+                toneClues=[],
+            ),
             pageInventory=[],
             sourceCitations=[],
             brandAssetCues=[],
@@ -1727,10 +1732,31 @@ class LeadRepository:
         )
 
     def _brief_doc_to_snapshot(self, doc: dict[str, Any]) -> SiteBrief:
-        company_summary = doc.get("companySummary")
-        value_proposition_summary = (
-            doc.get("valuePropositionSummary") or company_summary
+        from app.schemas.brief import BriefTextRecommendation, BriefEvidence
+
+        def _ensure_text_recommendation(raw: Any) -> BriefTextRecommendation:
+            if isinstance(raw, dict):
+                return BriefTextRecommendation(**raw)
+            elif isinstance(raw, BriefTextRecommendation):
+                return raw
+            else:
+                # Provide default for missing data
+                return BriefTextRecommendation(
+                    value="",
+                    evidence=BriefEvidence(
+                        sourceKind="inferred",
+                        inferenceLabel="default",
+                        confidence=0,
+                        references=[]
+                    )
+                )
+
+        company_summary_raw = doc.get("companySummary")
+        value_proposition_summary_raw = (
+            doc.get("valuePropositionSummary") or company_summary_raw
         )
+        company_summary = _ensure_text_recommendation(company_summary_raw)
+        value_proposition_summary = _ensure_text_recommendation(value_proposition_summary_raw)
         return SiteBrief(
             id=str(doc["id"]),
             leadId=str(doc["leadId"]),
@@ -1763,7 +1789,7 @@ class LeadRepository:
         self,
         *,
         extraction: ExtractionSnapshot,
-        asset_cues: list[dict[str, Any]],
+        asset_cues: list[dict[str, Any] | Any],  # Can be dict or BrandAssetCue
     ) -> list[dict[str, Any]]:
         refs = [
             _page_reference_from_citation(citation)
@@ -1776,7 +1802,7 @@ class LeadRepository:
         self,
         *,
         extraction: ExtractionSnapshot,
-        asset_cues: list[dict[str, Any]],
+        asset_cues: list[dict[str, Any] | Any],  # Can be dict or BrandAssetCue
         evidence_types: list[str] | None = None,
         include_assets: bool = False,
         limit: int = 3,
@@ -1815,8 +1841,8 @@ class LeadRepository:
         approved: bool = False,
     ) -> dict[str, Any]:
         now = _now()
-        asset_cues = [
-            cue.model_dump() if hasattr(cue, "model_dump") else cue
+        asset_cues: list[dict[str, Any]] = [
+            cue.model_dump() if hasattr(cue, "model_dump") else dict(cue) if isinstance(cue, dict) else {}
             for cue in extraction.brandAssetCues
         ]
         source_refs = self._brief_source_references(
@@ -2167,10 +2193,10 @@ class LeadRepository:
 
         visual_redesigns: list[dict[str, Any]] = []
         for page_item in extraction.pageInventory:
-            page_dict = page_item.model_dump() if hasattr(page_item, "model_dump") else page_item
+            page_dict: dict[str, Any] = page_item.model_dump() if hasattr(page_item, "model_dump") else dict(page_item) if isinstance(page_item, dict) else {}
             if not page_dict.get("sections"):
                 continue
-            
+
             critiques = []
             for sec in page_dict["sections"]:
                 sec_type = sec.get("type", "unknown")
@@ -2634,17 +2660,15 @@ class LeadRepository:
             )
             return doc
 
-    async def get_master_brief(self, lead_id: str) -> "MasterBrief | None":
+    async def get_master_brief(self, lead_id: str) -> MasterBrief | None:
         """Get the current master brief for a lead."""
-        from app.schemas.brief import MasterBrief
-
         await self._maybe_ensure_indexes()
         doc = await self._latest_master_brief_doc(lead_id)
         if doc is None:
             return None
         return MasterBrief.model_validate(doc)
 
-    async def create_master_brief(self, lead_id: str) -> "MasterBrief | None":
+    async def create_master_brief(self, lead_id: str) -> MasterBrief | None:
         """Generate a new AI master brief from extraction data."""
         from app.core.master_brief import generate_master_brief
 
@@ -2683,7 +2707,7 @@ class LeadRepository:
 
     async def refine_master_brief(
         self, lead_id: str, feedback: str
-    ) -> "MasterBrief | None":
+    ) -> MasterBrief | None:
         """Refine master brief with user feedback."""
         from app.core.master_brief import generate_master_brief
 
@@ -2728,10 +2752,8 @@ class LeadRepository:
 
     async def approve_master_brief(
         self, lead_id: str, approved_by: str, notes: str | None = None
-    ) -> "MasterBrief | None":
+    ) -> MasterBrief | None:
         """Approve the master brief to trigger site generation."""
-        from app.schemas.brief import MasterBrief
-
         await self._maybe_ensure_indexes()
         brief = await self.get_master_brief(lead_id)
         if brief is None:
@@ -3011,7 +3033,7 @@ class LeadRepository:
 
         from app.core.tasks import run_extraction_job_task
 
-        run_extraction_job_task.delay(lead_id=lead_id, job_id=job_id, refresh=refresh)
+        run_extraction_job_task.delay(lead_id=lead_id, job_id=job_id, refresh=refresh)  # type: ignore[attr-defined]
 
     @staticmethod
     def log_inline_error(label: str, task: asyncio.Task[None]) -> None:

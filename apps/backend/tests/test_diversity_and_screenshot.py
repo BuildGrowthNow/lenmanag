@@ -8,7 +8,7 @@ from app.core.mongo import get_database
 from app.core.sites import site_repository, _check_theme_diversity_constraint, _compute_diversity_score
 from app.core.screenshot_comparator import ScreenshotComparator
 from app.schemas.lead import LeadUpsertRequest
-from app.schemas.site import GeneratedSite
+from app.schemas.site import BrandTokens, CtaStrategy, GeneratedSite, HeroVariant
 
 
 def test_theme_diversity_constraint():
@@ -28,7 +28,7 @@ def test_theme_diversity_constraint():
             themeRationale="Test",
             paletteMode="zinc",
             paletteRationale="Test",
-            brandTokens={
+            brandTokens=BrandTokens.model_validate({
                 "paletteMode": "zinc",
                 "primaryColor": {"value": "#000", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "secondaryColor": {"value": "#fff", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
@@ -42,8 +42,8 @@ def test_theme_diversity_constraint():
                 "visualTone": {"value": "minimal", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "motionIntensity": {"value": "low", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "layoutDensity": {"value": "comfortable", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-            },
-            heroVariant={
+            }),
+            heroVariant=HeroVariant.model_validate({
                 "headline": "Test",
                 "subheadline": "Test",
                 "supportingLine": "Test",
@@ -52,13 +52,13 @@ def test_theme_diversity_constraint():
                 "layout": "center",
                 "visualTreatment": "clean",
                 "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []},
-            },
+            }),
             sectionStack=[],
-            ctaStrategy={
+            ctaStrategy=CtaStrategy.model_validate({
                 "primary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "secondary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "footer": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-            },
+            }),
             qualityScore=50,
             readinessStatus="blocked",
             qaStatus="fail",
@@ -112,7 +112,7 @@ def test_theme_diversity_constraint():
         themeRationale="Test",
         paletteMode="light",
         paletteRationale="Test",
-        brandTokens={
+        brandTokens=BrandTokens.model_validate({
             "paletteMode": "light",
             "primaryColor": {"value": "#000", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "secondaryColor": {"value": "#fff", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
@@ -126,8 +126,8 @@ def test_theme_diversity_constraint():
             "visualTone": {"value": "minimal", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "motionIntensity": {"value": "low", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "layoutDensity": {"value": "comfortable", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-        },
-        heroVariant={
+        }),
+        heroVariant=HeroVariant.model_validate({
             "headline": "Test",
             "subheadline": "Test",
             "supportingLine": "Test",
@@ -136,13 +136,13 @@ def test_theme_diversity_constraint():
             "layout": "center",
             "visualTreatment": "clean",
             "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []},
-        },
+        }),
         sectionStack=[],
-        ctaStrategy={
+        ctaStrategy=CtaStrategy.model_validate({
             "primary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "secondary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "footer": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-        },
+        }),
         qualityScore=50,
         readinessStatus="blocked",
         qaStatus="fail",
@@ -197,7 +197,7 @@ def test_diversity_score_computation():
             themeRationale="Test",
             paletteMode="zinc",
             paletteRationale="Test",
-            brandTokens={
+            brandTokens=BrandTokens.model_validate({
                 "paletteMode": "zinc",
                 "primaryColor": {"value": "#000", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "secondaryColor": {"value": "#fff", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
@@ -211,8 +211,8 @@ def test_diversity_score_computation():
                 "visualTone": {"value": "minimal", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "motionIntensity": {"value": "low", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "layoutDensity": {"value": "comfortable", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-            },
-            heroVariant={
+            }),
+            heroVariant=HeroVariant.model_validate({
                 "headline": "Test",
                 "subheadline": "Test",
                 "supportingLine": "Test",
@@ -221,13 +221,13 @@ def test_diversity_score_computation():
                 "layout": "center",
                 "visualTreatment": "clean",
                 "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []},
-            },
+            }),
             sectionStack=[],
-            ctaStrategy={
+            ctaStrategy=CtaStrategy.model_validate({
                 "primary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "secondary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
                 "footer": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-            },
+            }),
             qualityScore=50,
             readinessStatus="blocked",
             qaStatus="fail",
@@ -281,7 +281,7 @@ def test_phase17_screenshot_qa_and_improvement_brief():
         # Create a lead and minimal extraction snapshot
         # Use a distinct domain to avoid colliding with other tests that also use example.com
         req = LeadUpsertRequest(companyName="Phase17 Co", websiteUrl="https://phase17.example.com")
-        action = await lead_repository.create_lead(req)
+        action = await lead_repository.create_lead(req, user_id="test-user")
         lead = action.lead
         site_id = lead.id
 
@@ -424,10 +424,7 @@ def test_phase17_screenshot_qa_and_improvement_brief():
         # Also ensure versions are tracked
         versions = await site_repository.list_versions(site.id)
         assert versions
-        if hasattr(versions, 'items'):
-            assert len(versions.items) >= 1
-        else:
-            assert len(versions) >= 1
+        assert len(versions.items) >= 1
 
         # Auto-improvement runs should not mark the site as manually refined or touch prompt history
         assert site.isManuallyRefined is False
@@ -454,7 +451,7 @@ def test_screenshot_comparator():
         themeRationale="Test",
         paletteMode="zinc",
         paletteRationale="Test",
-        brandTokens={
+        brandTokens=BrandTokens.model_validate({
             "paletteMode": "zinc",
             "primaryColor": {"value": "#000", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "secondaryColor": {"value": "#fff", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
@@ -468,8 +465,8 @@ def test_screenshot_comparator():
             "visualTone": {"value": "minimal", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "motionIntensity": {"value": "low", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "layoutDensity": {"value": "comfortable", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-        },
-        heroVariant={
+        }),
+        heroVariant=HeroVariant.model_validate({
             "headline": "Test",
             "subheadline": "Test",
             "supportingLine": "Test",
@@ -478,13 +475,13 @@ def test_screenshot_comparator():
             "layout": "center",
             "visualTreatment": "clean",
             "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []},
-        },
+        }),
         sectionStack=[],
-        ctaStrategy={
+        ctaStrategy=CtaStrategy.model_validate({
             "primary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "secondary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "footer": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-        },
+        }),
         qualityScore=50,
         readinessStatus="blocked",
         qaStatus="fail",
@@ -534,7 +531,7 @@ def test_screenshot_comparator():
         themeRationale="Test",
         paletteMode="zinc",
         paletteRationale="Test",
-        brandTokens={
+        brandTokens=BrandTokens.model_validate({
             "paletteMode": "zinc",
             "primaryColor": {"value": "#000", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "secondaryColor": {"value": "#fff", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
@@ -548,8 +545,8 @@ def test_screenshot_comparator():
             "visualTone": {"value": "minimal", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "motionIntensity": {"value": "low", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "layoutDensity": {"value": "comfortable", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-        },
-        heroVariant={
+        }),
+        heroVariant=HeroVariant.model_validate({
             "headline": "Test",
             "subheadline": "Test",
             "supportingLine": "Test",
@@ -558,13 +555,13 @@ def test_screenshot_comparator():
             "layout": "center",
             "visualTreatment": "clean",
             "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []},
-        },
+        }),
         sectionStack=[],
-        ctaStrategy={
+        ctaStrategy=CtaStrategy.model_validate({
             "primary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "secondary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "footer": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-        },
+        }),
         qualityScore=50,
         readinessStatus="blocked",
         qaStatus="fail",
@@ -608,7 +605,7 @@ def test_screenshot_comparator():
         themeRationale="Test",
         paletteMode="light",
         paletteRationale="Test",
-        brandTokens={
+        brandTokens=BrandTokens.model_validate({
             "paletteMode": "light",
             "primaryColor": {"value": "#000", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "secondaryColor": {"value": "#fff", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
@@ -622,8 +619,8 @@ def test_screenshot_comparator():
             "visualTone": {"value": "minimal", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "motionIntensity": {"value": "low", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "layoutDensity": {"value": "comfortable", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-        },
-        heroVariant={
+        }),
+        heroVariant=HeroVariant.model_validate({
             "headline": "Test",
             "subheadline": "Test",
             "supportingLine": "Test",
@@ -632,13 +629,13 @@ def test_screenshot_comparator():
             "layout": "center",
             "visualTreatment": "clean",
             "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []},
-        },
+        }),
         sectionStack=[],
-        ctaStrategy={
+        ctaStrategy=CtaStrategy.model_validate({
             "primary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "secondary": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
             "footer": {"label": "Test", "href": "#", "rationale": "Test", "evidence": {"sourceKind": "inferred", "inferenceLabel": "Test", "confidence": 0, "references": []}},
-        },
+        }),
         qualityScore=50,
         readinessStatus="blocked",
         qaStatus="fail",

@@ -76,7 +76,7 @@ class GCSAssetStorage:
 
         # Use upload_from_file which supports resumable uploads when chunk_size set
         stream.seek(0)
-        blob.upload_from_file(stream, content_type=content_type, timeout=settings.asset_download_timeout, retry=self._gcloud_retry())
+        blob.upload_from_file(stream, content_type=content_type, timeout=settings.asset_download_timeout, retry=self._gcloud_retry())  # type: ignore[arg-type]
 
         # update stats
         try:
@@ -102,7 +102,7 @@ class GCSAssetStorage:
             # only operate on configured bucket
             raise ValueError("attempt to delete object outside configured bucket")
         blob = self.bucket.blob(name)
-        blob.delete(retry=self._gcloud_retry())
+        blob.delete(retry=self._gcloud_retry())  # type: ignore[arg-type]
 
     def generate_signed_url(self, uri: str, expires_seconds: int) -> str:
         if not uri.startswith("gs://"):

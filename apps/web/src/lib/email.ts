@@ -83,9 +83,9 @@ export async function sendNewOrderNotification(data: NewOrderEmailData): Promise
 
   <div style="background: #F1F5F9; border-radius: 12px; padding: 20px; margin-bottom: 24px; text-align: center;">
     <p style="margin: 0 0 16px 0; color: #475569;">View and manage this order in your admin panel:</p>
-    <a href="${appUrl}/nsa/orders"
+    <a href="${appUrl}/app/leads"
        style="display: inline-block; background: #EAB308; color: #1E293B; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
-      View Order Details
+      View Lead Details
     </a>
   </div>
 

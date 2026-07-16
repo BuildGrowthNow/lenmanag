@@ -51,10 +51,12 @@ async def _require_session(
 
 async def _job_response(job) -> JobResponse:
     job_doc = await lead_repository.get_job_doc(job.id)
-    lead_ids = list(job_doc.get("leadIds", [])) if job_doc else []
+    lead_ids_raw = list(job_doc.get("leadIds", [])) if job_doc else []
+    lead_ids = [str(lid) for lid in lead_ids_raw if lid is not None]
     metadata = dict(job_doc.get("metadata", {})) if job_doc else {}
     if not lead_ids:
-        lead_ids = [job_doc.get("leadId")] if job_doc and job_doc.get("leadId") else []
+        lead_id = job_doc.get("leadId") if job_doc else None
+        lead_ids = [str(lead_id)] if lead_id else []
     return JobResponse(job=job, leadIds=lead_ids, metadata=metadata)
 
 

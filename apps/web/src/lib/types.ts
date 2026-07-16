@@ -1,11 +1,5 @@
 export type ResourceStatus = "idle" | "loading" | "ready" | "empty" | "error" | "unauthorized";
 
-export type SessionUser = {
-  email: string;
-  name: string;
-  role: "operator" | "admin";
-};
-
 export type ExtractionHealth = {
   hasExtraction: boolean;
   crawlStatus: ExtractionStatus;
@@ -16,13 +10,6 @@ export type ExtractionHealth = {
   isRunning: boolean;
   isFailed: boolean;
   blockReason: string | null;
-};
-
-export type SessionResponse = {
-  authenticated: boolean;
-  user: SessionUser | null;
-  status: "active" | "inactive";
-  expiresAt: string | null;
 };
 
 export type DashboardSummary = {

@@ -353,7 +353,9 @@ def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only
     assert "https://cdn.brand.com/logo-contact.png" not in downloaded
 
 
-def _make_brief(approval_state: str = "approved") -> SiteBrief:
+from app.schemas.brief import BriefApprovalState
+
+def _make_brief(approval_state: BriefApprovalState = "approved") -> SiteBrief:
     ev = BriefEvidence(
         sourceKind="inferred",
         inferenceLabel="test",

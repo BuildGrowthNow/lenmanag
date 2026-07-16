@@ -37,7 +37,7 @@ class PurgeResult:
 class StorageStats:
     total_bytes: int = 0
     file_count: int = 0
-    by_type: Dict[str, int] = None
+    by_type: Dict[str, int] | None = None
 
 
 class AssetRetentionManager:
@@ -133,8 +133,10 @@ class AssetRetentionManager:
                 total += size
                 count += 1
                 # attempt to infer type by filename or parent dir
-                ext = f.suffix.lstrip(".").lower() or "bin"
-                stats.by_type[ext] = stats.by_type.get(ext, 0) + 1
+                if stats.by_type is not None:
+                    ext = f.suffix.lstrip(".").lower() or "bin"
+                    current_count = stats.by_type.get(ext, 0)
+                    stats.by_type[ext] = current_count + 1
             except Exception:
                 continue
         stats.total_bytes = total

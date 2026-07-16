@@ -122,7 +122,7 @@ def alpha_blend(hex_color: str, alpha: float) -> str:
 
 def generate_mesh_gradient(
     color1: str, color2: str, color3: str | None = None
-) -> dict[str, str]:
+) -> dict[str, str | list[str]]:
     """Generate a mesh gradient configuration."""
     if color3 is None:
         color3 = analogous(color1, 45)[0]
@@ -199,7 +199,7 @@ def generate_color_system(
     industry: IndustryType = "saas",
     mood: MoodType = "professional",
     dark_mode: bool = True,
-) -> dict[str, str | dict]:
+) -> dict[str, str | dict | bool]:
     """
     Generate a full 12+ color system from 1-3 source colors.
 

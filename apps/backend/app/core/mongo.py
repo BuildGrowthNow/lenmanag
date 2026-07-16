@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Union
 
 import mongomock
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from app.core.config import get_settings
 
-_client: Optional[AsyncIOMotorClient | "_AsyncMongoMockClient"] = None
+_client: Optional[Union[AsyncIOMotorClient, "_AsyncMongoMockClient"]] = None
 
 
 class _AsyncMongoMockCursor:
@@ -35,7 +35,7 @@ class _AsyncMongoMockCursor:
     async def to_list(self, length: Optional[int] = None) -> list[dict[str, Any]]:
         docs = list(self._documents)
         for key, direction in reversed(self._sort_fields):
-            docs.sort(key=lambda item, field=key: item.get(field), reverse=direction == -1)
+            docs.sort(key=lambda item, field=key: item.get(field) or "", reverse=direction == -1)  # type: ignore[arg-type]
         if self._skip:
             docs = docs[self._skip :]
         cap = self._limit if self._limit is not None else length
@@ -45,7 +45,7 @@ class _AsyncMongoMockCursor:
 
 
 class _AsyncMongoMockCollection:
-    def __init__(self, collection: mongomock.collection.Collection):
+    def __init__(self, collection: mongomock.collection.Collection):  # type: ignore[attr-defined]
         self._collection = collection
 
     async def insert_one(self, document: dict[str, Any]):
@@ -60,8 +60,14 @@ class _AsyncMongoMockCollection:
     async def update_one(self, *args, **kwargs):
         return self._collection.update_one(*args, **kwargs)
 
+    async def delete_one(self, *args, **kwargs):
+        return self._collection.delete_one(*args, **kwargs)
+
     async def delete_many(self, *args, **kwargs):
         return self._collection.delete_many(*args, **kwargs)
+
+    async def find_one_and_update(self, *args, **kwargs):
+        return self._collection.find_one_and_update(*args, **kwargs)
 
     async def find_one(self, *args, **kwargs) -> dict[str, Any] | None:
         doc = self._collection.find_one(*args, **kwargs)
@@ -79,11 +85,11 @@ class _AsyncMongoMockCollection:
 
 
 class _AsyncMongoMockDatabase:
-    def __init__(self, database: mongomock.database.Database):
+    def __init__(self, database: mongomock.database.Database):  # type: ignore[attr-defined]
         self._database = database
 
     def __getitem__(self, name: str) -> _AsyncMongoMockCollection:
-        return _AsyncMongoMockCollection(self._database[name])
+        return _AsyncMongoMockCollection(self._database[name])  # type: ignore[attr-defined]
 
 
 class _AsyncMongoMockClient:

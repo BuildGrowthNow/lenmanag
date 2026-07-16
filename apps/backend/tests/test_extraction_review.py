@@ -13,7 +13,7 @@ async def test_list_pages_returns_page_inventory():
 
     # Create a lead on a dedicated domain to avoid collisions with other tests
     req = LeadUpsertRequest(companyName="Test Co", websiteUrl="https://pages.example.com")
-    action = await lead_repository.create_lead(req)
+    action = await lead_repository.create_lead(req, user_id="test-user")
     lead = action.lead
     lead_id = lead.id
 
@@ -136,7 +136,7 @@ async def test_list_pages_returns_empty_for_no_extraction():
 
     # Create a lead without extraction
     req = LeadUpsertRequest(companyName="Test Co 2", websiteUrl="https://example2.com")
-    action = await lead_repository.create_lead(req)
+    action = await lead_repository.create_lead(req, user_id="test-user")
     lead = action.lead
     lead_id = lead.id
 
@@ -158,7 +158,7 @@ async def test_approve_brief_blocked_by_critical_gaps():
 
     # Create a lead
     req = LeadUpsertRequest(companyName="Test Co 3", websiteUrl="https://example3.com")
-    action = await lead_repository.create_lead(req)
+    action = await lead_repository.create_lead(req, user_id="test-user")
     lead = action.lead
     lead_id = lead.id
 
@@ -216,7 +216,7 @@ async def test_approve_brief_succeeds_without_critical_gaps():
 
     # Create a lead
     req = LeadUpsertRequest(companyName="Test Co 4", websiteUrl="https://example4.com")
-    action = await lead_repository.create_lead(req)
+    action = await lead_repository.create_lead(req, user_id="test-user")
     lead = action.lead
     lead_id = lead.id
 

@@ -85,32 +85,32 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
     summary_parts = []
 
     # Company info
-    summary_parts.append(f"## Company Information")
+    summary_parts.append("## Company Information")
     summary_parts.append(f"Name: {extraction.summary.companyName or 'Unknown'}")
     if extraction.summary.positioningSummary:
         summary_parts.append(f"Positioning: {extraction.summary.positioningSummary}")
 
     # Services
     if extraction.summary.serviceClues:
-        summary_parts.append(f"\n## Services")
+        summary_parts.append("\n## Services")
         for service in extraction.summary.serviceClues[:10]:
             summary_parts.append(f"- {service}")
 
     # Audience
     if extraction.summary.audienceClues:
-        summary_parts.append(f"\n## Target Audience")
+        summary_parts.append("\n## Target Audience")
         for audience in extraction.summary.audienceClues[:5]:
             summary_parts.append(f"- {audience}")
 
     # Tone
     if extraction.summary.toneClues:
-        summary_parts.append(f"\n## Tone & Voice")
+        summary_parts.append("\n## Tone & Voice")
         for tone in extraction.summary.toneClues[:3]:
             summary_parts.append(f"- {tone}")
 
     # Brand assets
     if extraction.brandAssetCues:
-        summary_parts.append(f"\n## Brand Assets")
+        summary_parts.append("\n## Brand Assets")
         colors = [c for c in extraction.brandAssetCues if c.assetType == "color"]
         if colors:
             summary_parts.append(f"Colors: {', '.join(c.value for c in colors[:3])}")
@@ -125,7 +125,7 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
 
     # Key content from sections
     if hasattr(extraction, "sectionInventory") and extraction.sectionInventory:
-        summary_parts.append(f"\n## Key Content Sections")
+        summary_parts.append("\n## Key Content Sections")
         for section in extraction.sectionInventory[:5]:
             if hasattr(section, "model_dump"):
                 section_data = section.model_dump()
@@ -142,7 +142,7 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
         if c.evidenceType and "testimonial" in c.evidenceType.lower()
     )
     if testimonial_count > 0:
-        summary_parts.append(f"\n## Social Proof")
+        summary_parts.append("\n## Social Proof")
         summary_parts.append(f"Found {testimonial_count} testimonials/reviews")
 
     return "\n".join(summary_parts)

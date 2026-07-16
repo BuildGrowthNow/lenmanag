@@ -20,6 +20,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
+import { SocialProofNotifications } from "@/components/landing/social-proof-notifications";
+import { AnimatedStats } from "@/components/landing/animated-stats";
+import { FloatingMockup } from "@/components/landing/floating-mockup";
+import { BentoFeatures } from "@/components/landing/bento-features";
+import { LogoWall } from "@/components/landing/logo-wall";
+import { TestimonialsSection } from "@/components/landing/testimonials-section";
+import { FAQSection } from "@/components/landing/faq-section";
 
 export default function LandingPage() {
   const [formData, setFormData] = useState({
@@ -114,6 +121,9 @@ export default function LandingPage() {
         }}
       />
 
+      {/* Social Proof Notifications */}
+      <SocialProofNotifications />
+
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
         {/* Animated Background */}
       <div className="fixed inset-0 opacity-30">
@@ -195,122 +205,26 @@ export default function LandingPage() {
             </motion.div>
           </motion.div>
 
-          {/* Stats */}
+          {/* Stats - Using Animated Stats Component */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.8 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-24 max-w-4xl mx-auto"
+            className="mt-24"
           >
-            {[
-              { icon: Clock, label: "3 Days", value: "Delivery" },
-              { icon: Users, label: "500+", value: "Clients" },
-              { icon: Star, label: "5.0", value: "Rating" },
-              { icon: TrendingUp, label: "98%", value: "Satisfaction" },
-            ].map((stat, i) => (
-              <motion.div
-                key={i}
-                whileHover={{ scale: 1.05 }}
-                className="text-center p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10"
-              >
-                <stat.icon className="w-8 h-8 mx-auto mb-3 text-yellow-500" />
-                <div className="text-3xl font-bold text-white">{stat.label}</div>
-                <div className="text-sm text-slate-400">{stat.value}</div>
-              </motion.div>
-            ))}
+            <AnimatedStats />
           </motion.div>
+
+          {/* Floating Mockup */}
+          <FloatingMockup />
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="relative px-6 py-24 bg-slate-900/50">
-        <div className="max-w-7xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-5xl font-bold mb-4">
-              Why Choose <span className="text-yellow-500">Us?</span>
-            </h2>
-            <p className="text-xl text-slate-400">
-              We handle everything while you focus on your business
-            </p>
-          </motion.div>
+      {/* Logo Wall */}
+      <LogoWall />
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                icon: Zap,
-                title: "Lightning Fast",
-                description:
-                  "Get your professional website in just 3 days. No endless revisions, no delays.",
-                color: "yellow",
-              },
-              {
-                icon: Palette,
-                title: "Custom Design",
-                description:
-                  "Every website is uniquely crafted to match your brand and vision perfectly.",
-                color: "purple",
-              },
-              {
-                icon: Code,
-                title: "Premium Tech",
-                description:
-                  "Built with cutting-edge technology on our proprietary platform for optimal performance.",
-                color: "blue",
-              },
-              {
-                icon: Rocket,
-                title: "Ready to Launch",
-                description:
-                  "Delivered complete and ready to go live. Hosting, SSL, and optimization included.",
-                color: "green",
-              },
-              {
-                icon: Globe,
-                title: "SEO Optimized",
-                description:
-                  "Built for search engines from the ground up. Get found by your customers.",
-                color: "pink",
-              },
-              {
-                icon: Users,
-                title: "Direct Support",
-                description:
-                  "Talk directly with us. No ticketing systems, no chatbots. Just real people.",
-                color: "orange",
-              },
-            ].map((feature, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1, duration: 0.5 }}
-                viewport={{ once: true }}
-                whileHover={{ y: -10, scale: 1.02 }}
-              >
-                <Card className="p-8 h-full bg-white/5 backdrop-blur-sm border-white/10 hover:border-yellow-500/50 transition-all hover:shadow-2xl hover:shadow-yellow-500/20">
-                  <div className="mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 flex items-center justify-center">
-                      <feature.icon className="w-7 h-7 text-yellow-500" />
-                    </div>
-                  </div>
-                  <h3 className="text-2xl font-bold mb-3 text-white">
-                    {feature.title}
-                  </h3>
-                  <p className="text-slate-400 leading-relaxed">
-                    {feature.description}
-                  </p>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Features Section - Using Bento Grid */}
+      <BentoFeatures />
 
       {/* How It Works */}
       <section className="relative px-6 py-24">
@@ -465,6 +379,12 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Testimonials Section */}
+      <TestimonialsSection />
+
+      {/* FAQ Section */}
+      <FAQSection />
 
       {/* Pricing & CTA */}
       <section id="pricing" className="relative px-6 py-24">

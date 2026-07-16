@@ -12,7 +12,7 @@ def test_operator_theme_override_applied():
     async def run_test():
         # Create a lead on a distinct domain to avoid cross-test collisions
         req = LeadUpsertRequest(companyName="Test Co", websiteUrl="https://override.example.com")
-        action = await lead_repository.create_lead(req)
+        action = await lead_repository.create_lead(req, user_id="test-user")
         lead = action.lead
         site_id = lead.id
 

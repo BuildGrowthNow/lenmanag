@@ -17,7 +17,7 @@ async def test_automatic_second_pass_visual_redesign_iteration():
     async def run_test() -> None:
         # Create lead and minimal extraction snapshot
         req = LeadUpsertRequest(companyName="Iter Co", websiteUrl="https://iter.example.com")
-        action = await lead_repository.create_lead(req)
+        action = await lead_repository.create_lead(req, user_id="test-user")
         lead = action.lead
         site_id = lead.id
 

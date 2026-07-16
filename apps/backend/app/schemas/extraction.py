@@ -173,7 +173,7 @@ class ExtractionSnapshot(BaseModel):
 
 class ExtractionJobResponse(BaseModel):
     job: JobSummary
-    extraction: ExtractionSnapshot
+    extraction: Optional[ExtractionSnapshot] = None
 
 
 class PageInventoryResponse(BaseModel):

@@ -10,7 +10,8 @@ client = httpx.Client(base_url=BASE_URL, timeout=300.0)
 # Login
 r = client.post("/auth/login", json={"email": EMAIL, "name": NAME})
 session_cookie = r.cookies.get("lenquant_session")
-client.cookies.set("lenquant_session", session_cookie)
+if session_cookie:
+    client.cookies.set("lenquant_session", session_cookie)
 print("Logged in")
 
 # Use the existing lead ID

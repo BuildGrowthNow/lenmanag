@@ -4,8 +4,11 @@ import asyncio
 from app.core.mongo import get_database
 
 async def main():
-    db = await get_database()
-    doc = await db.sites.find_one()
+    db = get_database()
+    if db is None:
+        print("Database not available")
+        return
+    doc = await db.sites.find_one()  # type: ignore[attr-defined]
     if doc:
         print(f"Slug: {doc.get('previewSlug')}, ID: {doc.get('_id') or doc.get('id')}")
     else:

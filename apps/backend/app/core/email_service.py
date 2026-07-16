@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from app.core.config import get_settings
 
@@ -9,7 +8,7 @@ settings = get_settings()
 
 async def send_verification_email(email: str, verification_token: str, base_url: str) -> bool:
     try:
-        from resend import Resend
+        from resend import Resend  # type: ignore[import-untyped]
 
         if not settings.resend_api_key:
             logger.warning("RESEND_API_KEY not configured, skipping email send")

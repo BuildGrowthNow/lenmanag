@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const SESSION_COOKIE = "lenquant_session";
-
 export function middleware(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
 
@@ -11,24 +9,24 @@ export function middleware(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
-  const hasSessionCookie = !!request.cookies.get(SESSION_COOKIE)?.value;
 
-  // Also check for JWT in localStorage (handled client-side) or Authorization header
+  // Auth is JWT-based and stored in localStorage (client-side only).
+  // The middleware can only gate routes at the server level using the
+  // Authorization header (present on server-to-server calls). For
+  // browser navigations the client-side layout handles the redirect.
   const hasAuthHeader = !!request.headers.get("authorization");
-  const isAuthenticated = hasSessionCookie || hasAuthHeader;
 
   // Allow access to auth pages without authentication
   if (pathname === "/login" || pathname === "/signup" || pathname === "/verify-email") {
-    // If already authenticated, redirect to dashboard from login/signup
-    if (isAuthenticated && (pathname === "/login" || pathname === "/signup")) {
-      return NextResponse.redirect(new URL("/app", request.url));
-    }
     return NextResponse.next();
   }
 
-  // Unauthenticated user on /app/* → redirect to login
-  if (pathname.startsWith("/app") && !isAuthenticated) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  // If an Authorization header is present on an /app/* request, let it through.
+  // Browser navigations without the header are handled by the client layout.
+  if (pathname.startsWith("/app") && !hasAuthHeader) {
+    // Don't hard-redirect here — the client layout will redirect once it
+    // checks localStorage. A server redirect would break client-side JWT auth.
+    return NextResponse.next();
   }
 
   return NextResponse.next();

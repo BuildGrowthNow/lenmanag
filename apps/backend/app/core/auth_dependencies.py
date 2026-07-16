@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 
-from fastapi import Cookie, Depends, HTTPException, Header
+from fastapi import Depends, HTTPException, Header
 
 from app.core.jwt_handler import decode_access_token
 from app.core.users import UserRepository

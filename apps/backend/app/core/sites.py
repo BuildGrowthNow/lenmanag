@@ -24,9 +24,12 @@ from app.schemas.brief import SiteBrief, VisualCritique, VisualRedesignBrief
 from app.schemas.extraction import ExtractionSnapshot
 from app.schemas.lead import JobSummary
 from app.schemas.site import (
+    BrandTokens,
+    CtaStrategy,
     GeneratedSite,
     GeneratedSiteVersion,
     GeneratedSiteVersionResponse,
+    HeroVariant,
     PaletteMode,
     PublishApprovalState,
     RefinementPromptRecord,
@@ -47,6 +50,7 @@ from app.schemas.site import (
     SiteReviewRecord,
     SiteReviewRequest,
     SiteScreenshotMetadata,
+    SiteSection,
     SiteSourceAttribution,
     ThemeLibraryResponse,
     ThemeVariant,
@@ -745,7 +749,7 @@ def _brand_tokens(
         [_asset_reference_from_cue(cue) for cue in logo_cues] if logo_cues else refs[:1]
     )
     typography_value = (
-        typography_cues[0]["value"] if typography_cues else theme["typographyPairing"]
+        typography_cues[0]["value"] if typography_cues else str(theme["typographyPairing"])
     )
     typography_kind = "source_backed" if typography_cues else "inferred"
     typography_refs = (
@@ -763,14 +767,14 @@ def _brand_tokens(
     visual_tone_value = tone_text or brief.toneProfile.value
     visual_tone_kind = "source_backed" if extraction.summary.toneClues else "inferred"
     visual_tone_refs = refs[:3]
-    motion_value = theme["motionPreset"]
+    motion_value = str(theme["motionPreset"])
     motion_kind = "inferred"
-    layout_value = theme["spacingStyle"]
+    layout_value = str(theme["spacingStyle"])
     layout_kind = "inferred"
     return {
         "paletteMode": palette_mode,
         "primaryColor": _token(
-            primary_value,
+            str(primary_value),
             source_kind="source_backed" if color_cues else "inferred",
             inference_label="Taken directly from extracted brand color cues."
             if color_cues
@@ -782,7 +786,7 @@ def _brand_tokens(
             references=primary_refs,
         ),
         "secondaryColor": _token(
-            secondary_value,
+            str(secondary_value),
             source_kind="source_backed" if len(color_cues) > 1 else "inferred",
             inference_label="Taken from the second captured brand color."
             if len(color_cues) > 1
@@ -794,7 +798,7 @@ def _brand_tokens(
             references=secondary_refs,
         ),
         "accentColor": _token(
-            accent_value,
+            str(accent_value),
             source_kind="source_backed" if len(color_cues) > 2 else "inferred",
             inference_label="Taken from the extracted accent color cue."
             if len(color_cues) > 2
@@ -903,7 +907,7 @@ def _hero_variant(
     # Build a polished, visitor-facing headline from brief + extraction.
     raw_hero = _strip_instruction_leads(brief.recommendedHero.value)
     company_summary = _strip_instruction_leads(brief.companySummary.value)
-    positioning = _strip_instruction_leads(extraction.summary.positioningSummary)
+    positioning = _strip_instruction_leads(extraction.summary.positioningSummary or "")
 
     # Collect basic identity signals from pageInventory (home and key pages).
     homepage_title: str | None = None
@@ -1148,7 +1152,7 @@ def _section_stack(
 ) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
     company_summary = _strip_instruction_leads(brief.companySummary.value)
-    positioning = _strip_instruction_leads(extraction.summary.positioningSummary)
+    positioning = _strip_instruction_leads(extraction.summary.positioningSummary or "")
     section_refs = refs[:4]
 
     page_refs = [r for r in refs if r.get("kind") == "page" and r.get("excerpt")]
@@ -1404,7 +1408,7 @@ def _section_stack(
     # Append a proof/highlights section only if we don't already have a proof-like
     # section in this stack.
     existing_kinds = {
-        _canonical_section_type(section.get("kind") or section.get("title"))
+        _canonical_section_type(section.get("kind") or section.get("title") or "")
         or section.get("kind")
         for section in sections
     }
@@ -2295,7 +2299,7 @@ class SiteRepository:
         """
         Returns batch-level diversity metrics for the last N sites.
         """
-        sites = await self._list_sites(limit=limit)
+        sites = await self._list_sites(limit=limit, offset=0)
 
         # Compute theme distribution
         theme_counts = Counter(site.themeKey for site in sites)
@@ -3190,6 +3194,8 @@ class SiteRepository:
     async def run_generation_job(
         self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None = None
     ) -> GeneratedSite | None:
+        from typing import cast
+        from ..schemas.site import PaletteMode
         await self._maybe_ensure_indexes()
         settings = get_settings()
         lead = await lead_repository.get_lead(site_id)
@@ -3530,13 +3536,13 @@ class SiteRepository:
         logger.info(f"Loaded {len(awwwards_patterns)} Awwwards patterns for {detected_industry}")
 
         # Get hero pattern recommendation based on assets
+        image_count = sum(1 for c in extraction.brandAssetCues if c.assetType == "image")
         hero_pattern_recommendation = get_hero_pattern_recommendation(
             industry=detected_industry,
             available_assets={
                 "has_video": has_video,
                 "has_product_image": has_product_image,
                 "has_hero_images": bool(hero_image_cues),
-                "image_count": sum(1 for c in extraction.brandAssetCues if c.assetType == "image"),
             }
         )
 
@@ -3644,7 +3650,7 @@ class SiteRepository:
             theme_rationale = f"Operator selected theme {theme['name']}"
             # Recompute baselines using the explicit theme and the (possibly) applied palette
             recomputed_brand_tokens = _brand_tokens(
-                palette_mode=palette_mode,
+                palette_mode=cast(PaletteMode, palette_mode),
                 theme=theme,
                 brief=brief,
                 extraction=extraction,
@@ -3673,7 +3679,7 @@ class SiteRepository:
 
             # Recompute diversity score with the new theme
             diversity_score = _compute_diversity_score(
-                batch_sites, theme["themeKey"], palette_mode
+                batch_sites, theme["themeKey"], cast(PaletteMode, palette_mode)
             )
 
         # Log final applied section stack before quality scoring / QA
@@ -3730,12 +3736,12 @@ class SiteRepository:
             extraction=extraction,
             site_sections=applied_sections,
             brand_tokens=applied_tokens,
-            palette_mode=palette_mode,
+            palette_mode=cast(PaletteMode, palette_mode),
         )
         comparison_entries = _comparison_entries(
             brief=brief,
             theme=theme,
-            palette_mode=palette_mode,
+            palette_mode=cast(PaletteMode, palette_mode),
             hero=applied_hero,
             sections=applied_sections,
             cta_strategy=applied_cta,
@@ -3751,7 +3757,7 @@ class SiteRepository:
             cursor = database["generated_sites"].find({}, {"previewSlug": 1})
             # Handle both real MongoDB cursor and mock cursor
             try:
-                async for doc in cursor:
+                async for doc in cursor:  # type: ignore[attr-defined]
                     if slug := doc.get("previewSlug"):
                         existing_slugs.add(slug)
             except TypeError:
@@ -3789,12 +3795,12 @@ class SiteRepository:
             themeKey=theme["themeKey"],
             themeName=theme["name"],
             themeRationale=theme_rationale,
-            paletteMode=palette_mode,
+            paletteMode=cast(PaletteMode, palette_mode),
             paletteRationale=palette_rationale,
-            brandTokens=applied_tokens,
-            heroVariant=applied_hero,
-            sectionStack=applied_sections,
-            ctaStrategy=applied_cta,
+            brandTokens=BrandTokens.model_validate(applied_tokens),
+            heroVariant=HeroVariant.model_validate(applied_hero),
+            sectionStack=[SiteSection.model_validate(s) for s in applied_sections],
+            ctaStrategy=CtaStrategy.model_validate(applied_cta),
             navigationConfig=navigation_config,
             awwwardsPatternMetadata=pattern_metadata,
             qualityScore=0,
@@ -3932,7 +3938,7 @@ class SiteRepository:
                 brief=brief,
                 extraction=extraction,
                 theme=theme,
-                palette_mode=palette_mode,
+                palette_mode=cast(PaletteMode, palette_mode),
             ),
             "browserReviewState": _review_state_from(current),
             "publishApprovalState": _publish_approval_state(
@@ -3941,7 +3947,7 @@ class SiteRepository:
             "screenshotRefs": _screenshot_ref_docs(current),
             "latestReviewId": current.latestReviewId if current else None,
             "handoffRecordId": current.handoffRecordId if current else None,
-            "diversityNotes": _diversity_notes(current, theme, palette_mode, refs),
+            "diversityNotes": _diversity_notes(current, theme, cast(PaletteMode, palette_mode), refs),
             "diversityScore": diversity_score,
             "layoutHash": layout_hash,
             "previewSlug": current.previewSlug if current else friendly_slug,
@@ -3988,7 +3994,7 @@ class SiteRepository:
                 brief=brief,
                 extraction=extraction,
                 theme=theme,
-                palette_mode=palette_mode,
+                palette_mode=cast(PaletteMode, palette_mode),
             ),
             "browserReviewState": _review_state_from(current),
             "publishApprovalState": _publish_approval_state(
@@ -3997,7 +4003,7 @@ class SiteRepository:
             "screenshotRefs": _screenshot_ref_docs(current),
             "latestReviewId": current.latestReviewId if current else None,
             "handoffRecordId": current.handoffRecordId if current else None,
-            "diversityNotes": _diversity_notes(current, theme, palette_mode, refs),
+            "diversityNotes": _diversity_notes(current, theme, cast(PaletteMode, palette_mode), refs),
             "diversityScore": diversity_score,
             "layoutHash": layout_hash,
             "previewSlug": current.previewSlug if current else friendly_slug,
