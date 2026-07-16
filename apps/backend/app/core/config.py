@@ -42,18 +42,22 @@ class Settings(BaseSettings):
     gemini_vision_model: str = "gemini-2.0-flash"
 
     # Amazon Bedrock Configuration (used when llm_provider=bedrock)
-    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-6-v1"
+    bedrock_model_id: str = (
+        "us.anthropic.claude-sonnet-4-6-v1:0"  # Fixed: added :0 suffix
+    )
     bedrock_region: str = "us-east-1"
-    bedrock_max_tokens: int = 4096
-    bedrock_timeout_seconds: int = 300  # 5 minutes for complex code generation
-    # Fallback models if primary fails 2-3x or times out 30-60s+
+    bedrock_max_tokens: int = 8192  # Increased for full page code generation
+    bedrock_timeout_seconds: int = (
+        600  # 10 minutes for complex code generation (up from 5min)
+    )
+    # Fallback models if primary fails 2-3x or times out
     # Priority: Qwen 3 coders (fastest), then Amazon Nova, then DeepSeek R1
     bedrock_fallback_models: list[str] = [
-        "qwen.qwen3-coder-480b-a35b-v1:0",
-        "qwen.qwen3-coder-next-v1:0",
-        "qwen.qwen3-coder-30b-a3b-v1:0",
-        "us.amazon.nova-lite-v1:0",
-        "us.amazon.deepseek-r1-v1:0",
+        "qwen.qwen3-coder-next",  # Fastest Qwen coder
+        "qwen.qwen3-coder-30b-a3b-v1:0",  # Latest Qwen
+        "deepseek.v3.2", 
+        "us.amazon.nova-pro-v1:0", 
+        "mistral.mistral-large-3-675b-instruct",  # DeepSeek R1
     ]
 
     # Visual Redesign Configuration

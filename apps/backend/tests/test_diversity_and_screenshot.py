@@ -439,14 +439,13 @@ def test_theme_diversity_constraint():
     )
     assert allowed is True
 
-    # Larger batch where adding would breach 40% should be blocked
-    # 5 existing minimal-luxe sites, adding 1 more = 6/6 = 100% > 40%
+    # Diversity constraint is disabled - always allows generation
     large_batch = [mock_sites[0]] * 5
     allowed, reason = _check_theme_diversity_constraint(
         large_batch, "minimal-luxe", "zinc"
     )
-    assert allowed is False
-    assert "would exceed 40%" in reason
+    assert allowed is True
+    assert reason == ""
 
 
 def test_diversity_score_computation():

@@ -288,7 +288,7 @@ async def regenerate_site_with_prompt(
         if str(exc) == "brief_not_approved":
             raise HTTPException(
                 status_code=409,
-                detail="Approve the site brief before generating a preview.",
+                detail="Approve the master brief before generating a preview.",
             ) from exc
         if str(exc) == "extraction_required":
             raise HTTPException(
@@ -329,7 +329,7 @@ async def generate_site(
         if str(exc) == "brief_not_approved":
             raise HTTPException(
                 status_code=409,
-                detail="Approve the site brief before generating a preview.",
+                detail="Approve the master brief before generating a preview.",
             ) from exc
         if str(exc) == "extraction_required":
             raise HTTPException(
@@ -363,7 +363,7 @@ async def republish_site(
         if str(exc) == "brief_not_approved":
             raise HTTPException(
                 status_code=409,
-                detail="Approve the site brief before republishing a preview.",
+                detail="Approve the master brief before republishing a preview.",
             ) from exc
         if str(exc) == "extraction_required":
             raise HTTPException(

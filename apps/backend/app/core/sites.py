@@ -2083,55 +2083,14 @@ def _site_source_attribution(
 
 
 def _check_theme_diversity_constraint(
-    current_batch_sites: list[GeneratedSite],
-    proposed_theme_key: str,
-    proposed_palette_mode: PaletteMode,
+    current_batch_sites: list[GeneratedSite],  # noqa: ARG001
+    proposed_theme_key: str,  # noqa: ARG001
+    proposed_palette_mode: PaletteMode,  # noqa: ARG001
 ) -> tuple[bool, str]:
+    """Theme diversity constraint - always allows generation.
+
+    Diversity tracking is for metrics only, not a hard gate.
     """
-    Check if the proposed theme/palette combination would violate diversity rules.
-
-    Rules:
-    - No single theme should exceed 40% of the batch (last 50 sites)
-    - No single palette mode should exceed 60% of the batch
-
-    Returns:
-        (allowed: bool, reason: str)
-    """
-    if not current_batch_sites:
-        return True, ""
-
-    batch_size = len(current_batch_sites)
-    new_batch_size = batch_size + 1
-
-    # For small sample sizes, relaxed thresholds to allow generation.
-    # With only a few sites in the batch, strict diversity rules block generation.
-    if new_batch_size < 10:
-        return True, ""
-    theme_counts = Counter(site.themeKey for site in current_batch_sites)
-    palette_counts = Counter(site.paletteMode for site in current_batch_sites)
-
-    proposed_theme_count = theme_counts.get(proposed_theme_key, 0) + 1
-    proposed_palette_count = palette_counts.get(proposed_palette_mode, 0) + 1
-
-    theme_percentage = (
-        (proposed_theme_count / new_batch_size) * 100 if new_batch_size > 0 else 0
-    )
-    palette_percentage = (
-        (proposed_palette_count / new_batch_size) * 100 if new_batch_size > 0 else 0
-    )
-
-    if theme_percentage > 40:
-        return (
-            False,
-            f"Theme '{proposed_theme_key}' would exceed 40% of the batch ({theme_percentage:.1f}%). Consider a different theme.",
-        )
-
-    if palette_percentage > 60:
-        return (
-            False,
-            f"Palette mode '{proposed_palette_mode}' would exceed 60% of the batch ({palette_percentage:.1f}%). Consider a different palette.",
-        )
-
     return True, ""
 
 
@@ -3042,15 +3001,14 @@ class SiteRepository:
         if lead is None:
             return None
 
-        # Check for master brief first (new system), fall back to legacy brief
+        # Check for master brief first (AI-native generation), fall back to legacy brief
         master_brief = await lead_repository.get_master_brief(site_id)
         brief = await lead_repository.get_brief(site_id)
 
         # Allow generation if EITHER master brief OR legacy brief is approved
         has_approved_brief = (
-            (master_brief is not None and master_brief.approvalState == "approved") or
-            (brief is not None and brief.approvalState == "approved")
-        )
+            master_brief is not None and master_brief.approvalState == "approved"
+        ) or (brief is not None and brief.approvalState == "approved")
         if not has_approved_brief:
             raise ValueError("brief_not_approved")
 
@@ -3086,7 +3044,7 @@ class SiteRepository:
                                 prompt_text = _text(item.get("promptText"))
                                 break
 
-                if prompt_text:
+                if prompt_text and brief:
                     extraction_summary = _text(extraction.summary.positioningSummary)
                     brief_summary = _text(brief.companySummary.value)
                     brand_tokens_summary = ""
@@ -3140,7 +3098,10 @@ class SiteRepository:
                     auto_refinement = _auto_refinement_from_improvement_brief(
                         current.improvementRecommendations  # type: ignore[arg-type]
                     )
-                    if auto_refinement.get("componentSuggestions"):
+                    if (
+                        auto_refinement.get("componentSuggestions")
+                        and brief is not None
+                    ):
                         updated_visual = _apply_refinement_to_visual_redesign(
                             brief=brief, refinement=auto_refinement
                         )
@@ -3159,8 +3120,9 @@ class SiteRepository:
         next_version = int(current.version if current else 0) + 1
         job_type = "site_generate" if current is None else "site_republish"
 
-        # Check diversity constraints before generation
-        if not request or not request.force:
+        # Check diversity constraints before generation (only for legacy brief path)
+        # Master brief path skips diversity checks as AI generation handles variety naturally
+        if brief and (not request or not request.force):
             batch_sites = [
                 site
                 for site in await self._list_sites(limit=50, offset=0)
@@ -3229,8 +3191,12 @@ class SiteRepository:
             metadata={
                 "siteId": site_id,
                 "leadId": site_id,
-                "briefId": brief.id,
-                "briefVersion": brief.version,
+                "briefId": brief.id
+                if brief
+                else (master_brief.id if master_brief else ""),
+                "briefVersion": brief.version
+                if brief
+                else (master_brief.version if master_brief else 0),
                 "nextVersion": next_version,
                 "request": request.model_dump() if request else {},
             },
@@ -3277,9 +3243,8 @@ class SiteRepository:
 
         brief = await lead_repository.get_brief(site_id)
         # Allow generation if EITHER master brief OR legacy brief is approved
-        has_approved_brief = (
-            use_ai_generation or
-            (brief is not None and brief.approvalState == "approved")
+        has_approved_brief = use_ai_generation or (
+            brief is not None and brief.approvalState == "approved"
         )
         if not has_approved_brief:
             raise ValueError("brief_not_approved")
@@ -3294,12 +3259,13 @@ class SiteRepository:
                 "AI generation mode: Master brief %s approved",
                 master_brief.id if master_brief else "unknown",
             )
-        logger.info(
-            "Brief %s v%s with %d recommended sections",
-            brief.id,
-            brief.version,
-            len(getattr(brief, "recommendedSections", []) or []),
-        )
+        if brief:
+            logger.info(
+                "Legacy Brief %s v%s with %d recommended sections",
+                brief.id,
+                brief.version,
+                len(getattr(brief, "recommendedSections", []) or []),
+            )
         logger.info(
             "Extraction: %d citations, %d brand cues, %d extracted sections",
             len(extraction.sourceCitations),
@@ -3321,11 +3287,57 @@ class SiteRepository:
             metadata={
                 "siteId": site_id,
                 "leadId": site_id,
-                "briefId": brief.id,
-                "briefVersion": brief.version,
+                "briefId": brief.id
+                if brief
+                else (master_brief.id if master_brief else ""),
+                "briefVersion": brief.version
+                if brief
+                else (master_brief.version if master_brief else 0),
                 "nextVersion": next_version,
             },
         )
+
+        # If we only have master_brief (no legacy brief), use AI-native generation
+        if brief is None and use_ai_generation and master_brief is not None:
+            from app.core.ai_site_generation import generate_landing_page_code
+
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                progress=40,
+                step="Generating landing page code from master brief",
+            )
+
+            result = await generate_landing_page_code(
+                master_brief=master_brief,
+                extraction=extraction,
+                site_id=site_id,
+            )
+
+            if not result.get("success"):
+                await lead_repository._update_job(  # noqa: SLF001
+                    job_id,
+                    status="failed",
+                    progress=100,
+                    step="Code generation failed",
+                    error_message=result.get("error", "Unknown error"),
+                    finished=True,
+                    lead_ids=[site_id],
+                )
+                return None
+
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                progress=100,
+                step="Generation complete",
+                status="completed",
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return await self.get_site(site_id)
+
+        # Legacy brief path - brief is guaranteed non-None here
+        assert brief is not None
+
         await lead_repository._update_job(
             job_id, progress=35, step="Building source-safe brand tokens"
         )  # noqa: SLF001

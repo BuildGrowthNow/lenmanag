@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import time
 from typing import Any, Optional
 
 import boto3
@@ -13,26 +14,47 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+FAST_TIMEOUT_SECONDS = 60
+"""Per-model timeout before falling back to the next model in the chain."""
+
 
 class BedrockClient:
     """Wrapper around Amazon Bedrock for text and vision analysis with fallback models."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         settings = get_settings()
         self.model_id = settings.bedrock_model_id
         self.region = settings.bedrock_region
         self.max_tokens = settings.bedrock_max_tokens
         self.timeout_seconds = settings.bedrock_timeout_seconds
         self.fallback_models = settings.bedrock_fallback_models
-        self.consecutive_timeouts = 0
+        self._model_failures: dict[str, int] = {}
 
+        self._clients: dict[str, Any] = {}
+        self._clients[self.region] = self._create_client(self.region)
+
+    def _create_client(self, region: str) -> Any:
         boto_config = BotoConfig(
-            region_name=self.region,
-            retries={"max_attempts": 3, "mode": "adaptive"},
-            connect_timeout=self.timeout_seconds,
-            read_timeout=self.timeout_seconds,
+            region_name=region,
+            retries={"max_attempts": 2, "mode": "adaptive"},
+            connect_timeout=30,
+            read_timeout=FAST_TIMEOUT_SECONDS,
         )
-        self.client = boto3.client("bedrock-runtime", config=boto_config)
+        return boto3.client("bedrock-runtime", config=boto_config)
+
+    def _get_client_for_model(self, model_id: str) -> Any:  # noqa: ARG002
+        """Get a boto3 client appropriate for the model (handles cross-region)."""
+        return self._clients[self.region]
+
+    def _should_skip_model(self, model_id: str) -> bool:
+        """Skip models that have failed 3+ consecutive times recently."""
+        return self._model_failures.get(model_id, 0) >= 3
+
+    def _record_failure(self, model_id: str) -> None:
+        self._model_failures[model_id] = self._model_failures.get(model_id, 0) + 1
+
+    def _record_success(self, model_id: str) -> None:
+        self._model_failures.pop(model_id, None)
 
     async def generate_text(
         self,
@@ -41,46 +63,53 @@ class BedrockClient:
         max_tokens: int = 2048,
     ) -> str:
         """Generate text response from Bedrock with automatic fallback to alternate models."""
-        model_to_try = self.model_id
         models_to_try = [self.model_id] + self.fallback_models
+        models_to_try = [m for m in models_to_try if not self._should_skip_model(m)]
 
+        if not models_to_try:
+            self._model_failures.clear()
+            models_to_try = [self.model_id] + self.fallback_models
+
+        last_error: Exception | None = None
         for i, model_to_try in enumerate(models_to_try):
+            start = time.monotonic()
             try:
-                return await self._invoke_bedrock(
+                result = await self._invoke_bedrock(
                     model_id=model_to_try,
                     prompt=prompt,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
-            except (TimeoutError, Exception) as e:
-                error_str = str(e)
-                is_timeout = (
-                    "timeout" in error_str.lower() or
-                    "read timeout" in error_str.lower() or
-                    isinstance(e, TimeoutError)
+                elapsed = time.monotonic() - start
+                logger.info(
+                    "Bedrock generation succeeded with %s in %.1fs",
+                    model_to_try,
+                    elapsed,
                 )
-
-                if is_timeout:
-                    self.consecutive_timeouts += 1
-                else:
-                    self.consecutive_timeouts = 0
+                self._record_success(model_to_try)
+                return result
+            except Exception as e:
+                last_error = e
+                elapsed = time.monotonic() - start
+                error_str = str(e).lower()
+                is_timeout = "timeout" in error_str or "read timeout" in error_str
 
                 logger.warning(
-                    f"Bedrock generation failed with model {model_to_try} "
-                    f"(timeout={is_timeout}, attempt={i+1}/{len(models_to_try)}): {e}"
+                    "Bedrock model %s failed (timeout=%s, %.1fs, attempt %d/%d): %s",
+                    model_to_try,
+                    is_timeout,
+                    elapsed,
+                    i + 1,
+                    len(models_to_try),
+                    e,
                 )
+                self._record_failure(model_to_try)
 
-                # If this was the last model, raise the error
-                if i == len(models_to_try) - 1:
-                    logger.error(
-                        f"All Bedrock models exhausted. Last error: {e}"
-                    )
-                    raise ValueError(f"Bedrock text generation failed after all fallbacks: {e}")
+        raise ValueError(
+            f"Bedrock text generation failed after all fallbacks: {last_error}"
+        )
 
-        # Should never reach here, but satisfy type checker
-        raise ValueError("Bedrock text generation failed: no models to try")
-
-    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=2, max=5))
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=2, max=8))
     async def _invoke_bedrock(
         self,
         model_id: str,
@@ -89,31 +118,26 @@ class BedrockClient:
         max_tokens: int = 2048,
     ) -> str:
         """Internal method to invoke Bedrock with a specific model."""
-        try:
-            body = json.dumps(
-                {
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    "messages": [{"role": "user", "content": prompt}],
-                }
-            )
-            response = self.client.invoke_model(
-                modelId=model_id,
-                contentType="application/json",
-                accept="application/json",
-                body=body,
-            )
-            result = json.loads(response["body"].read())
-            text = result["content"][0]["text"]
-            if not text:
-                raise ValueError("Empty response from Bedrock")
-            # Reset timeout counter on success
-            self.consecutive_timeouts = 0
-            return text
-        except Exception as e:
-            logger.error(f"Bedrock invocation failed for model {model_id}: {e}")
-            raise
+        body = json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+        )
+        client = self._get_client_for_model(model_id)
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=body,
+        )
+        result = json.loads(response["body"].read())
+        text = result["content"][0]["text"]
+        if not text:
+            raise ValueError("Empty response from Bedrock")
+        return text
 
     async def analyze_image(
         self,
@@ -125,10 +149,16 @@ class BedrockClient:
     ) -> str:
         """Analyze image with Bedrock Claude Vision with fallback models."""
         models_to_try = [self.model_id] + self.fallback_models
+        models_to_try = [m for m in models_to_try if not self._should_skip_model(m)]
 
+        if not models_to_try:
+            self._model_failures.clear()
+            models_to_try = [self.model_id] + self.fallback_models
+
+        last_error: Exception | None = None
         for i, model_to_try in enumerate(models_to_try):
             try:
-                return await self._invoke_bedrock_vision(
+                result = await self._invoke_bedrock_vision(
                     model_id=model_to_try,
                     prompt=prompt,
                     image_data=image_data,
@@ -136,20 +166,24 @@ class BedrockClient:
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
-            except (TimeoutError, Exception) as e:
-                if i == len(models_to_try) - 1:
-                    logger.error(
-                        f"All Bedrock models exhausted for vision analysis. Last error: {e}"
-                    )
-                    raise ValueError(f"Bedrock vision analysis failed after all fallbacks: {e}")
+                self._record_success(model_to_try)
+                return result
+            except Exception as e:
+                last_error = e
                 logger.warning(
-                    f"Vision analysis failed with model {model_to_try}, trying next: {e}"
+                    "Vision analysis failed with model %s (attempt %d/%d): %s",
+                    model_to_try,
+                    i + 1,
+                    len(models_to_try),
+                    e,
                 )
+                self._record_failure(model_to_try)
 
-        # Should never reach here, but satisfy type checker
-        raise ValueError("Bedrock vision analysis failed: no models to try")
+        raise ValueError(
+            f"Bedrock vision analysis failed after all fallbacks: {last_error}"
+        )
 
-    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=2, max=5))
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=2, max=8))
     async def _invoke_bedrock_vision(
         self,
         model_id: str,
@@ -160,46 +194,42 @@ class BedrockClient:
         max_tokens: int = 2048,
     ) -> str:
         """Internal method to invoke Bedrock vision with a specific model."""
-        try:
-            encoded = base64.b64encode(image_data).decode()
-            body = json.dumps(
-                {
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "image",
-                                    "source": {
-                                        "type": "base64",
-                                        "media_type": image_mime_type,
-                                        "data": encoded,
-                                    },
+        encoded = base64.b64encode(image_data).decode()
+        body = json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": image_mime_type,
+                                    "data": encoded,
                                 },
-                                {"type": "text", "text": prompt},
-                            ],
-                        }
-                    ],
-                }
-            )
-            response = self.client.invoke_model(
-                modelId=model_id,
-                contentType="application/json",
-                accept="application/json",
-                body=body,
-            )
-            result = json.loads(response["body"].read())
-            text = result["content"][0]["text"]
-            if not text:
-                raise ValueError("Empty response from Bedrock Vision")
-            self.consecutive_timeouts = 0
-            return text
-        except Exception as e:
-            logger.error(f"Bedrock vision invocation failed for model {model_id}: {e}")
-            raise
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+            }
+        )
+        client = self._get_client_for_model(model_id)
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=body,
+        )
+        result = json.loads(response["body"].read())
+        text = result["content"][0]["text"]
+        if not text:
+            raise ValueError("Empty response from Bedrock Vision")
+        return text
 
     async def batch_generate_text(
         self,
@@ -207,13 +237,12 @@ class BedrockClient:
         temperature: float = 0.7,
         max_tokens: int = 2048,
     ) -> list[str]:
-        """Generate multiple text responses in parallel."""
-        import asyncio
-
-        tasks = [
-            self.generate_text(prompt, temperature, max_tokens) for prompt in prompts
-        ]
-        return await asyncio.gather(*tasks)
+        """Generate multiple text responses sequentially (avoids rate limiting)."""
+        results: list[str] = []
+        for prompt in prompts:
+            result = await self.generate_text(prompt, temperature, max_tokens)
+            results.append(result)
+        return results
 
     async def refine_brief_with_operator_prompt(
         self,
@@ -271,7 +300,7 @@ class BedrockClient:
         try:
             return json.loads(response)
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from response: {response}")
+            logger.error(f"Failed to parse JSON from response: {response[:500]}")
             raise ValueError(f"Invalid JSON in LLM response: {e}")
 
 
