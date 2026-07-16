@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  Zap,
   Sparkles,
   CheckCircle2,
   ArrowRight,
@@ -11,15 +10,12 @@ import {
   Palette,
   Code,
   Rocket,
-  Star,
-  Globe,
   Users,
-  TrendingUp
+  PartyPopper,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
 import { SocialProofNotifications } from "@/components/landing/social-proof-notifications";
 import { AnimatedStats } from "@/components/landing/animated-stats";
 import { FloatingMockup } from "@/components/landing/floating-mockup";
@@ -27,6 +23,8 @@ import { BentoFeatures } from "@/components/landing/bento-features";
 import { LogoWall } from "@/components/landing/logo-wall";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
 import { FAQSection } from "@/components/landing/faq-section";
+import { PricingConfigurator } from "@/components/landing/pricing-configurator";
+import { type SelectedAddOns } from "@/lib/pricing";
 
 export default function LandingPage() {
   const [formData, setFormData] = useState({
@@ -36,8 +34,26 @@ export default function LandingPage() {
     phone: "",
     projectDetails: "",
   });
+  const [selectedAddOns, setSelectedAddOns] = useState<SelectedAddOns>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [step, setStep] = useState<"configure" | "details">("configure");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("success") === "true") {
+      setShowSuccess(true);
+    }
+  }, []);
+
+  const handleCheckout = (addOns: SelectedAddOns) => {
+    setSelectedAddOns(addOns);
+    setStep("details");
+    setTimeout(() => {
+      document.getElementById("order-form")?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,39 +61,30 @@ export default function LandingPage() {
     setSubmitError(null);
 
     try {
-      // Submit lead data to backend
-      const response = await fetch("/api/leads", {
+      const response = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          addOns: selectedAddOns,
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to submit form");
+        throw new Error(data.error || "Failed to create checkout");
       }
 
-      // Redirect to Stripe payment
-      const paymentLink = process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK;
-      if (paymentLink && paymentLink !== "#") {
-        window.location.href = paymentLink;
-      } else {
-        // Fallback if payment link not configured
-        alert("Thank you! We'll contact you within 24 hours.");
-        setFormData({
-          name: "",
-          email: "",
-          company: "",
-          phone: "",
-          projectDetails: "",
-        });
-        setIsSubmitting(false);
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
       }
     } catch (error) {
-      console.error("Error submitting form:", error);
+      console.error("Error creating checkout:", error);
       setSubmitError(
-        error instanceof Error ? error.message : "Failed to submit form. Please try again."
+        error instanceof Error
+          ? error.message
+          : "Failed to process. Please try again."
       );
       setIsSubmitting(false);
     }
@@ -88,6 +95,51 @@ export default function LandingPage() {
   ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  if (showSuccess) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white flex items-center justify-center px-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center max-w-lg"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2, type: "spring" }}
+            className="w-20 h-20 mx-auto mb-8 rounded-full bg-green-500/20 flex items-center justify-center"
+          >
+            <PartyPopper className="w-10 h-10 text-green-400" />
+          </motion.div>
+          <h1 className="text-4xl font-bold mb-4">Payment Confirmed!</h1>
+          <p className="text-xl text-slate-300 mb-6">
+            Thank you for your order. We&apos;ve started working on your website.
+          </p>
+          <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-left space-y-3 mb-8">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+              <span className="text-slate-300">Payment received successfully</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+              <span className="text-slate-300">Confirmation email sent</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Clock className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+              <span className="text-slate-300">Your website will be ready within 3 days</span>
+            </div>
+          </div>
+          <p className="text-sm text-slate-400">
+            Questions? Contact us at{" "}
+            <a href="mailto:fern2gue@gmail.com" className="text-yellow-500 hover:underline">
+              fern2gue@gmail.com
+            </a>
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -111,7 +163,6 @@ export default function LandingPage() {
               price: "1000",
               priceCurrency: "USD",
               availability: "https://schema.org/InStock",
-              validFrom: new Date().toISOString(),
             },
             areaServed: {
               "@type": "Place",
@@ -126,349 +177,285 @@ export default function LandingPage() {
 
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-hidden">
         {/* Animated Background */}
-      <div className="fixed inset-0 opacity-30">
-        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
-        <motion.div
-          className="absolute top-0 -left-4 w-96 h-96 bg-yellow-500/30 rounded-full mix-blend-multiply filter blur-3xl"
-          animate={{
-            x: [0, 100, 0],
-            y: [0, 50, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-        <motion.div
-          className="absolute top-0 right-4 w-96 h-96 bg-purple-500/20 rounded-full mix-blend-multiply filter blur-3xl"
-          animate={{
-            x: [0, -100, 0],
-            y: [0, 100, 0],
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-      </div>
-
-      {/* Hero Section */}
-      <section className="relative px-6 pt-20 pb-32">
-        <div className="max-w-7xl mx-auto">
+        <div className="fixed inset-0 opacity-30">
+          <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center"
-          >
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring" }}
-              className="inline-flex items-center gap-2 px-4 py-2 mb-8 bg-yellow-500/10 border border-yellow-500/20 rounded-full"
-            >
-              <Sparkles className="w-4 h-4 text-yellow-500" />
-              <span className="text-sm font-medium text-yellow-500">
-                Premium Website Generation
-              </span>
-            </motion.div>
-
-            <h1 className="text-6xl md:text-8xl font-bold mb-6 bg-gradient-to-r from-white via-yellow-100 to-white bg-clip-text text-transparent">
-              Your Website.
-              <br />
-              <span className="text-yellow-500">In 3 Days.</span>
-            </h1>
-
-            <p className="text-xl md:text-2xl text-slate-300 mb-12 max-w-3xl mx-auto">
-              Professional websites and landing pages delivered at lightning speed.
-              No meetings. No hassle. Just results.
-            </p>
-
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="inline-block"
-            >
-              <Button
-                onClick={() =>
-                  document
-                    .getElementById("pricing")
-                    ?.scrollIntoView({ behavior: "smooth" })
-                }
-                className="px-8 py-6 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
-              >
-                Get Started Now
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </motion.div>
-          </motion.div>
-
-          {/* Stats - Using Animated Stats Component */}
+            className="absolute top-0 -left-4 w-96 h-96 bg-yellow-500/30 rounded-full mix-blend-multiply filter blur-3xl"
+            animate={{
+              x: [0, 100, 0],
+              y: [0, 50, 0],
+            }}
+            transition={{
+              duration: 20,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.8 }}
-            className="mt-24"
-          >
-            <AnimatedStats />
-          </motion.div>
-
-          {/* Floating Mockup */}
-          <FloatingMockup />
+            className="absolute top-0 right-4 w-96 h-96 bg-purple-500/20 rounded-full mix-blend-multiply filter blur-3xl"
+            animate={{
+              x: [0, -100, 0],
+              y: [0, 100, 0],
+            }}
+            transition={{
+              duration: 25,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          />
         </div>
-      </section>
 
-      {/* Logo Wall */}
-      <LogoWall />
-
-      {/* Features Section - Using Bento Grid */}
-      <BentoFeatures />
-
-      {/* How It Works */}
-      <section className="relative px-6 py-24">
-        <div className="max-w-7xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-5xl font-bold mb-4">
-              Our <span className="text-yellow-500">4-Phase Process</span>
-            </h2>
-            <p className="text-xl text-slate-400">
-              From order to launch in four clear phases over 3 days
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
-            {/* Connection Line */}
-            <div className="hidden lg:block absolute top-24 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent" />
-
-            {[
-              {
-                step: "01",
-                title: "Discovery",
-                description:
-                  "Fill out our form and share your vision. We'll align on your brand, goals, target audience, and key requirements.",
-                icon: Users,
-              },
-              {
-                step: "02",
-                title: "Design",
-                description:
-                  "Our designers create a custom, on-brand layout. We craft the visual identity and user experience for your site.",
-                icon: Palette,
-              },
-              {
-                step: "03",
-                title: "Development",
-                description:
-                  "Our platform generates your website with premium tech. Fully responsive, SEO-optimized, and performance-tuned.",
-                icon: Code,
-              },
-              {
-                step: "04",
-                title: "Delivery",
-                description:
-                  "Receive your complete website in 3 days. Review, approve, and go live immediately with everything included.",
-                icon: Rocket,
-              },
-            ].map((process, i) => (
+        {/* Hero Section */}
+        <section className="relative px-6 pt-20 pb-32">
+          <div className="max-w-7xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+              className="text-center"
+            >
               <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.15, duration: 0.5 }}
-                viewport={{ once: true }}
-                className="relative"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring" }}
+                className="inline-flex items-center gap-2 px-4 py-2 mb-8 bg-yellow-500/10 border border-yellow-500/20 rounded-full"
               >
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  className="text-center"
-                >
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center text-2xl font-bold shadow-2xl shadow-yellow-500/50 relative z-10">
-                    {process.step}
-                  </div>
-                  <div className="mb-4 flex justify-center">
-                    <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
-                      <process.icon className="w-6 h-6 text-yellow-500" />
-                    </div>
-                  </div>
-                  <h3 className="text-xl font-bold mb-3 text-white">
-                    {process.title}
-                  </h3>
-                  <p className="text-slate-400 leading-relaxed text-sm">
-                    {process.description}
-                  </p>
-                </motion.div>
+                <Sparkles className="w-4 h-4 text-yellow-500" />
+                <span className="text-sm font-medium text-yellow-500">
+                  Premium Website Generation
+                </span>
               </motion.div>
-            ))}
-          </div>
 
-          {/* Timeline */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.5 }}
-            viewport={{ once: true }}
-            className="mt-16 text-center"
-          >
-            <div className="inline-flex items-center gap-4 px-6 py-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl">
-              <Clock className="w-6 h-6 text-yellow-500" />
-              <div className="text-left">
-                <div className="text-sm text-slate-400">Total Timeline</div>
-                <div className="text-2xl font-bold text-white">
-                  3 Days <span className="text-yellow-500">Guaranteed</span>
+              <h1 className="text-6xl md:text-8xl font-bold mb-6 bg-gradient-to-r from-white via-yellow-100 to-white bg-clip-text text-transparent">
+                Your Website.
+                <br />
+                <span className="text-yellow-500">In 3 Days.</span>
+              </h1>
+
+              <p className="text-xl md:text-2xl text-slate-300 mb-12 max-w-3xl mx-auto">
+                Professional websites and landing pages delivered at lightning speed.
+                No meetings. No hassle. Just results.
+              </p>
+
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="inline-block"
+              >
+                <Button
+                  onClick={() =>
+                    document
+                      .getElementById("pricing")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }
+                  className="px-8 py-6 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
+                >
+                  Get Started — $1,000
+                  <ArrowRight className="ml-2 w-5 h-5" />
+                </Button>
+              </motion.div>
+            </motion.div>
+
+            {/* Stats */}
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.8 }}
+              className="mt-24"
+            >
+              <AnimatedStats />
+            </motion.div>
+
+            {/* Floating Mockup */}
+            <FloatingMockup />
+          </div>
+        </section>
+
+        {/* Logo Wall */}
+        <LogoWall />
+
+        {/* Features Section */}
+        <BentoFeatures />
+
+        {/* How It Works */}
+        <section className="relative px-6 py-24">
+          <div className="max-w-7xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              transition={{ duration: 0.8 }}
+              viewport={{ once: true }}
+              className="text-center mb-16"
+            >
+              <h2 className="text-5xl font-bold mb-4">
+                Our <span className="text-yellow-500">4-Phase Process</span>
+              </h2>
+              <p className="text-xl text-slate-400">
+                From order to launch in four clear phases over 3 days
+              </p>
+            </motion.div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
+              <div className="hidden lg:block absolute top-24 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent" />
+
+              {[
+                {
+                  step: "01",
+                  title: "Discovery",
+                  description:
+                    "Fill out our form and share your vision. We'll align on your brand, goals, target audience, and key requirements.",
+                  icon: Users,
+                },
+                {
+                  step: "02",
+                  title: "Design",
+                  description:
+                    "Our designers create a custom, on-brand layout. We craft the visual identity and user experience for your site.",
+                  icon: Palette,
+                },
+                {
+                  step: "03",
+                  title: "Development",
+                  description:
+                    "Our platform generates your website with premium tech. Fully responsive, SEO-optimized, and performance-tuned.",
+                  icon: Code,
+                },
+                {
+                  step: "04",
+                  title: "Delivery",
+                  description:
+                    "Receive your complete website in 3 days. Review, approve, and go live immediately with everything included.",
+                  icon: Rocket,
+                },
+              ].map((process, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.15, duration: 0.5 }}
+                  viewport={{ once: true }}
+                  className="relative"
+                >
+                  <motion.div whileHover={{ scale: 1.05 }} className="text-center">
+                    <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center text-2xl font-bold shadow-2xl shadow-yellow-500/50 relative z-10">
+                      {process.step}
+                    </div>
+                    <div className="mb-4 flex justify-center">
+                      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
+                        <process.icon className="w-6 h-6 text-yellow-500" />
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-bold mb-3 text-white">{process.title}</h3>
+                    <p className="text-slate-400 leading-relaxed text-sm">
+                      {process.description}
+                    </p>
+                  </motion.div>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6, duration: 0.5 }}
+              viewport={{ once: true }}
+              className="mt-16 text-center"
+            >
+              <div className="inline-flex items-center gap-4 px-6 py-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl">
+                <Clock className="w-6 h-6 text-yellow-500" />
+                <div className="text-left">
+                  <div className="text-sm text-slate-400">Total Timeline</div>
+                  <div className="text-2xl font-bold text-white">
+                    3 Days <span className="text-yellow-500">Guaranteed</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* What You Get */}
-      <section className="relative px-6 py-24 bg-slate-900/50">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-5xl font-bold mb-4">
-              Everything <span className="text-yellow-500">Included</span>
-            </h2>
-            <p className="text-xl text-slate-400">
-              One price. Everything you need.
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            {[
-              "Professional custom design",
-              "Mobile-responsive layout",
-              "Lightning-fast performance",
-              "SEO optimization",
-              "SSL certificate included",
-              "Contact forms & integrations",
-              "Google Analytics setup",
-              "Social media integration",
-              "Premium hosting (1 year)",
-              "Content management system",
-              "Performance monitoring",
-              "Free minor updates (30 days)",
-            ].map((item, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05, duration: 0.3 }}
-                viewport={{ once: true }}
-                whileHover={{ x: 10 }}
-                className="flex items-center gap-3 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/50 transition-all"
-              >
-                <CheckCircle2 className="w-6 h-6 text-yellow-500 flex-shrink-0" />
-                <span className="text-lg text-white">{item}</span>
-              </motion.div>
-            ))}
+            </motion.div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Testimonials Section */}
-      <TestimonialsSection />
-
-      {/* FAQ Section */}
-      <FAQSection />
-
-      {/* Pricing & CTA */}
-      <section id="pricing" className="relative px-6 py-24">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-12 items-start">
-            {/* Pricing Card */}
+        {/* What You Get */}
+        <section className="relative px-6 py-24 bg-slate-900/50">
+          <div className="max-w-5xl mx-auto">
             <motion.div
-              initial={{ opacity: 0, x: -50 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
               transition={{ duration: 0.8 }}
               viewport={{ once: true }}
+              className="text-center mb-16"
             >
-              <Card className="p-10 bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border-2 border-yellow-500/50 shadow-2xl shadow-yellow-500/20">
-                <div className="text-center mb-8">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 mb-6 bg-yellow-500 rounded-full">
-                    <Star className="w-4 h-4 text-slate-900" />
-                    <span className="text-sm font-bold text-slate-900">
-                      LIMITED TIME OFFER
-                    </span>
-                  </div>
-                  <div className="mb-4">
-                    <div className="text-5xl font-bold text-white mb-2">
-                      $1,000
-                    </div>
-                    <div className="text-slate-400">One-time payment</div>
-                  </div>
-                  <div className="text-sm text-yellow-500 font-semibold">
-                    Regular price: $2,500
-                  </div>
-                </div>
-
-                <div className="space-y-4 mb-8">
-                  {[
-                    "Complete website in 3 days",
-                    "Custom design & development",
-                    "All features included",
-                    "1 year premium hosting",
-                    "Direct support access",
-                    "30-day update guarantee",
-                  ].map((feature, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-                      <span className="text-white">{feature}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <Button
-                    onClick={() =>
-                      window.open(
-                        process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK || "#",
-                        "_blank"
-                      )
-                    }
-                    className="w-full py-6 text-lg font-bold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-xl shadow-2xl shadow-yellow-500/50 transition-all"
-                  >
-                    <Zap className="mr-2 w-5 h-5" />
-                    Start Your Project Now
-                  </Button>
-                </motion.div>
-
-                <p className="text-center text-sm text-slate-400 mt-6">
-                  Secure payment via Stripe • Money-back guarantee
-                </p>
-              </Card>
+              <h2 className="text-5xl font-bold mb-4">
+                Everything <span className="text-yellow-500">Included</span>
+              </h2>
+              <p className="text-xl text-slate-400">
+                In the base package. One price. Everything you need.
+              </p>
             </motion.div>
 
-            {/* Contact Form */}
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
-            >
-              <div className="sticky top-8">
+            <div className="grid md:grid-cols-2 gap-4">
+              {[
+                "Professional custom design",
+                "Mobile-responsive layout",
+                "Lightning-fast performance",
+                "Basic SEO optimization",
+                "SSL certificate included",
+                "Contact forms & integrations",
+                "Social media integration",
+                "Premium hosting (1 year)",
+                "Performance monitoring",
+                "Free minor updates (30 days)",
+              ].map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05, duration: 0.3 }}
+                  viewport={{ once: true }}
+                  whileHover={{ x: 10 }}
+                  className="flex items-center gap-3 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/50 transition-all"
+                >
+                  <CheckCircle2 className="w-6 h-6 text-yellow-500 flex-shrink-0" />
+                  <span className="text-lg text-white">{item}</span>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Testimonials Section */}
+        <TestimonialsSection />
+
+        {/* Pricing Configurator */}
+        <section id="pricing" className="relative px-6 py-24">
+          <div className="max-w-6xl mx-auto">
+            {step === "configure" && (
+              <PricingConfigurator onCheckout={handleCheckout} isLoading={isSubmitting} />
+            )}
+
+            {step === "details" && (
+              <motion.div
+                id="order-form"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="max-w-xl mx-auto"
+              >
+                <button
+                  onClick={() => setStep("configure")}
+                  className="mb-6 text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"
+                >
+                  <ArrowRight className="w-4 h-4 rotate-180" />
+                  Back to package selection
+                </button>
+
                 <h3 className="text-3xl font-bold mb-2 text-white">
-                  Get Started Today
+                  Almost there!
                 </h3>
                 <p className="text-slate-400 mb-8">
-                  Fill out the form and we&apos;ll reach out within 24 hours
+                  Tell us about your project and we&apos;ll redirect you to secure payment.
                 </p>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-5">
                   <div>
                     <label className="block text-sm font-medium mb-2 text-white">
                       Full Name *
@@ -499,32 +486,33 @@ export default function LandingPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-white">
-                      Company
-                    </label>
-                    <Input
-                      type="text"
-                      name="company"
-                      value={formData.company}
-                      onChange={handleChange}
-                      placeholder="Your Company Inc."
-                      className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-yellow-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-2 text-white">
-                      Phone
-                    </label>
-                    <Input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      placeholder="+1 (555) 000-0000"
-                      className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-yellow-500"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">
+                        Company
+                      </label>
+                      <Input
+                        type="text"
+                        name="company"
+                        value={formData.company}
+                        onChange={handleChange}
+                        placeholder="Your Company"
+                        className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-yellow-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-white">
+                        Phone
+                      </label>
+                      <Input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        placeholder="+1 (555) 000-0000"
+                        className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-yellow-500"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -537,7 +525,7 @@ export default function LandingPage() {
                       onChange={handleChange}
                       required
                       placeholder="Tell us about your project, goals, and any specific requirements..."
-                      rows={5}
+                      rows={4}
                       className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-yellow-500 resize-none"
                     />
                   </div>
@@ -552,68 +540,70 @@ export default function LandingPage() {
                     <Button
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full py-6 text-lg font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-6 text-lg font-bold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-xl shadow-2xl shadow-yellow-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isSubmitting ? "Submitting..." : "Submit & Continue to Payment"}
+                      {isSubmitting ? "Redirecting to payment..." : "Continue to Payment"}
                       <ArrowRight className="ml-2 w-5 h-5" />
                     </Button>
                   </motion.div>
 
                   <p className="text-xs text-center text-slate-500">
-                    By submitting, you agree to our terms of service
+                    Secure payment via Stripe. Money-back guarantee.
                   </p>
                 </form>
-              </div>
+              </motion.div>
+            )}
+          </div>
+        </section>
+
+        {/* FAQ Section */}
+        <FAQSection />
+
+        {/* Final CTA */}
+        <section className="relative px-6 py-24 bg-gradient-to-br from-yellow-500/10 via-transparent to-purple-500/10">
+          <div className="max-w-4xl mx-auto text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+              viewport={{ once: true }}
+            >
+              <h2 className="text-5xl md:text-6xl font-bold mb-6 text-white">
+                Ready to Launch Your
+                <br />
+                <span className="text-yellow-500">Dream Website?</span>
+              </h2>
+              <p className="text-xl text-slate-300 mb-10">
+                Join hundreds of satisfied clients who transformed their online presence
+              </p>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  onClick={() =>
+                    document
+                      .getElementById("pricing")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }
+                  className="px-10 py-7 text-xl font-bold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
+                >
+                  <Rocket className="mr-2 w-6 h-6" />
+                  Start Your Project — $1,000
+                </Button>
+              </motion.div>
             </motion.div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Final CTA */}
-      <section className="relative px-6 py-24 bg-gradient-to-br from-yellow-500/10 via-transparent to-purple-500/10">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-5xl md:text-6xl font-bold mb-6 text-white">
-              Ready to Launch Your
-              <br />
-              <span className="text-yellow-500">Dream Website?</span>
-            </h2>
-            <p className="text-xl text-slate-300 mb-10">
-              Join hundreds of satisfied clients who transformed their online presence
+        {/* Footer */}
+        <footer className="relative px-6 py-12 border-t border-white/10">
+          <div className="max-w-7xl mx-auto text-center text-slate-400">
+            <p className="mb-2">
+              &copy; {new Date().getFullYear()} Lenquant. All rights reserved.
             </p>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button
-                onClick={() =>
-                  document
-                    .getElementById("pricing")
-                    ?.scrollIntoView({ behavior: "smooth" })
-                }
-                className="px-10 py-7 text-xl font-bold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
-              >
-                <Rocket className="mr-2 w-6 h-6" />
-                Start Your Project
-              </Button>
-            </motion.div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="relative px-6 py-12 border-t border-white/10">
-        <div className="max-w-7xl mx-auto text-center text-slate-400">
-          <p className="mb-2">
-            © {new Date().getFullYear()} Lenquant. All rights reserved.
-          </p>
-          <p className="text-sm">
-            Premium websites delivered in 3 days or less.
-          </p>
-        </div>
-      </footer>
+            <p className="text-sm">
+              Premium websites delivered in 3 days or less.
+            </p>
+          </div>
+        </footer>
       </div>
     </>
   );

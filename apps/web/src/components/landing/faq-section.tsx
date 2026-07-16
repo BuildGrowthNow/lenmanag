@@ -26,6 +26,11 @@ const FAQS = [
       "We stand behind our work with a 100% satisfaction guarantee. If we don't deliver what we promised, you get a full refund within the first 7 days. No questions asked.",
   },
   {
+    question: "What are the add-ons and how does pricing work?",
+    answer:
+      "The base package starts at $1,000 for a professional landing page. You can add extra pages ($200 each, up to 5 total), a custom domain ($150), advanced SEO ($300), blog/CMS ($250), analytics tracking ($100), or priority 24-hour delivery ($500). Pick only what you need—the configurator updates your total in real time.",
+  },
+  {
     question: "Can you handle e-commerce or complex features?",
     answer:
       "Yes! While our base package covers professional websites and landing pages, we can add e-commerce functionality, payment integrations, booking systems, and more. Contact us to discuss your specific needs.",
