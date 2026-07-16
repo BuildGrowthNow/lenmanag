@@ -10,7 +10,9 @@ import type {
   LeadListResponse,
   LeadPatchPayload,
   PageInventoryResponse,
-  LeadUpsertPayload
+  LeadUpsertPayload,
+  MasterBrief,
+  MasterBriefApprovalRequest
 } from "@/lib/types";
 
 type LeadListQuery = {
@@ -136,4 +138,28 @@ export async function updateLeadBrief(id: string, payload: SiteBriefPatchPayload
 
 export async function approveLeadBrief(id: string): Promise<SiteBrief> {
   return request(`/api/leads/${id}/brief/approve`, { method: "POST" });
+}
+
+// Master Brief API (AI-native brief system)
+
+export async function getLeadMasterBrief(id: string): Promise<MasterBrief | null> {
+  return safeRequest<MasterBrief | null>(`/api/leads/${id}/master-brief`, null);
+}
+
+export async function createLeadMasterBrief(id: string): Promise<MasterBrief> {
+  return request(`/api/leads/${id}/master-brief`, { method: "POST" });
+}
+
+export async function approveMasterBrief(
+  id: string,
+  payload: MasterBriefApprovalRequest
+): Promise<MasterBrief> {
+  return request(`/api/leads/${id}/master-brief/approve`, { method: "POST", body: payload });
+}
+
+export async function refineMasterBrief(id: string, feedback: string): Promise<MasterBrief> {
+  return request(`/api/leads/${id}/master-brief/refine`, {
+    method: "POST",
+    body: { feedback }
+  });
 }

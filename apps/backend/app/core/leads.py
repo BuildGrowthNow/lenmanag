@@ -660,26 +660,38 @@ class LeadRepository:
         await self._set_pipeline_stage(lead_id, "extracted")
 
         if mode == "auto":
-            # Auto mode: immediately generate brief
+            # Auto mode: immediately generate master brief
             await self._set_pipeline_stage(lead_id, "briefing")
             try:
-                brief = await self.create_brief(lead_id)
-                if brief is None:
+                # Use NEW AI-powered master brief (not old deterministic brief)
+                master_brief = await self.create_master_brief(lead_id)
+                if master_brief is None:
                     await self._set_pipeline_stage(
                         lead_id,
                         "needs_attention",
-                        detail="Brief generation returned no result.",
+                        detail="Master brief generation returned no result.",
                     )
                     return
-                # Auto-approve the brief
-                await self.approve_brief(lead_id, approved_by="auto")
+
+                # Auto-approve the master brief
+                await self.approve_master_brief(
+                    lead_id=lead_id,
+                    approved_by="auto",
+                    notes="Auto-approved in pipeline"
+                )
+
+                # WAIT for brief to be saved before advancing
+                # (create_master_brief is already async and blocks until complete)
+
+                # Now advance to site generation
                 await self.advance_pipeline_after_brief(lead_id)
+
             except Exception:
                 logging.getLogger("lenquant.pipeline").exception(
-                    "Auto brief generation failed for lead %s", lead_id
+                    "Auto master brief generation failed for lead %s", lead_id
                 )
                 await self._set_pipeline_stage(
-                    lead_id, "needs_attention", detail="Brief generation failed."
+                    lead_id, "needs_attention", detail="Master brief generation failed."
                 )
         else:
             # Manual mode: pause at extracted — operator approves brief

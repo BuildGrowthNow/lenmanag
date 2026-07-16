@@ -1111,6 +1111,46 @@ export type SiteBriefPatchPayload = {
   reviewNotes?: string | null;
 };
 
+export type MasterBriefSection = {
+  purpose: string;
+  headline: string;
+  contentSummary: string;
+  suggestedApproach: string;
+  contentPoints: string[];
+};
+
+export type MasterBrief = {
+  id: string;
+  leadId: string;
+  version: number;
+  businessGoal: string;
+  primaryAudience: string;
+  conversionAction: string;
+  valueProposition: string;
+  toneAndVoice: string;
+  visualStyle: string;
+  colorStrategy: string;
+  motionLevel: "none" | "subtle" | "moderate" | "dramatic";
+  specialEffects: string[];
+  headline: string;
+  subheadline: string;
+  sections: MasterBriefSection[];
+  ctaStrategy: string;
+  aiReasoning: string;
+  confidenceScore: number;
+  approvalState: "pending" | "approved" | "rejected";
+  approvedBy: string | null;
+  approvedAt: string | null;
+  reviewNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MasterBriefApprovalRequest = {
+  approvedBy?: string;
+  notes?: string;
+};
+
 export type LeadActionResponse = {
   lead: LeadDetail;
   created: boolean;

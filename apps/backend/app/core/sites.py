@@ -2061,7 +2061,7 @@ def _model_dump(value: Any) -> Any:
 def _site_source_attribution(
     *,
     lead: Any | None,
-    brief: SiteBrief | None,
+    brief: Any | None,
     extraction: ExtractionSnapshot | None,
     theme: dict[str, Any],
     palette_mode: PaletteMode,
@@ -2769,9 +2769,14 @@ class SiteRepository:
         review_state = _review_state_from(
             site, {"outcome": outcome, "blockedReason": blocked_reason}
         )
+        # Prefer master brief for attribution, fall back to legacy brief
+        master_brief = await lead_repository.get_master_brief(site_id)
+        legacy_brief = await lead_repository.get_brief(site_id)
+        brief_for_attribution = master_brief or legacy_brief
+
         source_attribution = _site_source_attribution(
             lead=await lead_repository.get_lead(site_id),
-            brief=await lead_repository.get_brief(site_id),
+            brief=brief_for_attribution,
             extraction=await lead_repository.get_extraction(site_id),
             theme={"themeKey": site.themeKey},
             palette_mode=site.paletteMode,
@@ -3950,7 +3955,7 @@ class SiteRepository:
             diversityScore=diversity_score,
             layoutHash="",
             previewSlug=friendly_slug,
-            previewUrl=f"/sites/{friendly_slug}",
+            previewUrl=f"/st/{friendly_slug}",
             overrideCount=len(overrides),
             overrides=[],
             exportMetadata=None,
@@ -4086,7 +4091,7 @@ class SiteRepository:
             "diversityScore": diversity_score,
             "layoutHash": layout_hash,
             "previewSlug": current.previewSlug if current else friendly_slug,
-            "previewUrl": f"/sites/{current.previewSlug if current else friendly_slug}",
+            "previewUrl": f"/st/{current.previewSlug if current else friendly_slug}",
             "overrideCount": len(overrides),
             "refinementPromptId": refinement_prompt_id,
             "createdAt": now,
@@ -4209,7 +4214,7 @@ class SiteRepository:
                 screenshot_qa_result = (
                     await self._screenshot_comparator.compare_layout_screenshot(
                         site_id=site_id,
-                        preview_url=f"/sites/{site_id}",
+                        preview_url=f"/st/{site_id}",
                         section_names=section_names_for_qa,
                     )
                 )
