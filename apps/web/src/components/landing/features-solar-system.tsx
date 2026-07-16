@@ -19,68 +19,69 @@ const FEATURES = [
     title: "Beautiful Design",
     description: "Visual appeal that captivates your visitors and builds trust",
     icon: Palette,
-    orbit: 0,
+    line: 0,
   },
   {
     id: "performance",
     title: "Fast Loading",
     description: "Better user experience and improved search rankings",
     icon: Zap,
-    orbit: 0,
+    line: 0,
   },
   {
     id: "mobile",
     title: "Mobile Ready",
     description: "Works perfectly on phones and tablets for every customer",
     icon: Smartphone,
-    orbit: 1,
+    line: 1,
   },
   {
     id: "easy",
     title: "Easy to Manage",
     description: "Update your site without coding knowledge required",
     icon: Sliders,
-    orbit: 1,
+    line: 1,
   },
   {
     id: "support",
     title: "Customer Support",
     description: "Always here when you need help with your website",
     icon: Headphones,
-    orbit: 2,
+    line: 2,
   },
   {
     id: "quality",
     title: "Professional Quality",
     description: "Trusted by successful businesses worldwide",
     icon: Award,
-    orbit: 2,
+    line: 2,
   },
   {
     id: "turnaround",
     title: "Quick Turnaround",
     description: "Ready to launch in just 3 days guaranteed",
     icon: Clock,
-    orbit: 3,
+    line: 3,
   },
   {
     id: "affordable",
     title: "Affordable",
     description: "Enterprise-quality results without premium pricing",
     icon: DollarSign,
-    orbit: 3,
+    line: 3,
   },
 ];
 
-const ORBITS = [
-  { radius: 140, speed: 20, angle: 0 },
-  { radius: 180, speed: 25, angle: 90 },
-  { radius: 140, speed: 20, angle: 180 },
-  { radius: 180, speed: 25, angle: 270 },
+const LINES = [
+  { angle: 0, label: "top" },
+  { angle: 90, label: "right" },
+  { angle: 180, label: "bottom" },
+  { angle: 270, label: "left" },
 ];
 
 export function FeaturesSolarSystem() {
   const [hoveredFeature, setHoveredFeature] = useState<string | null>(null);
+  const [isHovering, setIsHovering] = useState(false);
 
   return (
     <section className="relative px-6 py-24 bg-slate-900/50 overflow-visible">
@@ -124,128 +125,141 @@ export function FeaturesSolarSystem() {
               </motion.div>
             </motion.div>
 
-            {/* Four Orbital Rings with Points */}
-            {ORBITS.map((orbit, orbitIdx) => (
-              <div key={`orbit-${orbitIdx}`}>
-                {/* Orbital Ring SVG */}
+            {/* Four pointing lines with rotating features */}
+            {LINES.map((line, lineIdx) => (
+              <div key={`line-${lineIdx}`}>
+                {/* Pointing line SVG */}
                 <svg
                   className="absolute inset-0 w-full h-full pointer-events-none"
-                  style={{
-                    left: "50%",
-                    top: "50%",
-                    transform: "translate(-50%, -50%)"
-                  }}
                   viewBox="0 0 700 700"
                 >
-                  <circle
-                    cx="350"
-                    cy="350"
-                    r={orbit.radius}
-                    fill="none"
+                  <line
+                    x1="350"
+                    y1="350"
+                    x2={350 + Math.cos((line.angle * Math.PI) / 180) * 280}
+                    y2={350 + Math.sin((line.angle * Math.PI) / 180) * 280}
                     stroke="rgba(255, 255, 255, 0.1)"
                     strokeWidth="1"
                     strokeDasharray="4 6"
                   />
-                  {/* Point indicator on orbit */}
+                  {/* Point indicator at the end */}
                   <circle
-                    cx={350 + Math.cos((orbit.angle * Math.PI) / 180) * orbit.radius}
-                    cy={350 + Math.sin((orbit.angle * Math.PI) / 180) * orbit.radius}
+                    cx={350 + Math.cos((line.angle * Math.PI) / 180) * 280}
+                    cy={350 + Math.sin((line.angle * Math.PI) / 180) * 280}
                     r="4"
-                    fill="rgba(234, 179, 8, 0.3)"
+                    fill="rgba(234, 179, 8, 0.4)"
                   />
                 </svg>
 
-                {/* Features orbiting on this ring */}
-                {FEATURES.filter((f) => f.orbit === orbitIdx).map(
-                  (feature, indexInOrbit) => {
-                    const totalInOrbit = FEATURES.filter(
-                      (f) => f.orbit === orbitIdx
-                    ).length;
-                    const offset = indexInOrbit * (360 / totalInOrbit);
+                {/* Features on this line */}
+                {FEATURES.filter((f) => f.line === lineIdx).map(
+                  (feature, indexInLine) => {
+                    const distance = 120 + indexInLine * 90;
+                    const angle = (line.angle * Math.PI) / 180;
 
                     return (
                       <motion.div
                         key={feature.id}
                         className="absolute"
                         initial={{ opacity: 0, scale: 0 }}
-                        animate={{ opacity: 1, scale: 1, rotate: 360 }}
+                        whileInView={{ opacity: 1, scale: 1 }}
+                        viewport={{ once: true }}
+                        animate={
+                          isHovering
+                            ? { opacity: 1, scale: 1 }
+                            : {
+                                opacity: 1,
+                                scale: 1,
+                                x: [
+                                  Math.cos(angle) * 120 + Math.cos(angle) * indexInLine * 90,
+                                  Math.cos(angle) * 280 + Math.cos(angle) * indexInLine * 90,
+                                  Math.cos(angle) * 120 + Math.cos(angle) * indexInLine * 90,
+                                ],
+                                y: [
+                                  Math.sin(angle) * 120 + Math.sin(angle) * indexInLine * 90,
+                                  Math.sin(angle) * 280 + Math.sin(angle) * indexInLine * 90,
+                                  Math.sin(angle) * 120 + Math.sin(angle) * indexInLine * 90,
+                                ],
+                              }
+                        }
                         transition={{
                           opacity: {
-                            delay: orbitIdx * 0.2 + indexInOrbit * 0.1,
+                            delay: lineIdx * 0.15 + indexInLine * 0.1,
                             duration: 0.5,
                           },
                           scale: {
-                            delay: orbitIdx * 0.2 + indexInOrbit * 0.1,
+                            delay: lineIdx * 0.15 + indexInLine * 0.1,
                             duration: 0.5,
                           },
-                          rotate: {
-                            duration: orbit.speed,
+                          x: {
+                            duration: 8,
                             repeat: Infinity,
-                            ease: "linear",
+                            ease: "easeInOut",
+                            delay: indexInLine * 4,
+                          },
+                          y: {
+                            duration: 8,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                            delay: indexInLine * 4,
                           },
                         }}
-                        viewport={{ once: true }}
                         style={{
-                          left: "50%",
-                          top: "50%",
-                          width: orbit.radius * 2,
-                          height: orbit.radius * 2,
-                          marginLeft: -orbit.radius,
-                          marginTop: -orbit.radius,
+                          left: "350px",
+                          top: "350px",
+                          transform: "translate(-50%, -50%)",
+                        }}
+                        onMouseEnter={() => {
+                          setHoveredFeature(feature.id);
+                          setIsHovering(true);
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredFeature(null);
+                          setIsHovering(false);
                         }}
                       >
-                        <motion.div
-                          className="absolute"
-                          style={{
-                            left: "50%",
-                            top: "0%",
-                            transform: `rotate(${offset}deg) translateX(${orbit.radius}px)`,
-                            transformOrigin: "0 0",
-                          }}
+                        <motion.button
+                          whileHover={{ scale: 1.2 }}
+                          whileTap={{ scale: 0.95 }}
+                          className={`w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
+                            hoveredFeature === feature.id
+                              ? "border-yellow-500 shadow-yellow-500/40"
+                              : "border-white/20 hover:border-yellow-500/60"
+                          }`}
                         >
-                          <motion.button
-                            whileHover={{ scale: 1.2 }}
-                            whileTap={{ scale: 0.95 }}
-                            className={`w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
+                          <feature.icon
+                            className={`w-7 h-7 transition-colors ${
                               hoveredFeature === feature.id
-                                ? "border-yellow-500 shadow-yellow-500/40"
-                                : "border-white/20 hover:border-yellow-500/60"
+                                ? "text-yellow-300"
+                                : "text-yellow-500"
                             }`}
-                            onMouseEnter={() => setHoveredFeature(feature.id)}
-                            onMouseLeave={() => setHoveredFeature(null)}
-                          >
-                            <feature.icon
-                              className={`w-7 h-7 transition-colors ${
-                                hoveredFeature === feature.id
-                                  ? "text-yellow-300"
-                                  : "text-yellow-500"
-                              }`}
-                            />
-                          </motion.button>
+                          />
+                        </motion.button>
 
-                          {/* Popover on Hover */}
-                          {hoveredFeature === feature.id && (
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ duration: 0.15 }}
-                              className="absolute z-50 pointer-events-none whitespace-nowrap"
-                              style={{
-                                top: "-80px",
-                                left: "-110px",
-                              }}
-                            >
-                              <div className="px-4 py-3 rounded-xl bg-slate-900/95 border border-yellow-500/50 shadow-xl shadow-yellow-500/20 min-w-[220px] backdrop-blur-sm">
-                                <div className="text-sm font-bold text-yellow-400 mb-1">
-                                  {feature.title}
-                                </div>
-                                <div className="text-xs text-slate-300 leading-relaxed">
-                                  {feature.description}
-                                </div>
+                        {/* Popover on Hover - horizontal, not rotated */}
+                        {hoveredFeature === feature.id && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                            animate={{ opacity: 1, scale: 1, x: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute z-50 pointer-events-none"
+                            style={{
+                              left: "100%",
+                              top: "50%",
+                              transform: "translateY(-50%)",
+                              marginLeft: "12px",
+                            }}
+                          >
+                            <div className="px-4 py-3 rounded-xl bg-slate-900/95 border border-yellow-500/50 shadow-xl shadow-yellow-500/20 min-w-[220px] backdrop-blur-sm">
+                              <div className="text-sm font-bold text-yellow-400 mb-1">
+                                {feature.title}
                               </div>
-                            </motion.div>
-                          )}
-                        </motion.div>
+                              <div className="text-xs text-slate-300 leading-relaxed">
+                                {feature.description}
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
                       </motion.div>
                     );
                   }
