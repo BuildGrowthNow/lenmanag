@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from app.core.llm import get_llm_client
-from app.schemas.brief import VisualCritique, VisualRedesignBrief, SiteBrief
+from app.schemas.brief import MasterBrief, VisualCritique, VisualRedesignBrief
 from app.schemas.extraction import ExtractionSnapshot, ExtractedSection
 
 logger = logging.getLogger(__name__)
@@ -266,7 +266,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
     async def generate_redesign_brief(
         self,
-        brief: SiteBrief,
+        brief: MasterBrief,
         extraction: ExtractionSnapshot,
         client_brand: dict[str, Any],
     ) -> list[VisualRedesignBrief]:
@@ -299,10 +299,22 @@ Return ONLY valid JSON (no markdown, no explanation):
             critiques.append(critique)
 
         if critiques:
+            # MasterBrief uses toneAndVoice (string) instead of toneProfile.value
+            art_direction = "minimal-luxe"
+            if hasattr(brief, "visualStyle") and brief.visualStyle:
+                # Derive art direction from visual style
+                style_lower = brief.visualStyle.lower()
+                if "bold" in style_lower or "dramatic" in style_lower:
+                    art_direction = "bold-modern"
+                elif "minimal" in style_lower or "clean" in style_lower:
+                    art_direction = "minimal-luxe"
+                elif "playful" in style_lower or "fun" in style_lower:
+                    art_direction = "playful-vibrant"
+
             redesign_brief = VisualRedesignBrief(
                 pageUrl=extraction.canonicalWebsiteUrl or "homepage",
                 critiques=critiques,
-                artDirection=brief.toneProfile.value or "minimal-luxe",
+                artDirection=art_direction,
             )
             redesign_briefs.append(redesign_brief)
 
@@ -315,7 +327,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
 
 async def generate_visual_redesign_brief(
-    brief: SiteBrief,
+    brief: MasterBrief,
     extraction: ExtractionSnapshot,
     client_brand: dict[str, Any],
 ) -> list[VisualRedesignBrief]:
