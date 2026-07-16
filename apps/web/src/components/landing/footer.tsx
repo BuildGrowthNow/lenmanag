@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Mail, Phone, MapPin, Linkedin, Twitter, Facebook } from "lucide-react";
+import { Mail, Phone, MapPin } from "lucide-react";
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -112,14 +112,6 @@ export function Footer() {
                   Terms of Service
                 </a>
               </li>
-              <li>
-                <a
-                  href="/cookie-policy"
-                  className="text-slate-300 hover:text-yellow-500 transition-colors text-sm"
-                >
-                  Cookie Policy
-                </a>
-              </li>
             </ul>
           </motion.div>
 
@@ -171,41 +163,11 @@ export function Footer() {
           whileInView={{ opacity: 1 }}
           transition={{ duration: 0.5 }}
           viewport={{ once: true }}
-          className="flex flex-col md:flex-row items-center justify-between"
+          className="text-center"
         >
-          <div className="text-center md:text-left mb-6 md:mb-0">
-            <p className="text-slate-400 text-sm">
-              &copy; {currentYear} Lenquant. All rights reserved.
-            </p>
-            <p className="text-slate-500 text-xs mt-1">
-              Professional websites delivered in 3 days or less.
-            </p>
-          </div>
-
-          {/* Social Links */}
-          <div className="flex items-center gap-4">
-            <a
-              href="#"
-              className="w-10 h-10 rounded-full bg-white/5 hover:bg-yellow-500/20 flex items-center justify-center text-slate-400 hover:text-yellow-500 transition-all"
-              aria-label="LinkedIn"
-            >
-              <Linkedin className="w-5 h-5" />
-            </a>
-            <a
-              href="#"
-              className="w-10 h-10 rounded-full bg-white/5 hover:bg-yellow-500/20 flex items-center justify-center text-slate-400 hover:text-yellow-500 transition-all"
-              aria-label="Twitter"
-            >
-              <Twitter className="w-5 h-5" />
-            </a>
-            <a
-              href="#"
-              className="w-10 h-10 rounded-full bg-white/5 hover:bg-yellow-500/20 flex items-center justify-center text-slate-400 hover:text-yellow-500 transition-all"
-              aria-label="Facebook"
-            >
-              <Facebook className="w-5 h-5" />
-            </a>
-          </div>
+          <p className="text-slate-400 text-sm">
+            &copy; {currentYear} Lenquant. All rights reserved.
+          </p>
         </motion.div>
       </div>
     </footer>

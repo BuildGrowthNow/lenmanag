@@ -670,7 +670,7 @@ export default function SitesLandingPage() {
               <h2 className="text-5xl md:text-6xl font-bold mb-6 text-white">
                 Your Masterpiece Awaits
                 <br />
-                <span className="text-yellow-500">Premium Design • $1,000 • 3 Days</span>
+                <span className="text-yellow-500">Premium Design • $1,000<br />• 3 Days delivery</span>
               </h2>
               <p className="text-xl text-slate-300 mb-10">
                 Join hundreds of business owners who trusted us to create their breakthrough website
