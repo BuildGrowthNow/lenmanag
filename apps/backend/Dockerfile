@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     fonts-liberation \
+    fonts-unifont \
     libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
@@ -48,15 +49,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Playwright and Chromium browser
 RUN pip install --no-cache-dir playwright==1.44.0 && \
-    playwright install-deps chromium && \
-    playwright install chromium
+    playwright install chromium || true
 
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir -e ".[gemini]"
-
-RUN playwright install chromium --with-deps
 
 COPY . .
 
