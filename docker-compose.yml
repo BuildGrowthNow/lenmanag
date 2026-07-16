@@ -38,7 +38,6 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
-    user: appuser
     env_file:
       - .env.production
     depends_on:
@@ -55,7 +54,6 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     command: celery -A app.core.celery_app beat --loglevel=info
-    user: appuser
     env_file:
       - .env.production
     depends_on:
