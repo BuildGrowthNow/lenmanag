@@ -74,10 +74,11 @@ export async function refineMasterBrief(
 
 export async function approveMasterBrief(
   leadId: string,
-  notes?: string
+  notes?: string,
+  approvedBy?: string
 ): Promise<MasterBrief> {
   return request<MasterBrief>(`/api/leads/${leadId}/master-brief/approve`, {
     method: 'POST',
-    body: { notes }
+    body: { approvedBy, notes }
   });
 }

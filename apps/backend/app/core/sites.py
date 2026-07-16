@@ -2103,11 +2103,9 @@ def _check_theme_diversity_constraint(
     batch_size = len(current_batch_sites)
     new_batch_size = batch_size + 1
 
-    # For very small sample sizes, the 40%/60% thresholds are overly strict
-    # (e.g. the second site in a batch of two would always be at 100%).
-    # Only start enforcing diversity once there are enough sites for the
-    # percentages to be meaningful.
-    if new_batch_size < 5:
+    # For small sample sizes, relaxed thresholds to allow generation.
+    # With only a few sites in the batch, strict diversity rules block generation.
+    if new_batch_size < 10:
         return True, ""
     theme_counts = Counter(site.themeKey for site in current_batch_sites)
     palette_counts = Counter(site.paletteMode for site in current_batch_sites)
@@ -3043,9 +3041,19 @@ class SiteRepository:
         lead = await lead_repository.get_lead(site_id)
         if lead is None:
             return None
+
+        # Check for master brief first (new system), fall back to legacy brief
+        master_brief = await lead_repository.get_master_brief(site_id)
         brief = await lead_repository.get_brief(site_id)
-        if brief is None or brief.approvalState != "approved":
+
+        # Allow generation if EITHER master brief OR legacy brief is approved
+        has_approved_brief = (
+            (master_brief is not None and master_brief.approvalState == "approved") or
+            (brief is not None and brief.approvalState == "approved")
+        )
+        if not has_approved_brief:
             raise ValueError("brief_not_approved")
+
         extraction = await lead_repository.get_extraction(site_id)
         if extraction is None or extraction.version <= 0:
             raise ValueError("extraction_required")
@@ -3268,7 +3276,12 @@ class SiteRepository:
         )
 
         brief = await lead_repository.get_brief(site_id)
-        if brief is None or brief.approvalState != "approved":
+        # Allow generation if EITHER master brief OR legacy brief is approved
+        has_approved_brief = (
+            use_ai_generation or
+            (brief is not None and brief.approvalState == "approved")
+        )
+        if not has_approved_brief:
             raise ValueError("brief_not_approved")
         extraction = await lead_repository.get_extraction(site_id)
         if extraction is None or extraction.version <= 0:

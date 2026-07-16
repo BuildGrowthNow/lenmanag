@@ -1,12 +1,15 @@
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.mongo import get_mongo_client
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -37,3 +40,17 @@ if settings.cors_origins:
     )
 
 app.include_router(api_router)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled exception in %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "Internal Server Error",
+            "detail": str(exc),
+            "path": request.url.path,
+        },
+    )

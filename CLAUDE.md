@@ -187,6 +187,159 @@ Production env file lives at `/opt/lenquant/.env.production` on the EC2 server (
 
 ---
 
+## Authentication & API Testing
+
+### Backend Authentication System
+
+The backend uses a **password + email allowlist** system for operator access (no user registration):
+
+**Allowlist Configuration** (from `.env.production`):
+```
+AUTH_ALLOWLIST_EMAILS=admin@example.com,fern2gue@gmail.com
+AUTH_ALLOWLIST_DOMAINS=lenquant.com,lengrowth.com,sites.lenquant.com
+AUTH_ADMIN_PASSWORD=LENGROWTH2026
+```
+
+Only emails in the allowlist or domains in the allowlist can authenticate. All use the same shared password.
+
+### How to Authenticate for API Testing
+
+#### Step 1: Get Session Cookie
+
+```bash
+# Login to get session token
+RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "fern2gue@gmail.com", "password": "LENGROWTH2026"}')
+
+# Extract session cookie from response
+SESSION=$(echo "$RESPONSE" | grep -o 'lenquant_session=[^;]*' | cut -d'=' -f2)
+```
+
+**Alternative:** Get it from response headers:
+```bash
+curl -v -X POST "http://localhost:8000/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "fern2gue@gmail.com", "password": "LENGROWTH2026"}' 2>&1 | grep -i "set-cookie"
+
+# Output will show:
+# set-cookie: lenquant_session=eyJlbWFpbCI6ImZlcm4yZ3VlQGdtYWlsLmNvbSIs...; ...
+```
+
+#### Step 2: Use Session Cookie in API Calls
+
+Store the cookie and use it in all authenticated requests:
+
+```bash
+SESSION="eyJlbWFpbCI6ImZlcm4yZ3VlQGdtYWlsLmNvbSIsIm5hbWUiOiJmZXJuMmd1ZSIsInJvbGUiOiJvcGVyYXRvciIsImlhdCI6MTc4NDIwMTU4MSwiZXhwIjoxNzg0MjMwMzgxfQ.7weDRjJ9rB6sJkTrx9pOjWcBiBj9YBWODO_0eRjZlYI"
+
+# Example: Create a lead
+curl -s -X POST -H "Cookie: lenquant_session=$SESSION" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Lead",
+    "email": "test@example.com",
+    "phone": "+1-555-0123",
+    "companyName": "Test Company",
+    "websiteUrl": "https://example.com",
+    "industry": "Technology",
+    "targetAudience": "Business users"
+  }' \
+  "http://localhost:8000/api/v1/leads" | jq .
+
+# Example: List leads
+curl -s -H "Cookie: lenquant_session=$SESSION" \
+  "http://localhost:8000/api/v1/leads?limit=25" | jq .
+
+# Example: Start extraction
+curl -s -X POST -H "Cookie: lenquant_session=$SESSION" \
+  "http://localhost:8000/api/v1/leads/{lead_id}/extraction/start" | jq .
+
+# Example: Create master brief
+curl -s -X POST -H "Cookie: lenquant_session=$SESSION" \
+  "http://localhost:8000/api/v1/leads/{lead_id}/master-brief" | jq .
+```
+
+### Authentication Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/auth/login` | POST | Authenticate and get session token |
+| `/api/v1/auth/verify` | POST | Check if email is allowlisted (no password needed) |
+| `/api/v1/auth/session` | GET | Get current session info |
+| `/api/v1/auth/refresh` | POST | Refresh session token |
+| `/api/v1/auth/logout` | POST | Logout and invalidate session |
+
+### Testing Authenticated Endpoints
+
+**Full workflow example** for testing lead → extraction → brief → generation:
+
+```bash
+#!/bin/bash
+
+# 1. Login
+SESSION=$(curl -s -X POST "http://localhost:8000/api/v1/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "fern2gue@gmail.com", "password": "LENGROWTH2026"}' \
+  | jq -r '.data | @base64 | @json' | tr -d '"')
+
+# 2. Create lead
+LEAD=$(curl -s -X POST -H "Cookie: lenquant_session=$SESSION" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Lead",
+    "email": "test@example.com",
+    "companyName": "Test Company",
+    "websiteUrl": "https://example.com"
+  }' \
+  "http://localhost:8000/api/v1/leads")
+
+LEAD_ID=$(echo "$LEAD" | jq -r '.data.lead.id')
+echo "Created lead: $LEAD_ID"
+
+# 3. Start extraction
+curl -s -X POST -H "Cookie: lenquant_session=$SESSION" \
+  "http://localhost:8000/api/v1/leads/$LEAD_ID/extraction/start" | jq .
+
+# 4. Wait for extraction to complete (check Celery logs)
+sleep 60
+
+# 5. Create master brief
+curl -s -X POST -H "Cookie: lenquant_session=$SESSION" \
+  "http://localhost:8000/api/v1/leads/$LEAD_ID/master-brief" | jq .
+
+# 6. Approve brief
+curl -s -X POST -H "Cookie: lenquant_session=$SESSION" \
+  -H "Content-Type: application/json" \
+  -d '{"approvedBy": "fern2gue@gmail.com", "notes": "Auto-approved"}' \
+  "http://localhost:8000/api/v1/leads/$LEAD_ID/master-brief/approve" | jq .
+
+# 7. Trigger site generation
+curl -s -X POST -H "Cookie: lenquant_session=$SESSION" \
+  -H "Content-Type: application/json" \
+  -d '{"force": true}' \
+  "http://localhost:8000/api/v1/sites/$LEAD_ID/generate" | jq .
+```
+
+### Important Notes
+
+- **Session tokens expire** after the time set in `SESSION_COOKIE_MAX_AGE_SECONDS` (default: 8 hours)
+- **Cookies are HttpOnly** and Secure — must be passed via `Cookie` header, not JavaScript
+- **Password is shared** across all allowlisted operators — no per-user passwords
+- **Public endpoints** (site preview at `/api/v1/public/sites/{slug}`) don't require authentication
+- For **production testing**, use credentials from `.env.production` on the server
+
+### Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| 401 Unauthorized | Session expired or missing. Re-authenticate. |
+| Cookie not persisting | Make sure you're using `-c` flag with curl: `curl -c /tmp/cookies.txt ...` |
+| API returns 404 for authenticated endpoint | Check session is valid, use GET `/api/v1/auth/session` to verify |
+| "Authentication required" on POST | Session cookie must be in `Cookie` header, not `Authorization` header |
+
+---
+
 ## Workflow for Every Task
 
 1. **Understand the scope** — read relevant files before making changes

@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     bedrock_model_id: str = "us.anthropic.claude-sonnet-4-6-v1"
     bedrock_region: str = "us-east-1"
     bedrock_max_tokens: int = 4096
+    bedrock_timeout_seconds: int = 300  # 5 minutes for complex code generation
+    # Fallback models if primary fails 2-3x or times out 30-60s+
+    # Priority: Qwen 3 coders (fastest), then Amazon Nova, then DeepSeek R1
+    bedrock_fallback_models: list[str] = [
+        "qwen.qwen3-coder-480b-a35b-v1:0",
+        "qwen.qwen3-coder-next-v1:0",
+        "qwen.qwen3-coder-30b-a3b-v1:0",
+        "us.amazon.nova-lite-v1:0",
+        "us.amazon.deepseek-r1-v1:0",
+    ]
 
     # Visual Redesign Configuration
     visual_redesign_enabled: bool = True
