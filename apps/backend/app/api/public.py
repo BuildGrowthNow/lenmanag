@@ -16,7 +16,7 @@ def _normalize_preview_slug(slug: str) -> str:
     return slug.strip().rstrip("`'\" ")
 
 
-@router.get("/sites/{slug}", response_model=ResponseEnvelope[GeneratedSite])
+@router.get("/st/{slug}", response_model=ResponseEnvelope[GeneratedSite])
 async def get_public_site(
     slug: str, request: Request
 ) -> ResponseEnvelope[GeneratedSite]:

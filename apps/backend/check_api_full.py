@@ -2,7 +2,7 @@ import httpx
 import json
 
 slug = "a8dd9f7c1e1344c5b03b9e5bf82747aa"
-url = f"http://127.0.0.1:8003/api/v1/public/sites/{slug}"
+url = f"http://127.0.0.1:8003/api/v1/public/st/{slug}"
 
 r = httpx.get(url)
 print(f"Status: {r.status_code}")

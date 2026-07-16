@@ -582,7 +582,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
   const themeItems = themes.items;
   const hasApprovedBrief = brief?.approvalState === "approved";
   const hasExtraction = Boolean(extraction && extraction.version > 0);
-  const previewUrl = site?.previewUrl || `/sites/${site?.previewSlug || id}`;
+  const previewUrl = site?.previewUrl || `/st/${site?.previewSlug || id}`;
   const score = site?.qualityScore ?? 0;
   const hasScreenshotQA = Boolean(site?.screenshotRefs && site.screenshotRefs.length > 0);
 

@@ -319,8 +319,43 @@ class _SignalParser(HTMLParser):
             # Enhanced logo detection with multiple strategies
             hint = f"{alt} {title} {src} {class_attr} {id_attr}".lower()
 
+            # Filter out Material Design icons and generic UI icons
+            material_design_patterns = [
+                "material-icons",
+                "material_icon",
+                "mui-icon",
+                "/settings.svg",
+                "/settings_",
+                "/humidity",
+                "/temperature",
+                "/menu.svg",
+                "/menu_",
+                "/close.svg",
+                "/search.svg",
+                "/arrow",
+                "/chevron",
+                "/check",
+                "/cross",
+                "/plus",
+                "/minus",
+                "/info",
+                "/warning",
+                "/error",
+                "/success",
+                "icon-font",
+                "font-awesome",
+                "fa-",
+                "feather-",
+            ]
+
+            # Skip if this looks like a generic icon
+            if any(
+                pattern in hint or pattern in src.lower()
+                for pattern in material_design_patterns
+            ):
+                pass  # Skip this image, not a logo
             # Strategy 1: Direct "logo" keyword in multiple attributes
-            if "logo" in hint:
+            elif "logo" in hint:
                 self.signals.logo_candidates.append(candidate or src.strip())
             # Strategy 2: Common logo file naming patterns
             elif any(
@@ -334,19 +369,40 @@ class _SignalParser(HTMLParser):
                     "/brand.",
                     "-brand.",
                     "_brand.",
-                    "/icon.",
                     "/favicon.",
                     "/apple-touch-icon",
                 ]
             ):
                 self.signals.logo_candidates.append(candidate or src.strip())
-            # Strategy 3: Logo in header/nav context (checked when we know parent)
-            # This will be handled separately in section-aware parsing
-            # Strategy 4: SVG files in header (often logos)
+            # Strategy 3: CDN logo patterns (common for company logos)
+            elif any(
+                cdn_pattern in src.lower()
+                for cdn_pattern in [
+                    "cdn.sanity.io",
+                    "cloudfront.net",
+                    "s3.amazonaws.com",
+                    "imgix.net",
+                    "cloudinary.com",
+                ]
+            ) and any(logo_hint in hint for logo_hint in ["logo", "brand", "company"]):
+                self.signals.logo_candidates.append(candidate or src.strip())
+            # Strategy 4: SVG files in header (often logos) but NOT generic icon names
             elif (
                 ".svg" in src.lower()
                 and self._section_stack
                 and self._section_stack[-1].tag_name == "header"
+                and not any(
+                    generic in src.lower()
+                    for generic in [
+                        "/icon",
+                        "_icon",
+                        "icon-",
+                        "icon_",
+                        "/ui/",
+                        "/icons/",
+                        "/assets/icons",
+                    ]
+                )
             ):
                 self.signals.logo_candidates.append(candidate or src.strip())
 
@@ -450,6 +506,29 @@ def _looks_like_cta(text: str) -> bool:
             "talk",
             "call",
             "schedule",
+            "get free",
+            "request",
+            "try",
+            "sign up",
+            "register",
+            "download",
+            "subscribe",
+            "join",
+            "buy",
+            "order",
+            "shop",
+            "view",
+            "explore",
+            "discover",
+            "estimate",
+            "consultation",
+            "appointment",
+            "start",
+            "begin",
+            "apply",
+            "enroll",
+            "reserve",
+            "claim",
         ]
     )
 
@@ -493,14 +572,30 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
 
             rendered_html = page.content()
 
-            page_data = page.evaluate("""
+            page_data = page.evaluate(r"""
             () => {
                 const getStyle = (el, prop) => window.getComputedStyle(el)[prop];
                 const sections = Array.from(document.querySelectorAll('header, main > section, section, article, footer'));
 
-                // Enhanced logo detection - find all potential logo images
+                // Enhanced logo detection - find all potential logo images with filtering
                 const logoImages = [];
                 const headerEl = document.querySelector('header, nav, .header, .navbar');
+
+                // Filter patterns for Material Design icons and generic UI icons
+                const materialDesignPatterns = [
+                    'material-icons', 'material_icon', 'mui-icon',
+                    '/settings.svg', '/settings_', '/humidity', '/temperature',
+                    '/menu.svg', '/menu_', '/close.svg', '/search.svg',
+                    '/arrow', '/chevron', '/check', '/cross', '/plus', '/minus',
+                    '/info', '/warning', '/error', '/success',
+                    'icon-font', 'font-awesome', 'fa-', 'feather-'
+                ];
+
+                const isGenericIcon = (src, hint) => {
+                    return materialDesignPatterns.some(pattern =>
+                        src.toLowerCase().includes(pattern) || hint.includes(pattern)
+                    );
+                };
 
                 // Strategy 1: Images in header/nav with logo-related attributes
                 if (headerEl) {
@@ -511,6 +606,11 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                         const className = (img.className || '').toLowerCase();
                         const id = (img.id || '').toLowerCase();
                         const hint = `${alt} ${className} ${id} ${src}`.toLowerCase();
+
+                        // Skip generic icons
+                        if (isGenericIcon(src, hint)) {
+                            return;
+                        }
 
                         let score = 40;
                         const reasons = [];
@@ -523,9 +623,14 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                             score += 30;
                             reasons.push('brand asset');
                         }
-                        if (/[.]svg/i.test(src)) {
+                        // CDN logo patterns (high confidence for company logos)
+                        if (/(cdn\.sanity\.io|cloudfront\.net|s3\.amazonaws|imgix\.net|cloudinary\.com)/i.test(src)) {
+                            score += 25;
+                            reasons.push('from logo CDN');
+                        }
+                        if (/[.]svg/i.test(src) && !/(\/icon|_icon|icon-|icon_|\/ui\/|\/icons\/|\/assets\/icons)/i.test(src)) {
                             score += 20;
-                            reasons.push('SVG format');
+                            reasons.push('SVG format (non-icon path)');
                         }
                         if (headerEl.contains(img) && headerImages.indexOf(img) === 0) {
                             score += 15;
@@ -551,6 +656,12 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                     const alt = (img.alt || '').toLowerCase();
                     const className = (img.className || '').toLowerCase();
                     const id = (img.id || '').toLowerCase();
+                    const hint = `${alt} ${className} ${id} ${src}`.toLowerCase();
+
+                    // Skip generic icons
+                    if (isGenericIcon(src, hint)) {
+                        return;
+                    }
 
                     if ((/logo/i.test(alt) || /logo/i.test(className) || /logo/i.test(id) || /[/]logo[._-]/i.test(src)) &&
                         !logoImages.some(l => l.src === img.src)) {
@@ -565,10 +676,15 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                     }
                 });
 
-                // Strategy 3: SVG elements (often used for logos)
+                // Strategy 3: SVG elements (often used for logos) but not generic icons
                 const svgElements = Array.from(document.querySelectorAll('svg'));
                 if (headerEl && svgElements.length > 0) {
-                    const headerSvgs = svgElements.filter(svg => headerEl.contains(svg));
+                    const headerSvgs = svgElements.filter(svg => {
+                        const svgClass = (svg.className?.baseVal || '').toLowerCase();
+                        const svgId = (svg.id || '').toLowerCase();
+                        const hint = `${svgClass} ${svgId}`;
+                        return headerEl.contains(svg) && !isGenericIcon('', hint);
+                    });
                     headerSvgs.slice(0, 2).forEach(svg => {
                         logoImages.push({
                             src: 'inline-svg',
@@ -1273,19 +1389,52 @@ def crawl_website(
     homepage_url = homepage_result["finalUrl"]
     homepage_signals = _parse_html(homepage_result["body"])
     detected_url = homepage_url if homepage_url != canonical_url else None
-    sitemap_candidates = [
+    
+    # Build sitemap candidates list
+    # 1. Custom sitemap URL from settings (if configured)
+    # 2. Standard sitemap locations
+    # 3. Compressed sitemap variants (.gz) if enabled
+    sitemap_candidates: list[str] = []
+    
+    # Add custom sitemap URL if configured
+    if settings.sitemap_url:
+        sitemap_candidates.append(settings.sitemap_url)
+    
+    # Add standard sitemap locations
+    sitemap_candidates.extend([
         urljoin(homepage_url, "/sitemap.xml"),
         urljoin(homepage_url, "/sitemap_index.xml"),
-    ]
+    ])
+    
+    # Add .gz variants if enabled
+    if settings.sitemap_gz_enabled:
+        sitemap_candidates.extend([
+            urljoin(homepage_url, "/sitemap.xml.gz"),
+            urljoin(homepage_url, "/sitemap_index.xml.gz"),
+        ])
+    
     sitemap_urls: list[str] = []
     sitemap_status = "missing"
     sitemap_errors: list[str] = []
+    
     for sitemap_url in sitemap_candidates:
         sitemap_result = _safe_fetch(sitemap_url)
         if not sitemap_result["ok"]:
             sitemap_errors.append(sitemap_result["error"] or "sitemap_fetch_failed")
             continue
-        parsed_urls = _parse_sitemap_urls(sitemap_result["body"] or "")
+        
+        # Handle compressed sitemaps
+        sitemap_body = sitemap_result["body"] or ""
+        if sitemap_url.endswith(".gz"):
+            # Try to decompress
+            try:
+                import gzip
+                sitemap_body = gzip.decompress(sitemap_body.encode('latin-1')).decode('utf-8')
+            except Exception:
+                # If decompression fails, try to parse as-is (some servers return uncompressed)
+                pass
+        
+        parsed_urls = _parse_sitemap_urls(sitemap_body)
         if parsed_urls:
             sitemap_status = "found"
             sitemap_urls.extend(parsed_urls)
@@ -1294,9 +1443,17 @@ def crawl_website(
                 for nested_url in parsed_urls[:3]:
                     nested_result = _safe_fetch(nested_url)
                     if nested_result["ok"]:
-                        sitemap_urls.extend(
-                            _parse_sitemap_urls(nested_result["body"] or "")
-                        )
+                        nested_body = nested_result["body"] or ""
+                        if nested_url.endswith(".gz"):
+                            try:
+                                import gzip
+                                nested_body = gzip.decompress(nested_body.encode('latin-1')).decode('utf-8')
+                            except Exception:
+                                pass
+                        if nested_result["ok"]:
+                            sitemap_urls.extend(
+                                _parse_sitemap_urls(nested_body)
+                            )
             break
     sitemap_urls = [
         url for url in dict.fromkeys(sitemap_urls) if _same_origin(canonical_url, url)
@@ -1313,7 +1470,7 @@ def crawl_website(
         remaining = max_pages - 1
         for sitemap_url in sitemap_urls[:remaining]:
             discovered_urls.append((sitemap_url, "sitemap", 1))
-        for href, anchor_text in homepage_signals.links:
+        for href, _ in homepage_signals.links:
             if not href:
                 continue
             candidate = urljoin(homepage_url, href)
@@ -1321,7 +1478,7 @@ def crawl_website(
                 homepage_links.append(candidate)
     else:
         # No sitemap found, fall back to internal links
-        for href, anchor_text in homepage_signals.links:
+        for href, _ in homepage_signals.links:
             if not href:
                 continue
             candidate = urljoin(homepage_url, href)
@@ -1539,27 +1696,80 @@ def crawl_website(
                         break
                 except Exception as e:
                     logger.warning(f"Asset download failed: {e}")
-            if url == homepage_url:
-                if signals.h1:
-                    service_clues.extend(signals.h1[:2])
-                if signals.h2:
-                    service_clues.extend(signals.h2[:4])
-            else:
-                if signals.h1:
-                    service_clues.extend(signals.h1[:1])
-                if signals.h2:
-                    service_clues.extend(signals.h2[:2])
-
+            # Enhanced service extraction - prioritize actual descriptions over bare headings
             for section in page_data.get("sections", []):
-                if section.get("type") == "services":
-                    heading = section.get("heading")
-                    if heading and heading not in service_clues:
-                        service_clues.append(heading)
-                    section_text = section.get("text") or ""
-                    for line in section_text.split("\n")[:5]:
+                section_type = section.get("type")
+                section_text = section.get("text") or ""
+                heading = section.get("heading")
+
+                # For services sections, extract service descriptions
+                if section_type == "services":
+                    # Look for list-like service descriptions (bullets, numbered items)
+                    lines = section_text.split("\n")
+                    for line in lines[:12]:
                         line = line.strip()
-                        if 3 < len(line) < 60 and line[0].isupper():
-                            service_clues.append(line)
+                        # Service description patterns: short sentences, bullet points, feature lists
+                        if 10 < len(line) < 80 and (
+                            line[0].isupper()
+                            or line.startswith(("•", "-", "*", "→"))
+                            or line[0].isdigit()
+                        ):
+                            # Remove bullet/number prefixes
+                            cleaned = line.lstrip("•-*→0123456789. ")
+                            if len(cleaned) > 10 and cleaned not in service_clues:
+                                service_clues.append(cleaned)
+
+                    # Add heading only if we didn't find good descriptions
+                    if (
+                        heading
+                        and len([c for c in service_clues if section_text[:50] in c])
+                        < 2
+                    ):
+                        if heading not in service_clues:
+                            service_clues.append(heading)
+
+                # For homepage hero/header sections, look for value propositions
+                elif section_type in ("hero", "header") and url == homepage_url:
+                    # Extract short, descriptive sentences from hero section
+                    sentences = [
+                        s.strip() for s in section_text.split(".") if s.strip()
+                    ]
+                    for sentence in sentences[:3]:
+                        # Value propositions are usually 15-100 chars
+                        if 15 < len(sentence) < 100 and sentence[0].isupper():
+                            if sentence not in service_clues:
+                                service_clues.append(sentence)
+
+                # Process/workflow sections often describe services
+                elif section_type == "process":
+                    lines = section_text.split("\n")
+                    for line in lines[:8]:
+                        line = line.strip()
+                        if 15 < len(line) < 70 and line[0].isupper():
+                            cleaned = line.lstrip("•-*→0123456789. ")
+                            if cleaned not in service_clues:
+                                service_clues.append(cleaned)
+
+            # Fallback: If we still don't have enough services, use headings as hints
+            if len(service_clues) < 3:
+                if url == homepage_url:
+                    if signals.h1:
+                        service_clues.extend(
+                            h for h in signals.h1[:2] if h not in service_clues
+                        )
+                    if signals.h2:
+                        service_clues.extend(
+                            h for h in signals.h2[:4] if h not in service_clues
+                        )
+                else:
+                    if signals.h1:
+                        service_clues.extend(
+                            h for h in signals.h1[:1] if h not in service_clues
+                        )
+                    if signals.h2:
+                        service_clues.extend(
+                            h for h in signals.h2[:2] if h not in service_clues
+                        )
 
             if signals.ctas:
                 cta_clues.extend(signals.ctas[:3])
@@ -1568,8 +1778,91 @@ def crawl_website(
                 body_text_for_audience.append(signals.meta_description)
             if signals.title:
                 body_text_for_audience.append(signals.title)
-            if signals.font_family:
-                tone_clues.append("Typography cue detected from public font hints.")
+
+            # Enhanced tone detection from actual content
+            all_text = " ".join(signals.body_text[:50]).lower()
+
+            # Professional/formal tone indicators
+            if any(
+                word in all_text
+                for word in [
+                    "we provide",
+                    "our services",
+                    "expertise",
+                    "professional",
+                    "industry-leading",
+                    "certified",
+                ]
+            ):
+                tone_clues.append(
+                    "Professional/formal tone with emphasis on expertise and credentials"
+                )
+
+            # Friendly/conversational tone indicators
+            if any(
+                word in all_text
+                for word in [
+                    "we're here",
+                    "let's",
+                    "you'll love",
+                    "welcome",
+                    "excited",
+                    "happy to",
+                ]
+            ):
+                tone_clues.append(
+                    "Friendly/conversational tone with welcoming language"
+                )
+
+            # Action-oriented/urgent tone
+            if any(
+                word in all_text
+                for word in [
+                    "now",
+                    "today",
+                    "don't wait",
+                    "limited",
+                    "act fast",
+                    "hurry",
+                ]
+            ):
+                tone_clues.append(
+                    "Action-oriented/urgent tone encouraging immediate engagement"
+                )
+
+            # Trust/authority tone
+            if any(
+                word in all_text
+                for word in [
+                    "trusted",
+                    "award",
+                    "years of experience",
+                    "proven",
+                    "guarantee",
+                    "certified",
+                ]
+            ):
+                tone_clues.append(
+                    "Trust/authority-focused tone highlighting credibility"
+                )
+
+            # Premium/luxury tone
+            if any(
+                word in all_text
+                for word in [
+                    "exclusive",
+                    "premium",
+                    "luxury",
+                    "bespoke",
+                    "curated",
+                    "exceptional",
+                ]
+            ):
+                tone_clues.append("Premium/luxury tone emphasizing high-end quality")
+
+            # Typography hint (keep as fallback)
+            if signals.font_family and not tone_clues:
+                tone_clues.append(f"Typography cue: {signals.font_family[:50]}")
 
     crawled_urls = [
         item["url"] for item in page_inventory if item.get("status") == "crawled"

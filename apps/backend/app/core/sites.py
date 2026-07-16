@@ -4214,7 +4214,7 @@ class SiteRepository:
                 screenshot_qa_result = (
                     await self._screenshot_comparator.compare_layout_screenshot(
                         site_id=site_id,
-                        preview_url=f"/st/{site_id}",
+                        preview_url=f"/st/{friendly_slug}",
                         section_names=section_names_for_qa,
                     )
                 )

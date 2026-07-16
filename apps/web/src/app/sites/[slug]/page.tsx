@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -365,10 +365,19 @@ function ensurePreviewSessionId(): string | null {
 
 export default function PublicPreviewPage({ params }: { params: Promise<{ slug: string }> }) {
   const [site, setSite] = useState<GeneratedSite | null | undefined>(undefined);
-  const { slug } = use(params);
-  const previewSlug = normalizePreviewSlug(slug);
+  const [slug, setSlug] = useState<string | undefined>(undefined);
+  
+  useEffect(() => {
+    const loadParams = async () => {
+      const { slug } = await params;
+      setSlug(slug);
+    };
+    loadParams();
+  }, [params]);
+  
+  const previewSlug = slug ? normalizePreviewSlug(slug) : "";
   const sessionRef = useRef<string | null>(null);
-  const pagePath = `/sites/${previewSlug}`;
+  const pagePath = `/st/${previewSlug}`;
 
   useEffect(() => {
     sessionRef.current = sessionRef.current ?? ensurePreviewSessionId();

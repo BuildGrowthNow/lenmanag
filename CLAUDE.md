@@ -326,7 +326,7 @@ curl -s -X POST -H "Cookie: lenquant_session=$SESSION" \
 - **Session tokens expire** after the time set in `SESSION_COOKIE_MAX_AGE_SECONDS` (default: 8 hours)
 - **Cookies are HttpOnly** and Secure — must be passed via `Cookie` header, not JavaScript
 - **Password is shared** across all allowlisted operators — no per-user passwords
-- **Public endpoints** (site preview at `/api/v1/public/sites/{slug}`) don't require authentication
+- **Public endpoints** (site preview at `/api/v1/public/st/{slug}`) don't require authentication
 - For **production testing**, use credentials from `.env.production` on the server
 
 ### Common Issues
@@ -386,3 +386,7 @@ All services share the `lenquant-network` bridge network.
 - **Next.js App Router** — no `pages/` directory, use `app/` with layouts and server components
 - **Tailwind CSS** — utility-first, no inline styles, use `cn()` from `lib/utils.ts` for conditional classes
 - **Error handling** — always handle async errors, never silent catches
+
+## TypeScript Configuration
+
+- **baseUrl deprecation**: The `baseUrl` compiler option is deprecated in TypeScript and will stop functioning in TypeScript 7.0. To silence the deprecation warning, add `"ignoreDeprecations": "6.0" - never change it to 5.0` to the `compilerOptions` in `tsconfig.json`. Do NOT change the baseUrl version to 5.0 or remove baseUrl — keep the current configuration and only add the ignoreDeprecations flag.

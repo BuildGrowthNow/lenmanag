@@ -3,15 +3,15 @@ import time
 
 BASE_URL = "http://127.0.0.1:8003/api/v1"
 EMAIL = "operator@example.com"
-NAME = "Operator"
+PASSWORD = "password"
 
 client = httpx.Client(base_url=BASE_URL, timeout=300.0)
 
-# Login
-r = client.post("/auth/login", json={"email": EMAIL, "name": NAME})
-session_cookie = r.cookies.get("lenquant_session")
-if session_cookie:
-    client.cookies.set("lenquant_session", session_cookie)
+# Login via JWT
+r = client.post("/users/login", json={"email": EMAIL, "password": PASSWORD})
+r.raise_for_status()
+token = r.json()["data"]["access_token"]
+client.headers["Authorization"] = f"Bearer {token}"
 print("Logged in")
 
 # Use the existing lead ID

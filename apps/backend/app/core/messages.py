@@ -177,7 +177,7 @@ class MessageRepository:
                 "",
                 f"I reviewed the approved preview for {lead.companyName or lead.websiteUrl}.",
                 f"The story centers on: {angle}",
-                f"Preview: {site.previewUrl if site else f'/sites/{lead_id}'}",
+                f"Preview: {site.previewUrl if site else f'/st/{lead_id}'}",
                 f"Primary CTA: {cta_primary.label if cta_primary else 'Review the preview'} -> {cta_primary.href if cta_primary else '#contact'}",
                 f"Secondary CTA: {cta_secondary.label if cta_secondary else 'See source notes'} -> {cta_secondary.href if cta_secondary else '#source-notes'}",
                 f"Calendly: {calendly_url or 'not captured in source data'}",

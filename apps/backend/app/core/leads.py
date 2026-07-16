@@ -15,6 +15,7 @@ from app.core.audit import write_brief_audit_log
 from app.core.checkpoint import TaskCheckpoint, resume_or_start_task
 from app.core.config import get_settings
 from app.core.extraction import crawl_website
+from app.core.extraction_analysis import analyze_extraction
 from app.core.extraction_enrichment import (
     enrich_extraction,
     validate_extraction_content,
@@ -46,6 +47,8 @@ from app.schemas.lead import (
     LeadUpsertRequest,
     SourceReference,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _now() -> datetime:
@@ -3041,6 +3044,48 @@ class LeadRepository:
                     "LLM enrichment failed: %s", enrich_err
                 )
 
+        # Phase 2: ALWAYS analyze extraction with LLM
+        await self._update_job(
+            job_id,
+            progress=70,
+            step="Analyzing extraction with LLM",
+            lead_ids=[lead_id],
+        )
+
+        try:
+            # Convert crawl_data to ExtractionSnapshot for analysis
+            temp_snapshot = self._extraction_doc_to_snapshot({**crawl_data, "leadId": lead_id, "analysis": None})
+
+            # Run LLM analysis
+            analysis_result = await analyze_extraction(temp_snapshot)
+
+            # Store analysis in crawl_data
+            crawl_data["analysis"] = {
+                **analysis_result,
+                "analyzedAt": _now().isoformat()
+            }
+
+            logger.info(
+                "LLM analysis complete for %s: %d services, confidence=%d",
+                lead_id,
+                len(analysis_result.get("services", [])),
+                analysis_result.get("confidence", 0)
+            )
+
+        except Exception as analysis_err:
+            logger.warning("LLM analysis failed, continuing with extraction: %s", analysis_err)
+            # Don't fail the job, just log and continue
+            crawl_data["analysis"] = {
+                "services": [],
+                "tone": "Professional",
+                "primaryCTAs": [],
+                "audience": "",
+                "valueProposition": "",
+                "positioning": "",
+                "confidence": 0,
+                "analyzedAt": None
+            }
+
         now = _now()
         previous_doc = await self._latest_extraction_doc(lead_id)
         version = int(previous_doc.get("version", 0)) + 1 if previous_doc else 1
@@ -3066,6 +3111,7 @@ class LeadRepository:
             "confidenceScore": crawl_data["confidenceScore"],
             "gapItems": crawl_data["gapItems"],
             "errors": crawl_data["errors"],
+            "analysis": crawl_data.get("analysis"),
             "crawlBudgetUsed": crawl_data.get("crawlBudgetUsed", 0),
             "crawlBudgetLimit": crawl_data.get(
                 "crawlBudgetLimit", get_settings().crawl_budget_bytes

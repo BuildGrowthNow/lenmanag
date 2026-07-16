@@ -15,29 +15,6 @@ export function versionedPath(path: string): string {
   return normalizePath(path);
 }
 
-async function getServerCookieHeader(): Promise<string | null> {
-  if (typeof window !== "undefined") {
-    return null;
-  }
-  try {
-    const { cookies } = await import("next/headers");
-    const cookieStore = await cookies();
-    const allCookies = cookieStore.getAll();
-    const cookieHeader = allCookies
-      .map((cookie) => `${cookie.name}=${cookie.value}`)
-      .join("; ");
-    if (cookieHeader) {
-      console.log("[API Client] Server cookies found:", allCookies.map(c => c.name).join(", "));
-    } else {
-      console.log("[API Client] No server cookies found");
-    }
-    return cookieHeader || null;
-  } catch (error) {
-    console.error("[API Client] Failed to get server cookies:", error);
-    return null;
-  }
-}
-
 type ApiResponseEnvelope<T> = {
   status: "success" | "error";
   meta: { version: string; requestId: string; generatedAt: string };
@@ -81,10 +58,8 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
-  const serverCookieHeader = await getServerCookieHeader();
   const normalizedPath = normalizePath(path);
 
-  // Get JWT token from localStorage (client-side only)
   let authToken: string | null = null;
   if (typeof window !== "undefined") {
     authToken = localStorage.getItem("access_token");
@@ -92,12 +67,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   const response = await fetch(`${API_BASE_URL}${normalizedPath}`, {
     method: options.method || "GET",
-    credentials: "include",
     headers: {
       Accept: VENDOR_MEDIA_TYPE,
       [VERSION_HEADER_NAME]: API_VERSION,
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(serverCookieHeader ? { Cookie: serverCookieHeader } : {}),
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options.headers || {})
     },

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Cookie, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 
-from app.core.security import decode_session_token
+from app.core.auth_dependencies import CurrentUserId
 from app.core.audit import write_audit_log
 from app.core.admin_config import get_config, patch_config
 from app.core.versioning import response_meta
@@ -10,26 +10,11 @@ from app.core.versioning import response_meta
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-def _require_admin(session_cookie: str | None) -> dict:
-    if not session_cookie:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    payload = decode_session_token(session_cookie)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    # accept operator or admin roles
-    if payload.get("role") not in {"operator", "admin"}:
-        raise HTTPException(status_code=403, detail="forbidden")
-    return payload
-
-
 @router.get("/config")
-async def get_admin_config(
-    request: Request, session_cookie: str | None = Cookie(default=None)
-):
-    user = _require_admin(session_cookie)
+async def get_admin_config(request: Request, user_id: CurrentUserId):
     cfg = await get_config()
     await write_audit_log(
-        user.get("email"),
+        user_id,
         "admin",
         "config",
         "get_config",
@@ -39,12 +24,8 @@ async def get_admin_config(
 
 
 @router.patch("/config")
-async def patch_admin_config(
-    request: Request, payload: dict, session_cookie: str | None = Cookie(default=None)
-):
-    user = _require_admin(session_cookie)
+async def patch_admin_config(request: Request, payload: dict, user_id: CurrentUserId):
     before = await get_config()
-    # basic validation: only allow whitelisted keys
     allowed = {
         "asset_storage_backend",
         "asset_max_file_bytes",
@@ -61,7 +42,7 @@ async def patch_admin_config(
         )
     updated = await patch_config(updates)
     await write_audit_log(
-        user.get("email"),
+        user_id,
         "admin",
         "config",
         "patch_config",

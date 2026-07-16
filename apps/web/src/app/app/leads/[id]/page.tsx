@@ -180,7 +180,7 @@ function StageWorkspace({
               </div>
             </div>
             {site ? (
-              <Link href={`/sites/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
+              <Link href={`/st/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
             ) : null}
           </div>
           {site ? (
@@ -220,7 +220,7 @@ function StageWorkspace({
           </p>
           <div className="flex flex-wrap gap-2">
             {site ? (
-              <Link href={`/sites/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
+              <Link href={`/st/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
             ) : null}
             <Link href={`/app/sites/${lead.id}`} className={buttonVariants()}>Publish →</Link>
           </div>

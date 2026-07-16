@@ -3,7 +3,7 @@ import httpx
 
 BASE_URL = "http://127.0.0.1:52501/api/v1"
 EMAIL = "operator@example.com"
-NAME = "Operator"
+PASSWORD = "password"
 TARGET_URL = "https://taslimifoundation.org"
 
 HEADERS = {
@@ -20,16 +20,12 @@ def main() -> None:
     client = httpx.Client(base_url=BASE_URL, headers=HEADERS, timeout=300.0)
     try:
         _print_step("login")
-        r = client.post("/auth/login", json={"email": EMAIL, "name": NAME})
+        r = client.post("/users/login", json={"email": EMAIL, "password": PASSWORD})
         print("status", r.status_code)
         print(r.text)
         r.raise_for_status()
-        # Store session cookie
-        session_cookie = r.cookies.get("lenquant_session")
-        if not session_cookie:
-            print("ERROR: No session cookie received")
-            return
-        client.cookies.set("lenquant_session", session_cookie)
+        token = r.json()["data"]["access_token"]
+        client.headers["Authorization"] = f"Bearer {token}"
 
         _print_step("create_lead")
         lead_payload = {

@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List, Literal, Optional
+from typing import List, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,14 +20,9 @@ class Settings(BaseSettings):
     signup_code: str = ""
     auth_allowlist_emails: str = "operator@example.com"
     auth_allowlist_domains: str = ""
-    auth_admin_password: str = ""
     resend_api_key: str = ""
     resend_from_email: str = "noreply@lenquant.com"
     backend_cors_origins: str = "http://localhost:3000,http://localhost:3002"
-    session_cookie_secure: bool = True
-    session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
-    session_cookie_domain: str | None = None
-    session_cookie_max_age_seconds: int = 60 * 60 * 8
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str | None = None
     celery_default_queue: str = "lenquant"
@@ -55,8 +50,8 @@ class Settings(BaseSettings):
     bedrock_fallback_models: list[str] = [
         "qwen.qwen3-coder-next",  # Fastest Qwen coder
         "qwen.qwen3-coder-30b-a3b-v1:0",  # Latest Qwen
-        "deepseek.v3.2", 
-        "us.amazon.nova-pro-v1:0", 
+        "deepseek.v3.2",
+        "us.amazon.nova-pro-v1:0",
         "mistral.mistral-large-3-675b-instruct",  # DeepSeek R1
     ]
 
@@ -112,6 +107,9 @@ class Settings(BaseSettings):
     extraction_mobile_screenshot_width: int = 390
     extraction_mobile_screenshot_height: int = 844
     extraction_section_screenshot_limit: int = 8
+    # Sitemap configuration
+    sitemap_url: str | None = None  # Optional custom sitemap URL
+    sitemap_gz_enabled: bool = True  # Try .gz compressed sitemaps
 
     # CTA safety config
     cta_allowed_verbs: str = (

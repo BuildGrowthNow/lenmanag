@@ -8,7 +8,7 @@ export function Topbar() {
         <div className="mt-1 font-medium text-text">LenQuant operator workspace</div>
       </div>
       <div className="flex items-center gap-2">
-        <Badge>Allowlist auth</Badge>
+        <Badge>Authenticated</Badge>
         <Badge className="bg-success/15 text-success">Live preview ops</Badge>
       </div>
     </div>

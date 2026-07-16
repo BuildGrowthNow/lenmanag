@@ -236,7 +236,7 @@ export default function SitesPage() {
               site.sourceAttribution?.normalizedDomain ||
               site.id.slice(0, 8);
             const domain = site.sourceAttribution?.normalizedDomain ?? "";
-            const previewPath = site.previewUrl || `/sites/${site.previewSlug}`;
+            const previewPath = site.previewUrl || `/st/${site.previewSlug}`;
             const score = qualityScoreDisplay(site);
             const hasScreenshotQA = site.screenshotRefs && site.screenshotRefs.length > 0;
 

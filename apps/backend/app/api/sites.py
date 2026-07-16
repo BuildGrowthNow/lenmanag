@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, cast
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.core.audit import write_audit_log
+from app.core.auth_dependencies import CurrentUserId
 from app.core.leads import lead_repository
-from app.core.security import SESSION_COOKIE_NAME, decode_session_token
 from app.core.sites import site_repository, validate_operator_prompt
 from app.core.versioning import response_meta
 from app.schemas.job import JobResponse
@@ -38,17 +38,6 @@ router = APIRouter(prefix="/sites", tags=["sites"])
 themes_router = APIRouter(tags=["sites"])
 
 
-async def _require_session(
-    session_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
-) -> dict:
-    if not session_cookie:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    payload = decode_session_token(session_cookie)
-    if payload is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    return payload
-
-
 async def _job_response(job) -> JobResponse:
     job_doc = await lead_repository.get_job_doc(job.id)
     lead_ids_raw = list(job_doc.get("leadIds", [])) if job_doc else []
@@ -62,7 +51,7 @@ async def _job_response(job) -> JobResponse:
 
 @themes_router.get("/themes", response_model=ResponseEnvelope[ThemeLibraryResponse])
 async def list_themes(
-    request: Request, session: dict = Depends(_require_session)
+    request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[ThemeLibraryResponse]:
     return success_response(
         site_repository.get_theme_library(), meta=response_meta(request)
@@ -72,9 +61,9 @@ async def list_themes(
 @router.get("", response_model=ResponseEnvelope[list[GeneratedSite]])
 async def list_sites(
     request: Request,
+    _user_id: CurrentUserId,
     limit: int = 25,
     offset: int = 0,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[list[GeneratedSite]]:
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
@@ -88,9 +77,9 @@ async def list_sites(
 @router.get("/review-queue", response_model=ResponseEnvelope[SiteReviewQueueResponse])
 async def review_queue(
     request: Request,
+    _user_id: CurrentUserId,
     limit: int = 25,
     offset: int = 0,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[SiteReviewQueueResponse]:
     return success_response(
         await site_repository.list_review_queue(limit=limit, offset=offset),
@@ -101,8 +90,8 @@ async def review_queue(
 @router.get("/diversity-report", response_model=ResponseEnvelope[dict[str, Any]])
 async def diversity_report(
     request: Request,
+    _user_id: CurrentUserId,
     limit: int = 100,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[dict[str, Any]]:
     return success_response(
         await site_repository.get_diversity_report(limit=limit),
@@ -112,7 +101,7 @@ async def diversity_report(
 
 @router.get("/{site_id}", response_model=ResponseEnvelope[GeneratedSite | None])
 async def get_site(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[GeneratedSite | None]:
     site = await site_repository.get_site(site_id)
     return success_response(site, meta=response_meta(request))
@@ -123,7 +112,7 @@ async def get_site(
     response_model=ResponseEnvelope[list[RefinementPromptRecord]],
 )
 async def get_prompt_history(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[list[RefinementPromptRecord]]:
     history = await site_repository.get_prompt_history(site_id)
     return success_response(history, meta=response_meta(request))
@@ -134,7 +123,7 @@ async def get_prompt_history(
     response_model=ResponseEnvelope[GeneratedSiteVersionResponse | None],
 )
 async def get_versions(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[GeneratedSiteVersionResponse | None]:
     return success_response(
         await site_repository.list_versions(site_id), meta=response_meta(request)
@@ -145,7 +134,7 @@ async def get_versions(
     "/{site_id}/compare", response_model=ResponseEnvelope[SiteCompareResponse | None]
 )
 async def get_compare(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteCompareResponse | None]:
     return success_response(
         await site_repository.get_compare(site_id), meta=response_meta(request)
@@ -154,7 +143,7 @@ async def get_compare(
 
 @router.get("/{site_id}/review", response_model=ResponseEnvelope[SiteReviewResponse])
 async def get_review(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteReviewResponse]:
     return success_response(
         SiteReviewResponse(review=await site_repository.get_review(site_id)),
@@ -167,15 +156,13 @@ async def add_review(
     site_id: str,
     payload: SiteReviewRequest,
     request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[SiteReviewRecord]:
-    review = await site_repository.upsert_review(
-        site_id, payload, actor=session["email"]
-    )
+    review = await site_repository.upsert_review(site_id, payload, actor=user_id)
     if review is None:
         raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_review_create",
@@ -189,15 +176,13 @@ async def patch_review(
     site_id: str,
     payload: SiteReviewPatchRequest,
     request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[SiteReviewRecord]:
-    review = await site_repository.upsert_review(
-        site_id, payload, actor=session["email"]
-    )
+    review = await site_repository.upsert_review(site_id, payload, actor=user_id)
     if review is None:
         raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_review_update",
@@ -210,13 +195,13 @@ async def patch_review(
     "/{site_id}/review/approve", response_model=ResponseEnvelope[SiteHandoffRecord]
 )
 async def approve_review(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteHandoffRecord]:
     handoff = await site_repository.publish_handoff(site_id)
     if handoff is None:
         raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_review_approve",
@@ -227,7 +212,7 @@ async def approve_review(
 
 @router.get("/{site_id}/handoff", response_model=ResponseEnvelope[SiteHandoffRecord])
 async def get_handoff(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteHandoffRecord]:
     handoff = await site_repository.get_handoff(site_id)
     if handoff is None:
@@ -244,7 +229,7 @@ async def regenerate_site_with_prompt(
     site_id: str,
     payload: dict[str, Any],
     request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[JobResponse]:
     refinement_prompt = (payload.get("refinementPrompt") or "").strip()
     force = bool(payload.get("force", False))
@@ -266,7 +251,7 @@ async def regenerate_site_with_prompt(
             ),
         )
 
-    operator_id = (payload.get("operatorId") or session.get("email") or "").strip()
+    operator_id = (payload.get("operatorId") or user_id or "").strip()
     if not operator_id:
         raise HTTPException(status_code=400, detail="operatorId is required.")
 
@@ -301,7 +286,7 @@ async def regenerate_site_with_prompt(
         raise HTTPException(status_code=404, detail="Lead not found.")
 
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_regenerate",
@@ -320,8 +305,8 @@ async def regenerate_site_with_prompt(
 async def generate_site(
     site_id: str,
     http_request: Request,
+    user_id: CurrentUserId,
     payload: SiteGenerateRequest | None = None,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[JobResponse]:
     try:
         job = await site_repository.queue_generation_job(site_id, request=payload)
@@ -340,7 +325,7 @@ async def generate_site(
     if job is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_generate",
@@ -355,7 +340,7 @@ async def generate_site(
     status_code=202,
 )
 async def republish_site(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[JobResponse]:
     try:
         job = await site_repository.queue_generation_job(site_id)
@@ -374,7 +359,7 @@ async def republish_site(
     if job is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_republish",
@@ -390,15 +375,13 @@ async def add_override(
     site_id: str,
     payload: SiteOverrideCreateRequest,
     http_request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[SiteOverrideRecord]:
-    record = await site_repository.create_override(
-        site_id, payload, actor=session["email"]
-    )
+    record = await site_repository.create_override(site_id, payload, actor=user_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_override_create",
@@ -415,15 +398,13 @@ async def disable_override(
     site_id: str,
     override_id: str,
     request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[SiteOverrideRecord]:
-    record = await site_repository.disable_override(
-        site_id, override_id, actor=session["email"]
-    )
+    record = await site_repository.disable_override(site_id, override_id, actor=user_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Override not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_override_disable",
@@ -437,7 +418,7 @@ async def export_site(
     site_id: str,
     payload: SiteExportRequest,
     http_request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[SiteExportMetadata]:
     now = datetime.now(timezone.utc)
     metadata = SiteExportMetadata(
@@ -454,7 +435,7 @@ async def export_site(
     if export_metadata is None:
         raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_export_create",
@@ -467,7 +448,7 @@ async def export_site(
     "/{site_id}/export", response_model=ResponseEnvelope[SiteExportMetadata | None]
 )
 async def get_export(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteExportMetadata | None]:
     site = await site_repository.get_site(site_id)
     if site is None:
@@ -479,7 +460,7 @@ async def get_export(
     "/{site_id}/export/history", response_model=ResponseEnvelope[list[SiteExportRecord]]
 )
 async def export_history(
-    site_id: str, request: Request, session: dict = Depends(_require_session)
+    site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[list[SiteExportRecord]]:
     site = await site_repository.get_site(site_id)
     if site is None:
@@ -491,7 +472,7 @@ async def export_history(
 
 @router.get("/{site_id}/export/bundle")
 async def download_export_bundle(
-    site_id: str, session: dict = Depends(_require_session)
+    site_id: str, _user_id: CurrentUserId
 ) -> StreamingResponse:
     bundle = await site_repository.build_export_bundle(site_id)
     if bundle is None:
@@ -513,14 +494,11 @@ async def sync_export_edits(
     export_id: str,
     edits: list[dict[str, Any]],
     request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[list[SiteOverrideRecord]]:
-    """
-    Syncs local edits back to structured overrides.
-    """
     overrides = await site_repository.sync_export_edits(site_id, export_id, edits)
     await write_audit_log(
-        session["email"],
+        user_id,
         "site",
         site_id,
         "site_export_sync",

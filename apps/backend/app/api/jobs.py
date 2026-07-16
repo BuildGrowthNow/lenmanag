@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 
+from app.core.auth_dependencies import CurrentUserId
 from app.core.leads import lead_repository
-from app.core.security import SESSION_COOKIE_NAME, decode_session_token
 from app.core.versioning import response_meta
 from app.schemas.job import JobQueueHealthResponse, JobResponse
 from app.schemas.lead import JobRetryRequest
@@ -16,20 +16,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-async def _require_session(
-    session_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
-) -> dict:
-    if not session_cookie:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    payload = decode_session_token(session_cookie)
-    if payload is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    return payload
-
-
 @router.get("/health", response_model=ResponseEnvelope[JobQueueHealthResponse])
 async def queue_health(
-    http_request: Request, session: dict = Depends(_require_session)
+    http_request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[JobQueueHealthResponse]:
     return success_response(
         await lead_repository.get_queue_health(), meta=response_meta(http_request)
@@ -38,7 +27,7 @@ async def queue_health(
 
 @router.get("/{job_id}", response_model=ResponseEnvelope[JobResponse])
 async def get_job(
-    job_id: str, http_request: Request, session: dict = Depends(_require_session)
+    job_id: str, http_request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[JobResponse]:
     job = await lead_repository.get_job(job_id)
     if job is None:
@@ -58,8 +47,8 @@ async def get_job(
 async def retry_job(
     job_id: str,
     http_request: Request,
+    _user_id: CurrentUserId,
     payload: JobRetryRequest | None = None,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[JobResponse]:
     retry = await lead_repository.retry_job(job_id, request=payload)
     if retry is None:

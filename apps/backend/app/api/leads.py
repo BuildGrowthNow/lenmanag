@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Cookie, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from app.core.audit import write_audit_log
 from app.core.auth_dependencies import CurrentUserId
 from app.core.leads import lead_repository
-from app.core.security import SESSION_COOKIE_NAME, decode_session_token
 from app.core.versioning import response_meta
 from app.schemas.brief import (
     MasterBrief,
@@ -32,27 +31,15 @@ from app.schemas.response import ResponseEnvelope, success_response
 router = APIRouter(prefix="/leads", tags=["leads"])
 
 
-async def _require_session(
-    session_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
-) -> dict:
-    if not session_cookie:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    payload = decode_session_token(session_cookie)
-    if payload is None:
-        raise HTTPException(status_code=401, detail="Authentication required.")
-    return payload
-
-
 @router.post("", response_model=ResponseEnvelope[LeadActionResponse])
 async def create_lead(
     payload: LeadUpsertRequest,
     http_request: Request,
     user_id: CurrentUserId,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[LeadActionResponse]:
     result = await lead_repository.create_lead(payload, user_id=user_id)
     await write_audit_log(
-        session.get("email", user_id),
+        user_id,
         "lead",
         result.lead.id,
         "lead_create",
@@ -66,7 +53,6 @@ async def import_leads(
     http_request: Request,
     user_id: CurrentUserId,
     file: UploadFile = File(...),
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[LeadImportResponse]:
     raw = await file.read()
     try:
@@ -76,7 +62,7 @@ async def import_leads(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     await write_audit_log(
-        session.get("email", user_id),
+        user_id,
         "lead_import",
         result.job.id,
         "lead_import",
@@ -93,7 +79,6 @@ async def list_leads(
     status: str | None = None,
     limit: int = 25,
     offset: int = 0,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[LeadListResponse]:
     try:
         result = await lead_repository.list_leads(
@@ -109,7 +94,6 @@ async def get_lead(
     lead_id: str,
     http_request: Request,
     user_id: CurrentUserId,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[LeadDetail]:
     lead = await lead_repository.get_lead(lead_id, user_id=user_id)
     if lead is None:
@@ -123,13 +107,12 @@ async def patch_lead(
     payload: LeadPatchRequest,
     http_request: Request,
     user_id: CurrentUserId,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[LeadDetail]:
     lead = await lead_repository.update_lead(lead_id, payload, user_id=user_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
-        session.get("email", user_id),
+        user_id,
         "lead",
         lead_id,
         "lead_update",
@@ -143,13 +126,12 @@ async def delete_lead(
     lead_id: str,
     http_request: Request,
     user_id: CurrentUserId,
-    session: dict = Depends(_require_session),
 ) -> ResponseEnvelope[LeadDetail]:
     lead = await lead_repository.delete_lead(lead_id, user_id=user_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
-        session.get("email", user_id),
+        user_id,
         "lead",
         lead_id,
         "lead_archive",
@@ -165,13 +147,13 @@ async def delete_lead(
 async def start_extraction(
     lead_id: str,
     http_request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[ExtractionJobResponse]:
     result = await lead_repository.start_extraction(lead_id, refresh=False)
     if result is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "lead",
         lead_id,
         "site_extraction_start",
@@ -187,13 +169,13 @@ async def start_extraction(
 async def refresh_extraction(
     lead_id: str,
     http_request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[ExtractionJobResponse]:
     result = await lead_repository.start_extraction(lead_id, refresh=True)
     if result is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "lead",
         lead_id,
         "site_extraction_refresh",
@@ -206,7 +188,7 @@ async def refresh_extraction(
     "/{lead_id}/extraction", response_model=ResponseEnvelope[ExtractionSnapshot]
 )
 async def get_extraction(
-    lead_id: str, http_request: Request, session: dict = Depends(_require_session)
+    lead_id: str, http_request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[ExtractionSnapshot]:
     extraction = await lead_repository.get_extraction(lead_id)
     if extraction is None:
@@ -216,7 +198,7 @@ async def get_extraction(
 
 @router.get("/{lead_id}/pages", response_model=ResponseEnvelope[PageInventoryResponse])
 async def get_pages(
-    lead_id: str, http_request: Request, session: dict = Depends(_require_session)
+    lead_id: str, http_request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[PageInventoryResponse]:
     pages = await lead_repository.list_pages(lead_id)
     if pages is None:
@@ -226,7 +208,7 @@ async def get_pages(
 
 @router.get("/{lead_id}/brief", response_model=ResponseEnvelope[SiteBrief | None])
 async def get_brief(
-    lead_id: str, http_request: Request, session: dict = Depends(_require_session)
+    lead_id: str, http_request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteBrief | None]:
     brief = await lead_repository.get_brief(lead_id)
     return success_response(brief, meta=response_meta(http_request))
@@ -234,7 +216,7 @@ async def get_brief(
 
 @router.post("/{lead_id}/brief", response_model=ResponseEnvelope[SiteBrief])
 async def create_brief(
-    lead_id: str, http_request: Request, session: dict = Depends(_require_session)
+    lead_id: str, http_request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteBrief]:
     try:
         brief = await lead_repository.create_brief(lead_id)
@@ -248,7 +230,7 @@ async def create_brief(
     if brief is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
-        session["email"], "lead", lead_id, "site_brief_create", after=brief.model_dump()
+        user_id, "lead", lead_id, "site_brief_create", after=brief.model_dump()
     )
     return success_response(brief, meta=response_meta(http_request))
 
@@ -258,7 +240,7 @@ async def update_brief(
     lead_id: str,
     payload: SiteBriefPatchRequest,
     http_request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[SiteBrief]:
     try:
         brief = await lead_repository.update_brief(lead_id, payload)
@@ -272,19 +254,17 @@ async def update_brief(
     if brief is None:
         raise HTTPException(status_code=404, detail="Brief not found.")
     await write_audit_log(
-        session["email"], "lead", lead_id, "site_brief_update", after=brief.model_dump()
+        user_id, "lead", lead_id, "site_brief_update", after=brief.model_dump()
     )
     return success_response(brief, meta=response_meta(http_request))
 
 
 @router.post("/{lead_id}/brief/approve", response_model=ResponseEnvelope[SiteBrief])
 async def approve_brief(
-    lead_id: str, http_request: Request, session: dict = Depends(_require_session)
+    lead_id: str, http_request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteBrief]:
     try:
-        brief = await lead_repository.approve_brief(
-            lead_id, approved_by=session["email"]
-        )
+        brief = await lead_repository.approve_brief(lead_id, approved_by=user_id)
     except ValueError as exc:
         if str(exc) == "brief_requires_extraction":
             raise HTTPException(
@@ -300,7 +280,7 @@ async def approve_brief(
     if brief is None:
         raise HTTPException(status_code=404, detail="Brief not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "lead",
         lead_id,
         "site_brief_approve",
@@ -318,9 +298,8 @@ async def approve_brief(
 async def get_master_brief(
     lead_id: str,
     http_request: Request,
-    session: dict = Depends(_require_session),
+    _user_id: CurrentUserId,
 ) -> ResponseEnvelope[MasterBrief | None]:
-    """Get the current master brief for a lead."""
     master_brief = await lead_repository.get_master_brief(lead_id)
     return success_response(master_brief, meta=response_meta(http_request))
 
@@ -329,9 +308,8 @@ async def get_master_brief(
 async def create_master_brief(
     lead_id: str,
     http_request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[MasterBrief]:
-    """Generate a new AI master brief from extraction data."""
     try:
         master_brief = await lead_repository.create_master_brief(lead_id)
     except ValueError as exc:
@@ -344,7 +322,7 @@ async def create_master_brief(
     if master_brief is None:
         raise HTTPException(status_code=500, detail="Failed to generate master brief.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "lead",
         lead_id,
         "master_brief_create",
@@ -360,9 +338,8 @@ async def refine_master_brief(
     lead_id: str,
     payload: MasterBriefRefinementRequest,
     http_request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[MasterBrief]:
-    """Refine the master brief with user feedback."""
     try:
         master_brief = await lead_repository.refine_master_brief(
             lead_id=lead_id,
@@ -378,7 +355,7 @@ async def refine_master_brief(
     if master_brief is None:
         raise HTTPException(status_code=500, detail="Failed to refine master brief.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "lead",
         lead_id,
         "master_brief_refine",
@@ -394,13 +371,12 @@ async def approve_master_brief(
     lead_id: str,
     payload: MasterBriefApprovalRequest,
     http_request: Request,
-    session: dict = Depends(_require_session),
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[MasterBrief]:
-    """Approve the master brief to trigger site generation."""
     try:
         master_brief = await lead_repository.approve_master_brief(
             lead_id=lead_id,
-            approved_by=payload.approvedBy or session["email"],
+            approved_by=payload.approvedBy or user_id,
             notes=payload.notes,
         )
     except ValueError as exc:
@@ -410,7 +386,7 @@ async def approve_master_brief(
     if master_brief is None:
         raise HTTPException(status_code=404, detail="Brief not found.")
     await write_audit_log(
-        session["email"],
+        user_id,
         "lead",
         lead_id,
         "master_brief_approve",

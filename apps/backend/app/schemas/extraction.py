@@ -129,6 +129,18 @@ class PageInventoryItem(BaseModel):
     visualCapture: Optional[PageVisualCapture] = None
 
 
+class ExtractionAnalysis(BaseModel):
+    """LLM-analyzed semantic data from extraction."""
+    services: list[str] = Field(default_factory=list)
+    tone: str = "Professional"
+    primaryCTAs: list[str] = Field(default_factory=list)
+    audience: str = ""
+    valueProposition: str = ""
+    positioning: str = ""
+    confidence: int = 0
+    analyzedAt: Optional[datetime] = None
+
+
 class ExtractionSummary(BaseModel):
     companyName: Optional[str] = None
     canonicalWebsiteUrl: str
@@ -167,6 +179,7 @@ class ExtractionSnapshot(BaseModel):
     confidenceScore: int
     gapItems: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+    analysis: Optional[ExtractionAnalysis] = None
     createdAt: datetime
     updatedAt: datetime
 
