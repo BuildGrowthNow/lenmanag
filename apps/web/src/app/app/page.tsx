@@ -67,7 +67,7 @@ export default async function DashboardPage() {
             {needsAttention.map((lead) => (
               <Link
                 key={lead.id}
-                href={`/nsa/leads/${lead.id}`}
+                href={`/app/leads/${lead.id}`}
                 className="flex items-start gap-3 rounded-2xl border border-red-500/30 bg-red-500/5 p-4 transition-colors hover:bg-red-500/10"
               >
                 <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-red-400" />
@@ -123,7 +123,7 @@ export default async function DashboardPage() {
                 return (
                   <div key={stage.key} className="flex items-center">
                     <Link
-                      href={`/nsa/leads`}
+                      href={`/app/leads`}
                       className="flex min-w-[80px] flex-col items-center gap-1.5 rounded-2xl border border-line bg-panel-2 px-4 py-3 text-center transition-colors hover:bg-panel"
                     >
                       <span className="text-2xl font-semibold text-text">{fmt(count)}</span>
@@ -177,7 +177,7 @@ export default async function DashboardPage() {
                   </div>
                   <div className="shrink-0 text-xs text-muted">{relativeTime(lead.updatedAt)}</div>
                   <Link
-                    href={`/nsa/leads/${lead.id}`}
+                    href={`/app/leads/${lead.id}`}
                     className="shrink-0 text-xs text-muted underline-offset-2 hover:text-text hover:underline"
                   >
                     View →
@@ -282,7 +282,7 @@ export default async function DashboardPage() {
                 {error.leadId && (
                   <div className="mt-2 text-xs">
                     Lead:{" "}
-                    <Link className="text-text underline-offset-2 hover:underline" href={`/nsa/leads/${error.leadId}`}>
+                    <Link className="text-text underline-offset-2 hover:underline" href={`/app/leads/${error.leadId}`}>
                       {error.leadId.slice(0, 8)}…
                     </Link>
                   </div>

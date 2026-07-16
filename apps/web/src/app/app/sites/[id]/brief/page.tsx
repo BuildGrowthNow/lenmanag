@@ -76,10 +76,10 @@ export default async function SiteBriefPage({ params }: { params: Promise<{ id: 
                 <div className="text-xs uppercase tracking-[0.18em] text-muted">Workspace links</div>
                 <div className="mt-3 flex flex-wrap gap-3">
                   <Button>
-                    <Link href={`/nsa/leads/${lead.id}`}>Open lead workspace</Link>
+                    <Link href={`/app/leads/${lead.id}`}>Open lead workspace</Link>
                   </Button>
                   <Button variant="secondary">
-                    <Link href={`/nsa/sites/${lead.id}`}>Open site workspace</Link>
+                    <Link href={`/app/sites/${lead.id}`}>Open site workspace</Link>
                   </Button>
                 </div>
               </div>
@@ -105,7 +105,7 @@ export default async function SiteBriefPage({ params }: { params: Promise<{ id: 
             description="Run extraction and create the brief from the lead workspace before review can begin."
             action={
               <Button>
-                <Link href={`/nsa/leads/${lead.id}`}>Go to lead workspace</Link>
+                <Link href={`/app/leads/${lead.id}`}>Go to lead workspace</Link>
               </Button>
             }
           />

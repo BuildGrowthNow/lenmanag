@@ -714,7 +714,7 @@ function LeadRow({ lead, onArchive }: { lead: LeadListItem; onArchive: (id: stri
     <div className="grid grid-cols-[2fr_1.2fr_1.5fr_0.8fr_0.9fr_0.8fr] gap-3 px-4 py-4 text-sm hover:bg-white/2">
       {/* Company */}
       <div>
-        <Link href={`/nsa/leads/${lead.id}`} className="font-medium text-text hover:text-accent transition-colors">
+        <Link href={`/app/leads/${lead.id}`} className="font-medium text-text hover:text-accent transition-colors">
           {lead.companyName || <span className="text-muted italic">No name</span>}
         </Link>
         <div className="mt-1 text-xs text-muted">{lead.normalizedDomain}</div>
@@ -737,7 +737,7 @@ function LeadRow({ lead, onArchive }: { lead: LeadListItem; onArchive: (id: stri
       </div>
       {/* Actions */}
       <div className="flex items-start gap-1 pt-0.5">
-        <Link href={`/nsa/leads/${lead.id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}>View</Link>
+        <Link href={`/app/leads/${lead.id}`} className={buttonVariants({ variant: "secondary", size: "sm" })}>View</Link>
         <Button
           variant="ghost"
           onClick={() => onArchive(lead.id)}

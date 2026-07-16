@@ -22,7 +22,8 @@ async function fetchSiteBundle(siteId: string) {
     throw new Error(`Failed to fetch site: ${res.status}`);
   }
 
-  return res.json();
+  const envelope = await res.json();
+  return envelope.data;
 }
 
 export default async function PreviewPage({ params }: PageProps) {

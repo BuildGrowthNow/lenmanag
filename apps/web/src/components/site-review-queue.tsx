@@ -234,7 +234,7 @@ function ReviewWorkspace({ item, onApproved, onRejected }: ReviewWorkspaceProps)
               </Link>
             </Button>
             <Button variant="secondary" className="flex-1">
-              <Link href={`/nsa/sites/${item.siteId}`}>Open spec</Link>
+              <Link href={`/app/sites/${item.siteId}`}>Open spec</Link>
             </Button>
           </div>
         </div>

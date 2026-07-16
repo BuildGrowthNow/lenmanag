@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SiteWorkspaceControls } from "@/components/site-workspace-controls";
 import { SiteExportControls } from "@/components/site-export-controls";
 import { ApplyThemeButton } from "@/components/apply-theme-button";
-import { OverrideDiffBadge } from "@/components/override-diff-badge";
+import { OverrideDiffBadgeWrapper } from "@/components/override-diff-badge-wrapper";
 import { RefinementPromptInput } from "@/components/refinement-prompt-input";
 import { PromptHistory } from "@/components/prompt-history";
 import { getLead, getLeadBrief, getLeadExtraction } from "@/lib/api/leads";
@@ -20,7 +20,6 @@ import {
   getSiteVersions,
   getThemes,
   getSiteExportHistory,
-  disableSiteOverride,
 } from "@/lib/api/sites";
 import type {
   GeneratedSite,
@@ -31,6 +30,7 @@ import type {
   SiteSection,
   BriefSourceReference,
 } from "@/lib/types";
+import { disableOverrideAction } from "./actions";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -285,7 +285,7 @@ function BriefTabContent({
           </Badge>
           <span className="text-xs text-muted">v{brief.version}</span>
         </div>
-        <Link href={`/nsa/leads/${leadId}`} className="text-xs text-accent hover:underline">
+        <Link href={`/app/leads/${leadId}`} className="text-xs text-accent hover:underline">
           ← Back to lead
         </Link>
       </div>
@@ -620,7 +620,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
             </Link>
           </Button>
           <Button variant="secondary">
-            <Link href={`/nsa/leads/${lead.id}`}>← Lead</Link>
+            <Link href={`/app/leads/${lead.id}`}>← Lead</Link>
           </Button>
         </div>
       </div>
@@ -723,12 +723,10 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                 {site.overrideDiffs.map((diff) => (
                   <div key={diff.overrideId} className="rounded-2xl border border-line bg-panel-2 p-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <OverrideDiffBadge
+                      <OverrideDiffBadgeWrapper
                         diff={diff}
-                        onDisable={async (overrideId) => {
-                          await disableSiteOverride(id, overrideId);
-                          window.location.reload();
-                        }}
+                        siteId={id}
+                        onDisable={disableOverrideAction}
                       />
                       <Badge className="border-white/10 bg-white/5 text-text">{diff.scope}</Badge>
                       <span className="text-xs text-muted">{diff.path}</span>

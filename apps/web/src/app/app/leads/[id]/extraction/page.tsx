@@ -169,10 +169,10 @@ export default async function ExtractionReviewPage({ params }: { params: Promise
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
             <Button>
-              <Link href={`/nsa/leads/${leadId}`}>Back to lead workspace</Link>
+              <Link href={`/app/leads/${leadId}`}>Back to lead workspace</Link>
             </Button>
             <Button variant="secondary">
-              <Link href={`/nsa/leads/${leadId}/extraction`}>Refresh extraction review</Link>
+              <Link href={`/app/leads/${leadId}/extraction`}>Refresh extraction review</Link>
             </Button>
           </CardContent>
         </Card>

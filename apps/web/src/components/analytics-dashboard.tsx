@@ -132,7 +132,7 @@ export function AnalyticsDashboard({ dashboard }: Props) {
                     )}
                     {selectedSite.leadId && (
                       <Link
-                        href={`/nsa/leads/${selectedSite.leadId}`}
+                        href={`/app/leads/${selectedSite.leadId}`}
                         className="text-text underline-offset-2 hover:underline"
                       >
                         View lead →
@@ -198,7 +198,7 @@ export function AnalyticsDashboard({ dashboard }: Props) {
                       <tr key={row.leadId} className="border-t border-line/50">
                         <td className="px-4 py-3">
                           <Link
-                            href={`/nsa/leads/${row.leadId}`}
+                            href={`/app/leads/${row.leadId}`}
                             className="font-mono text-xs text-muted underline-offset-2 hover:text-text hover:underline"
                           >
                             {row.leadId.slice(0, 12)}…

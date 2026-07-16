@@ -50,7 +50,7 @@ export function ExtractionReviewClient({ leadId, pages }: ExtractionReviewClient
     setIsRefreshing(true);
     try {
       // Refresh will be handled by redirecting to the page
-      window.location.href = `/nsa/leads/${leadId}/extraction`;
+      window.location.href = `/app/leads/${leadId}/extraction`;
     } catch (error) {
       console.error("Failed to refresh extraction:", error);
     } finally {

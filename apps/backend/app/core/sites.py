@@ -3536,7 +3536,6 @@ class SiteRepository:
         logger.info(f"Loaded {len(awwwards_patterns)} Awwwards patterns for {detected_industry}")
 
         # Get hero pattern recommendation based on assets
-        image_count = sum(1 for c in extraction.brandAssetCues if c.assetType == "image")
         hero_pattern_recommendation = get_hero_pattern_recommendation(
             industry=detected_industry,
             available_assets={

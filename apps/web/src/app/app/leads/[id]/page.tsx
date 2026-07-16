@@ -202,7 +202,7 @@ function StageWorkspace({
             </div>
           ) : null}
           <div className="flex gap-2 pt-2">
-            <Link href={`/nsa/sites/${lead.id}`} className={buttonVariants({ variant: "ghost" })}>Open site workspace</Link>
+            <Link href={`/app/sites/${lead.id}`} className={buttonVariants({ variant: "ghost" })}>Open site workspace</Link>
           </div>
         </div>
       </WorkspaceCard>
@@ -222,7 +222,7 @@ function StageWorkspace({
             {site ? (
               <Link href={`/sites/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
             ) : null}
-            <Link href={`/nsa/sites/${lead.id}`} className={buttonVariants()}>Publish →</Link>
+            <Link href={`/app/sites/${lead.id}`} className={buttonVariants()}>Publish →</Link>
           </div>
         </div>
       </WorkspaceCard>
@@ -523,7 +523,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                 ) : null}
 
                 <div className="flex flex-wrap gap-2 pt-2">
-                  <Link href={`/nsa/leads/${lead.id}/extraction`} className={buttonVariants({ variant: "secondary" })}>View full page inventory</Link>
+                  <Link href={`/app/leads/${lead.id}/extraction`} className={buttonVariants({ variant: "secondary" })}>View full page inventory</Link>
                 </div>
               </div>
             </details>

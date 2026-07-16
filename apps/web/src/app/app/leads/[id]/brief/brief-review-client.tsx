@@ -48,7 +48,7 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
     setIsApproving(true);
     try {
       await approveMasterBrief(leadId);
-      router.push(`/nsa/leads/${leadId}`);
+      router.push(`/app/leads/${leadId}`);
       router.refresh();
     } catch (error) {
       console.error('Failed to approve brief:', error);

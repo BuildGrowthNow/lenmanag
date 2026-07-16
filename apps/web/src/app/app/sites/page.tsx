@@ -273,7 +273,7 @@ export default function SitesPage() {
                   </div>
                   <div className="mt-auto flex gap-2 pt-2">
                     <Button variant="secondary" className="flex-1">
-                      <Link href={`/nsa/sites/${site.id}`}>Open spec</Link>
+                      <Link href={`/app/sites/${site.id}`}>Open spec</Link>
                     </Button>
                     <Button className="flex-1">
                       <Link href={previewPath} target="_blank" className="flex items-center gap-1.5">
