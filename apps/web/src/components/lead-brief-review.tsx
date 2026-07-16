@@ -1,33 +1,21 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { approveLeadBrief, createLeadBrief, refreshLeadExtraction, startLeadExtraction, updateLeadBrief } from "@/lib/api/leads";
+import { approveMasterBrief, createLeadMasterBrief, refreshLeadExtraction, startLeadExtraction } from "@/lib/api/leads";
 import { sendAnalyticsEvent } from "@/lib/analytics";
 import { extractionAgeLabel as formatExtractionAge, formatDateTime as formatExtractionDate } from "@/lib/extraction-health";
 import type { ExtractionHealth } from "@/lib/extraction-health";
-import type { SiteBrief } from "@/lib/types";
+import type { MasterBrief } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 
 type LeadBriefReviewProps = {
   leadId: string;
-  brief: SiteBrief | null;
+  brief: MasterBrief | null;
   extractionHealth: ExtractionHealth;
-};
-
-type BriefFormState = {
-  companySummary: string;
-  valuePropositionSummary: string;
-  audienceHypothesis: string;
-  toneProfile: string;
-  conversionAngle: string;
-  recommendedHero: string;
-  recommendedSections: string;
-  reviewNotes: string;
 };
 
 function confidenceBadgeClass(confidence: number) {
@@ -38,33 +26,8 @@ function confidenceBadgeClass(confidence: number) {
 
 function approvalBadgeClass(state: string) {
   if (state === "approved") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-100";
-  if (state === "needs_review") return "border-amber-500/40 bg-amber-500/10 text-amber-100";
+  if (state === "pending") return "border-amber-500/40 bg-amber-500/10 text-amber-100";
   return "border-sky-500/40 bg-sky-500/10 text-sky-100";
-}
-
-function sourceBadgeClass(kind: string) {
-  if (kind === "source_backed") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-100";
-  return "border-sky-500/40 bg-sky-500/10 text-sky-100";
-}
-
-function briefToForm(brief: SiteBrief | null): BriefFormState {
-  return {
-    companySummary: brief?.companySummary.value ?? "",
-    valuePropositionSummary: brief?.valuePropositionSummary.value ?? "",
-    audienceHypothesis: brief?.audienceHypothesis.value ?? "",
-    toneProfile: brief?.toneProfile.value ?? "",
-    conversionAngle: brief?.conversionAngle.value ?? "",
-    recommendedHero: brief?.recommendedHero.value ?? "",
-    recommendedSections: brief?.recommendedSections.map((section) => section.title).join("\n") ?? "",
-    reviewNotes: brief?.reviewNotes ?? ""
-  };
-}
-
-function normalizeLines(value: string) {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
 }
 
 function confidenceLabel(confidence: number) {
@@ -75,8 +38,7 @@ function confidenceLabel(confidence: number) {
 
 export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefReviewProps) {
   const router = useRouter();
-  const [form, setForm] = useState<BriefFormState>(() => briefToForm(brief));
-  const [busyAction, setBusyAction] = useState<"create" | "save" | "approve" | null>(null);
+  const [busyAction, setBusyAction] = useState<"create" | "approve" | null>(null);
   const [extractionBusy, setExtractionBusy] = useState<"start" | "refresh" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -107,11 +69,6 @@ export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefRe
     </div>
   ) : null;
 
-  useEffect(() => {
-    setForm(briefToForm(brief));
-    setMessage(null);
-  }, [brief]);
-
   async function handleExtractionRefresh() {
     const mode: "start" | "refresh" = hasExtraction ? "refresh" : "start";
     setExtractionBusy(mode);
@@ -140,50 +97,17 @@ export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefRe
     setBusyAction("create");
     setMessage(null);
     try {
-      await createLeadBrief(leadId);
-      setMessage("Brief generated from the latest extraction snapshot.");
+      await createLeadMasterBrief(leadId);
+      setMessage("Master brief generated from the latest extraction snapshot.");
       void sendAnalyticsEvent({
         leadId,
-        eventType: "brief_edited",
-        eventName: "Brief generated from editor",
+        eventType: "brief_created",
+        eventName: "Master brief generated",
         metadata: { scope: "brief_editor" }
       });
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not create the brief.");
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  async function handleSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (editingLocked || !brief) {
-      return;
-    }
-    setBusyAction("save");
-    setMessage(null);
-    try {
-      await updateLeadBrief(leadId, {
-        companySummary: form.companySummary,
-        valuePropositionSummary: form.valuePropositionSummary,
-        audienceHypothesis: form.audienceHypothesis,
-        toneProfile: form.toneProfile,
-        conversionAngle: form.conversionAngle,
-        recommendedHero: form.recommendedHero,
-        recommendedSections: normalizeLines(form.recommendedSections),
-        reviewNotes: form.reviewNotes
-      });
-      setMessage("Brief saved as a new version.");
-      void sendAnalyticsEvent({
-        leadId,
-        eventType: "brief_edited",
-        eventName: "Brief saved from editor",
-        metadata: { scope: "brief_editor" }
-      });
-      router.refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not save the brief.");
     } finally {
       setBusyAction(null);
     }
@@ -196,12 +120,12 @@ export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefRe
     setBusyAction("approve");
     setMessage(null);
     try {
-      await approveLeadBrief(leadId);
-      setMessage("Brief approved.");
+      await approveMasterBrief(leadId, brief.reviewNotes ?? undefined);
+      setMessage("Master brief approved. Site generation will start automatically.");
       void sendAnalyticsEvent({
         leadId,
         eventType: "brief_approved",
-        eventName: "Brief approved from editor",
+        eventName: "Master brief approved",
         metadata: { scope: "brief_editor" }
       });
       router.refresh();
@@ -217,7 +141,7 @@ export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefRe
       <Card>
         <CardHeader>
           <CardTitle>Site brief</CardTitle>
-          <CardDescription>The brief is created from the latest extraction snapshot and stays versioned after every edit.</CardDescription>
+          <CardDescription>The brief is created from the latest extraction snapshot and used to generate your landing page.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {extractionWarning}
@@ -225,13 +149,13 @@ export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefRe
             <div className="text-xs uppercase tracking-[0.18em] text-muted">Status</div>
             <div className="mt-2">
               {hasExtraction
-                ? "No brief has been generated yet. Create one from the latest extraction snapshot to start the review loop."
-                : "Run a crawl first. The brief cannot be generated until there is extraction data to interpret."}
+                ? "No brief has been generated yet. Create one from the latest extraction snapshot to proceed."
+                : "Run a crawl first. The brief cannot be generated until there is extraction data."}
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
             <Button type="button" onClick={() => void handleCreateBrief()} disabled={!hasExtraction || busyAction === "create" || editingLocked}>
-              {busyAction === "create" ? "Generating..." : "Create brief from extraction"}
+              {busyAction === "create" ? "Generating..." : "Create master brief"}
             </Button>
           </div>
           {message ? <div className="text-xs leading-5 text-muted">{message}</div> : null}
@@ -245,287 +169,91 @@ export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefRe
       <CardHeader>
         <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <CardTitle>Site brief review</CardTitle>
-            <CardDescription>Operators can edit the interpreted brief while citations remain locked to the source crawl and asset references.</CardDescription>
+            <CardTitle>Master brief review</CardTitle>
+            <CardDescription>AI-generated brief for your landing page strategy. Approve to proceed to site generation.</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge className={approvalBadgeClass(brief.approvalState)}>{brief.approvalState.replace("_", " ")}</Badge>
+            <Badge className={approvalBadgeClass(brief.approvalState)}>{brief.approvalState.replace(/_/g, " ")}</Badge>
             <Badge>v{brief.version}</Badge>
             <Badge className={confidenceBadgeClass(brief.confidenceScore)}>{confidenceLabel(brief.confidenceScore)} confidence</Badge>
-            {editingLocked ? <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-100">Editing locked</Badge> : null}
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
         {extractionWarning}
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-line bg-panel-2 p-4 text-xs text-muted">
-            <div className="uppercase tracking-[0.18em]">Source extraction</div>
-            <div className="mt-2 text-sm text-text">Version {brief.sourceExtractionVersion}</div>
-            <div className="mt-1 break-all">ID: {brief.sourceExtractionId}</div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-2xl border border-line bg-panel-2 p-4">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted">Business Goal</div>
+            <div className="mt-2 text-sm text-text">{brief.businessGoal}</div>
           </div>
-          <div className="rounded-2xl border border-line bg-panel-2 p-4 text-xs text-muted">
-            <div className="uppercase tracking-[0.18em]">Approval state</div>
-            <div className="mt-2 text-sm text-text">{brief.approvalState}</div>
-            <div className="mt-1">{brief.needsReview ? "This brief still needs operator review before generation begins." : "This brief is approved for the next phase."}</div>
+          <div className="rounded-2xl border border-line bg-panel-2 p-4">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted">Primary Audience</div>
+            <div className="mt-2 text-sm text-text">{brief.primaryAudience}</div>
           </div>
-          <div className="rounded-2xl border border-line bg-panel-2 p-4 text-xs text-muted">
-            <div className="uppercase tracking-[0.18em]">Review notes</div>
-            <div className="mt-2 text-sm text-text">{brief.reviewNotes || "No review notes recorded."}</div>
+          <div className="rounded-2xl border border-line bg-panel-2 p-4">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted">Conversion Action</div>
+            <div className="mt-2 text-sm text-text">{brief.conversionAction}</div>
+          </div>
+          <div className="rounded-2xl border border-line bg-panel-2 p-4">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted">Value Proposition</div>
+            <div className="mt-2 text-sm text-text">{brief.valueProposition}</div>
+          </div>
+          <div className="rounded-2xl border border-line bg-panel-2 p-4">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted">Tone & Voice</div>
+            <div className="mt-2 text-sm text-text">{brief.toneAndVoice}</div>
+          </div>
+          <div className="rounded-2xl border border-line bg-panel-2 p-4">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted">Visual Style</div>
+            <div className="mt-2 text-sm text-text">{brief.visualStyle}</div>
           </div>
         </div>
 
-        <form className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]" onSubmit={(event) => void handleSave(event)}>
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.18em] text-muted">Company summary</div>
-                  <div className="mt-1 text-xs text-muted">
-                    <span className="mr-2">Source label:</span>
-                    <Badge className={sourceBadgeClass(brief.companySummary.evidence.sourceKind)}>{brief.companySummary.evidence.sourceKind.replace("_", " ")}</Badge>
-                    <Badge className="ml-2">{brief.companySummary.evidence.inferenceLabel}</Badge>
-                    <Badge className={`ml-2 ${confidenceBadgeClass(brief.companySummary.evidence.confidence)}`}>{brief.companySummary.evidence.confidence}%</Badge>
+        <div className="rounded-2xl border border-line bg-panel-2 p-4">
+          <div className="text-xs uppercase tracking-[0.18em] text-muted">Hero Headline</div>
+          <div className="mt-2 text-lg font-semibold text-text">{brief.headline}</div>
+          <div className="mt-1 text-sm text-muted">{brief.subheadline}</div>
+        </div>
+
+        {brief.sections && brief.sections.length > 0 && (
+          <div className="space-y-3">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted font-semibold">Page Sections</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {brief.sections.map((section, index) => (
+                <div key={index} className="rounded-2xl border border-line bg-panel-2 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-muted">{section.purpose}</div>
+                      <div className="mt-1 font-semibold text-text">{section.headline}</div>
+                    </div>
                   </div>
+                  <div className="mt-2 text-sm text-text">{section.contentSummary}</div>
+                  {section.contentPoints && section.contentPoints.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {section.contentPoints.map((point, pIndex) => (
+                        <div key={pIndex} className="text-sm text-muted flex gap-2">
+                          <span className="text-xs">•</span>
+                          <span>{point}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-              <Textarea
-                className="mt-3"
-                value={form.companySummary}
-                onChange={(event) => setForm((current) => ({ ...current, companySummary: event.target.value }))}
-                rows={4}
-                disabled={editingLocked}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Value proposition summary</div>
-              <div className="mt-1 text-xs text-muted">
-                <Badge className={sourceBadgeClass(brief.valuePropositionSummary.evidence.sourceKind)}>{brief.valuePropositionSummary.evidence.sourceKind.replace("_", " ")}</Badge>
-                <Badge className="ml-2">{brief.valuePropositionSummary.evidence.inferenceLabel}</Badge>
-                <Badge className={`ml-2 ${confidenceBadgeClass(brief.valuePropositionSummary.evidence.confidence)}`}>{brief.valuePropositionSummary.evidence.confidence}%</Badge>
-              </div>
-              <Textarea
-                className="mt-3"
-                value={form.valuePropositionSummary}
-                onChange={(event) => setForm((current) => ({ ...current, valuePropositionSummary: event.target.value }))}
-                rows={3}
-                disabled={editingLocked}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Audience hypothesis</div>
-              <div className="mt-1 text-xs text-muted">
-                <Badge className={sourceBadgeClass(brief.audienceHypothesis.evidence.sourceKind)}>{brief.audienceHypothesis.evidence.sourceKind.replace("_", " ")}</Badge>
-                <Badge className="ml-2">{brief.audienceHypothesis.evidence.inferenceLabel}</Badge>
-                <Badge className={`ml-2 ${confidenceBadgeClass(brief.audienceHypothesis.evidence.confidence)}`}>{brief.audienceHypothesis.evidence.confidence}%</Badge>
-              </div>
-              <Textarea
-                className="mt-3"
-                value={form.audienceHypothesis}
-                onChange={(event) => setForm((current) => ({ ...current, audienceHypothesis: event.target.value }))}
-                rows={3}
-                disabled={editingLocked}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Tone profile</div>
-              <div className="mt-1 text-xs text-muted">
-                <Badge className={sourceBadgeClass(brief.toneProfile.evidence.sourceKind)}>{brief.toneProfile.evidence.sourceKind.replace("_", " ")}</Badge>
-                <Badge className="ml-2">{brief.toneProfile.evidence.inferenceLabel}</Badge>
-                <Badge className={`ml-2 ${confidenceBadgeClass(brief.toneProfile.evidence.confidence)}`}>{brief.toneProfile.evidence.confidence}%</Badge>
-              </div>
-              <Textarea
-                className="mt-3"
-                value={form.toneProfile}
-                onChange={(event) => setForm((current) => ({ ...current, toneProfile: event.target.value }))}
-                rows={3}
-                disabled={editingLocked}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Conversion angle</div>
-              <div className="mt-1 text-xs text-muted">
-                <Badge className={sourceBadgeClass(brief.conversionAngle.evidence.sourceKind)}>{brief.conversionAngle.evidence.sourceKind.replace("_", " ")}</Badge>
-                <Badge className="ml-2">{brief.conversionAngle.evidence.inferenceLabel}</Badge>
-                <Badge className={`ml-2 ${confidenceBadgeClass(brief.conversionAngle.evidence.confidence)}`}>{brief.conversionAngle.evidence.confidence}%</Badge>
-              </div>
-              <Textarea
-                className="mt-3"
-                value={form.conversionAngle}
-                onChange={(event) => setForm((current) => ({ ...current, conversionAngle: event.target.value }))}
-                rows={3}
-                disabled={editingLocked}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Hero direction</div>
-              <div className="mt-1 text-xs text-muted">
-                <Badge className={sourceBadgeClass(brief.recommendedHero.evidence.sourceKind)}>{brief.recommendedHero.evidence.sourceKind.replace("_", " ")}</Badge>
-                <Badge className="ml-2">{brief.recommendedHero.evidence.inferenceLabel}</Badge>
-                <Badge className={`ml-2 ${confidenceBadgeClass(brief.recommendedHero.evidence.confidence)}`}>{brief.recommendedHero.evidence.confidence}%</Badge>
-              </div>
-              <Textarea
-                className="mt-3"
-                value={form.recommendedHero}
-                onChange={(event) => setForm((current) => ({ ...current, recommendedHero: event.target.value }))}
-                rows={3}
-                disabled={editingLocked}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Recommended sections</div>
-              <div className="mt-1 text-xs text-muted">
-                <span>One section title per line. Source citations remain locked even if the operator changes this list.</span>
-              </div>
-              <Textarea
-                className="mt-3"
-                value={form.recommendedSections}
-                onChange={(event) => setForm((current) => ({ ...current, recommendedSections: event.target.value }))}
-                rows={4}
-                disabled={editingLocked}
-              />
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Review notes</div>
-              <Textarea
-                className="mt-3"
-                value={form.reviewNotes}
-                onChange={(event) => setForm((current) => ({ ...current, reviewNotes: event.target.value }))}
-                rows={3}
-                disabled={editingLocked}
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={busyAction === "save" || editingLocked}>
-                {busyAction === "save" ? "Saving..." : "Save new version"}
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => void handleApprove()} disabled={busyAction === "approve" || editingLocked}>
-                {busyAction === "approve" ? "Approving..." : "Approve brief"}
-              </Button>
-            </div>
-            {message ? <div className="text-xs leading-5 text-muted">{message}</div> : null}
-          </div>
-
-          <div className="space-y-4">
-            {brief.visualRedesign && brief.visualRedesign.length > 0 && (
-              <div className="rounded-2xl border border-line bg-panel-2 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-muted">Visual Redesign Cues</div>
-                <div className="mt-3 space-y-4">
-                  {brief.visualRedesign.map((page, pageIndex) => (
-                    <div key={pageIndex} className="space-y-2">
-                      <div className="text-sm font-medium">Page: {page.pageUrl}</div>
-                      <Badge className="bg-primary/10 text-primary hover:bg-primary/20">Art Direction: {page.artDirection}</Badge>
-                      <div className="mt-2 space-y-2 pl-4 border-l-2 border-line">
-                        {page.critiques.map((critique, cIndex) => (
-                          <div key={cIndex} className="rounded-xl border border-line bg-panel px-3 py-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge>{critique.sectionType}</Badge>
-                              <Badge className={confidenceBadgeClass(critique.confidence)}>{critique.confidence}%</Badge>
-                              <span className="text-sm text-text">Recommended Component: <span className="font-semibold">{critique.recommendedComponent}</span></span>
-                            </div>
-                            <div className="mt-2 space-y-1">
-                              {critique.redesignGoal && (
-                                <div className="text-sm text-text"><span className="text-muted text-xs uppercase mr-1">Goal:</span> {critique.redesignGoal}</div>
-                              )}
-                              {critique.contentToReuse.length > 0 && (
-                                <div className="text-sm text-text"><span className="text-muted text-xs uppercase mr-1">Reuse:</span> {critique.contentToReuse.join(", ")}</div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Source citations</div>
-              <div className="mt-3 space-y-2">
-                {brief.sourceCitations.length ? (
-                  brief.sourceCitations.map((citation, index) => (
-                    <div key={`${citation.kind}-${citation.sourceUrl}-${index}`} className="rounded-xl border border-line bg-panel px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge>{citation.kind}</Badge>
-                        {citation.evidenceType ? <Badge>{citation.evidenceType}</Badge> : null}
-                        {citation.assetType ? <Badge>{citation.assetType}</Badge> : null}
-                        <Badge className={confidenceBadgeClass(citation.confidence)}>{citation.confidence}%</Badge>
-                        <span className="text-sm text-text">{citation.label}</span>
-                      </div>
-                      <div className="mt-2 break-all text-xs text-muted">{citation.sourceUrl}</div>
-                      <div className="mt-1 text-sm text-text">{citation.excerpt}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-muted">No citations were stored with this brief.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Brand asset provenance</div>
-              <div className="mt-3 space-y-2">
-                {brief.brandAssetProvenance.length ? (
-                  brief.brandAssetProvenance.map((reference, index) => (
-                    <div key={`${reference.kind}-${reference.sourceUrl}-${index}`} className="rounded-xl border border-line bg-panel px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge>{reference.kind}</Badge>
-                        {reference.assetType ? <Badge>{reference.assetType}</Badge> : null}
-                        <Badge className={confidenceBadgeClass(reference.confidence)}>{reference.confidence}%</Badge>
-                        <span className="text-sm text-text">{reference.label}</span>
-                      </div>
-                      <div className="mt-2 break-all text-xs text-muted">{reference.sourceUrl}</div>
-                      <div className="mt-1 text-sm text-text">{reference.excerpt}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-muted">No public brand assets were captured with this brief.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Proof points</div>
-              <div className="mt-3 space-y-2">
-                {brief.proofPoints.length ? (
-                  brief.proofPoints.map((proof, index) => (
-                    <div key={`${proof.label}-${index}`} className="rounded-xl border border-line bg-panel px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={sourceBadgeClass(proof.evidence.sourceKind)}>{proof.evidence.sourceKind.replace("_", " ")}</Badge>
-                        <Badge className={confidenceBadgeClass(proof.evidence.confidence)}>{proof.evidence.confidence}%</Badge>
-                        <span className="text-sm text-text">{proof.label}</span>
-                      </div>
-                      <div className="mt-1 text-sm text-text">{proof.detail}</div>
-                      <div className="mt-1 text-xs text-muted">{proof.evidence.inferenceLabel}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-muted">No proof points recorded.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-line bg-panel-2 p-4">
-              <div className="text-xs uppercase tracking-[0.18em] text-muted">Missing requirements</div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {brief.missingRequirements.length ? (
-                  brief.missingRequirements.map((item) => <Badge key={item} className="border-amber-500/40 bg-amber-500/10 text-amber-100">{item}</Badge>)
-                ) : (
-                  <span className="text-sm text-muted">No blockers recorded on this brief.</span>
-                )}
-              </div>
+              ))}
             </div>
           </div>
-        </form>
+        )}
+
+        <div className="rounded-2xl border border-line bg-panel-2 p-4">
+          <div className="text-xs uppercase tracking-[0.18em] text-muted">CTA Strategy</div>
+          <div className="mt-2 text-sm text-text">{brief.ctaStrategy}</div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <Button type="button" onClick={() => void handleApprove()} disabled={busyAction === "approve" || editingLocked || brief.approvalState === "approved"}>
+            {busyAction === "approve" ? "Approving..." : brief.approvalState === "approved" ? "Already approved" : "Approve & generate site"}
+          </Button>
+        </div>
+        {message ? <div className="text-xs leading-5 text-muted">{message}</div> : null}
       </CardContent>
     </Card>
   );

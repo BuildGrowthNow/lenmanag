@@ -7,10 +7,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadBriefReview } from "@/components/lead-brief-review";
 import { LeadExtractionControls } from "@/components/lead-extraction-controls";
-import { getLead, getLeadBrief, getLeadExtraction, getLeadPages } from "@/lib/api/leads";
+import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages } from "@/lib/api/leads";
 import { getSite } from "@/lib/api/sites";
 import { evaluateExtractionHealth } from "@/lib/extraction-health";
-import type { LeadDetail, ExtractionSnapshot, SiteBrief, GeneratedSite, PipelineStage } from "@/lib/types";
+import type { LeadDetail, ExtractionSnapshot, MasterBrief, GeneratedSite, PipelineStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ function StageWorkspace({
 }: {
   lead: LeadDetail;
   extraction: ExtractionSnapshot | null;
-  brief: SiteBrief | null;
+  brief: MasterBrief | null;
   site: GeneratedSite | null;
 }) {
   const stage = lead.pipelineStage;
@@ -314,7 +314,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     getLead(id),
     getLeadExtraction(id),
     getLeadPages(id),
-    getLeadBrief(id),
+    getLeadMasterBrief(id),
     getSite(id),
   ]);
 

@@ -2,8 +2,6 @@ import { request, safeRequest } from "@/lib/api/client";
 import type {
   ExtractionJobResponse,
   ExtractionSnapshot,
-  SiteBrief,
-  SiteBriefPatchPayload,
   LeadActionResponse,
   LeadDetail,
   LeadImportResponse,
@@ -124,22 +122,6 @@ export async function getLeadPages(id: string): Promise<PageInventoryResponse | 
   return safeRequest<PageInventoryResponse | null>(`/api/leads/${id}/pages`, null);
 }
 
-export async function getLeadBrief(id: string): Promise<SiteBrief | null> {
-  return safeRequest<SiteBrief | null>(`/api/leads/${id}/brief`, null);
-}
-
-export async function createLeadBrief(id: string): Promise<SiteBrief> {
-  return request(`/api/leads/${id}/brief`, { method: "POST" });
-}
-
-export async function updateLeadBrief(id: string, payload: SiteBriefPatchPayload): Promise<SiteBrief> {
-  return request(`/api/leads/${id}/brief`, { method: "PATCH", body: payload });
-}
-
-export async function approveLeadBrief(id: string): Promise<SiteBrief> {
-  return request(`/api/leads/${id}/brief/approve`, { method: "POST" });
-}
-
 // Master Brief API (AI-native brief system)
 
 export async function getLeadMasterBrief(id: string): Promise<MasterBrief | null> {
@@ -152,9 +134,12 @@ export async function createLeadMasterBrief(id: string): Promise<MasterBrief> {
 
 export async function approveMasterBrief(
   id: string,
-  payload: MasterBriefApprovalRequest
+  notes?: string
 ): Promise<MasterBrief> {
-  return request(`/api/leads/${id}/master-brief/approve`, { method: "POST", body: payload });
+  return request(`/api/leads/${id}/master-brief/approve`, {
+    method: "POST",
+    body: { notes }
+  });
 }
 
 export async function refineMasterBrief(id: string, feedback: string): Promise<MasterBrief> {
