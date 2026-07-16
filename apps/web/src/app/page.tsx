@@ -26,7 +26,7 @@ import { TrustedCompanies } from "@/components/landing/trusted-companies";
 import { FeaturesSolarSystem } from "@/components/landing/features-solar-system";
 import { ScreenshotCarousel } from "@/components/landing/screenshot-carousel";
 import { CaseStudiesCarousel } from "@/components/landing/case-studies-carousel";
-import { TestimonialsSection } from "@/components/landing/testimonials-section";
+import { SocialWall } from "@/components/landing/social-wall";
 import { FAQSection } from "@/components/landing/faq-section";
 import { PricingConfigurator } from "@/components/landing/pricing-configurator";
 import { StickyCTABar } from "@/components/landing/sticky-cta-bar";
@@ -488,11 +488,11 @@ export default function SitesLandingPage() {
         {/* Case Studies Section */}
         <CaseStudiesCarousel />
 
-        {/* Testimonials Section */}
+        {/* Social Wall - Real Customers */}
         <section id="testimonials">
-          <TestimonialsSection />
+          <SocialWall />
 
-          {/* CTA After Testimonials */}
+          {/* CTA After Social Wall */}
           <motion.div
             className="flex justify-center mt-12 px-6"
             initial={{ opacity: 0, y: 20 }}
