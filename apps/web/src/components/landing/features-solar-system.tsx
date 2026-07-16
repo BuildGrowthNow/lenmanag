@@ -19,7 +19,7 @@ const FEATURES = [
     title: "Beautiful Design",
     description: "Visual appeal that captivates your visitors and builds trust",
     icon: Palette,
-    line: 0,
+    orbit: 0,
     position: 0,
   },
   {
@@ -27,7 +27,7 @@ const FEATURES = [
     title: "Fast Loading",
     description: "Better user experience and improved search rankings",
     icon: Zap,
-    line: 0,
+    orbit: 0,
     position: 1,
   },
   {
@@ -35,7 +35,7 @@ const FEATURES = [
     title: "Mobile Ready",
     description: "Works perfectly on phones and tablets for every customer",
     icon: Smartphone,
-    line: 1,
+    orbit: 1,
     position: 0,
   },
   {
@@ -43,7 +43,7 @@ const FEATURES = [
     title: "Easy to Manage",
     description: "Update your site without coding knowledge required",
     icon: Sliders,
-    line: 1,
+    orbit: 1,
     position: 1,
   },
   {
@@ -51,7 +51,7 @@ const FEATURES = [
     title: "Customer Support",
     description: "Always here when you need help with your website",
     icon: Headphones,
-    line: 2,
+    orbit: 2,
     position: 0,
   },
   {
@@ -59,7 +59,7 @@ const FEATURES = [
     title: "Professional Quality",
     description: "Trusted by successful businesses worldwide",
     icon: Award,
-    line: 2,
+    orbit: 2,
     position: 1,
   },
   {
@@ -67,7 +67,7 @@ const FEATURES = [
     title: "Quick Turnaround",
     description: "Ready to launch in just 3 days guaranteed",
     icon: Clock,
-    line: 3,
+    orbit: 3,
     position: 0,
   },
   {
@@ -75,16 +75,16 @@ const FEATURES = [
     title: "Affordable",
     description: "Enterprise-quality results without premium pricing",
     icon: DollarSign,
-    line: 3,
+    orbit: 3,
     position: 1,
   },
 ];
 
-const LINES = [
-  { angle: 0, label: "top" },
-  { angle: 90, label: "right" },
-  { angle: 180, label: "bottom" },
-  { angle: 270, label: "left" },
+const ORBITS = [
+  { radius: 120, pointAngle: 0 },
+  { radius: 170, pointAngle: 90 },
+  { radius: 220, pointAngle: 180 },
+  { radius: 270, pointAngle: 270 },
 ];
 
 export function FeaturesSolarSystem() {
@@ -93,7 +93,7 @@ export function FeaturesSolarSystem() {
 
   return (
     <section className="relative px-6 py-24 bg-slate-900/50 overflow-visible">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-6xl mx-auto overflow-visible">
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -110,15 +110,19 @@ export function FeaturesSolarSystem() {
         </motion.div>
 
         {/* Solar System Visualization - Desktop */}
-        <div className="hidden md:flex items-center justify-center">
-          <div className="relative" style={{ width: "700px", height: "700px" }}>
+        <div className="hidden md:flex items-center justify-center overflow-visible" style={{ minHeight: "900px" }}>
+          <div className="relative overflow-visible" style={{ width: "700px", height: "700px" }}>
             {/* Center Circle */}
             <motion.div
               initial={{ scale: 0 }}
               whileInView={{ scale: 1 }}
               transition={{ duration: 0.5 }}
               viewport={{ once: true }}
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20"
+              className="absolute z-0"
+              style={{
+                left: "294px",
+                top: "294px",
+              }}
             >
               <motion.div
                 animate={{ scale: [1, 1.05, 1] }}
@@ -133,31 +137,31 @@ export function FeaturesSolarSystem() {
               </motion.div>
             </motion.div>
 
-            {/* Four pointing lines */}
+            {/* Orbital Rings with Points - Static */}
             <svg
               className="absolute inset-0 w-full h-full pointer-events-none"
               viewBox="0 0 700 700"
             >
-              {LINES.map((line, idx) => {
-                const x1 = 350;
-                const y1 = 350;
-                const x2 = 350 + Math.cos((line.angle * Math.PI) / 180) * 280;
-                const y2 = 350 + Math.sin((line.angle * Math.PI) / 180) * 280;
+              {ORBITS.map((orbit, idx) => {
+                const pointX =
+                  350 + Math.cos((orbit.pointAngle * Math.PI) / 180) * orbit.radius;
+                const pointY =
+                  350 + Math.sin((orbit.pointAngle * Math.PI) / 180) * orbit.radius;
 
                 return (
-                  <g key={`line-${idx}`}>
-                    <line
-                      x1={x1}
-                      y1={y1}
-                      x2={x2}
-                      y2={y2}
-                      stroke="rgba(255, 255, 255, 0.1)"
+                  <g key={`orbit-${idx}`}>
+                    <circle
+                      cx="350"
+                      cy="350"
+                      r={orbit.radius}
+                      fill="none"
+                      stroke="rgba(255, 255, 255, 0.08)"
                       strokeWidth="1"
                       strokeDasharray="4 6"
                     />
                     <circle
-                      cx={x2}
-                      cy={y2}
+                      cx={pointX}
+                      cy={pointY}
                       r="4"
                       fill="rgba(234, 179, 8, 0.4)"
                     />
@@ -166,115 +170,122 @@ export function FeaturesSolarSystem() {
               })}
             </svg>
 
-            {/* Orbiting features on all lines */}
-            {FEATURES.map((feature, idx) => {
-              const line = LINES[feature.line];
-              const angle = (line.angle * Math.PI) / 180;
-              const isOdd = feature.position === 1;
+            {/* Features on Orbits - Each orbit rotates independently */}
+            {ORBITS.map((orbit, orbitIdx) => {
+              const isClockwise = orbitIdx % 2 === 0;
+              const duration = 60 + orbitIdx * 10;
 
               return (
                 <motion.div
-                  key={feature.id}
-                  className="absolute"
-                  initial={{ opacity: 0, scale: 0 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  transition={{
-                    delay: idx * 0.05,
-                    duration: 0.5,
-                  }}
-                  viewport={{ once: true }}
-                  animate={
-                    isHovering
-                      ? {}
-                      : {
-                          x: isOdd
-                            ? [
-                                Math.cos(angle) * 150,
-                                Math.cos(angle) * 280,
-                                Math.cos(angle) * 150,
-                              ]
-                            : [
-                                Math.cos(angle) * 280,
-                                Math.cos(angle) * 150,
-                                Math.cos(angle) * 280,
-                              ],
-                          y: isOdd
-                            ? [
-                                Math.sin(angle) * 150,
-                                Math.sin(angle) * 280,
-                                Math.sin(angle) * 150,
-                              ]
-                            : [
-                                Math.sin(angle) * 280,
-                                Math.sin(angle) * 150,
-                                Math.sin(angle) * 280,
-                              ],
-                        }
-                  }
-                  transition={{
-                    duration: 6,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
+                  key={`orbit-container-${orbitIdx}`}
+                  className="absolute inset-0"
                   style={{
-                    left: "350px",
-                    top: "350px",
-                    transform: "translate(-50%, -50%)",
+                    left: "50%",
+                    top: "50%",
+                    width: orbit.radius * 2,
+                    height: orbit.radius * 2,
+                    marginLeft: -orbit.radius,
+                    marginTop: -orbit.radius,
+                    zIndex: 10 + orbitIdx,
+                    pointerEvents: "none",
                   }}
-                  onMouseEnter={() => {
-                    setHoveredFeature(feature.id);
-                    setIsHovering(true);
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredFeature(null);
-                    setIsHovering(false);
+                  animate={{ rotate: isClockwise ? 360 : -360 }}
+                  transition={{
+                    duration: duration,
+                    repeat: isHovering ? 0 : Infinity,
+                    ease: "linear",
                   }}
                 >
-                  <motion.button
-                    whileHover={{ scale: 1.2 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
-                      hoveredFeature === feature.id
-                        ? "border-yellow-500 shadow-yellow-500/40"
-                        : "border-white/20 hover:border-yellow-500/60"
-                    }`}
-                  >
-                    <feature.icon
-                      className={`w-7 h-7 transition-colors ${
-                        hoveredFeature === feature.id
-                          ? "text-yellow-300"
-                          : "text-yellow-500"
-                      }`}
-                    />
-                  </motion.button>
+                  {FEATURES.filter((f) => f.orbit === orbitIdx).map(
+                    (feature, indexInOrbit) => {
+                      const baseAngle = orbitIdx * 45;
+                      const angle = baseAngle + indexInOrbit * 180;
+                      const rad = (angle * Math.PI) / 180;
+                      const x = orbit.radius + orbit.radius * Math.cos(rad);
+                      const y = orbit.radius + orbit.radius * Math.sin(rad);
+                      const rotation = isClockwise ? 360 : -360;
 
-                  {/* Popover on Hover - horizontal, not rotated */}
-                  {hoveredFeature === feature.id && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.8, x: -10 }}
-                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute z-50 pointer-events-none"
-                      style={{
-                        left: "100%",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        marginLeft: "12px",
-                      }}
-                    >
-                      <div className="px-4 py-3 rounded-xl bg-slate-900/95 border border-yellow-500/50 shadow-xl shadow-yellow-500/20 min-w-[220px] backdrop-blur-sm">
-                        <div className="text-sm font-bold text-yellow-400 mb-1">
-                          {feature.title}
-                        </div>
-                        <div className="text-xs text-slate-300 leading-relaxed">
-                          {feature.description}
-                        </div>
-                      </div>
-                    </motion.div>
+                      const isLeftSide = angle > 90 && angle < 270;
+                      const isTopSide = angle > 180 && angle < 360;
+
+                      return (
+                        <motion.div
+                          key={feature.id}
+                          className="absolute z-10"
+                          animate={{ rotate: -rotation }}
+                          transition={{
+                            duration: duration,
+                            repeat: isHovering ? 0 : Infinity,
+                            ease: "linear",
+                          }}
+                          style={{
+                            left: `${x}px`,
+                            top: `${y}px`,
+                            transform: "translate(-50%, -50%)",
+                            pointerEvents: "auto",
+                          }}
+                          onMouseEnter={() => {
+                            setHoveredFeature(feature.id);
+                            setIsHovering(true);
+                          }}
+                          onMouseLeave={() => {
+                            setHoveredFeature(null);
+                            setIsHovering(false);
+                          }}
+                        >
+                          <div className="relative" style={{ pointerEvents: "auto" }}>
+                            <button
+                              className={`w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
+                                hoveredFeature === feature.id
+                                  ? "border-yellow-500 shadow-yellow-500/40"
+                                  : "border-white/20 hover:border-yellow-500/60"
+                              }`}
+                              style={{ pointerEvents: "auto" }}
+                            >
+                              <feature.icon
+                                className={`w-7 h-7 transition-colors ${
+                                  hoveredFeature === feature.id
+                                    ? "text-yellow-300"
+                                    : "text-yellow-500"
+                                }`}
+                              />
+                            </button>
+
+                            {/* Popover - positioned based on quadrant */}
+                            {hoveredFeature === feature.id && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ duration: 0.15 }}
+                                className="absolute pointer-events-none"
+                                style={{
+                                  left: isLeftSide ? "auto" : "calc(100% + 12px)",
+                                  right: isLeftSide ? "calc(100% + 12px)" : "auto",
+                                  top: "50%",
+                                  transform: "translateY(-50%)",
+                                  whiteSpace: "nowrap",
+                                  zIndex: 9999,
+                                }}
+                              >
+                                <div className="px-4 py-3 rounded-xl bg-slate-900/95 border border-yellow-500/50 shadow-xl shadow-yellow-500/20 min-w-[220px] backdrop-blur-sm">
+                                  <div className="text-sm font-bold text-yellow-400 mb-1">
+                                    {feature.title}
+                                  </div>
+                                  <div className="text-xs text-slate-300 leading-relaxed whitespace-normal">
+                                    {feature.description}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    }
                   )}
                 </motion.div>
               );
             })}
+
           </div>
         </div>
 

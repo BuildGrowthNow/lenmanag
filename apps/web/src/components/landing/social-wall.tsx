@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Star } from "lucide-react";
 
 const CUSTOMERS = [
@@ -202,6 +202,16 @@ const ROW_1 = CUSTOMERS.slice(0, 8);
 const ROW_2 = CUSTOMERS.slice(8, 16);
 const ROW_3 = CUSTOMERS.slice(16, 24);
 
+// Context to share hover state across all carousel rows
+const HoverContext = createContext<{
+  hoveredId: number | null;
+  setHoveredId: (id: number | null) => void;
+}>({ hoveredId: null, setHoveredId: () => {} });
+
+function useHoverContext() {
+  return useContext(HoverContext);
+}
+
 function StarRating({ rating }: { rating: number }) {
   return (
     <div className="flex gap-0.5">
@@ -226,7 +236,7 @@ function CarouselRow({
   speed: number;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const { hoveredId, setHoveredId } = useHoverContext();
   const animationRef = useRef<number | null>(null);
   const scrollPos = useRef(0);
 
@@ -267,7 +277,7 @@ function CarouselRow({
   const duplicated = [...customers, ...customers];
 
   return (
-    <div className="overflow-hidden w-full">
+    <div className="overflow-visible w-full">
       <div ref={rowRef} className="flex gap-4 will-change-transform">
         {duplicated.map((customer, i) => (
           <div
@@ -276,9 +286,9 @@ function CarouselRow({
             onMouseLeave={() => setHoveredId(null)}
             className={`flex-shrink-0 w-72 p-4 rounded-xl border transition-all duration-300 ${
               hoveredId === customer.id
-                ? "bg-white/15 border-yellow-500/50 scale-105 shadow-lg shadow-yellow-500/10 z-10"
+                ? "bg-white/15 border-yellow-500/50 scale-125 shadow-2xl shadow-yellow-500/20 z-50 relative"
                 : hoveredId !== null
-                  ? "bg-white/5 border-white/5 opacity-50 blur-[1px]"
+                  ? "bg-white/5 border-white/5 opacity-40 blur-sm"
                   : "bg-white/5 border-white/10"
             }`}
           >
@@ -308,25 +318,29 @@ function CarouselRow({
 }
 
 export function SocialWall() {
-  return (
-    <section className="relative py-16 overflow-hidden">
-      <div className="text-center mb-10 px-6">
-        <p className="text-yellow-500 text-sm font-bold uppercase mb-2">
-          From Real People
-        </p>
-        <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
-          Meet Our <span className="text-yellow-500">Happy Clients</span>
-        </h2>
-        <p className="text-zinc-400 text-lg">
-          Real stories from people just like you
-        </p>
-      </div>
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
 
-      <div className="space-y-4">
-        <CarouselRow customers={ROW_1} direction="left" speed={0.5} />
-        <CarouselRow customers={ROW_2} direction="right" speed={0.4} />
-        <CarouselRow customers={ROW_3} direction="left" speed={0.6} />
-      </div>
-    </section>
+  return (
+    <HoverContext.Provider value={{ hoveredId, setHoveredId }}>
+      <section className="relative py-16 overflow-hidden">
+        <div className="text-center mb-10 px-6">
+          <p className="text-yellow-500 text-sm font-bold uppercase mb-2">
+            From Real People
+          </p>
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
+            Meet Our <span className="text-yellow-500">Happy Clients</span>
+          </h2>
+          <p className="text-zinc-400 text-lg">
+            Real stories from people just like you
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <CarouselRow customers={ROW_1} direction="left" speed={0.5} />
+          <CarouselRow customers={ROW_2} direction="right" speed={0.4} />
+          <CarouselRow customers={ROW_3} direction="left" speed={0.6} />
+        </div>
+      </section>
+    </HoverContext.Provider>
   );
 }
