@@ -218,6 +218,12 @@ All services share the `lenquant-network` bridge network.
 
 ---
 
+## Agent Behaviour
+
+- **Work sequentially, never in parallel** — do not spawn sub-agents or run parallel tool calls that hit the LLM. AWS Bedrock has strict requests-per-minute limits; parallel agent tasks will cause rate-limit errors. Always complete one step fully before starting the next.
+
+---
+
 ## Important Conventions
 
 - **Never commit secrets** — use `.env` locally, GitHub Actions secrets in CI

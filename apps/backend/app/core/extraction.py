@@ -306,6 +306,8 @@ class _SignalParser(HTMLParser):
                 src = src.split(",", 1)[0].strip().split(" ", 1)[0]
             alt = attr_map.get("alt") or ""
             title = attr_map.get("title") or ""
+            class_attr = attr_map.get("class") or ""
+            id_attr = attr_map.get("id") or ""
             candidate = src.strip() or alt.strip() or title.strip()
             if candidate:
                 self.signals.images.append(candidate)
@@ -313,8 +315,24 @@ class _SignalParser(HTMLParser):
                     self._section_stack[-1].images.append(candidate)
             kind = "video" if self._current_tag == "video" else "image"
             self._asset(kind, src, alt or title or None, self._current_tag)
-            hint = f"{alt} {title} {src}".lower()
+
+            # Enhanced logo detection with multiple strategies
+            hint = f"{alt} {title} {src} {class_attr} {id_attr}".lower()
+
+            # Strategy 1: Direct "logo" keyword in multiple attributes
             if "logo" in hint:
+                self.signals.logo_candidates.append(candidate or src.strip())
+            # Strategy 2: Common logo file naming patterns
+            elif any(pattern in src.lower() for pattern in [
+                "/logo.", "-logo.", "_logo.", "logo-", "logo_",
+                "/brand.", "-brand.", "_brand.",
+                "/icon.", "/favicon.", "/apple-touch-icon"
+            ]):
+                self.signals.logo_candidates.append(candidate or src.strip())
+            # Strategy 3: Logo in header/nav context (checked when we know parent)
+            # This will be handled separately in section-aware parsing
+            # Strategy 4: SVG files in header (often logos)
+            elif ".svg" in src.lower() and self._section_stack and self._section_stack[-1].tag_name == "header":
                 self.signals.logo_candidates.append(candidate or src.strip())
 
         if self._current_tag in {"a", "button"}:
@@ -464,6 +482,90 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
             () => {
                 const getStyle = (el, prop) => window.getComputedStyle(el)[prop];
                 const sections = Array.from(document.querySelectorAll('header, main > section, section, article, footer'));
+
+                // Enhanced logo detection - find all potential logo images
+                const logoImages = [];
+                const headerEl = document.querySelector('header, nav, .header, .navbar');
+
+                // Strategy 1: Images in header/nav with logo-related attributes
+                if (headerEl) {
+                    const headerImages = Array.from(headerEl.querySelectorAll('img'));
+                    headerImages.forEach(img => {
+                        const src = img.src || '';
+                        const alt = (img.alt || '').toLowerCase();
+                        const className = (img.className || '').toLowerCase();
+                        const id = (img.id || '').toLowerCase();
+                        const hint = `${alt} ${className} ${id} ${src}`.toLowerCase();
+
+                        let score = 40;
+                        const reasons = [];
+
+                        if (/logo/i.test(hint)) {
+                            score += 40;
+                            reasons.push('contains "logo" keyword');
+                        }
+                        if (/brand/i.test(hint)) {
+                            score += 30;
+                            reasons.push('brand asset');
+                        }
+                        if (/[.]svg/i.test(src)) {
+                            score += 20;
+                            reasons.push('SVG format');
+                        }
+                        if (headerEl.contains(img) && headerImages.indexOf(img) === 0) {
+                            score += 15;
+                            reasons.push('first image in header');
+                        }
+
+                        if (score >= 50) {
+                            logoImages.push({
+                                src: img.src,
+                                alt: img.alt || '',
+                                score: score,
+                                reason: reasons.join(', '),
+                                width: img.width,
+                                height: img.height
+                            });
+                        }
+                    });
+                }
+
+                // Strategy 2: All images with logo/brand in attributes (anywhere on page)
+                Array.from(document.querySelectorAll('img')).forEach(img => {
+                    const src = img.src || '';
+                    const alt = (img.alt || '').toLowerCase();
+                    const className = (img.className || '').toLowerCase();
+                    const id = (img.id || '').toLowerCase();
+
+                    if ((/logo/i.test(alt) || /logo/i.test(className) || /logo/i.test(id) || /[/]logo[._-]/i.test(src)) &&
+                        !logoImages.some(l => l.src === img.src)) {
+                        logoImages.push({
+                            src: img.src,
+                            alt: img.alt || '',
+                            score: 70,
+                            reason: 'direct logo reference in attributes',
+                            width: img.width,
+                            height: img.height
+                        });
+                    }
+                });
+
+                // Strategy 3: SVG elements (often used for logos)
+                const svgElements = Array.from(document.querySelectorAll('svg'));
+                if (headerEl && svgElements.length > 0) {
+                    const headerSvgs = svgElements.filter(svg => headerEl.contains(svg));
+                    headerSvgs.slice(0, 2).forEach(svg => {
+                        logoImages.push({
+                            src: 'inline-svg',
+                            alt: 'Inline SVG logo',
+                            score: 75,
+                            reason: 'SVG in header (likely logo)',
+                            width: svg.getBoundingClientRect().width,
+                            height: svg.getBoundingClientRect().height
+                        });
+                    });
+                }
+
                 return {
                     meta: Array.from(document.querySelectorAll('meta')).reduce((acc, meta) => {
                         const name = meta.getAttribute('name') || meta.getAttribute('property');
@@ -479,6 +581,7 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                     headings: Array.from(document.querySelectorAll('h1, h2, h3, h4')).map(el => el.innerText),
                     links: Array.from(document.querySelectorAll('a[href]')).map(el => ({href: el.href, text: el.innerText.trim()})).filter(l => l.href),
                     images: Array.from(document.querySelectorAll('img[src]')).map(el => ({src: el.src, alt: el.alt || ''})),
+                    logoImages: logoImages.sort((a, b) => b.score - a.score),
                     sectionsData: sections.map((sec, idx) => ({
                         index: idx,
                         tagName: sec.tagName.toLowerCase(),
@@ -813,18 +916,93 @@ def _extract_page_summary(
 def _extract_brand_asset_cues(
     page_url: str, signals: PageSignals
 ) -> list[dict[str, Any]]:
+    """Extract brand assets with enhanced logo detection and scoring."""
     cues: list[dict[str, Any]] = []
+
     if signals.logo_candidates:
-        cues.append(
-            {
-                "assetType": "logo",
-                "label": "Logo candidate",
-                "value": signals.logo_candidates[0],
-                "sourceUrl": page_url,
-                "confidence": 74,
-                "note": "Detected from image metadata or filename.",
-            }
-        )
+        # Score logo candidates to pick the most likely actual logo
+        scored_logos: list[tuple[str, int, str]] = []
+
+        for candidate in signals.logo_candidates[:10]:  # Limit to top 10 candidates
+            score = 50  # Base score
+            note_parts = []
+
+            candidate_lower = candidate.lower()
+
+            # High-confidence patterns (direct logo naming)
+            if "/logo." in candidate_lower or "-logo." in candidate_lower or "_logo." in candidate_lower:
+                score += 35
+                note_parts.append("filename contains 'logo'")
+            elif "logo-" in candidate_lower or "logo_" in candidate_lower:
+                score += 30
+                note_parts.append("filename starts with 'logo'")
+
+            # Brand-related patterns
+            if "/brand." in candidate_lower or "-brand." in candidate_lower:
+                score += 25
+                note_parts.append("brand asset")
+
+            # Format preferences (SVG is highest quality for logos)
+            if ".svg" in candidate_lower:
+                score += 20
+                note_parts.append("vector format (SVG)")
+            elif ".png" in candidate_lower:
+                score += 10
+                note_parts.append("PNG format")
+
+            # Avoid testimonial/client logos (lower score for these)
+            if any(term in candidate_lower for term in ["testimonial", "client", "partner", "customer"]):
+                score -= 40
+                note_parts.append("possibly client/partner logo")
+
+            # Favicon paths (moderate confidence)
+            if "favicon" in candidate_lower or "apple-touch-icon" in candidate_lower:
+                score += 15
+                note_parts.append("icon asset")
+
+            # Prefer shorter paths (usually in header/root)
+            path_depth = candidate.count("/")
+            if path_depth <= 3:
+                score += 10
+            elif path_depth > 5:
+                score -= 10
+
+            note = "; ".join(note_parts) if note_parts else "Detected from image metadata"
+            scored_logos.append((candidate, score, note))
+
+        # Sort by score descending and take the best candidate
+        scored_logos.sort(key=lambda x: x[1], reverse=True)
+
+        if scored_logos:
+            best_logo, best_score, best_note = scored_logos[0]
+            # Confidence based on score (50-95 range)
+            confidence = min(95, max(50, best_score))
+
+            cues.append(
+                {
+                    "assetType": "logo",
+                    "label": "Primary logo",
+                    "value": best_logo,
+                    "sourceUrl": page_url,
+                    "confidence": confidence,
+                    "note": best_note,
+                }
+            )
+
+            # Add secondary logo candidate if score is decent
+            if len(scored_logos) > 1:
+                second_logo, second_score, second_note = scored_logos[1]
+                if second_score >= 60 and second_logo != best_logo:
+                    cues.append(
+                        {
+                            "assetType": "logo",
+                            "label": "Secondary logo",
+                            "value": second_logo,
+                            "sourceUrl": page_url,
+                            "confidence": min(85, max(45, second_score - 10)),
+                            "note": f"Alternative: {second_note}",
+                        }
+                    )
     if signals.theme_color:
         cues.append(
             {
@@ -1197,6 +1375,13 @@ def crawl_website(
         if result.get("renderedByPlaywright") and result.get("pageData"):
             pw_data = result["pageData"]
             page_data["renderedByPlaywright"] = True
+
+            # Merge Playwright's enhanced logo detection
+            if pw_data.get("logoImages"):
+                for logo_data in pw_data["logoImages"]:
+                    logo_src = logo_data.get("src", "")
+                    if logo_src and logo_src not in signals.logo_candidates:
+                        signals.logo_candidates.append(logo_src)
             page_data["meta"] = pw_data.get("meta", {})
             page_data["cleanedText"] = pw_data.get("cleanedText", "")
             page_data["fonts"] = pw_data.get("fonts", [])
