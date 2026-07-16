@@ -233,14 +233,13 @@ export default function SitesLandingPage() {
               </motion.div>
 
               <h1 className="text-6xl md:text-8xl font-bold mb-6 bg-gradient-to-r from-white via-yellow-100 to-white bg-clip-text text-transparent">
-                Your Website.
+                Master Design
                 <br />
-                <span className="text-yellow-500">In 3 Days.</span>
+                <span className="text-yellow-500">$1,000 • 3 Days</span>
               </h1>
 
               <p className="text-xl md:text-2xl text-slate-300 mb-12 max-w-3xl mx-auto">
-                Professional websites and landing pages delivered at lightning speed.
-                No meetings. No hassle. Just results.
+                Premium, custom-crafted websites built by design experts. No compromises. No delays. Just masterfully executed results.
               </p>
 
               <motion.div
@@ -256,7 +255,7 @@ export default function SitesLandingPage() {
                   }
                   className="px-8 py-6 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
                 >
-                  Get Started — $1,000
+                  Start Your Masterpiece
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </motion.div>
@@ -595,12 +594,12 @@ export default function SitesLandingPage() {
               viewport={{ once: true }}
             >
               <h2 className="text-5xl md:text-6xl font-bold mb-6 text-white">
-                Ready to Launch Your
+                Your Masterpiece Awaits
                 <br />
-                <span className="text-yellow-500">Dream Website?</span>
+                <span className="text-yellow-500">Premium Design • $1,000 • 3 Days</span>
               </h2>
               <p className="text-xl text-slate-300 mb-10">
-                Join hundreds of satisfied clients who transformed their online presence
+                Join hundreds of business owners who trusted us to create their breakthrough website
               </p>
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
@@ -612,7 +611,7 @@ export default function SitesLandingPage() {
                   className="px-10 py-7 text-xl font-bold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
                 >
                   <Rocket className="mr-2 w-6 h-6" />
-                  Start Your Project — $1,000
+                  Create Your Masterpiece
                 </Button>
               </motion.div>
             </motion.div>
