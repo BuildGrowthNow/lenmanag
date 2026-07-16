@@ -30,118 +30,100 @@ This document outlines a comprehensive 5-phase upgrade to the LenQuant landing p
 
 ## Phase 1: Navigation & Hero Section Enhancement
 
-### 1.1 Sticky Navigation Menu
-**File**: `apps/web/src/components/landing/navbar.tsx` (new file)
+### 1.1 Top Banner Z-Index Fix
+**File**: `apps/web/src/components/landing/social-proof-ticker.tsx`
 
 **Requirements**:
-- Fixed position header that appears on scroll
-- Smooth scroll navigation to sections:
-  - Trusted By (logo wall)
-  - What We Do (features)
-  - Process
-  - Everything Included
-  - Testimonials
-  - Pricing
-  - FAQ
-- Mobile-responsive hamburger menu
-- Active section highlighting with smooth animation
-- Semi-transparent background with blur effect
-
-**Implementation**:
-```typescript
-// apps/web/src/components/landing/navbar.tsx
-- Use Framer Motion for scroll animations
-- Implement intersection observer to track active section
-- Desktop: horizontal menu with smooth scroll
-- Mobile: hamburger menu with smooth collapse/expand
-- Active state indicator (underline or highlight)
-```
+- Fix z-index so banner appears ABOVE navbar (not behind it)
+- Change z-index from z-40 to z-[60] or higher
+- Navbar should be z-50, banner should be z-[60]
 
 **Deliverables**:
-- Navbar component with smooth scroll functionality
-- Mobile-responsive hamburger implementation
-- CSS for smooth transitions and active states
+- Banner displays above navbar without being hidden
+- No visual overlap issues
 
 ---
 
-### 1.2 Hero Section Redesign
-**File**: `apps/web/src/components/landing/hero-section.tsx` (new component)
+### 1.2 Hero Section Cleanup
+**File**: `apps/web/src/app/page.tsx` (Hero Section)
 
 **Requirements**:
-- Remove floating browser mockup (no more floating device elements)
-- Add large centered screen mockup showing "Your site inside it"
-- Animated pop-out effect with confetti particle system
-- Replace static mockup with dynamic showcase
+- **REMOVE**: "Premium Website Generation" badge with sparkles icon
+- **REMOVE**: FloatingMockup component (floating screens serve no purpose)
+- **REMOVE**: ScreenshotCarousel component (we don't have real examples to show)
+- Keep: AnimatedHeroHeadline, AnimatedStats, CTA button
+
+**Deliverables**:
+- Cleaner hero section
+- No unnecessary floating elements
+- No fake screenshot carousel
+
+---
+
+### 1.3 Typing Animation Hero Headline
+**File**: `apps/web/src/components/landing/animated-hero-headline.tsx`
+
+**Current State**: Static fade-in animation showing "Master Design • $1,000 • 3 Days"
+
+**New Requirements**:
+- Create typing animation effect
+- Sequence should type:
+  1. "Your Website"
+  2. "In 3 Days"  
+  3. "$1,000"
+  4. "Master Design"
+- Each phrase should type out character by character
+- Cursor blink effect while typing
+- Clean, modern typography
+- Mobile responsive sizing
 
 **Animation Sequence**:
-1. Hero loads with text animation
-2. Screen mockup appears with slide-in animation
-3. "Pop out" effect triggered (scale, blur, rotate)
-4. Confetti particles burst from center
-5. Screenshot carousel appears below showing "Real Examples"
+1. Type "Your Website" (pause)
+2. Type "In 3 Days" (pause)
+3. Type "$1,000" (pause)
+4. Type "Master Design" (pause)
+5. All text remains visible
 
 **Deliverables**:
-- Hero section component with new mockup design
-- Confetti particle system (use `react-confetti` or custom implementation)
-- Smooth pop-out animation sequence
-- Fully responsive design
-
----
-
-### 1.3 Screenshot Carousel
-**File**: `apps/web/src/components/landing/screenshot-carousel.tsx` (new component)
-
-**Requirements**:
-- Display screenshots from Awwwards websites
-- Opacity fade transitions between images
-- Auto-rotate with manual navigation controls
-- Add caption: "Examples from award-winning websites"
-- Mobile-responsive grid layout
-
-**Image Sources**:
-- Download 5-6 screenshots from Awwwards.com (random award-winning sites)
-- Store in `public/screenshots/` directory
-- Optimize for web (WebP format preferred, PNG fallback)
-- Use placeholder blur while loading
-
-**Deliverables**:
-- Screenshot carousel component
-- Opacity transition animations
-- Auto-play with pause on hover
-- Downloaded and optimized screenshot images
+- Typing animation component
+- Character-by-character reveal
+- Responsive text sizing
+- Smooth cursor animation
 
 ---
 
 ## Phase 2: Social Proof & Features
 
-### 2.1 Trusted By Section with Custom SVG Logos
-**File**: `apps/web/src/components/landing/trusted-companies.tsx` (replaces logo-wall.tsx)
+### 2.1 Trusted Companies Section - Horizontal Layout
+**File**: `apps/web/src/components/landing/trusted-companies.tsx`
 
-**Requirements**:
-- Display trusted company logos
-- Create custom SVG logos for each company (no external SVG/image dependencies)
-- Animated stagger entrance
-- Responsive grid (3-4 columns on desktop, 2 on tablet, 1 on mobile)
+**Current State**: Large vertical cards with logos and descriptions
 
-**Companies to Feature**:
-- TechVenture Co (Tech icon based SVG)
-- CloudFirst Inc (Cloud/sky based SVG)
-- DataFlow Systems (Flow/nodes based SVG)
-- GrowthLabs (Growth/upward arrow based SVG)
-- InnovatePro (Innovation/lightbulb based SVG)
-- ScaleHub (Scale/expanding based SVG)
+**New Requirements**:
+- Make section SMALLER in height
+- Horizontal layout: Logo + Company Name side by side
+- Remove descriptions and extra text
+- Simple, clean presentation
+- Title: "Trusted by Forward-Thinking Companies"
 
-**SVG Design Notes**:
-- Minimalist, modern style
-- Use brand colors that complement yellow/white theme
-- Each logo should be distinct and memorable
-- Size: 40x40px base, scale via viewBox
+**Layout Structure**:
+```
+[Logo Icon] Company Name    [Logo Icon] Company Name    [Logo Icon] Company Name
+```
+
+**Design Specifications**:
+- Logo size: 32px x 32px (smaller than current)
+- Company name in simple text next to logo
+- Horizontal flex layout
+- Responsive: wrap to multiple rows on mobile
+- Minimal spacing and padding
+- No background cards or borders
 
 **Deliverables**:
-- `trusted-companies.tsx` component
-- 6 custom SVG logo components
-- Smooth entrance animations
-- Responsive layout
+- Smaller, horizontal trusted companies section
+- Logo + name pairs only
+- No descriptions or marketing copy
+- Height reduced by ~50%
 
 ---
 
@@ -241,70 +223,75 @@ This document outlines a comprehensive 5-phase upgrade to the LenQuant landing p
 
 ## Phase 4: Enhanced Pricing Structure
 
-### 4.1 Pricing Redesign
-**File**: `apps/web/src/components/landing/pricing-configurator.tsx` (substantial refactor)
+### 4.1 Pricing Redesign - Fix Size & Language
+**File**: `apps/web/src/components/landing/pricing-configurator.tsx` + `apps/web/src/lib/pricing.ts`
+
+**CRITICAL ISSUES IN CURRENT IMPLEMENTATION**:
+1. **Size**: Professional Website card is NOT the same size as others (must be equal)
+2. **Hosting**: Professional Website mentions hosting (REMOVE - hosting is separate service)
+3. **Language**: Text is too technical (simplify per documentation)
 
 **New Pricing Structure**:
 
-#### Main Packages:
+#### Main Packages (ALL SAME CARD SIZE):
 1. **Basic Website** - $1,000 (one-time)
    - 4-5 pages
-   - Custom design
-   - Mobile responsive
-   - Contact form
-   - Basic SEO
+   - Beautiful design that matches your brand
+   - Works perfectly on phones and tablets
+   - Easy way for customers to contact you
+   - Found easily on Google search
 
-2. **Professional Website** - $2,500 (one-time, NOW EXPANDED TO EQUAL SIZE)
-   - Up to 15 pages (significantly more than basic)
-   - Advanced custom design
-   - Mobile responsive
-   - Contact forms + advanced integrations
-   - SEO optimization + blog setup
-   - Performance optimization
+2. **Professional Website** - $2,500 (one-time)
+   - Up to 15 pages (much more content)
+   - Advanced custom design that stands out
+   - Works perfectly on phones and tablets
+   - Contact forms + connects to your tools
+   - SEO optimization + blog ready to publish
+   - Loads fast and performs great
+   - **REMOVE ANY MENTION OF HOSTING**
 
 3. **E-Commerce Site** - $3,500 (one-time)
-   - Full e-commerce functionality
-   - Product management
-   - Payment processing
-   - Inventory system
-   - Customer dashboard
+   - Sell products online
+   - Manage your inventory easily
+   - Accept payments securely
+   - Track orders and customers
+   - Customer account dashboard
 
 #### Extra Services (Dropdown/Collapsible Section):
 - **Additional Pages** - $150 per page (one-time, up to 50 pages)
-  - Support for pages beyond package limit
-  - Same design quality and performance
+  - Add more pages to your site
+  - Same beautiful design quality
 
 - **Advanced Features** - $300-$1,000 (one-time)
-  - Custom integrations
-  - Special functionality
-  - API connections
-  - Advanced customizations
+  - Connect to special tools
+  - Custom functionality for your business
+  - API integrations
 
 - **Maintenance Service** - $500/month
-  - 1-hour strategy meeting per month
-  - 3 requested changes/updates per month
-  - Performance monitoring
-  - Security updates
+  - 1-hour strategy meeting every month
+  - 3 updates or changes per month
+  - We watch your site's performance
+  - Keep everything secure
 
-- **Hosting Service** - $200/month (recurring)
-  - Hosting only (no design/development)
-  - Fast, reliable infrastructure
-  - Auto-scaling
-  - SSL certificate
-  - Backups
+- **Hosting Service** - $200/month (SEPARATE FROM PROFESSIONAL WEBSITE)
+  - Fast, reliable website hosting
+  - Automatic scaling
+  - Secure SSL certificate
+  - Automatic backups
 
-#### Design Notes:
-- Professional Website card should be SAME SIZE as other main packages (not smaller)
-- Professional Website should be visually prominent (highlight or slight glow effect)
-- Extra services in a collapsible/dropdown below the main cards
-- Clear visual distinction: "ONE-TIME" vs "MONTHLY" badges
-- Color coding for service type (base packages vs add-ons vs subscriptions)
+**Design Requirements**:
+- All 3 main cards MUST be equal height and width
+- Professional Website should be highlighted (slight glow)
+- Professional Website should NOT mention hosting
+- Use simple, benefit-focused language (NOT technical)
+- Clear "ONE-TIME" vs "MONTHLY" badges
+- Extra services in expandable section below
 
 **Deliverables**:
-- Redesigned pricing component with expanded card sizing
-- Dropdown/expandable extra services section
-- Clear one-time vs recurring price indicators
-- New pricing tiers and services
+- Equal-sized pricing cards
+- Remove hosting from Professional package features
+- Simplified, non-technical language throughout
+- Hosting as separate monthly service only
 
 ---
 
@@ -338,10 +325,25 @@ interface Feature {
 
 ---
 
-## Phase 5: Footer & Testimonials Cleanup
+## Phase 5: Footer & UI Cleanup
 
-### 5.1 Enhanced Footer
-**File**: `apps/web/src/components/landing/footer.tsx` (new component)
+### 5.1 Remove Bottom Yellow CTA Bar
+**File**: `apps/web/src/app/page.tsx`
+
+**Requirements**:
+- **REMOVE**: StickyCTABar component completely
+- This is the ugly yellow sticky bar at the bottom
+- Remove import and component usage
+- Keep RiskReversalBadge (green badge on right side)
+
+**Deliverables**:
+- No yellow sticky CTA bar at bottom
+- Cleaner page layout
+
+---
+
+### 5.2 Enhanced Footer
+**File**: `apps/web/src/components/landing/footer.tsx` (existing component)
 
 **Requirements**:
 - Professional footer layout
@@ -383,24 +385,52 @@ interface Feature {
 
 ---
 
-### 5.2 Testimonials Cleanup
-**File**: `apps/web/src/components/landing/testimonials-section.tsx`
+### 5.2 Testimonials Wall - Complete Redesign
+**File**: `apps/web/src/components/landing/social-wall.tsx`
 
-**Changes**:
-- Remove all em-dashes (—) from testimonial text
-- Remove all dashes (-) that are used as em-dashes
-- Keep text clean and simple
-- Ensure punctuation is properly formatted
+**Current State**: Single horizontal scrolling row with 12 customers
 
-**Before/After Example**:
-```
-Before: "This service was amazing — it saved us months of work on our website redesign — highly recommended!"
-After: "This service was amazing. It saved us months of work on our website redesign. Highly recommended!"
-```
+**CRITICAL ISSUES TO FIX**:
+1. **Bug**: Current implementation has bugs in the carousel
+2. **Images**: Need REAL client photos downloaded from internet (not SVG avatars)
+3. **Layout**: Should be 3 SEPARATE rows of carousels
+4. **Size**: Make cards SMALLER in height
+5. **Width**: Full page width, NO width limits
+6. **Direction**: Some rows scroll left, some scroll right (alternating)
+
+**New Requirements**:
+
+**3-Row Carousel System**:
+- Row 1: Scrolls LEFT → RIGHT (customers 1-4)
+- Row 2: Scrolls RIGHT → LEFT (customers 5-8)  
+- Row 3: Scrolls LEFT → RIGHT (customers 9-12)
+
+**Card Design**:
+- Height: Reduce by 30-40% (make smaller/more compact)
+- Width: Full page width with no container limits
+- Remove gradient edge overlays (full width carousel)
+- Cards should be smaller overall
+
+**Client Images**:
+- Download 12 REAL person photos from internet
+- Use realistic business professional headshots
+- Match gender to names (Sarah = female, Marcus = male, etc.)
+- Store in `public/clients/` directory
+- Format: JPG or PNG, optimized for web
+
+**Carousel Behavior**:
+- Continuous auto-scroll (no stop on hover)
+- Smooth infinite loop
+- Different speeds for visual interest
+- No pause functionality
 
 **Deliverables**:
-- Updated testimonial text (all entries)
-- Clean punctuation format
+- 3 separate horizontal carousels
+- Real client photos (12 images downloaded)
+- Smaller card height
+- Full-width layout
+- Alternating scroll directions
+- Fixed bugs in current implementation
 
 ---
 
