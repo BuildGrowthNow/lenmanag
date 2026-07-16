@@ -11,10 +11,10 @@ interface StickyMessage {
 }
 
 const MESSAGES: StickyMessage[] = [
-  { text: "See how we create masterpieces", section: "hero" },
-  { text: "Only $1,000 to get started", section: "features" },
-  { text: "Join 500+ satisfied clients", section: "testimonials" },
-  { text: "Lock in your spot now", section: "pricing" },
+  { text: "See how your website could look 🎨", section: "hero" },
+  { text: "Get started for just $1,000 ✨", section: "features" },
+  { text: "Join 500+ happy customers like you 🚀", section: "testimonials" },
+  { text: "Ready? Let's build your masterpiece 💪", section: "pricing" },
 ];
 
 export function StickyCTABar() {
@@ -131,39 +131,47 @@ export function StickyCTABar() {
               <div className="text-4xl mb-4">🎁</div>
 
               <h3 className="text-2xl font-bold text-white mb-3">
-                Wait! Before you go...
+                Hold on! 👋
               </h3>
 
-              <p className="text-zinc-300 mb-2">
-                Grab <span className="text-yellow-500 font-bold">15% off</span> your next website if you book
-                <span className="text-yellow-500 font-bold"> in the next 24 hours</span>
+              <p className="text-zinc-300 mb-3 text-lg">
+                Get <span className="text-yellow-500 font-bold">15% off</span> if you grab your spot in the <span className="text-yellow-500 font-bold">next 24 hours</span>
               </p>
 
-              <p className="text-sm text-zinc-400 mb-6">
-                Last chance to join our April cohort
+              <p className="text-sm text-zinc-400 mb-6 font-semibold">
+                That's an extra $250-500 in your pocket
               </p>
 
               <div className="space-y-3">
-                <Button
-                  onClick={handlePricing}
-                  className="w-full px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-zinc-900 font-bold rounded-lg transition-all"
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  Lock In My Discount
-                </Button>
+                  <Button
+                    onClick={handlePricing}
+                    className="w-full px-6 py-4 bg-yellow-500 hover:bg-yellow-600 text-zinc-900 font-bold rounded-lg transition-all text-lg shadow-lg"
+                  >
+                    Yes! Save Me 15% 🎉
+                  </Button>
+                </motion.div>
 
                 <button
                   onClick={() => setShowExitIntent(false)}
                   className="w-full px-6 py-2 text-zinc-400 hover:text-white transition-colors text-sm"
                 >
-                  No thanks, I'll pay full price
+                  Nah, I'll come back later
                 </button>
               </div>
 
-              <div className="mt-6 pt-6 border-t border-white/10">
-                <p className="text-xs text-zinc-500">
-                  Only 3 spots available at this rate
+              <motion.div
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="mt-6 pt-6 border-t border-white/10"
+              >
+                <p className="text-sm font-bold text-red-500">
+                  ⏰ Timer: Only 3 spots left at this price!
                 </p>
-              </div>
+              </motion.div>
             </motion.div>
           </motion.div>
         )}

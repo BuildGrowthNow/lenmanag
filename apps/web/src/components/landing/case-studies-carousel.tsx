@@ -8,41 +8,41 @@ const CASE_STUDIES = [
   {
     id: 1,
     clientName: "TechFlow Solutions",
-    industry: "Software",
-    metric1: "340% increase in leads",
-    metric2: "5x faster load times",
-    metric3: "$45K additional revenue",
-    quote: "This website transformed our business in just 3 days.",
+    industry: "Software Company",
+    metric1: "Getting 3x more leads every month",
+    metric2: "Website loads super fast now",
+    metric3: "$45K earned since launch",
+    quote: "We went from struggling to explain our product online... to having clients line up. Mind-blowing.",
     image: "bg-gradient-to-br from-blue-500 to-cyan-500",
   },
   {
     id: 2,
     clientName: "EcoGreen Marketing",
     industry: "Marketing Agency",
-    metric1: "520% boost in inquiries",
-    metric2: "2x conversion rate",
-    metric3: "$120K new contracts",
-    quote: "Best investment we made this year.",
+    metric1: "5x more inquiries coming in",
+    metric2: "Way more people staying on the site",
+    metric3: "$120K in new client deals",
+    quote: "Best money we spent all year. Our phone doesn't stop ringing. This is incredible.",
     image: "bg-gradient-to-br from-green-500 to-emerald-500",
   },
   {
     id: 3,
     clientName: "Coastal Realty Group",
     industry: "Real Estate",
-    metric1: "280% more property views",
-    metric2: "3x faster page speed",
-    metric3: "$200K in new sales",
-    quote: "Our agents love the new site. Inquiries doubled.",
+    metric1: "People actually looking at our listings",
+    metric2: "Site works perfectly on phones now",
+    metric3: "$200K+ in new property sales",
+    quote: "Our agents are selling more than ever. They love showing clients the website. Game changer.",
     image: "bg-gradient-to-br from-orange-500 to-red-500",
   },
   {
     id: 4,
     clientName: "Digital Ventures Co",
     industry: "Startup",
-    metric1: "400% traffic growth",
-    metric2: "90% reduction in bounce rate",
-    metric3: "$85K Series A conversations",
-    quote: "We went from invisible to industry leader.",
+    metric1: "Went from zero visibility to everywhere",
+    metric2: "People actually stay and explore",
+    metric3: "Seriously attracting investor attention",
+    quote: "This website is our secret weapon. Investors are impressed. We're finally being taken seriously.",
     image: "bg-gradient-to-br from-purple-500 to-pink-500",
   },
 ];
@@ -130,33 +130,54 @@ export function CaseStudiesCarousel() {
               </p>
             </div>
 
-            {/* Metrics */}
+                {/* Metrics */}
             <div className="grid grid-cols-1 gap-3 p-6 rounded-xl bg-white/5 border border-white/10">
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.3 }}
-                className="flex items-center gap-3"
+                whileHover={{ x: 5, scale: 1.02 }}
+                className="flex items-center gap-3 cursor-pointer"
               >
-                <span className="text-2xl font-bold text-yellow-500">📈</span>
+                <motion.span
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ duration: 0.6, delay: 0.3 }}
+                  className="text-2xl"
+                >
+                  📈
+                </motion.span>
                 <span className="text-white font-semibold">{study.metric1}</span>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.4 }}
-                className="flex items-center gap-3"
+                whileHover={{ x: 5, scale: 1.02 }}
+                className="flex items-center gap-3 cursor-pointer"
               >
-                <span className="text-2xl font-bold text-yellow-500">⚡</span>
+                <motion.span
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ duration: 0.6, delay: 0.4 }}
+                  className="text-2xl"
+                >
+                  ⚡
+                </motion.span>
                 <span className="text-white font-semibold">{study.metric2}</span>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.5 }}
-                className="flex items-center gap-3"
+                whileHover={{ x: 5, scale: 1.02 }}
+                className="flex items-center gap-3 cursor-pointer"
               >
-                <span className="text-2xl font-bold text-yellow-500">💰</span>
+                <motion.span
+                  animate={{ scale: [1, 1.3, 1] }}
+                  transition={{ duration: 0.6, delay: 0.5 }}
+                  className="text-2xl"
+                >
+                  💰
+                </motion.span>
                 <span className="text-white font-semibold">{study.metric3}</span>
               </motion.div>
             </div>
