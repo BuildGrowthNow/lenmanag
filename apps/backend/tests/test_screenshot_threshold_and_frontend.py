@@ -14,7 +14,9 @@ async def test_screenshot_comparator_uses_configured_quality_threshold(monkeypat
     class DummySettings(Settings):
         visual_redesign_quality_threshold: int = 92
 
-    monkeypatch.setattr("app.core.screenshot_comparator.get_settings", lambda: DummySettings())
+    monkeypatch.setattr(
+        "app.core.screenshot_comparator.get_settings", lambda: DummySettings()
+    )
 
     mock_analyzer = AsyncMock()
     mock_analyzer.capture_screenshots = AsyncMock(
@@ -40,7 +42,8 @@ async def test_screenshot_comparator_uses_configured_quality_threshold(monkeypat
     comparator = ScreenshotComparator()
 
     with patch(
-        "app.core.screenshot_comparator.get_screenshot_analyzer", return_value=mock_analyzer
+        "app.core.screenshot_comparator.get_screenshot_analyzer",
+        return_value=mock_analyzer,
     ):
         await comparator.compare_layout_screenshot(
             site_id="site-123",
@@ -63,7 +66,9 @@ def test_premium_registry_contains_phase14_components():
     # Locate repo root relative to this test file
     here = Path(__file__).resolve()
     repo_root = here.parents[3]
-    registry_path = repo_root / "apps" / "web" / "src" / "components" / "premium-sections.tsx"
+    registry_path = (
+        repo_root / "apps" / "web" / "src" / "components" / "premium-sections.tsx"
+    )
 
     contents = registry_path.read_text(encoding="utf-8")
 
@@ -77,4 +82,6 @@ def test_premium_registry_contains_phase14_components():
         "cta-banner",
         "cta-sticky",
     ]:
-        assert component_id in contents, f"Missing premium componentId in frontend registry: {component_id}"
+        assert component_id in contents, (
+            f"Missing premium componentId in frontend registry: {component_id}"
+        )

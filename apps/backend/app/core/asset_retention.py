@@ -84,7 +84,9 @@ class AssetRetentionManager:
                 s3_store = S3AssetStorage()
             except Exception:
                 s3_store = None
-        elif self.settings.asset_storage_backend == "gcp" and GCSAssetStorage is not None:
+        elif (
+            self.settings.asset_storage_backend == "gcp" and GCSAssetStorage is not None
+        ):
             try:
                 gcs_store = GCSAssetStorage()
             except Exception:

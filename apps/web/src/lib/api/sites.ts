@@ -128,13 +128,20 @@ export async function getSiteExportHistory(id: string): Promise<SiteExportRecord
 
 export async function downloadSiteBundle(id: string): Promise<{ blob: Blob; filename: string }> {
   const bundlePath = versionedPath(`/api/sites/${id}/export/bundle`);
+
+  let authToken: string | null = null;
+  if (typeof window !== "undefined") {
+    authToken = localStorage.getItem("access_token");
+  }
+
   const response = await fetch(`${API_BASE_URL}${bundlePath}`, {
     method: "GET",
     credentials: "include",
     headers: {
       Accept: `${VENDOR_MEDIA_TYPE}, application/zip`,
       [VERSION_HEADER_NAME]: API_VERSION,
-      "X-Requested-With": "lenmanag-admin"
+      "X-Requested-With": "lenmanag-admin",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
     }
   });
   if (!response.ok) {

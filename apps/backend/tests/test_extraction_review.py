@@ -12,7 +12,9 @@ async def test_list_pages_returns_page_inventory():
     """Test that list_pages returns page inventory with citations and gaps."""
 
     # Create a lead on a dedicated domain to avoid collisions with other tests
-    req = LeadUpsertRequest(companyName="Test Co", websiteUrl="https://pages.example.com")
+    req = LeadUpsertRequest(
+        companyName="Test Co", websiteUrl="https://pages.example.com"
+    )
     action = await lead_repository.create_lead(req, user_id="test-user")
     lead = action.lead
     lead_id = lead.id
@@ -20,84 +22,84 @@ async def test_list_pages_returns_page_inventory():
     # Insert an extraction snapshot with page inventory
     now = datetime.now(timezone.utc)
     extraction_doc = {
-            "id": "ex-1",
-            "leadId": lead_id,
-            "jobId": None,
-            "version": 1,
-            "crawlStatus": "completed",
-            "sitemapStatus": "found",
-            "pagesDiscovered": 2,
-            "pagesCrawled": 2,
+        "id": "ex-1",
+        "leadId": lead_id,
+        "jobId": None,
+        "version": 1,
+        "crawlStatus": "completed",
+        "sitemapStatus": "found",
+        "pagesDiscovered": 2,
+        "pagesCrawled": 2,
+        "canonicalWebsiteUrl": lead.websiteUrl,
+        "detectedWebsiteUrl": lead.detectedWebsiteUrl,
+        "summary": {
+            "companyName": lead.companyName,
             "canonicalWebsiteUrl": lead.websiteUrl,
             "detectedWebsiteUrl": lead.detectedWebsiteUrl,
-            "summary": {
-                "companyName": lead.companyName,
-                "canonicalWebsiteUrl": lead.websiteUrl,
-                "detectedWebsiteUrl": lead.detectedWebsiteUrl,
-                "positioningSummary": "Test positioning",
-                "audienceClues": ["enterprise"],
-                "serviceClues": ["consulting"],
-                "ctaClues": ["contact"],
-                "toneClues": ["professional"],
+            "positioningSummary": "Test positioning",
+            "audienceClues": ["enterprise"],
+            "serviceClues": ["consulting"],
+            "ctaClues": ["contact"],
+            "toneClues": ["professional"],
+        },
+        "pageInventory": [
+            {
+                "url": "https://example.com",
+                "source": "homepage",
+                "status": "crawled",
+                "title": "Test Co - Home",
+                "summary": "Title: Test Co - Home | Description: Leading provider",
+                "depth": 0,
+                "ctaCount": 3,
+                "confidence": 85,
+                "citations": [
+                    {
+                        "pageUrl": "https://example.com",
+                        "evidenceType": "title",
+                        "label": "Page title",
+                        "excerpt": "Test Co - Home",
+                        "confidence": 86,
+                    },
+                    {
+                        "pageUrl": "https://example.com",
+                        "evidenceType": "meta",
+                        "label": "Meta description",
+                        "excerpt": "Leading provider",
+                        "confidence": 80,
+                    },
+                ],
+                "errors": [],
             },
-            "pageInventory": [
-                {
-                    "url": "https://example.com",
-                    "source": "homepage",
-                    "status": "crawled",
-                    "title": "Test Co - Home",
-                    "summary": "Title: Test Co - Home | Description: Leading provider",
-                    "depth": 0,
-                    "ctaCount": 3,
-                    "confidence": 85,
-                    "citations": [
-                        {
-                            "pageUrl": "https://example.com",
-                            "evidenceType": "title",
-                            "label": "Page title",
-                            "excerpt": "Test Co - Home",
-                            "confidence": 86,
-                        },
-                        {
-                            "pageUrl": "https://example.com",
-                            "evidenceType": "meta",
-                            "label": "Meta description",
-                            "excerpt": "Leading provider",
-                            "confidence": 80,
-                        },
-                    ],
-                    "errors": [],
-                },
-                {
-                    "url": "https://example.com/about",
-                    "source": "internal_link",
-                    "status": "crawled",
-                    "title": "About Us",
-                    "summary": "Title: About Us | H1: Our Story",
-                    "depth": 1,
-                    "ctaCount": 2,
-                    "confidence": 78,
-                    "citations": [
-                        {
-                            "pageUrl": "https://example.com/about",
-                            "evidenceType": "title",
-                            "label": "Page title",
-                            "excerpt": "About Us",
-                            "confidence": 82,
-                        },
-                    ],
-                    "errors": ["summary_sparse"],
-                },
-            ],
-            "sourceCitations": [],
-            "brandAssetCues": [],
-            "sitemapUrls": [],
-            "confidenceScore": 82,
-            "gapItems": ["summary_sparse"],
-            "errors": [],
-            "createdAt": now,
-            "updatedAt": now,
-        }
+            {
+                "url": "https://example.com/about",
+                "source": "internal_link",
+                "status": "crawled",
+                "title": "About Us",
+                "summary": "Title: About Us | H1: Our Story",
+                "depth": 1,
+                "ctaCount": 2,
+                "confidence": 78,
+                "citations": [
+                    {
+                        "pageUrl": "https://example.com/about",
+                        "evidenceType": "title",
+                        "label": "Page title",
+                        "excerpt": "About Us",
+                        "confidence": 82,
+                    },
+                ],
+                "errors": ["summary_sparse"],
+            },
+        ],
+        "sourceCitations": [],
+        "brandAssetCues": [],
+        "sitemapUrls": [],
+        "confidenceScore": 82,
+        "gapItems": ["summary_sparse"],
+        "errors": [],
+        "createdAt": now,
+        "updatedAt": now,
+    }
     database = get_database()
     await database["site_extractions"].insert_one(extraction_doc)
 
@@ -165,36 +167,36 @@ async def test_approve_brief_blocked_by_critical_gaps():
     # Insert an extraction snapshot with critical gaps
     now = datetime.now(timezone.utc)
     extraction_doc = {
-            "id": "ex-2",
-            "leadId": lead_id,
-            "jobId": None,
-            "version": 1,
-            "crawlStatus": "failed",
-            "sitemapStatus": "missing",
-            "pagesDiscovered": 0,
-            "pagesCrawled": 0,
+        "id": "ex-2",
+        "leadId": lead_id,
+        "jobId": None,
+        "version": 1,
+        "crawlStatus": "failed",
+        "sitemapStatus": "missing",
+        "pagesDiscovered": 0,
+        "pagesCrawled": 0,
+        "canonicalWebsiteUrl": lead.websiteUrl,
+        "detectedWebsiteUrl": lead.detectedWebsiteUrl,
+        "summary": {
+            "companyName": lead.companyName,
             "canonicalWebsiteUrl": lead.websiteUrl,
             "detectedWebsiteUrl": lead.detectedWebsiteUrl,
-            "summary": {
-                "companyName": lead.companyName,
-                "canonicalWebsiteUrl": lead.websiteUrl,
-                "detectedWebsiteUrl": lead.detectedWebsiteUrl,
-                "positioningSummary": None,
-                "audienceClues": [],
-                "serviceClues": [],
-                "ctaClues": [],
-                "toneClues": [],
-            },
-            "pageInventory": [],
-            "sourceCitations": [],
-            "brandAssetCues": [],
-            "sitemapUrls": [],
-            "confidenceScore": 0,
-            "gapItems": ["homepage_unreachable", "low_confidence_extraction"],
-            "errors": ["crawl_failed"],
-            "createdAt": now,
-            "updatedAt": now,
-        }
+            "positioningSummary": None,
+            "audienceClues": [],
+            "serviceClues": [],
+            "ctaClues": [],
+            "toneClues": [],
+        },
+        "pageInventory": [],
+        "sourceCitations": [],
+        "brandAssetCues": [],
+        "sitemapUrls": [],
+        "confidenceScore": 0,
+        "gapItems": ["homepage_unreachable", "low_confidence_extraction"],
+        "errors": ["crawl_failed"],
+        "createdAt": now,
+        "updatedAt": now,
+    }
     database = get_database()
     await database["site_extractions"].insert_one(extraction_doc)
 

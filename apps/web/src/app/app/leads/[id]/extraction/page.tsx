@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 import { PageFrame } from "@/components/shell/page-frame";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExtractionReviewClient } from "@/components/extraction-review-client";
 import { getLead, getLeadExtraction, getLeadPages } from "@/lib/api/leads";
-import { evaluateExtractionHealth } from "@/lib/extraction-health";
 import type { ExtractionStatus } from "@/lib/types";
 
 function extractionStatusLabel(status: ExtractionStatus) {

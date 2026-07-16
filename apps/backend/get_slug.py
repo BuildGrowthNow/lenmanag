@@ -1,7 +1,9 @@
 import sys
-sys.path.append('c:/Users/smikl/Desktop/Work/LenManag/apps/backend')
+
+sys.path.append("c:/Users/smikl/Desktop/Work/LenManag/apps/backend")
 import asyncio
 from app.core.mongo import get_database
+
 
 async def main():
     db = get_database()
@@ -13,5 +15,6 @@ async def main():
         print(f"Slug: {doc.get('previewSlug')}, ID: {doc.get('_id') or doc.get('id')}")
     else:
         print("No sites found")
+
 
 asyncio.run(main())

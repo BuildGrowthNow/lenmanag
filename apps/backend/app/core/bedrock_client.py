@@ -38,12 +38,14 @@ class BedrockClient:
     ) -> str:
         """Generate text response from Bedrock Claude."""
         try:
-            body = json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "messages": [{"role": "user", "content": prompt}],
-            })
+            body = json.dumps(
+                {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "messages": [{"role": "user", "content": prompt}],
+                }
+            )
             response = self.client.invoke_model(
                 modelId=self.model_id,
                 contentType="application/json",
@@ -71,25 +73,29 @@ class BedrockClient:
         """Analyze image with Bedrock Claude Vision."""
         try:
             encoded = base64.b64encode(image_data).decode()
-            body = json.dumps({
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "messages": [{
-                    "role": "user",
-                    "content": [
+            body = json.dumps(
+                {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "messages": [
                         {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": image_mime_type,
-                                "data": encoded,
-                            },
-                        },
-                        {"type": "text", "text": prompt},
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": image_mime_type,
+                                        "data": encoded,
+                                    },
+                                },
+                                {"type": "text", "text": prompt},
+                            ],
+                        }
                     ],
-                }],
-            })
+                }
+            )
             response = self.client.invoke_model(
                 modelId=self.model_id,
                 contentType="application/json",
@@ -115,8 +121,7 @@ class BedrockClient:
         import asyncio
 
         tasks = [
-            self.generate_text(prompt, temperature, max_tokens)
-            for prompt in prompts
+            self.generate_text(prompt, temperature, max_tokens) for prompt in prompts
         ]
         return await asyncio.gather(*tasks)
 
@@ -136,17 +141,17 @@ class BedrockClient:
             f"Current brief summary:\n{current_brief_summary}\n\n"
             f"Brand tokens:\n{brand_tokens_summary}\n\n"
             f"Original extraction:\n{extraction_summary}\n\n"
-            f"Operator refinement request:\n\"{operator_prompt}\"\n\n"
+            f'Operator refinement request:\n"{operator_prompt}"\n\n'
             "Produce a JSON object with refined guidance for visual redesign:\n"
             "{\n"
-            "  \"refinedFocus\": \"Updated design direction\",\n"
-            "  \"sectionOrder\": [\"section1\", \"section2\", ...],\n"
-            "  \"componentSuggestions\": [\n"
-            "    {\"section\": \"Hero\", \"suggestedComponent\": \"hero-split-editorial\"}\n"
+            '  "refinedFocus": "Updated design direction",\n'
+            '  "sectionOrder": ["section1", "section2", ...],\n'
+            '  "componentSuggestions": [\n'
+            '    {"section": "Hero", "suggestedComponent": "hero-split-editorial"}\n'
             "  ],\n"
-            "  \"ctaStrategy\": \"Refined CTA approach\",\n"
-            "  \"visualTone\": \"Updated visual tone\",\n"
-            "  \"additionalNotes\": \"Implementation hints\"\n"
+            '  "ctaStrategy": "Refined CTA approach",\n'
+            '  "visualTone": "Updated visual tone",\n'
+            '  "additionalNotes": "Implementation hints"\n'
             "}\n\n"
             "CONSTRAINTS:\n"
             "- Do NOT rewrite extracted product facts or content\n"

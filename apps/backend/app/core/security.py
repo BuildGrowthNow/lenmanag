@@ -18,11 +18,15 @@ def _secret_bytes() -> bytes:
 
 
 def _sign(payload: str) -> str:
-    signature = hmac.new(_secret_bytes(), payload.encode("utf-8"), hashlib.sha256).digest()
+    signature = hmac.new(
+        _secret_bytes(), payload.encode("utf-8"), hashlib.sha256
+    ).digest()
     return base64.urlsafe_b64encode(signature).decode("utf-8").rstrip("=")
 
 
-def create_session_token(email: str, name: Optional[str] = None, role: str = "operator") -> str:
+def create_session_token(
+    email: str, name: Optional[str] = None, role: str = "operator"
+) -> str:
     now = int(time.time())
     payload = {
         "email": email.lower(),
@@ -31,7 +35,13 @@ def create_session_token(email: str, name: Optional[str] = None, role: str = "op
         "iat": now,
         "exp": now + SESSION_TTL_SECONDS,
     }
-    encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("utf-8").rstrip("=")
+    encoded = (
+        base64.urlsafe_b64encode(
+            json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        )
+        .decode("utf-8")
+        .rstrip("=")
+    )
     return f"{encoded}.{_sign(encoded)}"
 
 
@@ -48,4 +58,3 @@ def decode_session_token(token: str) -> Optional[Dict[str, Any]]:
         return payload
     except Exception:
         return None
-

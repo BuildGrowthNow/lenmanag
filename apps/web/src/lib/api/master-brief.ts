@@ -2,7 +2,7 @@
  * API client for master brief operations
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+import { request, safeRequest } from "@/lib/api/client";
 
 export interface MasterBriefSection {
   purpose: string;
@@ -55,70 +55,29 @@ export interface MasterBrief {
 }
 
 export async function getMasterBrief(leadId: string): Promise<MasterBrief | null> {
-  const res = await fetch(`${API_BASE}/api/v1/leads/${leadId}/master-brief`, {
-    credentials: 'include',
-  });
-
-  if (!res.ok) {
-    if (res.status === 404) return null;
-    throw new Error(`Failed to fetch master brief: ${res.status}`);
-  }
-
-  const data = await res.json();
-  return data.data;
+  return safeRequest<MasterBrief | null>(`/api/leads/${leadId}/master-brief`, null);
 }
 
 export async function createMasterBrief(leadId: string): Promise<MasterBrief> {
-  const res = await fetch(`${API_BASE}/api/v1/leads/${leadId}/master-brief`, {
-    method: 'POST',
-    credentials: 'include',
-  });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `Failed to create master brief: ${res.status}`);
-  }
-
-  const data = await res.json();
-  return data.data;
+  return request<MasterBrief>(`/api/leads/${leadId}/master-brief`, { method: 'POST' });
 }
 
 export async function refineMasterBrief(
   leadId: string,
   feedback: string
 ): Promise<MasterBrief> {
-  const res = await fetch(`${API_BASE}/api/v1/leads/${leadId}/master-brief/refine`, {
+  return request<MasterBrief>(`/api/leads/${leadId}/master-brief/refine`, {
     method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ feedback }),
+    body: { feedback }
   });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `Failed to refine master brief: ${res.status}`);
-  }
-
-  const data = await res.json();
-  return data.data;
 }
 
 export async function approveMasterBrief(
   leadId: string,
   notes?: string
 ): Promise<MasterBrief> {
-  const res = await fetch(`${API_BASE}/api/v1/leads/${leadId}/master-brief/approve`, {
+  return request<MasterBrief>(`/api/leads/${leadId}/master-brief/approve`, {
     method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ notes }),
+    body: { notes }
   });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `Failed to approve master brief: ${res.status}`);
-  }
-
-  const data = await res.json();
-  return data.data;
 }

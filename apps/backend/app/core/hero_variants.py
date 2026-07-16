@@ -176,33 +176,58 @@ def select_hero_variant(
     if has_product_image and industry in ["saas", "tech", "ecommerce"]:
         return "product_screenshot", HERO_VARIANTS["product_screenshot"]
 
-    if has_multiple_images and industry in ["ecommerce_fashion", "real_estate", "hospitality"]:
+    if has_multiple_images and industry in [
+        "ecommerce_fashion",
+        "real_estate",
+        "hospitality",
+    ]:
         return "carousel_hero", HERO_VARIANTS["carousel_hero"]
 
     # Priority 2: Industry-driven selection
     industry_preferences: dict[str, list[HeroVariantType]] = {
-        "creative_agency": ["animated_gradient", "blob_shapes", "parallax_layers", "diagonal_split"],
+        "creative_agency": [
+            "animated_gradient",
+            "blob_shapes",
+            "parallax_layers",
+            "diagonal_split",
+        ],
         "saas": ["animated_gradient", "product_screenshot", "minimal_centered"],
         "legal_finance": ["split_asymmetric", "typographic_only", "minimal_centered"],
         "consulting": ["split_asymmetric", "typographic_only", "minimal_centered"],
         "ecommerce_fashion": ["carousel_hero", "grid_mosaic", "minimal_centered"],
         "tech": ["animated_gradient", "parallax_layers", "product_screenshot"],
         "real_estate": ["carousel_hero", "split_asymmetric", "parallax_layers"],
-        "health_wellness": ["split_asymmetric", "minimal_centered", "animated_gradient"],
+        "health_wellness": [
+            "split_asymmetric",
+            "minimal_centered",
+            "animated_gradient",
+        ],
         "education": ["parallax_layers", "blob_shapes", "split_asymmetric"],
         "hospitality": ["carousel_hero", "grid_mosaic", "parallax_layers"],
     }
 
     # Priority 3: Brand personality adjustment
     personality_preferences: dict[str, list[HeroVariantType]] = {
-        "bold": ["animated_gradient", "video_fullscreen", "blob_shapes", "diagonal_split"],
+        "bold": [
+            "animated_gradient",
+            "video_fullscreen",
+            "blob_shapes",
+            "diagonal_split",
+        ],
         "minimal": ["minimal_centered", "typographic_only", "split_asymmetric"],
-        "creative": ["blob_shapes", "parallax_layers", "immersive_3d", "diagonal_split"],
+        "creative": [
+            "blob_shapes",
+            "parallax_layers",
+            "immersive_3d",
+            "diagonal_split",
+        ],
         "professional": ["split_asymmetric", "typographic_only", "minimal_centered"],
     }
 
     # Get industry preferences
-    industry_variants = industry_preferences.get(industry, ["minimal_centered", "split_asymmetric"])
+    industry_variants = industry_preferences.get(
+        industry, ["minimal_centered", "split_asymmetric"]
+    )
 
     # Filter by brand personality if provided
     selected_key: HeroVariantType = "minimal_centered"
@@ -268,8 +293,12 @@ def generate_hero_config(
             "background": colors.get("surface", "#000000"),
             "text": colors.get("text", "#ffffff"),
             "accent": colors.get("primary", "#3b82f6"),
-            "gradient_start": colors.get("gradient_start", colors.get("primary", "#3b82f6")),
-            "gradient_end": colors.get("gradient_end", colors.get("secondary", "#8b5cf6")),
+            "gradient_start": colors.get(
+                "gradient_start", colors.get("primary", "#3b82f6")
+            ),
+            "gradient_end": colors.get(
+                "gradient_end", colors.get("secondary", "#8b5cf6")
+            ),
         },
     }
 
@@ -303,11 +332,14 @@ def generate_hero_config(
             base_config["split_angle"] = variant["split_angle"]
 
     elif variant_key == "parallax_layers":
-        base_config["layers"] = assets.get("layers", [
-            {"speed": 0.5, "image": assets.get("layer_1", "")},
-            {"speed": 0.3, "image": assets.get("layer_2", "")},
-            {"speed": 0.1, "image": assets.get("layer_3", "")},
-        ])
+        base_config["layers"] = assets.get(
+            "layers",
+            [
+                {"speed": 0.5, "image": assets.get("layer_1", "")},
+                {"speed": 0.3, "image": assets.get("layer_2", "")},
+                {"speed": 0.1, "image": assets.get("layer_3", "")},
+            ],
+        )
 
     elif variant_key == "typographic_only":
         base_config["headline_size"] = variant["headline_size"]
@@ -347,10 +379,13 @@ def generate_hero_config(
         base_config["style"] = "minimal"
 
     elif variant_key == "immersive_3d":
-        base_config["scene_3d"] = assets.get("3d_scene_config", {
-            "type": "rotating_shapes",
-            "primary_color": colors.get("primary", "#3b82f6"),
-        })
+        base_config["scene_3d"] = assets.get(
+            "3d_scene_config",
+            {
+                "type": "rotating_shapes",
+                "primary_color": colors.get("primary", "#3b82f6"),
+            },
+        )
 
     return base_config
 

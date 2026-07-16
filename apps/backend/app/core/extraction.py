@@ -1209,7 +1209,9 @@ def crawl_website(
             pw_sections = pw_data.get("sectionsData", [])
             for section in page_data.get("sections", []):
                 section_index = section.get("index")
-                pw_section = next((s for s in pw_sections if s.get("index") == section_index), None)
+                pw_section = next(
+                    (s for s in pw_sections if s.get("index") == section_index), None
+                )
                 if pw_section:
                     section["html"] = pw_section.get("html", "")
                     section["text"] = pw_section.get("text", section.get("text", ""))
@@ -1217,7 +1219,11 @@ def crawl_website(
                     section["playwrightCtas"] = pw_section.get("ctas", [])
                     section["computedStyles"] = pw_section.get("computedStyles", {})
                     if pw_section.get("images"):
-                        section["imageUrls"] = list(dict.fromkeys(section.get("imageUrls", []) + pw_section["images"]))
+                        section["imageUrls"] = list(
+                            dict.fromkeys(
+                                section.get("imageUrls", []) + pw_section["images"]
+                            )
+                        )
 
         page_inventory.append(page_data)
         source_citations.extend(page_data["citations"])
@@ -1226,7 +1232,7 @@ def crawl_website(
                 asset_manifest.append(asset)
         for section in page_data.get("sections", []):
             section_inventory.append({**section, "pageUrl": url})
-        
+
         if page_data.get("sections"):
             logger.info(f"Extracted {len(page_data['sections'])} sections from {url}")
         brand_asset_cues.extend(_extract_brand_asset_cues(url, signals))
@@ -1369,7 +1375,7 @@ def crawl_website(
             capture = captures.get(item["url"])
             if not capture:
                 continue
-            
+
             page_data = capture.get("pageData", {})
             if page_data:
                 item["meta"] = page_data.get("meta", {})
@@ -1379,8 +1385,10 @@ def crawl_website(
                 item["headings"] = page_data.get("headings", [])
                 item["links"] = page_data.get("links", [])
                 item["rawHtmlRef"] = item.get("rawHtmlHash")
-                
-                section_data_map = {s.get("index"): s for s in page_data.get("sectionsData", [])}
+
+                section_data_map = {
+                    s.get("index"): s for s in page_data.get("sectionsData", [])
+                }
                 for section in item.get("sections", []):
                     sd = section_data_map.get(section.get("index"))
                     if sd:

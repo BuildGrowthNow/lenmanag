@@ -28,7 +28,9 @@ print(f"Job ID: {job_id}")
 for i in range(30):
     r = client.get(f"/jobs/{job_id}")
     job = r.json()["data"]["job"]
-    print(f"Attempt {i}: status={job['status']} progress={job['progress']} step={job['step']}")
+    print(
+        f"Attempt {i}: status={job['status']} progress={job['progress']} step={job['step']}"
+    )
     if job["status"] == "completed":
         break
     time.sleep(2)

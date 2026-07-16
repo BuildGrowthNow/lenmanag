@@ -25,7 +25,7 @@ async def get_current_user_id_optional(
 
 
 async def get_current_user_id(
-    user_id: Annotated[Optional[str], Depends(get_current_user_id_optional)]
+    user_id: Annotated[Optional[str], Depends(get_current_user_id_optional)],
 ) -> str:
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -33,7 +33,7 @@ async def get_current_user_id(
 
 
 async def get_current_user(
-    user_id: Annotated[str, Depends(get_current_user_id)]
+    user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
     repo = UserRepository()
     user = await repo.get_user_by_id(user_id)

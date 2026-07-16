@@ -8,7 +8,12 @@ from typing import BinaryIO, Dict, Tuple
 from google.cloud import storage
 from google.oauth2 import service_account
 from google.api_core import retry as gcloud_retry
-from tenacity import retry, stop_after_attempt, wait_exponential_jitter, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential_jitter,
+    retry_if_exception_type,
+)
 
 from .config import get_settings
 
@@ -28,19 +33,25 @@ class GCSAssetStorage:
     def _make_client(self):
         key = settings.gcp_service_account_key
         if not key:
-            raise RuntimeError("GCP_SERVICE_ACCOUNT_KEY is required for GCSAssetStorage")
+            raise RuntimeError(
+                "GCP_SERVICE_ACCOUNT_KEY is required for GCSAssetStorage"
+            )
 
         # If key looks like a path, use from_service_account_file
         try:
             if key.strip().startswith("{"):
                 info = json.loads(key)
                 creds = service_account.Credentials.from_service_account_info(info)
-                return storage.Client(project=settings.asset_gcp_project, credentials=creds)
+                return storage.Client(
+                    project=settings.asset_gcp_project, credentials=creds
+                )
         except Exception:
             pass
 
         # fallback: treat as path
-        return storage.Client.from_service_account_json(key, project=settings.asset_gcp_project)
+        return storage.Client.from_service_account_json(
+            key, project=settings.asset_gcp_project
+        )
 
     def _validate_path_component(self, component: str) -> None:
         """Validate path component to prevent path traversal attacks."""
@@ -55,7 +66,9 @@ class GCSAssetStorage:
 
         # Ensure it's alphanumeric with limited special chars
         if not all(c.isalnum() or c in "-_" for c in component):
-            raise ValueError("Path component must be alphanumeric with hyphens/underscores only")
+            raise ValueError(
+                "Path component must be alphanumeric with hyphens/underscores only"
+            )
 
     def _blob_name(self, lead_id: str) -> str:
         """Generate blob name with path traversal protection."""
@@ -63,10 +76,18 @@ class GCSAssetStorage:
         return f"assets/{lead_id}/{uuid.uuid4().hex}"
 
     def _gcloud_retry(self):
-        return gcloud_retry.Retry(initial=0.1, maximum=10.0, multiplier=2.0, deadline=60.0)
+        return gcloud_retry.Retry(
+            initial=0.1, maximum=10.0, multiplier=2.0, deadline=60.0
+        )
 
-    @retry(stop=stop_after_attempt(5), wait=wait_exponential_jitter(initial=0.1, max=10), retry=retry_if_exception_type(Exception))
-    def upload_stream(self, stream: BinaryIO, lead_id: str, checksum: str, content_type: str) -> Tuple[str, int]:
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential_jitter(initial=0.1, max=10),
+        retry=retry_if_exception_type(Exception),
+    )
+    def upload_stream(
+        self, stream: BinaryIO, lead_id: str, checksum: str, content_type: str
+    ) -> Tuple[str, int]:
         name = self._blob_name(lead_id)
         blob = self.bucket.blob(name)
         # configure chunk size for resumable uploads
@@ -76,7 +97,12 @@ class GCSAssetStorage:
 
         # Use upload_from_file which supports resumable uploads when chunk_size set
         stream.seek(0)
-        blob.upload_from_file(stream, content_type=content_type, timeout=settings.asset_download_timeout, retry=self._gcloud_retry())  # type: ignore[arg-type]
+        blob.upload_from_file(
+            stream,
+            content_type=content_type,
+            timeout=settings.asset_download_timeout,
+            retry=self._gcloud_retry(),
+        )  # type: ignore[arg-type]
 
         # update stats
         try:
@@ -89,7 +115,11 @@ class GCSAssetStorage:
         uri = f"gs://{self.bucket_name}/{name}"
         return uri, int(size)
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=0.1, max=5), retry=retry_if_exception_type(Exception))
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=0.1, max=5),
+        retry=retry_if_exception_type(Exception),
+    )
     def delete(self, uri: str) -> None:
         if not uri.startswith("gs://"):
             raise ValueError("invalid gcs uri")
@@ -113,7 +143,9 @@ class GCSAssetStorage:
             raise ValueError("uri bucket mismatch")
         blob = self.bucket.blob(name)
         # v4 signed URL
-        url = blob.generate_signed_url(expiration=timedelta(seconds=expires_seconds), version="v4")
+        url = blob.generate_signed_url(
+            expiration=timedelta(seconds=expires_seconds), version="v4"
+        )
         return url
 
     def get_stats(self) -> Dict[str, int]:

@@ -17,7 +17,9 @@ class _AsyncMongoMockCursor:
         self._skip: int = 0
         self._limit: Optional[int] = None
 
-    def sort(self, key_or_list: Any, direction: Optional[int] = None) -> "_AsyncMongoMockCursor":
+    def sort(
+        self, key_or_list: Any, direction: Optional[int] = None
+    ) -> "_AsyncMongoMockCursor":
         if isinstance(key_or_list, list):
             self._sort_fields.extend([(item[0], item[1]) for item in key_or_list])
         else:
@@ -35,7 +37,10 @@ class _AsyncMongoMockCursor:
     async def to_list(self, length: Optional[int] = None) -> list[dict[str, Any]]:
         docs = list(self._documents)
         for key, direction in reversed(self._sort_fields):
-            docs.sort(key=lambda item, field=key: item.get(field) or "", reverse=direction == -1)  # type: ignore[arg-type]
+            docs.sort(
+                key=lambda item, field=key: item.get(field) or "",
+                reverse=direction == -1,
+            )  # type: ignore[arg-type]
         if self._skip:
             docs = docs[self._skip :]
         cap = self._limit if self._limit is not None else length

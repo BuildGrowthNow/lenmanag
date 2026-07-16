@@ -31,5 +31,7 @@ async def get_config() -> Dict[str, Any]:
 async def patch_config(updates: Dict[str, Any]) -> Dict[str, Any]:
     db = get_database()
     now = datetime.utcnow()
-    await db[COLLECTION].update_one({"_id": DOC_ID}, {"$set": {"value": updates, "updatedAt": now}}, upsert=True)
+    await db[COLLECTION].update_one(
+        {"_id": DOC_ID}, {"$set": {"value": updates, "updatedAt": now}}, upsert=True
+    )
     return updates

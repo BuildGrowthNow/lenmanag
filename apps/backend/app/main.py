@@ -16,7 +16,9 @@ async def lifespan(app: FastAPI):
         try:
             await client.admin.command("ping")
         except Exception as exc:  # pragma: no cover - startup guard for local shell use
-            logging.getLogger("lenquant").warning("MongoDB ping failed during startup: %s", exc)
+            logging.getLogger("lenquant").warning(
+                "MongoDB ping failed during startup: %s", exc
+            )
     yield
     if client is not None:
         client.close()

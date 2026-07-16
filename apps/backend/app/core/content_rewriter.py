@@ -115,21 +115,25 @@ async def rewrite_services(
             response = await llm.generate_text(prompt=prompt, max_tokens=50)
             rewritten = response.strip().strip('"').strip("'")
 
-            rewritten_services.append({
-                "original": service,
-                "rewritten": rewritten,
-                "type": "service",
-                "confidence": 80,
-            })
+            rewritten_services.append(
+                {
+                    "original": service,
+                    "rewritten": rewritten,
+                    "type": "service",
+                    "confidence": 80,
+                }
+            )
         except Exception as e:
             logger.warning(f"Service rewrite failed for '{service}': {e}")
-            rewritten_services.append({
-                "original": service,
-                "rewritten": service,
-                "type": "service",
-                "confidence": 50,
-                "error": str(e),
-            })
+            rewritten_services.append(
+                {
+                    "original": service,
+                    "rewritten": service,
+                    "type": "service",
+                    "confidence": 50,
+                    "error": str(e),
+                }
+            )
 
     return rewritten_services
 

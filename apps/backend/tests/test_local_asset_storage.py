@@ -11,7 +11,7 @@ def test_local_upload_and_delete(tmp_path, monkeypatch):
     assert size == len(data)
     assert uri.startswith("local://")
     # ensure file exists
-    rel = uri[len("local://"):]
+    rel = uri[len("local://") :]
     path = base / rel
     assert path.exists()
     # delete

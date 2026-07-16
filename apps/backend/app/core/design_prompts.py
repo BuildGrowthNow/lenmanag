@@ -47,7 +47,6 @@ WHAT TO AVOID:
 - Stock photography
 - Corporate formality
 - Lengthy explanations""",
-
         "content_rewrite_instructions": """Rewrite for IMPACT and CONFIDENCE:
 - Use power verbs: "Transform", "Craft", "Architect", "Unleash"
 - Be bold, not humble: "We create award-winning digital experiences"
@@ -55,7 +54,6 @@ WHAT TO AVOID:
 - Make every sentence earn its place
 - Speak to creative leaders and brand managers""",
     },
-
     "saas": {
         "visual_brief_prompt": """You are designing a modern SaaS product website.
 
@@ -93,7 +91,6 @@ WHAT TO AVOID:
 - Dark themes (unless explicitly requested)
 - Lengthy copy blocks
 - Abstract concepts without concrete benefits""",
-
         "content_rewrite_instructions": """Rewrite for CLARITY and VALUE:
 - Lead with the benefit, not the feature
 - Use metrics: "10x faster" not "very fast"
@@ -101,7 +98,6 @@ WHAT TO AVOID:
 - Address pain points directly
 - Speak to product managers and technical buyers""",
     },
-
     "legal_finance": {
         "visual_brief_prompt": """You are designing a professional services website for legal or financial services.
 
@@ -139,7 +135,6 @@ WHAT TO AVOID:
 - Bright colors or experimental layouts
 - Abstract imagery
 - Over-animation or motion""",
-
         "content_rewrite_instructions": """Rewrite for AUTHORITY and PRECISION:
 - Use industry-specific terminology correctly
 - Emphasize experience: "Three decades of trial experience"
@@ -147,7 +142,6 @@ WHAT TO AVOID:
 - Formal but not stuffy
 - Speak to business leaders and general counsel""",
     },
-
     "ecommerce_fashion": {
         "visual_brief_prompt": """You are designing an e-commerce fashion site.
 
@@ -184,7 +178,6 @@ WHAT TO AVOID:
 - Multiple competing CTAs
 - Complex navigation
 - Over-explanation of products""",
-
         "content_rewrite_instructions": """Rewrite for ASPIRATION and BREVITY:
 - Use sensory language: "Buttery soft leather"
 - Create desire, not just describe
@@ -192,7 +185,6 @@ WHAT TO AVOID:
 - Focus on lifestyle, not just product
 - Speak to style-conscious consumers""",
     },
-
     "consulting": {
         "visual_brief_prompt": """You are designing a consulting firm website.
 
@@ -230,7 +222,6 @@ WHAT TO AVOID:
 - Abstract concepts without examples
 - Over-creative layouts
 - Lengthy paragraphs""",
-
         "content_rewrite_instructions": """Rewrite for RESULTS and SPECIFICITY:
 - Lead with outcomes: "Reduced costs by 40%"
 - Use consulting frameworks (strategy, transformation, etc.)
@@ -238,7 +229,6 @@ WHAT TO AVOID:
 - Show ROI explicitly
 - Speak to C-suite and VPs""",
     },
-
     "real_estate": {
         "visual_brief_prompt": """You are designing a real estate website.
 
@@ -276,7 +266,6 @@ WHAT TO AVOID:
 - Overly salesy language
 - Cluttered layouts with too many filters
 - Ignoring location/neighborhood context""",
-
         "content_rewrite_instructions": """Rewrite for ASPIRATION and LOCAL EXPERTISE:
 - Emphasize location benefits
 - Use lifestyle language: "Morning coffee on your private terrace"
@@ -284,7 +273,6 @@ WHAT TO AVOID:
 - Include specific metrics (sqft, beds/baths)
 - Speak to homebuyers and sellers""",
     },
-
     "health_wellness": {
         "visual_brief_prompt": """You are designing a health/wellness website.
 
@@ -322,7 +310,6 @@ WHAT TO AVOID:
 - Overly technical language
 - Dark themes
 - Aggressive animations""",
-
         "content_rewrite_instructions": """Rewrite for COMPASSION and CLARITY:
 - Use warm, approachable language
 - Explain medical terms simply
@@ -330,7 +317,6 @@ WHAT TO AVOID:
 - Address common concerns directly
 - Speak to patients and their families""",
     },
-
     "tech": {
         "visual_brief_prompt": """You are designing a tech company website.
 
@@ -368,7 +354,6 @@ WHAT TO AVOID:
 - Light themes (unless specifically requested)
 - Non-technical explanations for technical products
 - Ignoring developer experience""",
-
         "content_rewrite_instructions": """Rewrite for TECHNICAL CLARITY and INNOVATION:
 - Use technical terms correctly
 - Show code examples when relevant
@@ -442,7 +427,7 @@ Tone: {", ".join(tone_clues[:3])}
 
 # INDUSTRY: {industry.upper()}
 
-{design_config['visual_brief_prompt']}
+{design_config["visual_brief_prompt"]}
 
 # SOURCE CONTENT (for context only, will be rewritten)
 {extracted_content[:500]}...
@@ -526,11 +511,11 @@ def build_content_rewrite_prompt(
     prompt = f"""You are a premium copywriter rewriting content for a {industry} website.
 
 # CONTENT REWRITE INSTRUCTIONS
-{design_config['content_rewrite_instructions']}
+{design_config["content_rewrite_instructions"]}
 
 # SPECIFIC TASK: {content_type.upper()}
-Goal: {spec['goal']}
-Constraints: {spec['constraints']}
+Goal: {spec["goal"]}
+Constraints: {spec["constraints"]}
 {f"Example for {industry}: {example}" if example else ""}
 
 # ORIGINAL CONTENT

@@ -39,7 +39,9 @@ def _extract_accept_version(accept_header: str | None) -> str | None:
     return None
 
 
-def negotiate_api_version(explicit_version: str | None, accept_header: str | None) -> str:
+def negotiate_api_version(
+    explicit_version: str | None, accept_header: str | None
+) -> str:
     token = explicit_version or _extract_accept_version(accept_header)
     return _normalize_version(token)
 

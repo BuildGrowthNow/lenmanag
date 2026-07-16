@@ -92,4 +92,3 @@ async def write_brief_audit_log(
         after=after,
         metadata=metadata,
     )
-

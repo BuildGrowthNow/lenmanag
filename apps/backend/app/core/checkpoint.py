@@ -2,6 +2,7 @@
 
 Provides resume capability for tasks that might fail mid-execution.
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,7 +44,9 @@ class TaskCheckpoint:
         """
         database = get_database()
         if database is None:
-            logger.warning(f"Cannot save checkpoint for {self.task_id}: database not available")
+            logger.warning(
+                f"Cannot save checkpoint for {self.task_id}: database not available"
+            )
             return
 
         checkpoint_doc = {
@@ -54,7 +57,9 @@ class TaskCheckpoint:
             "state": state,
             "metadata": metadata or {},
             "createdAt": datetime.now(timezone.utc),
-            "expiresAt": datetime.now(timezone.utc).replace(hour=23, minute=59, second=59),  # Expire at end of day
+            "expiresAt": datetime.now(timezone.utc).replace(
+                hour=23, minute=59, second=59
+            ),  # Expire at end of day
         }
 
         try:
@@ -64,10 +69,14 @@ class TaskCheckpoint:
                 {"$set": checkpoint_doc},
                 upsert=True,
             )
-            logger.info(f"Saved checkpoint for {self.task_id} at stage '{stage}' ({progress}%)")
+            logger.info(
+                f"Saved checkpoint for {self.task_id} at stage '{stage}' ({progress}%)"
+            )
         except Exception as exc:
             # Never fail the task due to checkpointing
-            logger.error(f"Failed to save checkpoint for {self.task_id}: {exc}", exc_info=True)
+            logger.error(
+                f"Failed to save checkpoint for {self.task_id}: {exc}", exc_info=True
+            )
 
     async def load_checkpoint(self) -> Optional[Dict[str, Any]]:
         """Load the most recent checkpoint for this task.
@@ -82,11 +91,15 @@ class TaskCheckpoint:
         try:
             doc = await database["task_checkpoints"].find_one({"taskId": self.task_id})
             if doc:
-                logger.info(f"Loaded checkpoint for {self.task_id} at stage '{doc.get('stage')}'")
+                logger.info(
+                    f"Loaded checkpoint for {self.task_id} at stage '{doc.get('stage')}'"
+                )
                 return doc
             return None
         except Exception as exc:
-            logger.error(f"Failed to load checkpoint for {self.task_id}: {exc}", exc_info=True)
+            logger.error(
+                f"Failed to load checkpoint for {self.task_id}: {exc}", exc_info=True
+            )
             return None
 
     async def delete_checkpoint(self) -> None:
@@ -99,7 +112,9 @@ class TaskCheckpoint:
             await database["task_checkpoints"].delete_one({"taskId": self.task_id})
             logger.info(f"Deleted checkpoint for {self.task_id}")
         except Exception as exc:
-            logger.error(f"Failed to delete checkpoint for {self.task_id}: {exc}", exc_info=True)
+            logger.error(
+                f"Failed to delete checkpoint for {self.task_id}: {exc}", exc_info=True
+            )
 
     @staticmethod
     async def ensure_indexes() -> None:

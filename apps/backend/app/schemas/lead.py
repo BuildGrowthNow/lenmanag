@@ -7,7 +7,15 @@ from pydantic import BaseModel, Field
 LeadSourceType = Literal["csv", "manual", "crm", "future"]
 LeadStatus = Literal["new", "needs_review", "archived"]
 JobStatus = Literal["queued", "running", "completed", "failed"]
-JobType = Literal["lead_import", "lead_create", "lead_merge", "site_crawl", "site_refresh", "site_generate", "site_republish"]
+JobType = Literal[
+    "lead_import",
+    "lead_create",
+    "lead_merge",
+    "site_crawl",
+    "site_refresh",
+    "site_generate",
+    "site_republish",
+]
 
 # Pipeline stage reflects where a lead sits in the automation flow
 PipelineStage = Literal[

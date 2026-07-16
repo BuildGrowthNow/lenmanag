@@ -28,10 +28,14 @@ async def create_asset_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
     return doc
 
 
-async def update_asset_doc(filter: Dict[str, Any], update: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def update_asset_doc(
+    filter: Dict[str, Any], update: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     db = get_database()
     col = db[ASSET_COLLECTION]
-    res = await col.find_one_and_update(filter, {"$set": update}, return_document=ReturnDocument.AFTER)
+    res = await col.find_one_and_update(
+        filter, {"$set": update}, return_document=ReturnDocument.AFTER
+    )
     return res
 
 
@@ -41,7 +45,9 @@ async def get_asset_by_id(_id: Any) -> Optional[Dict[str, Any]]:
     return await col.find_one({"_id": _id})
 
 
-async def reserve_crawl_budget(crawl_id: str, inc_bytes: int, max_bytes: int) -> Dict[str, Any]:
+async def reserve_crawl_budget(
+    crawl_id: str, inc_bytes: int, max_bytes: int
+) -> Dict[str, Any]:
     """Atomically increment used_bytes for a crawl and ensure it does not exceed max_bytes.
 
     This uses an optimistic upsert: it increments and then checks; if over-limit it rolls back.
@@ -54,7 +60,10 @@ async def reserve_crawl_budget(crawl_id: str, inc_bytes: int, max_bytes: int) ->
     # upsert and increment
     doc = await col.find_one_and_update(
         {"_id": crawl_id},
-        {"$inc": {"used_bytes": inc_bytes}, "$setOnInsert": {"limit": max_bytes, "createdAt": now}},
+        {
+            "$inc": {"used_bytes": inc_bytes},
+            "$setOnInsert": {"limit": max_bytes, "createdAt": now},
+        },
         upsert=True,
         return_document=ReturnDocument.AFTER,
     )

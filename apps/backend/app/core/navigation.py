@@ -68,11 +68,13 @@ def generate_navigation(
 
     # Add CTA button (always last)
     cta_label, cta_href = _get_industry_cta(industry)
-    nav_items.append({
-        "label": cta_label,
-        "href": cta_href,
-        "is_cta": True,
-    })
+    nav_items.append(
+        {
+            "label": cta_label,
+            "href": cta_href,
+            "is_cta": True,
+        }
+    )
 
     # Detect navigation style based on industry
     nav_style = _detect_nav_style(industry)
@@ -128,7 +130,9 @@ def _apply_industry_adjustments(
     # Real Estate: Add "Properties" if applicable
     if industry == "real_estate":
         if not any(item["label"] == "Properties" for item in nav_items):
-            nav_items.insert(1, {"label": "Properties", "href": "#properties", "is_cta": False})
+            nav_items.insert(
+                1, {"label": "Properties", "href": "#properties", "is_cta": False}
+            )
 
     # Health/Wellness: Rename "Services" to "Care"
     if industry == "health_wellness":

@@ -45,19 +45,21 @@ async def test_analyze_section_returns_valid_critique(mock_visual_gemini_client)
         text="We offer web design and development",
         ctas=["Web Design", "Development"],
     )
-    
+
     client_brand = {
         "paletteMode": "light",
         "primaryColor": {"value": "#000"},
         "accentColor": {"value": "#f97316"},
         "typography": {"value": "sans-serif"},
     }
-    
+
     critique = await analyzer.analyze_section(section, client_brand, 0)
-    
+
     assert isinstance(critique, VisualCritique)
     assert critique.sectionType == "services"
-    assert critique.recommendedComponent in {c["id"] for c in analyzer.AVAILABLE_COMPONENTS}
+    assert critique.recommendedComponent in {
+        c["id"] for c in analyzer.AVAILABLE_COMPONENTS
+    }
     assert critique.confidence > 0
 
 
@@ -78,9 +80,9 @@ async def test_analyze_section_handles_errors(mock_visual_gemini_client):
         text="",
         ctas=[],
     )
-    
+
     client_brand = {}
-    
+
     # Should not raise, should return safe default
     critique = await analyzer.analyze_section(section, client_brand, 0)
     assert critique is not None

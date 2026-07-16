@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     celery_result_backend: str | None = None
     celery_default_queue: str = "lenquant"
     celery_task_always_eager: bool = True
-    
+
     # LLM Provider: "gemini" (default for local) or "bedrock" (production)
     llm_provider: str = "gemini"
 
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     bedrock_model_id: str = "us.anthropic.claude-sonnet-4-6-v1"
     bedrock_region: str = "us-east-1"
     bedrock_max_tokens: int = 4096
-    
+
     # Visual Redesign Configuration
     visual_redesign_enabled: bool = True
     visual_redesign_max_iterations: int = 2

@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-PatternCategory = Literal["hero", "section", "animation", "layout", "color", "typography"]
+PatternCategory = Literal[
+    "hero", "section", "animation", "layout", "color", "typography"
+]
 
 
 AWWWARDS_PATTERNS: dict[PatternCategory, list[dict[str, Any]]] = {
@@ -591,22 +593,36 @@ AWWWARDS_PATTERNS: dict[PatternCategory, list[dict[str, Any]]] = {
 }
 
 
-def get_patterns_for_industry(industry: str, categories: list[PatternCategory] | None = None) -> list[dict[str, Any]]:
+def get_patterns_for_industry(
+    industry: str, categories: list[PatternCategory] | None = None
+) -> list[dict[str, Any]]:
     """Get relevant patterns for a specific industry."""
 
     # Industry-to-pattern mapping
     industry_pattern_map = {
         "creative_agency": {
-            "hero": ["Split Hero with Video", "Fullscreen Canvas Hero", "Typographic Hero with Gradient Mesh"],
+            "hero": [
+                "Split Hero with Video",
+                "Fullscreen Canvas Hero",
+                "Typographic Hero with Gradient Mesh",
+            ],
             "section": ["Bento Grid with Hover Lift", "Horizontal Scroll Gallery"],
-            "animation": ["Magnetic Button", "Stagger Fade-In on Scroll", "Hover Reveal Effect"],
+            "animation": [
+                "Magnetic Button",
+                "Stagger Fade-In on Scroll",
+                "Hover Reveal Effect",
+            ],
             "layout": ["Asymmetric Grid", "Full-Bleed Sections"],
             "color": ["Mesh Gradient Background", "Dark Mode with Neon Accents"],
             "typography": ["Oversized Display Type", "Mixed Serif + Sans Pairing"],
         },
         "saas": {
             "hero": ["Product Screenshot Hero", "Typographic Hero with Gradient Mesh"],
-            "section": ["Feature Comparison Table", "Stats Counter Section", "Testimonial Carousel with Avatars"],
+            "section": [
+                "Feature Comparison Table",
+                "Stats Counter Section",
+                "Testimonial Carousel with Avatars",
+            ],
             "animation": ["Stagger Fade-In on Scroll", "Scroll-Linked Progress Bar"],
             "layout": ["Full-Bleed Sections", "Sticky Sidebar Navigation"],
             "color": ["Mesh Gradient Background"],
@@ -622,7 +638,10 @@ def get_patterns_for_industry(industry: str, categories: list[PatternCategory] |
         },
         "ecommerce_fashion": {
             "hero": ["Carousel Hero", "Parallax Layers Hero"],
-            "section": ["Horizontal Scroll Gallery", "Full-Bleed Image with Text Overlay"],
+            "section": [
+                "Horizontal Scroll Gallery",
+                "Full-Bleed Image with Text Overlay",
+            ],
             "animation": ["Hover Reveal Effect", "Parallax Scroll Effect"],
             "layout": ["Full-Bleed Sections", "Asymmetric Grid"],
             "color": ["Duotone Image Overlay"],
@@ -639,14 +658,17 @@ def get_patterns_for_industry(industry: str, categories: list[PatternCategory] |
     }
 
     # Get patterns for industry (or use default)
-    pattern_names = industry_pattern_map.get(industry, {
-        "hero": ["Typographic Hero with Gradient Mesh", "Asymmetric Split Hero"],
-        "section": ["Bento Grid with Hover Lift", "Stats Counter Section"],
-        "animation": ["Stagger Fade-In on Scroll"],
-        "layout": ["Full-Bleed Sections"],
-        "color": ["Mesh Gradient Background"],
-        "typography": ["Mixed Serif + Sans Pairing"],
-    })
+    pattern_names = industry_pattern_map.get(
+        industry,
+        {
+            "hero": ["Typographic Hero with Gradient Mesh", "Asymmetric Split Hero"],
+            "section": ["Bento Grid with Hover Lift", "Stats Counter Section"],
+            "animation": ["Stagger Fade-In on Scroll"],
+            "layout": ["Full-Bleed Sections"],
+            "color": ["Mesh Gradient Background"],
+            "typography": ["Mixed Serif + Sans Pairing"],
+        },
+    )
 
     # Filter by categories if specified
     if categories:
@@ -656,15 +678,24 @@ def get_patterns_for_industry(industry: str, categories: list[PatternCategory] |
     selected_patterns = []
     for category_str, names in pattern_names.items():
         # Validate category
-        if category_str not in ["hero", "section", "animation", "layout", "color", "typography"]:
+        if category_str not in [
+            "hero",
+            "section",
+            "animation",
+            "layout",
+            "color",
+            "typography",
+        ]:
             continue
         category: PatternCategory = category_str  # type: ignore
         for pattern in AWWWARDS_PATTERNS.get(category, []):
             if pattern["name"] in names:
-                selected_patterns.append({
-                    **pattern,
-                    "category": category,
-                })
+                selected_patterns.append(
+                    {
+                        **pattern,
+                        "category": category,
+                    }
+                )
 
     return selected_patterns
 
@@ -691,16 +722,18 @@ def build_pattern_context_for_llm(industry: str, section_type: str = "hero") -> 
         return ""
 
     context = "# AWWWARDS REFERENCE PATTERNS\n\n"
-    context += f"Here are award-winning design patterns relevant to {industry} websites:\n\n"
+    context += (
+        f"Here are award-winning design patterns relevant to {industry} websites:\n\n"
+    )
 
     for i, pattern in enumerate(patterns[:3], 1):  # Limit to top 3 patterns
         context += f"## Pattern {i}: {pattern['name']}\n"
         context += f"**Reference:** {pattern.get('reference_site', 'N/A')}\n"
         context += f"**Description:** {pattern['description']}\n"
         context += f"**When to use:** {pattern['when_to_use']}\n"
-        if pattern.get('key_elements'):
+        if pattern.get("key_elements"):
             context += "**Key elements:**\n"
-            for elem in pattern['key_elements']:
+            for elem in pattern["key_elements"]:
                 context += f"- {elem}\n"
         context += "\n"
 
@@ -709,7 +742,9 @@ def build_pattern_context_for_llm(industry: str, section_type: str = "hero") -> 
     return context
 
 
-def get_hero_pattern_recommendation(industry: str, available_assets: dict[str, bool]) -> dict[str, Any]:
+def get_hero_pattern_recommendation(
+    industry: str, available_assets: dict[str, bool]
+) -> dict[str, Any]:
     """Recommend a specific hero pattern based on industry and available assets."""
 
     patterns = get_patterns_for_industry(industry, ["hero"])
@@ -727,15 +762,22 @@ def get_hero_pattern_recommendation(industry: str, available_assets: dict[str, b
             if "Product" in pattern["name"]:
                 return pattern
 
-    if available_assets.get("has_hero_images") and available_assets.get("image_count", 0) > 3:
+    if (
+        available_assets.get("has_hero_images")
+        and available_assets.get("image_count", 0) > 3
+    ):
         # Prefer carousel if multiple images
         for pattern in patterns:
             if "Carousel" in pattern["name"]:
                 return pattern
 
     # Default to first pattern for industry
-    return patterns[0] if patterns else {
-        "name": "Typographic Hero with Gradient Mesh",
-        "description": "Fallback hero pattern",
-        "key_elements": [],
-    }
+    return (
+        patterns[0]
+        if patterns
+        else {
+            "name": "Typographic Hero with Gradient Mesh",
+            "description": "Fallback hero pattern",
+            "key_elements": [],
+        }
+    )

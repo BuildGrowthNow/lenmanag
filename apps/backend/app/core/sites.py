@@ -142,10 +142,10 @@ def _generate_friendly_slug(company_name: str, existing_slugs: set[str]) -> str:
     import re
 
     # Remove special characters, convert to lowercase
-    clean = re.sub(r'[^a-z0-9]', '', company_name.lower())
+    clean = re.sub(r"[^a-z0-9]", "", company_name.lower())
 
     # Truncate to 8 characters
-    base_slug = clean[:8] if clean else 'site'
+    base_slug = clean[:8] if clean else "site"
 
     # If unique, return as-is
     if base_slug not in existing_slugs:
@@ -161,6 +161,7 @@ def _generate_friendly_slug(company_name: str, existing_slugs: set[str]) -> str:
 
     # Fallback to UUID if somehow we can't find a unique slug
     import uuid
+
     return str(uuid.uuid4())[:8]
 
 
@@ -604,13 +605,9 @@ def _site_refs(
         for citation in extraction.sourceCitations
     ]
     refs.extend(
-        _asset_reference_from_cue(cue.model_dump())
-        for cue in extraction.brandAssetCues
+        _asset_reference_from_cue(cue.model_dump()) for cue in extraction.brandAssetCues
     )
-    refs.extend(
-        citation.model_dump()
-        for citation in brief.sourceCitations
-    )
+    refs.extend(citation.model_dump() for citation in brief.sourceCitations)
     return _dedupe_refs(refs)
 
 
@@ -629,9 +626,7 @@ def _brand_tokens(
         if cue.assetType == "color"
     ]
     logo_cues = [
-        cue.model_dump()
-        for cue in extraction.brandAssetCues
-        if cue.assetType == "logo"
+        cue.model_dump() for cue in extraction.brandAssetCues if cue.assetType == "logo"
     ]
     typography_cues = [
         cue.model_dump()
@@ -679,9 +674,22 @@ def _brand_tokens(
 
     # Detect industry design config mood
     # Map to valid industry for color system (narrower type than industry_detection)
-    valid_industries = {"creative_agency", "saas", "legal_finance", "ecommerce_fashion", "consulting", "real_estate", "health_wellness", "tech"}
-    industry_for_config = cast(Any, industry) if industry in valid_industries else "tech"
-    industry_config = get_industry_design_config(industry_for_config) if industry else {}
+    valid_industries = {
+        "creative_agency",
+        "saas",
+        "legal_finance",
+        "ecommerce_fashion",
+        "consulting",
+        "real_estate",
+        "health_wellness",
+        "tech",
+    }
+    industry_for_config = (
+        cast(Any, industry) if industry in valid_industries else "tech"
+    )
+    industry_config = (
+        get_industry_design_config(industry_for_config) if industry else {}
+    )
     mood = industry_config.get("color_palette_mood", "professional")
     dark_mode = palette_mode != "light"
 
@@ -702,7 +710,11 @@ def _brand_tokens(
         primary_value = color_system["primary"]
         secondary_value = color_system["secondary"]
         accent_value = color_system["accent"]
-        primary_refs = [_asset_reference_from_cue(color_cues[0])] if color_cues else color_reference
+        primary_refs = (
+            [_asset_reference_from_cue(color_cues[0])]
+            if color_cues
+            else color_reference
+        )
         secondary_refs = (
             [_asset_reference_from_cue(color_cues[1])]
             if len(color_cues) > 1
@@ -749,7 +761,9 @@ def _brand_tokens(
         [_asset_reference_from_cue(cue) for cue in logo_cues] if logo_cues else refs[:1]
     )
     typography_value = (
-        typography_cues[0]["value"] if typography_cues else str(theme["typographyPairing"])
+        typography_cues[0]["value"]
+        if typography_cues
+        else str(theme["typographyPairing"])
     )
     typography_kind = "source_backed" if typography_cues else "inferred"
     typography_refs = (
@@ -1006,8 +1020,12 @@ def _hero_variant(
     if _looks_operator_facing(supporting_candidate):
         supporting_candidate = section_mission or headline_source
     # Avoid meta instructions like "Make the CTA pattern explicit".
-    if re.search(r"make\b[^.]{0,80}\bcta pattern\b", supporting_candidate, flags=re.IGNORECASE):
-        supporting_candidate = section_mission or meta_description or company_summary or headline_source
+    if re.search(
+        r"make\b[^.]{0,80}\bcta pattern\b", supporting_candidate, flags=re.IGNORECASE
+    ):
+        supporting_candidate = (
+            section_mission or meta_description or company_summary or headline_source
+        )
     supporting = _sanitize_public_copy(supporting_candidate)
     subheadline = _sanitize_public_copy(
         _strip_instruction_leads(brief.audienceHypothesis.value)
@@ -1060,11 +1078,16 @@ def _map_section_kind_to_component_id(kind: str) -> str:
         return "services-bento"
 
     # Stats / metrics / numbers
-    if any(token in value for token in ["stat", "metric", "number", "count", "achievement", "result"]):
+    if any(
+        token in value
+        for token in ["stat", "metric", "number", "count", "achievement", "result"]
+    ):
         return "stats-counter"
 
     # Services / offerings / capabilities - prefer interactive
-    if any(token in value for token in ["service", "offering", "feature", "capability"]):
+    if any(
+        token in value for token in ["service", "offering", "feature", "capability"]
+    ):
         return "services-tabs"
 
     # Proof / testimonials / results / social proof
@@ -1123,7 +1146,9 @@ def _map_section_kind_to_component_id(kind: str) -> str:
         return "editorial-feature"
 
     # Comparison / plans
-    if any(token in value for token in ["comparison", "compare", "versus", "vs", "plan"]):
+    if any(
+        token in value for token in ["comparison", "compare", "versus", "vs", "plan"]
+    ):
         return "features-comparison"
 
     # CTA / contact / booking / pricing
@@ -1183,10 +1208,15 @@ def _section_stack(
         score = section_conf + page_conf // 2
         # Prefer shallower pages but still allow rich inner pages to surface
         score += max(0, 6 - depth * 2)
-        text_blob = f"{_text(section.get('heading'))} {_text(section.get('text'))}".lower()
+        text_blob = (
+            f"{_text(section.get('heading'))} {_text(section.get('text'))}".lower()
+        )
         if any(term in text_blob for term in ["mission", "our story", "who we are"]):
             score += 10
-        if any(term in text_blob for term in ["support", "donate", "apply", "volunteer", "contact", "visit"]):
+        if any(
+            term in text_blob
+            for term in ["support", "donate", "apply", "volunteer", "contact", "visit"]
+        ):
             score += 6
         section["_score"] = score
         section_candidates_by_kind.setdefault(kind, []).append(section)
@@ -1211,7 +1241,7 @@ def _section_stack(
             for critique in page.critiques:
                 section_kind = critique.sectionType
                 if section_kind == "hero":
-                    continue # handled by hero variant
+                    continue  # handled by hero variant
                 title = section_kind.capitalize()
                 sections.append(
                     {
@@ -1219,7 +1249,9 @@ def _section_stack(
                         "title": title,
                         "eyebrow": None,
                         "headline": title,
-                        "body": _sanitize_public_copy(" ".join(critique.contentToReuse)),
+                        "body": _sanitize_public_copy(
+                            " ".join(critique.contentToReuse)
+                        ),
                         "items": [],
                         "ctaLabel": None,
                         "componentId": critique.recommendedComponent,
@@ -1227,8 +1259,8 @@ def _section_stack(
                             source_kind="source_backed",
                             inference_label="Generated from Visual Critique redesign plan.",
                             confidence=critique.confidence,
-                            references=section_refs
-                        )
+                            references=section_refs,
+                        ),
                     }
                 )
     elif brief.recommendedSections:
@@ -1447,7 +1479,9 @@ def _section_stack(
             positioning or company_summary
         )
         if not cta_body_source:
-            cta_body_source = "Explore the details and decide if this is a fit for your team."
+            cta_body_source = (
+                "Explore the details and decide if this is a fit for your team."
+            )
 
         sections.append(
             {
@@ -1628,10 +1662,14 @@ def _apply_refinement_to_visual_redesign(
     for page in brief.visualRedesign:
         updated_critiques: list[VisualCritique] = []
         for critique in page.critiques:
-            section_type_key = _canonical_section_type(critique.sectionType) or critique.sectionType
+            section_type_key = (
+                _canonical_section_type(critique.sectionType) or critique.sectionType
+            )
             suggested_component = mapping.get(section_type_key)
             if suggested_component:
-                critique = critique.model_copy(update={"recommendedComponent": suggested_component})
+                critique = critique.model_copy(
+                    update={"recommendedComponent": suggested_component}
+                )
             updated_critiques.append(critique)
 
         art_direction = visual_tone or page.artDirection
@@ -1816,12 +1854,16 @@ def _quality_score(
 
     # DESIGN QUALITY CHECKS
     if site_sections:
-        sections_with_component_id = sum(1 for s in site_sections if s.get("componentId"))
+        sections_with_component_id = sum(
+            1 for s in site_sections if s.get("componentId")
+        )
         total_sections = len(site_sections)
 
         # No premium components at all – automatic fail
         if sections_with_component_id == 0:
-            logger.warning("No sections have componentId set. Returning quality score of 0.")
+            logger.warning(
+                "No sections have componentId set. Returning quality score of 0."
+            )
             return 0
 
         # If fewer than half the sections have componentIds, cap visual score
@@ -1836,7 +1878,9 @@ def _quality_score(
 
         # Detect excessive section duplication (>40% repeated is a failure)
         section_titles = [
-            _text(s.get("title", "")).strip().lower() for s in site_sections if s.get("title")
+            _text(s.get("title", "")).strip().lower()
+            for s in site_sections
+            if s.get("title")
         ]
         if section_titles:
             unique_count = len(set(section_titles))
@@ -2438,7 +2482,9 @@ class SiteRepository:
             )
 
             force_flag = bool(getattr(request, "force", False)) if request else False
-            auto_request = SiteGenerateRequest(force=force_flag, refinementPromptId=None)
+            auto_request = SiteGenerateRequest(
+                force=force_flag, refinementPromptId=None
+            )
 
             await self.queue_generation_job(site_id, request=auto_request)
         except Exception as exc:  # pragma: no cover - defensive path
@@ -3005,7 +3051,9 @@ class SiteRepository:
             raise ValueError("extraction_required")
 
         current = await self.get_site(site_id)
-        refinement_prompt_id = getattr(request, "refinementPromptId", None) if request else None
+        refinement_prompt_id = (
+            getattr(request, "refinementPromptId", None) if request else None
+        )
 
         # If this generation was triggered by an operator refinement prompt, call Gemini
         # to refine the existing visual redesign brief before building the section stack.
@@ -3077,7 +3125,8 @@ class SiteRepository:
                 settings.visual_redesign_enabled
                 and current is not None
                 and getattr(current, "improvementRecommendations", None)
-                and int(getattr(current, "version", 0)) < int(settings.visual_redesign_max_iterations)
+                and int(getattr(current, "version", 0))
+                < int(settings.visual_redesign_max_iterations)
             ):
                 try:
                     auto_refinement = _auto_refinement_from_improvement_brief(
@@ -3196,6 +3245,7 @@ class SiteRepository:
     ) -> GeneratedSite | None:
         from typing import cast
         from ..schemas.site import PaletteMode
+
         await self._maybe_ensure_indexes()
         settings = get_settings()
         lead = await lead_repository.get_lead(site_id)
@@ -3213,7 +3263,9 @@ class SiteRepository:
 
         # Check for master brief (AI generation support)
         master_brief = await lead_repository.get_master_brief(site_id)
-        use_ai_generation = master_brief is not None and master_brief.approvalState == "approved"
+        use_ai_generation = (
+            master_brief is not None and master_brief.approvalState == "approved"
+        )
 
         brief = await lead_repository.get_brief(site_id)
         if brief is None or brief.approvalState != "approved":
@@ -3225,7 +3277,10 @@ class SiteRepository:
         # High-level generation trace
         logger.info("=== Starting site generation for %s ===", site_id)
         if use_ai_generation:
-            logger.info("AI generation mode: Master brief %s approved", master_brief.id if master_brief else "unknown")
+            logger.info(
+                "AI generation mode: Master brief %s approved",
+                master_brief.id if master_brief else "unknown",
+            )
         logger.info(
             "Brief %s v%s with %d recommended sections",
             brief.id,
@@ -3240,7 +3295,9 @@ class SiteRepository:
         )
 
         current = await self.get_site(site_id)
-        refinement_prompt_id = getattr(request, "refinementPromptId", None) if request else None
+        refinement_prompt_id = (
+            getattr(request, "refinementPromptId", None) if request else None
+        )
         next_version = int(current.version if current else 0) + 1
         await lead_repository._update_job(  # noqa: SLF001
             job_id,
@@ -3300,7 +3357,9 @@ class SiteRepository:
         refs = _site_refs(brief, extraction)
 
         # Detect industry for enhanced color system and design customization
-        services_list = [s.title for s in getattr(brief, "recommendedSections", []) or []]
+        services_list = [
+            s.title for s in getattr(brief, "recommendedSections", []) or []
+        ]
         content_snippets = [_text(extraction.summary.positioningSummary)]
         detected_industry, industry_confidence = detect_industry(
             company_name=_text(lead.companyName),
@@ -3330,10 +3389,17 @@ class SiteRepository:
         )
 
         from app.core.content_rewriter import rewrite_hero_section
-        from app.core.creative_copy import generate_creative_headline, generate_creative_cta
+        from app.core.creative_copy import (
+            generate_creative_headline,
+            generate_creative_cta,
+        )
 
-        brand_tone = " ".join(extraction.summary.toneClues[:3]) or brief.toneProfile.value
-        content_enhancement_enabled = getattr(settings, "content_enhancement_enabled", True)
+        brand_tone = (
+            " ".join(extraction.summary.toneClues[:3]) or brief.toneProfile.value
+        )
+        content_enhancement_enabled = getattr(
+            settings, "content_enhancement_enabled", True
+        )
 
         if content_enhancement_enabled:
             try:
@@ -3342,7 +3408,9 @@ class SiteRepository:
                     hero_data={
                         "headline": hero.get("headline", ""),
                         "subheadline": hero.get("subheadline", ""),
-                        "cta": cta_strategy.get("primaryCta", {}).get("label", "Get Started"),
+                        "cta": cta_strategy.get("primaryCta", {}).get(
+                            "label", "Get Started"
+                        ),
                     },
                     industry=detected_industry,
                     company_name=_text(lead.companyName),
@@ -3353,20 +3421,28 @@ class SiteRepository:
                 # Update hero with rewritten content
                 if "headline" in rewritten_hero:
                     hero["headline"] = rewritten_hero["headline"]
-                    hero["headline_rewrite_meta"] = rewritten_hero.get("headline_meta", {})
+                    hero["headline_rewrite_meta"] = rewritten_hero.get(
+                        "headline_meta", {}
+                    )
 
                 if "subheadline" in rewritten_hero:
                     hero["subheadline"] = rewritten_hero["subheadline"]
-                    hero["subheadline_rewrite_meta"] = rewritten_hero.get("subheadline_meta", {})
+                    hero["subheadline_rewrite_meta"] = rewritten_hero.get(
+                        "subheadline_meta", {}
+                    )
 
                 if "cta" in rewritten_hero:
                     cta_strategy["primaryCta"]["label"] = rewritten_hero["cta"]
-                    cta_strategy["primaryCta"]["rewrite_meta"] = rewritten_hero.get("cta_meta", {})
+                    cta_strategy["primaryCta"]["rewrite_meta"] = rewritten_hero.get(
+                        "cta_meta", {}
+                    )
 
                 logger.info(f"LLM content rewriting completed for {lead.companyName}")
 
             except Exception as e:
-                logger.warning(f"LLM rewriting failed: {e}, falling back to template-based generation")
+                logger.warning(
+                    f"LLM rewriting failed: {e}, falling back to template-based generation"
+                )
 
                 # Option 2: Template-based creative copy (fast, no LLM needed)
                 try:
@@ -3394,10 +3470,14 @@ class SiteRepository:
                         cta_strategy["primaryCta"]["label"] = creative_cta["text"]
                         cta_strategy["primaryCta"]["creative_cta_meta"] = creative_cta
 
-                    logger.info(f"Template-based creative copy completed for {lead.companyName}")
+                    logger.info(
+                        f"Template-based creative copy completed for {lead.companyName}"
+                    )
 
                 except Exception as fallback_error:
-                    logger.warning(f"Creative copy generation also failed: {fallback_error}, using original content")
+                    logger.warning(
+                        f"Creative copy generation also failed: {fallback_error}, using original content"
+                    )
         else:
             logger.info("Content enhancement disabled, using original content")
 
@@ -3410,24 +3490,29 @@ class SiteRepository:
         from app.core.navigation import generate_navigation, add_scroll_behavior
 
         # Detect available assets for hero selection
-        has_video = any(
-            cue.assetType == "video" for cue in extraction.brandAssetCues
-        )
+        has_video = any(cue.assetType == "video" for cue in extraction.brandAssetCues)
         has_product_image = any(
             cue.assetType == "image" and "product" in cue.label.lower()
             for cue in extraction.brandAssetCues
         )
-        has_multiple_images = sum(
-            1 for cue in extraction.brandAssetCues if cue.assetType == "image"
-        ) >= 3
+        has_multiple_images = (
+            sum(1 for cue in extraction.brandAssetCues if cue.assetType == "image") >= 3
+        )
 
         # Determine brand personality from tone
         tone_lower = brand_tone.lower() if brand_tone else ""
-        if any(word in tone_lower for word in ["bold", "vibrant", "dynamic", "energetic"]):
+        if any(
+            word in tone_lower for word in ["bold", "vibrant", "dynamic", "energetic"]
+        ):
             brand_personality = "bold"
-        elif any(word in tone_lower for word in ["minimal", "clean", "simple", "refined"]):
+        elif any(
+            word in tone_lower for word in ["minimal", "clean", "simple", "refined"]
+        ):
             brand_personality = "minimal"
-        elif any(word in tone_lower for word in ["creative", "innovative", "artistic", "experimental"]):
+        elif any(
+            word in tone_lower
+            for word in ["creative", "innovative", "artistic", "experimental"]
+        ):
             brand_personality = "creative"
         else:
             brand_personality = "professional"
@@ -3444,27 +3529,34 @@ class SiteRepository:
         # Collect assets for hero config
         hero_assets = {}
         if has_video:
-            video_cues = [c for c in extraction.brandAssetCues if c.assetType == "video"]
+            video_cues = [
+                c for c in extraction.brandAssetCues if c.assetType == "video"
+            ]
             if video_cues:
                 hero_assets["video_url"] = video_cues[0].value
 
         if has_product_image:
             product_images = [
-                c for c in extraction.brandAssetCues
+                c
+                for c in extraction.brandAssetCues
                 if c.assetType == "image" and "product" in c.label.lower()
             ]
             if product_images:
                 hero_assets["product_image"] = product_images[0].value
 
         if has_multiple_images:
-            image_cues = [c for c in extraction.brandAssetCues if c.assetType == "image"]
+            image_cues = [
+                c for c in extraction.brandAssetCues if c.assetType == "image"
+            ]
             hero_assets["carousel_images"] = [c.value for c in image_cues[:5]]
             hero_assets["mosaic_images"] = [c.value for c in image_cues[:8]]
 
         # Add hero image if available
         hero_image_cues = [
-            c for c in extraction.brandAssetCues
-            if c.assetType == "image" and any(
+            c
+            for c in extraction.brandAssetCues
+            if c.assetType == "image"
+            and any(
                 keyword in c.label.lower()
                 for keyword in ["hero", "banner", "background", "header"]
             )
@@ -3473,7 +3565,9 @@ class SiteRepository:
             hero_assets["hero_image"] = hero_image_cues[0].value
         elif has_multiple_images:
             # Use first available image as hero fallback
-            image_cues = [c for c in extraction.brandAssetCues if c.assetType == "image"]
+            image_cues = [
+                c for c in extraction.brandAssetCues if c.assetType == "image"
+            ]
             if image_cues:
                 hero_assets["hero_image"] = image_cues[0].value
 
@@ -3489,16 +3583,18 @@ class SiteRepository:
         )
 
         # Merge enhanced hero config into hero object
-        hero.update({
-            "variant_key": hero_variant_key,
-            "variant_config": enhanced_hero_config,
-            "variant_meta": {
-                "selection_reason": f"Selected {hero_variant_key} for {detected_industry} with {brand_personality} personality",
-                "has_video": has_video,
-                "has_product_image": has_product_image,
-                "brand_personality": brand_personality,
+        hero.update(
+            {
+                "variant_key": hero_variant_key,
+                "variant_config": enhanced_hero_config,
+                "variant_meta": {
+                    "selection_reason": f"Selected {hero_variant_key} for {detected_industry} with {brand_personality} personality",
+                    "has_video": has_video,
+                    "has_product_image": has_product_image,
+                    "brand_personality": brand_personality,
+                },
             }
-        })
+        )
 
         logger.info(f"Selected hero variant: {hero_variant_key} for {lead.companyName}")
 
@@ -3519,7 +3615,9 @@ class SiteRepository:
         # Add scroll behavior to navigation
         navigation_config = add_scroll_behavior(navigation_config)
 
-        logger.info(f"Generated navigation with {len(navigation_config['items'])} items, style: {navigation_config['style']}")
+        logger.info(
+            f"Generated navigation with {len(navigation_config['items'])} items, style: {navigation_config['style']}"
+        )
 
         # Phase 5: Awwwards pattern integration
         await lead_repository._update_job(
@@ -3533,7 +3631,9 @@ class SiteRepository:
 
         # Get relevant patterns for this industry
         awwwards_patterns = get_patterns_for_industry(detected_industry)
-        logger.info(f"Loaded {len(awwwards_patterns)} Awwwards patterns for {detected_industry}")
+        logger.info(
+            f"Loaded {len(awwwards_patterns)} Awwwards patterns for {detected_industry}"
+        )
 
         # Get hero pattern recommendation based on assets
         hero_pattern_recommendation = get_hero_pattern_recommendation(
@@ -3542,7 +3642,7 @@ class SiteRepository:
                 "has_video": has_video,
                 "has_product_image": has_product_image,
                 "has_hero_images": bool(hero_image_cues),
-            }
+            },
         )
 
         # Store pattern metadata for frontend usage
@@ -3553,12 +3653,16 @@ class SiteRepository:
                 "name": hero_pattern_recommendation["name"],
                 "description": hero_pattern_recommendation["description"],
             },
-            "available_pattern_categories": list(set(p.get("category") for p in awwwards_patterns)),
+            "available_pattern_categories": list(
+                set(p.get("category") for p in awwwards_patterns)
+            ),
         }
 
         # Generate visual redesign brief (with pattern context)
         await lead_repository._update_job(
-            job_id, progress=50, step="Generating visual redesign brief with pattern guidance"
+            job_id,
+            progress=50,
+            step="Generating visual redesign brief with pattern guidance",
         )
 
         from app.core.visual_redesign import generate_visual_redesign_brief
@@ -3571,7 +3675,9 @@ class SiteRepository:
                     extraction=extraction,
                     client_brand=brand_tokens,
                 )
-                logger.info(f"Generated {len(visual_redesign_briefs)} redesign briefs with pattern guidance")
+                logger.info(
+                    f"Generated {len(visual_redesign_briefs)} redesign briefs with pattern guidance"
+                )
                 # Update brief with visual redesign
                 await lead_repository.update_brief_visual_redesign(
                     lead_id=site_id,
@@ -3580,7 +3686,7 @@ class SiteRepository:
             except Exception as e:
                 logger.error(f"Visual redesign generation failed: {e}")
                 visual_redesign_briefs = []
-        
+
         missing_requirements = list(
             dict.fromkeys([*brief.missingRequirements, *extraction.gapItems])
         )
@@ -3761,7 +3867,7 @@ class SiteRepository:
                         existing_slugs.add(slug)
             except TypeError:
                 # Mock cursor doesn't support async iteration, use to_list
-                if hasattr(cursor, 'to_list'):
+                if hasattr(cursor, "to_list"):
                     docs = await cursor.to_list(length=None)
                     for doc in docs:
                         if slug := doc.get("previewSlug"):
@@ -3888,7 +3994,9 @@ class SiteRepository:
 
         version_id = uuid4().hex
 
-        def _screenshot_ref_docs(current_site: GeneratedSite | None) -> list[dict[str, Any]]:
+        def _screenshot_ref_docs(
+            current_site: GeneratedSite | None,
+        ) -> list[dict[str, Any]]:
             """Return screenshotRefs as plain dicts for persistence.
 
             GeneratedSite.screenshotRefs is a list of SiteScreenshotMetadata models in
@@ -3906,6 +4014,7 @@ class SiteRepository:
                 else:
                     docs.append(dict(item))
             return docs
+
         version_doc = {
             "id": version_id,
             "siteId": site_id,
@@ -3946,7 +4055,9 @@ class SiteRepository:
             "screenshotRefs": _screenshot_ref_docs(current),
             "latestReviewId": current.latestReviewId if current else None,
             "handoffRecordId": current.handoffRecordId if current else None,
-            "diversityNotes": _diversity_notes(current, theme, cast(PaletteMode, palette_mode), refs),
+            "diversityNotes": _diversity_notes(
+                current, theme, cast(PaletteMode, palette_mode), refs
+            ),
             "diversityScore": diversity_score,
             "layoutHash": layout_hash,
             "previewSlug": current.previewSlug if current else friendly_slug,
@@ -3958,10 +4069,20 @@ class SiteRepository:
             # Auto-publish sites that meet quality threshold
             "publishedAt": now if readiness_status == "ready_to_publish" else None,
             # AI generation fields (Phase 3)
-            "sourceCode": ai_generation_result.get("sourceCode") if ai_generation_result and "sourceCode" in ai_generation_result else None,
-            "compiledBundleUrl": ai_generation_result.get("compiledBundleUrl") if ai_generation_result and "compiledBundleUrl" in ai_generation_result else None,
-            "compilationStatus": ai_generation_result.get("compilationStatus", "pending") if ai_generation_result else None,
-            "compilationError": ai_generation_result.get("error") if ai_generation_result and "error" in ai_generation_result else None,
+            "sourceCode": ai_generation_result.get("sourceCode")
+            if ai_generation_result and "sourceCode" in ai_generation_result
+            else None,
+            "compiledBundleUrl": ai_generation_result.get("compiledBundleUrl")
+            if ai_generation_result and "compiledBundleUrl" in ai_generation_result
+            else None,
+            "compilationStatus": ai_generation_result.get(
+                "compilationStatus", "pending"
+            )
+            if ai_generation_result
+            else None,
+            "compilationError": ai_generation_result.get("error")
+            if ai_generation_result and "error" in ai_generation_result
+            else None,
         }
         site_doc = {
             "id": site_id,
@@ -4002,7 +4123,9 @@ class SiteRepository:
             "screenshotRefs": _screenshot_ref_docs(current),
             "latestReviewId": current.latestReviewId if current else None,
             "handoffRecordId": current.handoffRecordId if current else None,
-            "diversityNotes": _diversity_notes(current, theme, cast(PaletteMode, palette_mode), refs),
+            "diversityNotes": _diversity_notes(
+                current, theme, cast(PaletteMode, palette_mode), refs
+            ),
             "diversityScore": diversity_score,
             "layoutHash": layout_hash,
             "previewSlug": current.previewSlug if current else friendly_slug,
@@ -4017,10 +4140,20 @@ class SiteRepository:
             # Auto-publish sites that meet quality threshold
             "publishedAt": now if readiness_status == "ready_to_publish" else None,
             # AI generation fields (Phase 3)
-            "sourceCode": ai_generation_result.get("sourceCode") if ai_generation_result and "sourceCode" in ai_generation_result else None,
-            "compiledBundleUrl": ai_generation_result.get("compiledBundleUrl") if ai_generation_result and "compiledBundleUrl" in ai_generation_result else None,
-            "compilationStatus": ai_generation_result.get("compilationStatus", "pending") if ai_generation_result else None,
-            "compilationError": ai_generation_result.get("error") if ai_generation_result and "error" in ai_generation_result else None,
+            "sourceCode": ai_generation_result.get("sourceCode")
+            if ai_generation_result and "sourceCode" in ai_generation_result
+            else None,
+            "compiledBundleUrl": ai_generation_result.get("compiledBundleUrl")
+            if ai_generation_result and "compiledBundleUrl" in ai_generation_result
+            else None,
+            "compilationStatus": ai_generation_result.get(
+                "compilationStatus", "pending"
+            )
+            if ai_generation_result
+            else None,
+            "compilationError": ai_generation_result.get("error")
+            if ai_generation_result and "error" in ai_generation_result
+            else None,
         }
 
         # Run screenshot QA if enabled
@@ -4030,7 +4163,9 @@ class SiteRepository:
             try:
                 logger.info("Starting screenshot QA for %s", site_id)
                 await lead_repository._update_job(  # noqa: SLF001
-                    job_id, progress=80, step="Capturing and analyzing preview screenshot"
+                    job_id,
+                    progress=80,
+                    step="Capturing and analyzing preview screenshot",
                 )
                 from app.core.screenshot_analyzer import get_screenshot_analyzer
 
@@ -4046,21 +4181,25 @@ class SiteRepository:
                     if title:
                         section_names_for_qa.append(title)
 
-                screenshot_qa_result = await self._screenshot_comparator.compare_layout_screenshot(
-                    site_id=site_id,
-                    preview_url=f"/sites/{site_id}",
-                    section_names=section_names_for_qa,
+                screenshot_qa_result = (
+                    await self._screenshot_comparator.compare_layout_screenshot(
+                        site_id=site_id,
+                        preview_url=f"/sites/{site_id}",
+                        section_names=section_names_for_qa,
+                    )
                 )
-                
+
                 if screenshot_qa_result.get("success"):
                     # Update quality score based on screenshot QA (visual quality is primary)
-                    screenshot_quality = screenshot_qa_result.get("qualityScore", quality_score)
+                    screenshot_quality = screenshot_qa_result.get(
+                        "qualityScore", quality_score
+                    )
                     logger.info(
                         "Screenshot QA completed for %s: quality_score=%s",
                         site_id,
                         screenshot_quality,
                     )
-                    
+
                     # Recompute quality score using screenshot QA as the primary visual score
                     quality_score = _quality_score(
                         brief=brief,
@@ -4071,7 +4210,7 @@ class SiteRepository:
                         diversity_score=diversity_score,
                         screenshot_qa_score=screenshot_quality,
                     )
-                    
+
                     # Create screenshot metadata record
                     screenshot_meta = {
                         "id": uuid4().hex,
@@ -4083,14 +4222,14 @@ class SiteRepository:
                         "contentHash": screenshot_qa_result.get("layoutHash", ""),
                         "notes": screenshot_qa_result.get("readinessAssessment", ""),
                     }
-                    
+
                     site_doc["screenshotRefs"] = [screenshot_meta]
                     version_doc["screenshotRefs"] = [screenshot_meta]
-                    
+
                     # Always use the recomputed quality score (visual quality + data completeness)
                     site_doc["qualityScore"] = quality_score
                     version_doc["qualityScore"] = quality_score
-                    
+
                     # Recompute readiness/qa status based on new quality score
                     readiness_status, qa_status = _readiness_status(
                         brief, quality_score, missing_requirements
@@ -4099,7 +4238,7 @@ class SiteRepository:
                     site_doc["qaStatus"] = qa_status
                     version_doc["readinessStatus"] = readiness_status
                     version_doc["qaStatus"] = qa_status
-                    
+
                     # If quality is below threshold but within iteration budget, generate improvement
                     if (
                         screenshot_quality < settings.visual_redesign_quality_threshold
@@ -4107,28 +4246,37 @@ class SiteRepository:
                     ):
                         try:
                             await lead_repository._update_job(  # noqa: SLF001
-                                job_id, progress=85, step="Generating improvement recommendations"
+                                job_id,
+                                progress=85,
+                                step="Generating improvement recommendations",
                             )
-                            section_names = [s.get("title", "Section") for s in applied_sections]
+                            section_names = [
+                                s.get("title", "Section") for s in applied_sections
+                            ]
                             brand_summary = json.dumps(
                                 {
                                     "paletteMode": applied_tokens.get("paletteMode"),
-                                    "primaryColor": applied_tokens.get("primaryColor", {}).get("value"),
+                                    "primaryColor": applied_tokens.get(
+                                        "primaryColor", {}
+                                    ).get("value"),
                                 },
                                 default=str,
                             )
-                            
+
                             improvement_brief = await analyzer.generate_improvement_brief(
                                 site_id=site_id,
-                                extraction_summary=extraction.summary.positioningSummary or "",
+                                extraction_summary=extraction.summary.positioningSummary
+                                or "",
                                 section_stack=section_names,
                                 qa_critique=screenshot_qa_result.get("rawCritique", ""),
                                 brand_summary=brand_summary,
                             )
-                            
+
                             # Store improvement recommendations for next iteration
                             site_doc["improvementRecommendations"] = improvement_brief
-                            version_doc["improvementRecommendations"] = improvement_brief
+                            version_doc["improvementRecommendations"] = (
+                                improvement_brief
+                            )
                         except Exception as e:
                             logger.warning(
                                 f"Improvement brief generation failed for {site_id}: {e}"
@@ -4153,7 +4301,10 @@ class SiteRepository:
                     version_doc["sectionStack"] = applied_sections
             except Exception as e:
                 logger.error(
-                    "Screenshot QA integration failed for %s: %s", site_id, e, exc_info=True
+                    "Screenshot QA integration failed for %s: %s",
+                    site_id,
+                    e,
+                    exc_info=True,
                 )
                 # FALLBACK: make sure sections still have reasonable componentIds
                 for section in applied_sections:
@@ -4169,7 +4320,7 @@ class SiteRepository:
                         )
                 site_doc["sectionStack"] = applied_sections
                 version_doc["sectionStack"] = applied_sections
-        
+
         database = get_database()
         if database is None:
             async with self._memory_lock:

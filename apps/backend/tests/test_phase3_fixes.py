@@ -4,6 +4,7 @@ Test Phase 3 fixes: Friendly URL Slugs
 Note: Quality score tests are implicitly covered by existing integration tests
 (test_crawl_and_readiness.py, test_diversity_and_screenshot.py)
 """
+
 from app.core.sites import _generate_friendly_slug
 
 

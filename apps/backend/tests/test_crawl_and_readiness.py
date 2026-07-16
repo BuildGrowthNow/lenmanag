@@ -7,7 +7,12 @@ from app.core import extraction
 from app.core.config import Settings
 from app.core.extraction import crawl_website, _max_pages
 from app.core.sites import _readiness_status
-from app.schemas.brief import SiteBrief, BriefEvidence, BriefTextRecommendation
+from app.schemas.brief import (
+    SiteBrief,
+    BriefEvidence,
+    BriefTextRecommendation,
+    BriefApprovalState,
+)
 
 
 def test_crawl_website_sitemap_priority_and_budget(caplog):
@@ -15,7 +20,9 @@ def test_crawl_website_sitemap_priority_and_budget(caplog):
 
     max_pages = _max_pages()
 
-    homepage_html = "<html><body>HOME<a href='https://example.com/about'>About</a></body></html>"
+    homepage_html = (
+        "<html><body>HOME<a href='https://example.com/about'>About</a></body></html>"
+    )
     sitemap_urls = [f"https://example.com/page-{i}" for i in range(1, max_pages + 5)]
 
     def fake_safe_fetch(url: str) -> dict[str, Any]:
@@ -56,7 +63,9 @@ def test_crawl_website_sitemap_priority_and_budget(caplog):
                 self.title = "Title"
                 self.body = body
                 # links should be list of tuples (href, anchor_text)
-                self.links = [("https://example.com/about", "About")] if "HOME" in body else []
+                self.links = (
+                    [("https://example.com/about", "About")] if "HOME" in body else []
+                )
                 self.service_clues = []
                 self.audience_clues = []
                 self.cta_clues = []
@@ -80,14 +89,22 @@ def test_crawl_website_sitemap_priority_and_budget(caplog):
     def fake_parse_sitemap_urls(body: str) -> list[str]:
         return sitemap_urls
 
-    def fake_capture_page_visuals(*_args, **_kwargs):  # pragma: no cover - visual capture not relevant
+    def fake_capture_page_visuals(
+        *_args, **_kwargs
+    ):  # pragma: no cover - visual capture not relevant
         return {}
 
     with (
         patch("app.core.extraction._safe_fetch", side_effect=fake_safe_fetch),
         patch("app.core.extraction._parse_html", side_effect=fake_parse_html),
-        patch("app.core.extraction._parse_sitemap_urls", side_effect=fake_parse_sitemap_urls),
-        patch("app.core.extraction._capture_page_visuals", side_effect=fake_capture_page_visuals),
+        patch(
+            "app.core.extraction._parse_sitemap_urls",
+            side_effect=fake_parse_sitemap_urls,
+        ),
+        patch(
+            "app.core.extraction._capture_page_visuals",
+            side_effect=fake_capture_page_visuals,
+        ),
     ):
         result = crawl_website("https://example.com")
 
@@ -105,7 +122,9 @@ def test_crawl_website_sitemap_priority_and_budget(caplog):
 
     crawled_urls = {p["url"] for p in inventory}
     # Homepage URL is normalized (trailing slash removed)
-    assert "https://example.com" in crawled_urls or "https://example.com/" in crawled_urls
+    assert (
+        "https://example.com" in crawled_urls or "https://example.com/" in crawled_urls
+    )
     # Ensure only a prefix of sitemap URLs were used within budget
     assert any(url in crawled_urls for url in sitemap_urls[: max_pages - 1])
 
@@ -159,10 +178,14 @@ def test_crawl_website_no_sitemap_falls_back_to_internal_links():
                 self.title = "Title"
                 self.body = body
                 # links should be list of tuples (href, anchor_text)
-                self.links = [
-                    ("https://example.com/about", "About"),
-                    ("https://example.com/contact", "Contact"),
-                ] if "HOME" in body else []
+                self.links = (
+                    [
+                        ("https://example.com/about", "About"),
+                        ("https://example.com/contact", "Contact"),
+                    ]
+                    if "HOME" in body
+                    else []
+                )
                 self.service_clues = []
                 self.audience_clues = []
                 self.cta_clues = []
@@ -191,8 +214,14 @@ def test_crawl_website_no_sitemap_falls_back_to_internal_links():
     with (
         patch("app.core.extraction._safe_fetch", side_effect=fake_safe_fetch),
         patch("app.core.extraction._parse_html", side_effect=fake_parse_html),
-        patch("app.core.extraction._parse_sitemap_urls", side_effect=fake_parse_sitemap_urls),
-        patch("app.core.extraction._capture_page_visuals", side_effect=fake_capture_page_visuals),
+        patch(
+            "app.core.extraction._parse_sitemap_urls",
+            side_effect=fake_parse_sitemap_urls,
+        ),
+        patch(
+            "app.core.extraction._capture_page_visuals",
+            side_effect=fake_capture_page_visuals,
+        ),
     ):
         result = crawl_website("https://example.com")
 
@@ -209,7 +238,9 @@ def test_crawl_website_no_sitemap_falls_back_to_internal_links():
     assert len(internal_entries) > 0
 
 
-def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only(monkeypatch):
+def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only(
+    monkeypatch,
+):
     """Brand asset cues come from all pages but downloads only triggered from homepage-derived cues."""
 
     homepage_html = "<html><body>HOME</body></html>"
@@ -273,6 +304,7 @@ def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only
             self.sections = []
             self.assets = []
             self.body_text = []
+
     def fake_parse_html(body: str):
         sig = Signals(body)
         # Encode which page we are on by body marker
@@ -311,17 +343,20 @@ def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only
             download_calls.append(urls)
             return [DummyResult(u) for u in urls]
 
-        def enforce_aggregate_limit(self, total_bytes: int, max_bytes: int | None = None) -> bool:  # pragma: no cover - simple stub
+        def enforce_aggregate_limit(
+            self, total_bytes: int, max_bytes: int | None = None
+        ) -> bool:  # pragma: no cover - simple stub
             return True
 
     # Enable asset downloads for this test by patching get_settings
     from app.core.config import get_settings
+
     original_settings = get_settings()
 
     class MockSettings:
         def __init__(self):
             for attr in dir(original_settings):
-                if not attr.startswith('_'):
+                if not attr.startswith("_"):
                     setattr(self, attr, getattr(original_settings, attr))
             self.asset_download_enabled = True
 
@@ -330,8 +365,14 @@ def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only
     with (
         patch("app.core.extraction._safe_fetch", side_effect=fake_safe_fetch),
         patch("app.core.extraction._parse_html", side_effect=fake_parse_html),
-        patch("app.core.extraction._parse_sitemap_urls", side_effect=fake_parse_sitemap_urls),
-        patch("app.core.extraction._capture_page_visuals", side_effect=fake_capture_page_visuals),
+        patch(
+            "app.core.extraction._parse_sitemap_urls",
+            side_effect=fake_parse_sitemap_urls,
+        ),
+        patch(
+            "app.core.extraction._capture_page_visuals",
+            side_effect=fake_capture_page_visuals,
+        ),
         patch("app.core.extraction.settings", mock_settings),
         patch.object(extraction, "AssetDownloader", DummyDownloader),
     ):
@@ -343,7 +384,9 @@ def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only
     # Cues should include contributions from multiple pages
     sources = {c["sourceUrl"] for c in cues}
     assert "https://brand.com/" in sources
-    assert "https://brand.com/about" in sources or "https://brand.com/contact" in sources
+    assert (
+        "https://brand.com/about" in sources or "https://brand.com/contact" in sources
+    )
 
     # Exactly one batch download call, and only homepage-derived asset URLs are downloaded
     assert len(download_calls) == 1
@@ -352,8 +395,6 @@ def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only
     assert "https://cdn.brand.com/logo-about.png" not in downloaded
     assert "https://cdn.brand.com/logo-contact.png" not in downloaded
 
-
-from app.schemas.brief import BriefApprovalState
 
 def _make_brief(approval_state: BriefApprovalState = "approved") -> SiteBrief:
     ev = BriefEvidence(
@@ -410,15 +451,21 @@ def test_readiness_status_default_threshold_bands(monkeypatch):
     assert status == "ready_to_publish"
     assert qa == "pass"
 
-    status, qa = _readiness_status(brief, quality_score=80, missing_requirements=["minor"])
+    status, qa = _readiness_status(
+        brief, quality_score=80, missing_requirements=["minor"]
+    )
     assert status == "ready_for_review"
     assert qa == "warn"
 
-    status, qa = _readiness_status(brief, quality_score=60, missing_requirements=["minor"])
+    status, qa = _readiness_status(
+        brief, quality_score=60, missing_requirements=["minor"]
+    )
     assert status == "needs_review"
     assert qa == "warn"
 
-    status, qa = _readiness_status(brief, quality_score=40, missing_requirements=["major"])
+    status, qa = _readiness_status(
+        brief, quality_score=40, missing_requirements=["major"]
+    )
     assert status == "blocked"
     assert qa == "fail"
 
@@ -439,11 +486,15 @@ def test_readiness_status_respects_changed_threshold(monkeypatch):
     assert qa == "pass"
 
     # Score just below threshold with small missing requirements should be ready_for_review
-    status, qa = _readiness_status(brief, quality_score=75, missing_requirements=["minor"])
+    status, qa = _readiness_status(
+        brief, quality_score=75, missing_requirements=["minor"]
+    )
     assert status == "ready_for_review"
     assert qa == "warn"
 
     # Lower score band still maps to needs_review
-    status, qa = _readiness_status(brief, quality_score=60, missing_requirements=["minor"])
+    status, qa = _readiness_status(
+        brief, quality_score=60, missing_requirements=["minor"]
+    )
     assert status == "needs_review"
     assert qa == "warn"

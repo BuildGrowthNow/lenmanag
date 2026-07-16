@@ -16,7 +16,9 @@ async def test_automatic_second_pass_visual_redesign_iteration():
 
     async def run_test() -> None:
         # Create lead and minimal extraction snapshot
-        req = LeadUpsertRequest(companyName="Iter Co", websiteUrl="https://iter.example.com")
+        req = LeadUpsertRequest(
+            companyName="Iter Co", websiteUrl="https://iter.example.com"
+        )
         action = await lead_repository.create_lead(req, user_id="test-user")
         lead = action.lead
         site_id = lead.id
@@ -95,7 +97,9 @@ async def test_automatic_second_pass_visual_redesign_iteration():
             }
         ]
 
-        async def fake_generate_redesign(*_args: Any, **_kwargs: Any):  # pragma: no cover
+        async def fake_generate_redesign(
+            *_args: Any, **_kwargs: Any
+        ):  # pragma: no cover
             return initial_redesign
 
         # Two screenshot QA passes: first below threshold with critique, second above
@@ -156,7 +160,9 @@ async def test_automatic_second_pass_visual_redesign_iteration():
         }
 
         mock_analyzer = AsyncMock()
-        mock_analyzer.generate_improvement_brief = AsyncMock(return_value=improvement_payload)
+        mock_analyzer.generate_improvement_brief = AsyncMock(
+            return_value=improvement_payload
+        )
 
         with (
             patch(

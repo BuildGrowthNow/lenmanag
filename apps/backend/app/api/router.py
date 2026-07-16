@@ -16,7 +16,9 @@ from app.api.admin import router as admin_router
 from app.api.internal import router as internal_router
 
 api_router = APIRouter()
-api_v1_router = APIRouter(prefix="/api/v1", dependencies=[Depends(enforce_api_version("1"))])
+api_v1_router = APIRouter(
+    prefix="/api/v1", dependencies=[Depends(enforce_api_version("1"))]
+)
 
 api_v1_router.include_router(health_router)
 api_v1_router.include_router(auth_router)

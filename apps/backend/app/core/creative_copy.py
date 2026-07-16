@@ -146,18 +146,22 @@ def generate_headline_variations(
 
     # Template 1: Power Verb + Benefit
     if benefit:
-        variations.append({
-            "headline": f"{power_verbs[0]} {benefit}",
-            "template": "verb_benefit",
-            "confidence": 85,
-        })
+        variations.append(
+            {
+                "headline": f"{power_verbs[0]} {benefit}",
+                "template": "verb_benefit",
+                "confidence": 85,
+            }
+        )
 
     # Template 2: Company Name + Value Prop
-    variations.append({
-        "headline": f"{company_name}: {mission[:60]}",
-        "template": "name_mission",
-        "confidence": 75,
-    })
+    variations.append(
+        {
+            "headline": f"{company_name}: {mission[:60]}",
+            "template": "name_mission",
+            "confidence": 75,
+        }
+    )
 
     # Template 3: Bold Statement (industry-specific)
     industry_statements = {
@@ -172,19 +176,25 @@ def generate_headline_variations(
     }
 
     statement = industry_statements.get(industry, "Excellence, delivered")
-    variations.append({
-        "headline": statement,
-        "template": "bold_statement",
-        "confidence": 70,
-    })
+    variations.append(
+        {
+            "headline": statement,
+            "template": "bold_statement",
+            "confidence": 70,
+        }
+    )
 
     # Template 4: We [Power Verb] pattern
     if power_verbs:
-        variations.append({
-            "headline": f"We {power_verbs[0].lower()} {benefit}" if benefit else f"We {power_verbs[0].lower()} what others can't",
-            "template": "we_verb",
-            "confidence": 80,
-        })
+        variations.append(
+            {
+                "headline": f"We {power_verbs[0].lower()} {benefit}"
+                if benefit
+                else f"We {power_verbs[0].lower()} what others can't",
+                "template": "we_verb",
+                "confidence": 80,
+            }
+        )
 
     # Template 5: Outcome-focused
     outcome_templates = {
@@ -198,19 +208,23 @@ def generate_headline_variations(
         "tech": "Infrastructure that scales",
     }
 
-    variations.append({
-        "headline": outcome_templates.get(industry, "Results you can measure"),
-        "template": "outcome_focused",
-        "confidence": 78,
-    })
+    variations.append(
+        {
+            "headline": outcome_templates.get(industry, "Results you can measure"),
+            "template": "outcome_focused",
+            "confidence": 78,
+        }
+    )
 
     # Add positioning if available
     if positioning and len(positioning) < 80:
-        variations.append({
-            "headline": positioning,
-            "template": "positioning",
-            "confidence": 82,
-        })
+        variations.append(
+            {
+                "headline": positioning,
+                "template": "positioning",
+                "confidence": 82,
+            }
+        )
 
     return variations
 
@@ -389,11 +403,13 @@ def generate_cta_variations(
     context_ctas = industry_ctas.get(context, industry_ctas["primary"])
 
     for i, cta in enumerate(context_ctas):
-        variations.append({
-            "text": cta,
-            "context": context,
-            "confidence": 90 - (i * 2),  # Slightly prefer earlier options
-        })
+        variations.append(
+            {
+                "text": cta,
+                "context": context,
+                "confidence": 90 - (i * 2),  # Slightly prefer earlier options
+            }
+        )
 
     return variations
 

@@ -29,7 +29,9 @@ class ScreenshotComparator:
         }
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
-    def detect_duplicate_layout(self, site_a: GeneratedSite, site_b: GeneratedSite) -> float:
+    def detect_duplicate_layout(
+        self, site_a: GeneratedSite, site_b: GeneratedSite
+    ) -> float:
         """
         Returns similarity score (0-1) between two sites based on layout.
         1.0 = identical layout, 0.0 = completely different.
@@ -84,7 +86,9 @@ class ScreenshotComparator:
                 )
                 # Local dev fallback: try common alternate Next.js port 3003
                 if effective_base_url.rstrip("/").endswith(":3000"):
-                    alt_base = effective_base_url.rstrip("/").rsplit(":", 1)[0] + ":3003"
+                    alt_base = (
+                        effective_base_url.rstrip("/").rsplit(":", 1)[0] + ":3003"
+                    )
                     logger.info(
                         "Retrying screenshot capture for %s at alternate base_url=%s",
                         site_id,
@@ -93,7 +97,7 @@ class ScreenshotComparator:
                     screenshots = await _capture_with_base(alt_base)
                 else:
                     raise
-            
+
             # Perform QA analysis on desktop screenshot.
             # If the caller did not provide real section names, fall back to a
             # small set of generic labels for backward compatibility.
@@ -140,7 +144,9 @@ class ScreenshotComparator:
                 "qualityScore": qa_result.get("qualityScore", 50),
                 "sectionScores": qa_result.get("sectionScores", []),
                 "rawCritique": qa_result.get("rawCritique", ""),
-                "readinessAssessment": qa_result.get("readinessAssessment", "needs_refinement"),
+                "readinessAssessment": qa_result.get(
+                    "readinessAssessment", "needs_refinement"
+                ),
                 "passThreshold": qa_result.get("passThreshold", False),
                 "capturedAt": screenshots["capturedAt"],
             }

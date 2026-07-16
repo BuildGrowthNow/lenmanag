@@ -4,6 +4,7 @@ from typing import Optional
 
 from .config import get_settings
 from .asset_storage import LocalAssetStorage
+
 try:
     from .asset_storage_gcs import GCSAssetStorage
 except Exception:

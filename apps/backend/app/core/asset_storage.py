@@ -15,7 +15,9 @@ settings = get_settings()
 
 class AssetStorage(ABC):
     @abstractmethod
-    def upload_stream(self, stream: BinaryIO, lead_id: str, checksum: str, content_type: str) -> Tuple[str, int]:
+    def upload_stream(
+        self, stream: BinaryIO, lead_id: str, checksum: str, content_type: str
+    ) -> Tuple[str, int]:
         pass
 
     @abstractmethod
@@ -51,7 +53,9 @@ class LocalAssetStorage(AssetStorage):
             raise ValueError("invalid filename")
         return name
 
-    def upload_stream(self, stream: BinaryIO, lead_id: str, checksum: str, content_type: str) -> Tuple[str, int]:
+    def upload_stream(
+        self, stream: BinaryIO, lead_id: str, checksum: str, content_type: str
+    ) -> Tuple[str, int]:
         # create deterministic filename using secure random and lead id
         relname = f"{lead_id}-{secrets.token_hex(12)}"
         relname = self._safe_relpath(relname)

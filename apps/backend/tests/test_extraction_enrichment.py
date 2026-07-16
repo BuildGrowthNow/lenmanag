@@ -104,6 +104,7 @@ async def test_enrich_extraction_with_mock_llm(monkeypatch):
 
         def extract_json_from_response(self, response):
             import json
+
             return json.loads(response)
 
     mock_llm = MockLLM()
@@ -111,7 +112,9 @@ async def test_enrich_extraction_with_mock_llm(monkeypatch):
     def mock_get_llm_client():
         return mock_llm
 
-    monkeypatch.setattr("app.core.extraction_enrichment.get_llm_client", mock_get_llm_client)
+    monkeypatch.setattr(
+        "app.core.extraction_enrichment.get_llm_client", mock_get_llm_client
+    )
 
     crawl_data = {
         "summary": {
@@ -121,8 +124,14 @@ async def test_enrich_extraction_with_mock_llm(monkeypatch):
             "positioningSummary": None,
         },
         "sectionInventory": [
-            {"heading": "Our Services", "text": "We help businesses process payments online. " * 50},
-            {"heading": "For Developers", "text": "Built for developers who need reliable APIs. " * 50},
+            {
+                "heading": "Our Services",
+                "text": "We help businesses process payments online. " * 50,
+            },
+            {
+                "heading": "For Developers",
+                "text": "Built for developers who need reliable APIs. " * 50,
+            },
         ],
         "pageInventory": [
             {"cleanedText": "Payment processing made simple. " * 30},
@@ -159,9 +168,12 @@ async def test_enrich_extraction_merges_with_existing(monkeypatch):
 
         def extract_json_from_response(self, response):
             import json
+
             return json.loads(response)
 
-    monkeypatch.setattr("app.core.extraction_enrichment.get_llm_client", lambda: MockLLM())
+    monkeypatch.setattr(
+        "app.core.extraction_enrichment.get_llm_client", lambda: MockLLM()
+    )
 
     crawl_data = {
         "summary": {

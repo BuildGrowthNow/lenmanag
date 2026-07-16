@@ -51,7 +51,10 @@ def validate_extraction_content(crawl_data: dict[str, Any]) -> tuple[bool, list[
             f"Only {len(summary.get('audienceClues', []))} audience clues, need {MIN_AUDIENCE_CLUES}+"
         )
 
-    if not summary.get("positioningSummary") or len(summary.get("positioningSummary", "")) < 30:
+    if (
+        not summary.get("positioningSummary")
+        or len(summary.get("positioningSummary", "")) < 30
+    ):
         issues.append("Positioning summary too short or missing")
 
     return (len(issues) == 0, issues)
@@ -96,7 +99,9 @@ async def enrich_extraction(crawl_data: dict[str, Any]) -> dict[str, Any]:
             len(content.strip()),
         )
         if "content_too_sparse_for_enrichment" not in crawl_data.get("gapItems", []):
-            crawl_data.setdefault("gapItems", []).append("content_too_sparse_for_enrichment")
+            crawl_data.setdefault("gapItems", []).append(
+                "content_too_sparse_for_enrichment"
+            )
         return summary
 
     llm = get_llm_client()
@@ -116,13 +121,18 @@ async def enrich_extraction(crawl_data: dict[str, Any]) -> dict[str, Any]:
         audience = await _infer_audience(llm, company_name, content)
         if audience:
             existing = set(summary.get("audienceClues", []))
-            existing.discard("Audience not explicit in public metadata; review manually.")
+            existing.discard(
+                "Audience not explicit in public metadata; review manually."
+            )
             merged = list(existing | set(audience))[:6]
             summary["audienceClues"] = merged
             enriched_any = True
             logger.info("Enriched audienceClues: %s", merged)
 
-    if not summary.get("positioningSummary") or len(summary.get("positioningSummary", "")) < 30:
+    if (
+        not summary.get("positioningSummary")
+        or len(summary.get("positioningSummary", "")) < 30
+    ):
         positioning = await _infer_positioning(llm, company_name, content)
         if positioning:
             summary["positioningSummary"] = positioning
@@ -228,7 +238,9 @@ Return ONLY the positioning summary text, no quotes, no JSON, no explanation."""
         # Ensure meaningful length - if too short, it's likely just a title
         if len(result) > 40:
             return result[:400]
-        logger.warning("Positioning inference too short (%d chars): %s", len(result), result)
+        logger.warning(
+            "Positioning inference too short (%d chars): %s", len(result), result
+        )
         return None
     except Exception as e:
         logger.warning("Positioning inference failed: %s", e)

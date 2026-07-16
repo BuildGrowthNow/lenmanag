@@ -270,23 +270,19 @@ def generate_color_system(
         "accent": accent,
         "accent_vibrant": accent_vibrant,
         "accent_subtle": accent_subtle,
-
         # Gradient colors
         "gradient_start": primary,
         "gradient_end": gradient_end,
         "mesh_gradient": mesh,
-
         # Base colors
         "surface": surface,
         "text": text,
         "border": border,
-
         # Semantic colors
         "success": "#10b981",
         "warning": "#f59e0b",
         "error": "#ef4444",
         "info": accent,
-
         # Metadata
         "mood": mood,
         "dark_mode": dark_mode,

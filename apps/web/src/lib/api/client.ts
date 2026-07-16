@@ -114,7 +114,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 export async function safeRequest<T>(path: string, fallback: T, options: RequestOptions = {}): Promise<T> {
   try {
     return await request<T>(path, options);
-  } catch {
+  } catch (error) {
+    console.error(`[API Client] Request failed for ${path}:`, error instanceof Error ? error.message : String(error));
     return fallback;
   }
 }

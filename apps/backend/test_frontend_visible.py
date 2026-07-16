@@ -6,7 +6,9 @@ url = "http://localhost:3002/sites/b7d2d2d3f4ad4cb7900c7be1c2e86c12"
 
 def main() -> None:
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False, slow_mo=1000)  # Slow motion to see what happens
+        browser = p.chromium.launch(
+            headless=False, slow_mo=1000
+        )  # Slow motion to see what happens
         page = browser.new_page(viewport={"width": 1440, "height": 900})
 
         # Enable console logging

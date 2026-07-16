@@ -42,12 +42,20 @@ class AnalyticsRepository:
         database = get_database()
         if database is None or self._memory_ready:
             return
-        await database["analytics_events"].create_index([("siteId", 1), ("createdAt", -1)])
-        await database["analytics_events"].create_index([("leadId", 1), ("createdAt", -1)])
-        await database["analytics_events"].create_index([("sessionId", 1), ("createdAt", -1)])
+        await database["analytics_events"].create_index(
+            [("siteId", 1), ("createdAt", -1)]
+        )
+        await database["analytics_events"].create_index(
+            [("leadId", 1), ("createdAt", -1)]
+        )
+        await database["analytics_events"].create_index(
+            [("sessionId", 1), ("createdAt", -1)]
+        )
         self._memory_ready = True
 
-    async def ingest_event(self, request: AnalyticsEventCreateRequest) -> AnalyticsEvent:
+    async def ingest_event(
+        self, request: AnalyticsEventCreateRequest
+    ) -> AnalyticsEvent:
         await self._maybe_ensure_indexes()
         event = AnalyticsEvent(
             id=uuid4().hex,
@@ -100,7 +108,11 @@ class AnalyticsRepository:
     async def _enforce_retention(self, database=None) -> None:
         cutoff = self._retention_cutoff()
         if database is None:
-            self._memory = [event for event in self._memory if event.get("createdAt") and event["createdAt"] >= cutoff]
+            self._memory = [
+                event
+                for event in self._memory
+                if event.get("createdAt") and event["createdAt"] >= cutoff
+            ]
             return
         await database["analytics_events"].delete_many({"createdAt": {"$lt": cutoff}})
 
@@ -114,7 +126,11 @@ class AnalyticsRepository:
 
     @staticmethod
     def _is_cta_event(event: dict[str, Any]) -> bool:
-        return event.get("eventType") in {"hero_cta_click", "secondary_cta_click", "contact_click"}
+        return event.get("eventType") in {
+            "hero_cta_click",
+            "secondary_cta_click",
+            "contact_click",
+        }
 
     @staticmethod
     def _campaign_source(event: dict[str, Any]) -> str | None:
@@ -138,25 +154,53 @@ class AnalyticsRepository:
         return None
 
     def _sorted_counter_items(self, counter: Counter) -> list[dict[str, Any]]:
-        return [{"value": value, "count": count} for value, count in counter.most_common(10) if value]
+        return [
+            {"value": value, "count": count}
+            for value, count in counter.most_common(10)
+            if value
+        ]
 
     async def get_dashboard(self) -> AnalyticsDashboardResponse:
         events = await self._events()
         total_events = len(events)
-        total_page_views = sum(1 for event in events if event.get("eventType") == "page_view")
+        total_page_views = sum(
+            1 for event in events if event.get("eventType") == "page_view"
+        )
         total_cta_clicks = sum(1 for event in events if self._is_cta_event(event))
-        total_outbound_clicks = sum(1 for event in events if event.get("eventType") == "outbound_link_click")
-        total_calendly_clicks = sum(1 for event in events if event.get("eventType") == "calendly_click")
-        total_section_exposures = sum(1 for event in events if event.get("eventType") == "section_exposure")
-        total_form_interactions = sum(1 for event in events if event.get("eventType") == "form_interaction")
-        unique_sessions = len({event.get("sessionId") for event in events if event.get("sessionId")})
-        total_sites = len({event.get("siteId") for event in events if event.get("siteId")})
-        total_leads = len({event.get("leadId") for event in events if event.get("leadId")})
+        total_outbound_clicks = sum(
+            1 for event in events if event.get("eventType") == "outbound_link_click"
+        )
+        total_calendly_clicks = sum(
+            1 for event in events if event.get("eventType") == "calendly_click"
+        )
+        total_section_exposures = sum(
+            1 for event in events if event.get("eventType") == "section_exposure"
+        )
+        total_form_interactions = sum(
+            1 for event in events if event.get("eventType") == "form_interaction"
+        )
+        unique_sessions = len(
+            {event.get("sessionId") for event in events if event.get("sessionId")}
+        )
+        total_sites = len(
+            {event.get("siteId") for event in events if event.get("siteId")}
+        )
+        total_leads = len(
+            {event.get("leadId") for event in events if event.get("leadId")}
+        )
         events_by_type = Counter(event.get("eventType", "unknown") for event in events)
-        pages = Counter(event.get("pagePath") for event in events if event.get("pagePath"))
-        sources = Counter(self._event_source(event) for event in events if self._event_source(event))
-        referrers = Counter(event.get("referrer") for event in events if event.get("referrer"))
-        message_attribution = Counter(self._message_key(event) for event in events if self._message_key(event))
+        pages = Counter(
+            event.get("pagePath") for event in events if event.get("pagePath")
+        )
+        sources = Counter(
+            self._event_source(event) for event in events if self._event_source(event)
+        )
+        referrers = Counter(
+            event.get("referrer") for event in events if event.get("referrer")
+        )
+        message_attribution = Counter(
+            self._message_key(event) for event in events if self._message_key(event)
+        )
         from app.core.leads import lead_repository
 
         recent_errors_data = await lead_repository.recent_job_errors(limit=8)
@@ -184,9 +228,15 @@ class AnalyticsRepository:
             totalSites=total_sites,
             totalLeads=total_leads,
             eventsByType=dict(events_by_type),
-            topPages=[{"pagePath": page, "count": count} for page, count in pages.most_common(10)],
+            topPages=[
+                {"pagePath": page, "count": count}
+                for page, count in pages.most_common(10)
+            ],
             topSources=self._sorted_counter_items(sources),
-            referrers=[{"referrer": ref, "count": count} for ref, count in referrers.most_common(10)],
+            referrers=[
+                {"referrer": ref, "count": count}
+                for ref, count in referrers.most_common(10)
+            ],
             messageAttribution=self._sorted_counter_items(message_attribution),
             recentErrors=recent_errors,
             updatedAt=_now(),
@@ -208,28 +258,96 @@ class AnalyticsRepository:
                 grouped[str(site_id)].append(event)
         results: list[AnalyticsSiteMetrics] = []
         for site_id, site_events in grouped.items():
-            sessions = {event.get("sessionId") for event in site_events if event.get("sessionId")}
-            referrers = Counter(event.get("referrer") for event in site_events if event.get("referrer"))
+            sessions = {
+                event.get("sessionId")
+                for event in site_events
+                if event.get("sessionId")
+            }
+            referrers = Counter(
+                event.get("referrer") for event in site_events if event.get("referrer")
+            )
             latest = site_events[0]
             results.append(
                 AnalyticsSiteMetrics(
                     siteId=site_id,
-                    leadId=next((str(event.get("leadId")) for event in site_events if event.get("leadId")), None),
-                    themeKey=next((str(event.get("themeKey")) for event in site_events if event.get("themeKey")), None),
-                    variantKey=next((str(event.get("variantKey")) for event in site_events if event.get("variantKey")), None),
-                    pageViews=sum(1 for event in site_events if event.get("eventType") == "page_view"),
+                    leadId=next(
+                        (
+                            str(event.get("leadId"))
+                            for event in site_events
+                            if event.get("leadId")
+                        ),
+                        None,
+                    ),
+                    themeKey=next(
+                        (
+                            str(event.get("themeKey"))
+                            for event in site_events
+                            if event.get("themeKey")
+                        ),
+                        None,
+                    ),
+                    variantKey=next(
+                        (
+                            str(event.get("variantKey"))
+                            for event in site_events
+                            if event.get("variantKey")
+                        ),
+                        None,
+                    ),
+                    pageViews=sum(
+                        1
+                        for event in site_events
+                        if event.get("eventType") == "page_view"
+                    ),
                     uniqueSessions=len(sessions),
-                    heroCtaClicks=sum(1 for event in site_events if event.get("eventType") == "hero_cta_click"),
-                    secondaryCtaClicks=sum(1 for event in site_events if event.get("eventType") == "secondary_cta_click"),
-                    contactClicks=sum(1 for event in site_events if event.get("eventType") == "contact_click"),
-                    ctaClicks=sum(1 for event in site_events if self._is_cta_event(event)),
-                    outboundClicks=sum(1 for event in site_events if event.get("eventType") == "outbound_link_click"),
-                    calendlyClicks=sum(1 for event in site_events if event.get("eventType") == "calendly_click"),
-                    sectionExposures=sum(1 for event in site_events if event.get("eventType") == "section_exposure"),
-                    formInteractions=sum(1 for event in site_events if event.get("eventType") == "form_interaction"),
-                    messageAttributedVisits=sum(1 for event in site_events if event.get("messageId") or event.get("messageChannel")),
+                    heroCtaClicks=sum(
+                        1
+                        for event in site_events
+                        if event.get("eventType") == "hero_cta_click"
+                    ),
+                    secondaryCtaClicks=sum(
+                        1
+                        for event in site_events
+                        if event.get("eventType") == "secondary_cta_click"
+                    ),
+                    contactClicks=sum(
+                        1
+                        for event in site_events
+                        if event.get("eventType") == "contact_click"
+                    ),
+                    ctaClicks=sum(
+                        1 for event in site_events if self._is_cta_event(event)
+                    ),
+                    outboundClicks=sum(
+                        1
+                        for event in site_events
+                        if event.get("eventType") == "outbound_link_click"
+                    ),
+                    calendlyClicks=sum(
+                        1
+                        for event in site_events
+                        if event.get("eventType") == "calendly_click"
+                    ),
+                    sectionExposures=sum(
+                        1
+                        for event in site_events
+                        if event.get("eventType") == "section_exposure"
+                    ),
+                    formInteractions=sum(
+                        1
+                        for event in site_events
+                        if event.get("eventType") == "form_interaction"
+                    ),
+                    messageAttributedVisits=sum(
+                        1
+                        for event in site_events
+                        if event.get("messageId") or event.get("messageChannel")
+                    ),
                     timeOnPageSeconds=None,
-                    referrers=[{"referrer": ref, "count": count} for ref, count in referrers.most_common(10)],
+                    referrers=[
+                        {"referrer": ref, "count": count}
+                        for ref, count in referrers.most_common(10)
+                    ],
                     updatedAt=_utc(latest.get("createdAt")) or _now(),
                 )
             )
@@ -244,25 +362,82 @@ class AnalyticsRepository:
                 grouped[str(lead_id)].append(event)
         results: list[AnalyticsLeadMetrics] = []
         for lead_id, lead_events in grouped.items():
-            sessions = {event.get("sessionId") for event in lead_events if event.get("sessionId")}
-            referrers = Counter(event.get("referrer") for event in lead_events if event.get("referrer"))
+            sessions = {
+                event.get("sessionId")
+                for event in lead_events
+                if event.get("sessionId")
+            }
+            referrers = Counter(
+                event.get("referrer") for event in lead_events if event.get("referrer")
+            )
             latest = lead_events[0]
             results.append(
                 AnalyticsLeadMetrics(
                     leadId=lead_id,
-                    siteId=next((str(event.get("siteId")) for event in lead_events if event.get("siteId")), None),
-                    themeKey=next((str(event.get("themeKey")) for event in lead_events if event.get("themeKey")), None),
-                    visits=sum(1 for event in lead_events if event.get("eventType") == "page_view"),
+                    siteId=next(
+                        (
+                            str(event.get("siteId"))
+                            for event in lead_events
+                            if event.get("siteId")
+                        ),
+                        None,
+                    ),
+                    themeKey=next(
+                        (
+                            str(event.get("themeKey"))
+                            for event in lead_events
+                            if event.get("themeKey")
+                        ),
+                        None,
+                    ),
+                    visits=sum(
+                        1
+                        for event in lead_events
+                        if event.get("eventType") == "page_view"
+                    ),
                     uniqueSessions=len(sessions),
-                    heroCtaClicks=sum(1 for event in lead_events if event.get("eventType") == "hero_cta_click"),
-                    secondaryCtaClicks=sum(1 for event in lead_events if event.get("eventType") == "secondary_cta_click"),
-                    contactClicks=sum(1 for event in lead_events if event.get("eventType") == "contact_click"),
-                    ctaClicks=sum(1 for event in lead_events if self._is_cta_event(event)),
-                    bookedCalls=sum(1 for event in lead_events if event.get("eventType") == "calendly_click"),
-                    outboundClicks=sum(1 for event in lead_events if event.get("eventType") == "outbound_link_click"),
-                    formInteractions=sum(1 for event in lead_events if event.get("eventType") == "form_interaction"),
-                    messageAttributedVisits=sum(1 for event in lead_events if event.get("messageId") or event.get("messageChannel")),
-                    referrers=[{"referrer": ref, "count": count} for ref, count in referrers.most_common(10)],
+                    heroCtaClicks=sum(
+                        1
+                        for event in lead_events
+                        if event.get("eventType") == "hero_cta_click"
+                    ),
+                    secondaryCtaClicks=sum(
+                        1
+                        for event in lead_events
+                        if event.get("eventType") == "secondary_cta_click"
+                    ),
+                    contactClicks=sum(
+                        1
+                        for event in lead_events
+                        if event.get("eventType") == "contact_click"
+                    ),
+                    ctaClicks=sum(
+                        1 for event in lead_events if self._is_cta_event(event)
+                    ),
+                    bookedCalls=sum(
+                        1
+                        for event in lead_events
+                        if event.get("eventType") == "calendly_click"
+                    ),
+                    outboundClicks=sum(
+                        1
+                        for event in lead_events
+                        if event.get("eventType") == "outbound_link_click"
+                    ),
+                    formInteractions=sum(
+                        1
+                        for event in lead_events
+                        if event.get("eventType") == "form_interaction"
+                    ),
+                    messageAttributedVisits=sum(
+                        1
+                        for event in lead_events
+                        if event.get("messageId") or event.get("messageChannel")
+                    ),
+                    referrers=[
+                        {"referrer": ref, "count": count}
+                        for ref, count in referrers.most_common(10)
+                    ],
                     updatedAt=_utc(latest.get("createdAt")) or _now(),
                 )
             )
@@ -277,19 +452,58 @@ class AnalyticsRepository:
                 grouped[str(variant_key)].append(event)
         results: list[AnalyticsVariantMetrics] = []
         for variant_key, variant_events in grouped.items():
-            sessions = {event.get("sessionId") for event in variant_events if event.get("sessionId")}
+            sessions = {
+                event.get("sessionId")
+                for event in variant_events
+                if event.get("sessionId")
+            }
             latest = variant_events[0]
             results.append(
                 AnalyticsVariantMetrics(
                     variantKey=variant_key,
-                    themeKey=next((str(event.get("themeKey")) for event in variant_events if event.get("themeKey")), None),
-                    siteId=next((str(event.get("siteId")) for event in variant_events if event.get("siteId")), None),
-                    leadId=next((str(event.get("leadId")) for event in variant_events if event.get("leadId")), None),
-                    pageViews=sum(1 for event in variant_events if event.get("eventType") == "page_view"),
+                    themeKey=next(
+                        (
+                            str(event.get("themeKey"))
+                            for event in variant_events
+                            if event.get("themeKey")
+                        ),
+                        None,
+                    ),
+                    siteId=next(
+                        (
+                            str(event.get("siteId"))
+                            for event in variant_events
+                            if event.get("siteId")
+                        ),
+                        None,
+                    ),
+                    leadId=next(
+                        (
+                            str(event.get("leadId"))
+                            for event in variant_events
+                            if event.get("leadId")
+                        ),
+                        None,
+                    ),
+                    pageViews=sum(
+                        1
+                        for event in variant_events
+                        if event.get("eventType") == "page_view"
+                    ),
                     uniqueSessions=len(sessions),
-                    ctaClicks=sum(1 for event in variant_events if self._is_cta_event(event)),
-                    outboundClicks=sum(1 for event in variant_events if event.get("eventType") == "outbound_link_click"),
-                    calendlyClicks=sum(1 for event in variant_events if event.get("eventType") == "calendly_click"),
+                    ctaClicks=sum(
+                        1 for event in variant_events if self._is_cta_event(event)
+                    ),
+                    outboundClicks=sum(
+                        1
+                        for event in variant_events
+                        if event.get("eventType") == "outbound_link_click"
+                    ),
+                    calendlyClicks=sum(
+                        1
+                        for event in variant_events
+                        if event.get("eventType") == "calendly_click"
+                    ),
                     updatedAt=_utc(latest.get("createdAt")) or _now(),
                 )
             )
@@ -309,20 +523,54 @@ class AnalyticsRepository:
             results.append(
                 AnalyticsMessageMetrics(
                     channel=channel,
-                    messageId=str(latest.get("messageId")) if latest.get("messageId") else None,
-                    leadId=next((str(event.get("leadId")) for event in message_events if event.get("leadId")), None),
-                    siteId=next((str(event.get("siteId")) for event in message_events if event.get("siteId")), None),
-                    visits=sum(1 for event in message_events if event.get("eventType") == "page_view"),
-                    ctaClicks=sum(1 for event in message_events if self._is_cta_event(event)),
-                    calendlyClicks=sum(1 for event in message_events if event.get("eventType") == "calendly_click"),
-                    outboundClicks=sum(1 for event in message_events if event.get("eventType") == "outbound_link_click"),
+                    messageId=str(latest.get("messageId"))
+                    if latest.get("messageId")
+                    else None,
+                    leadId=next(
+                        (
+                            str(event.get("leadId"))
+                            for event in message_events
+                            if event.get("leadId")
+                        ),
+                        None,
+                    ),
+                    siteId=next(
+                        (
+                            str(event.get("siteId"))
+                            for event in message_events
+                            if event.get("siteId")
+                        ),
+                        None,
+                    ),
+                    visits=sum(
+                        1
+                        for event in message_events
+                        if event.get("eventType") == "page_view"
+                    ),
+                    ctaClicks=sum(
+                        1 for event in message_events if self._is_cta_event(event)
+                    ),
+                    calendlyClicks=sum(
+                        1
+                        for event in message_events
+                        if event.get("eventType") == "calendly_click"
+                    ),
+                    outboundClicks=sum(
+                        1
+                        for event in message_events
+                        if event.get("eventType") == "outbound_link_click"
+                    ),
                     updatedAt=_utc(latest.get("createdAt")) or _now(),
                 )
             )
         return results
 
     async def get_site_metrics(self, site_id: str) -> AnalyticsSiteMetrics | None:
-        events = [event for event in await self._events() if str(event.get("siteId")) == site_id]
+        events = [
+            event
+            for event in await self._events()
+            if str(event.get("siteId")) == site_id
+        ]
         if not events:
             return None
         site_metrics = await self._site_metrics()
@@ -332,7 +580,11 @@ class AnalyticsRepository:
         return None
 
     async def get_lead_metrics(self, lead_id: str) -> AnalyticsLeadMetrics | None:
-        events = [event for event in await self._events() if str(event.get("leadId")) == lead_id]
+        events = [
+            event
+            for event in await self._events()
+            if str(event.get("leadId")) == lead_id
+        ]
         if not events:
             return None
         lead_metrics = await self._lead_metrics()

@@ -19,7 +19,7 @@ class GeminiClient:
         settings = get_settings()
         if not settings.gemini_api_key:
             raise ValueError("GEMINI_API_KEY not configured")
-        
+
         self.client = genai.Client(api_key=settings.gemini_api_key)
         self.text_model = settings.gemini_model or "gemini-2.0-flash"
         self.vision_model = settings.gemini_vision_model or "gemini-2.0-flash"
@@ -41,10 +41,10 @@ class GeminiClient:
                     max_output_tokens=max_tokens,
                 ),
             )
-            
+
             if not response.text:
                 raise ValueError("Empty response from Gemini")
-            
+
             return response.text
         except Exception as e:
             logger.error(f"Gemini text generation failed: {e}")
@@ -75,10 +75,10 @@ class GeminiClient:
                     max_output_tokens=max_tokens,
                 ),
             )
-            
+
             if not response.text:
                 raise ValueError("Empty response from Gemini Vision")
-            
+
             return response.text
         except Exception as e:
             logger.error(f"Gemini vision analysis failed: {e}")
@@ -92,10 +92,9 @@ class GeminiClient:
     ) -> list[str]:
         """Generate multiple text responses in parallel."""
         import asyncio
-        
+
         tasks = [
-            self.generate_text(prompt, temperature, max_tokens)
-            for prompt in prompts
+            self.generate_text(prompt, temperature, max_tokens) for prompt in prompts
         ]
         return await asyncio.gather(*tasks)
 
@@ -115,17 +114,17 @@ class GeminiClient:
             f"Current brief summary:\n{current_brief_summary}\n\n"
             f"Brand tokens:\n{brand_tokens_summary}\n\n"
             f"Original extraction:\n{extraction_summary}\n\n"
-            f"Operator refinement request:\n\"{operator_prompt}\"\n\n"
+            f'Operator refinement request:\n"{operator_prompt}"\n\n'
             "Produce a JSON object with refined guidance for visual redesign:\n"
             "{\n"
-            "  \"refinedFocus\": \"Updated design direction\",\n"
-            "  \"sectionOrder\": [\"section1\", \"section2\", ...],\n"
-            "  \"componentSuggestions\": [\n"
-            "    {\"section\": \"Hero\", \"suggestedComponent\": \"hero-split-editorial\"}\n"
+            '  "refinedFocus": "Updated design direction",\n'
+            '  "sectionOrder": ["section1", "section2", ...],\n'
+            '  "componentSuggestions": [\n'
+            '    {"section": "Hero", "suggestedComponent": "hero-split-editorial"}\n'
             "  ],\n"
-            "  \"ctaStrategy\": \"Refined CTA approach\",\n"
-            "  \"visualTone\": \"Updated visual tone\",\n"
-            "  \"additionalNotes\": \"Implementation hints\"\n"
+            '  "ctaStrategy": "Refined CTA approach",\n'
+            '  "visualTone": "Updated visual tone",\n'
+            '  "additionalNotes": "Implementation hints"\n'
             "}\n\n"
             "CONSTRAINTS:\n"
             "- Do NOT rewrite extracted product facts or content\n"
@@ -152,7 +151,7 @@ class GeminiClient:
             end = response.find("```", start)
             if end > start:
                 response = response[start:end].strip()
-        
+
         # Try to parse JSON
         try:
             return json.loads(response)

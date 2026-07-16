@@ -49,9 +49,9 @@ class TestScreenshotAnalyzer:
         ]
         for component in screenshot_analyzer.AVAILABLE_COMPONENTS:
             component_id = component["id"]
-            assert any(
-                component_id.startswith(prefix) for prefix in valid_prefixes
-            ), f"Component {component_id} doesn't have valid prefix"
+            assert any(component_id.startswith(prefix) for prefix in valid_prefixes), (
+                f"Component {component_id} doesn't have valid prefix"
+            )
 
     @pytest.mark.asyncio
     async def test_capture_screenshots_success(
@@ -72,7 +72,9 @@ class TestScreenshotAnalyzer:
             )
             mock_browser.new_page = AsyncMock(return_value=mock_page)
             mock_browser.close = AsyncMock()
-            mock_pw.return_value.__aenter__.return_value = mock_context_manager.__aenter__.return_value
+            mock_pw.return_value.__aenter__.return_value = (
+                mock_context_manager.__aenter__.return_value
+            )
 
             # Call capture_screenshots
             result = await screenshot_analyzer.capture_screenshots(
@@ -118,7 +120,8 @@ class TestScreenshotAnalyzer:
         }"""
 
         with patch(
-            "app.core.screenshot_analyzer.get_llm_client", return_value=mock_gemini_client
+            "app.core.screenshot_analyzer.get_llm_client",
+            return_value=mock_gemini_client,
         ):
             mock_gemini_client.analyze_image.return_value = qa_response
             mock_gemini_client.extract_json_from_response.return_value = {
@@ -163,7 +166,8 @@ class TestScreenshotAnalyzer:
         }"""
 
         with patch(
-            "app.core.screenshot_analyzer.get_llm_client", return_value=mock_gemini_client
+            "app.core.screenshot_analyzer.get_llm_client",
+            return_value=mock_gemini_client,
         ):
             mock_gemini_client.analyze_image.return_value = qa_response
             mock_gemini_client.extract_json_from_response.return_value = {
@@ -192,7 +196,8 @@ class TestScreenshotAnalyzer:
     ):
         """Test QA analysis handles invalid JSON response."""
         with patch(
-            "app.core.screenshot_analyzer.get_llm_client", return_value=mock_gemini_client
+            "app.core.screenshot_analyzer.get_llm_client",
+            return_value=mock_gemini_client,
         ):
             mock_gemini_client.analyze_image.return_value = "Invalid JSON response"
             mock_gemini_client.extract_json_from_response.side_effect = ValueError(
@@ -231,7 +236,8 @@ class TestScreenshotAnalyzer:
         }"""
 
         with patch(
-            "app.core.screenshot_analyzer.get_llm_client", return_value=mock_gemini_client
+            "app.core.screenshot_analyzer.get_llm_client",
+            return_value=mock_gemini_client,
         ):
             mock_gemini_client.generate_text.return_value = improvement_response
             mock_gemini_client.extract_json_from_response.return_value = {

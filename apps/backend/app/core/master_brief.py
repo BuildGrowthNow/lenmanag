@@ -138,7 +138,8 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
 
     # Testimonials/proof
     testimonial_count = sum(
-        1 for c in extraction.sourceCitations
+        1
+        for c in extraction.sourceCitations
         if c.evidenceType and "testimonial" in c.evidenceType.lower()
     )
     if testimonial_count > 0:
@@ -342,10 +343,14 @@ def _build_master_brief_from_response(
         colorStrategy=brief_data.get("colorStrategy", "Neutral with subtle accents"),
         motionLevel=motion_level,
         specialEffects=brief_data.get("specialEffects", []),
-        headline=brief_data.get("headline", extraction.summary.companyName or "Welcome"),
+        headline=brief_data.get(
+            "headline", extraction.summary.companyName or "Welcome"
+        ),
         subheadline=brief_data.get("subheadline", ""),
         sections=sections,
-        ctaStrategy=brief_data.get("ctaStrategy", "Primary CTA: Contact, Secondary: Learn More"),
+        ctaStrategy=brief_data.get(
+            "ctaStrategy", "Primary CTA: Contact, Secondary: Learn More"
+        ),
         extractedContent=extracted_content,
         brandAssets=brand_assets,
         competitorInsights="",

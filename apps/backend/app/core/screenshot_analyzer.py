@@ -21,21 +21,81 @@ class ScreenshotAnalyzer:
 
     # Premium component IDs referenced in visual redesign briefs
     AVAILABLE_COMPONENTS = [
-        {"id": "hero-split-editorial", "name": "Split Editorial Hero", "description": "High-contrast editorial hero with split layout"},
-        {"id": "hero-stacked-panel", "name": "Stacked Panel Hero", "description": "Balanced stacked hero with confident CTA"},
-        {"id": "hero-media-led", "name": "Media-Led Hero", "description": "Image-first hero with expressive palette"},
-        {"id": "services-grid", "name": "Services Grid", "description": "Dynamic grid layout for service offerings"},
-        {"id": "services-bento", "name": "Services Bento", "description": "Bento-style service grid with varied item sizes"},
-        {"id": "proof-carousel", "name": "Proof Carousel", "description": "Testimonial/proof carousel with movement"},
-        {"id": "proof-masonry", "name": "Proof Masonry", "description": "Masonry layout for proof points and highlights"},
-        {"id": "gallery-masonry", "name": "Gallery Masonry", "description": "Masonry work/portfolio gallery"},
-        {"id": "gallery-grid", "name": "Gallery Grid", "description": "Uniform grid gallery layout"},
-        {"id": "timeline-vertical", "name": "Timeline Vertical", "description": "Vertical process timeline"},
-        {"id": "timeline-horizontal", "name": "Timeline Horizontal", "description": "Horizontal process timeline"},
-        {"id": "cta-banner", "name": "CTA Banner", "description": "Full-width conversion-focused CTA panel"},
-        {"id": "cta-sticky", "name": "Sticky CTA", "description": "Sticky footer CTA bar"},
-        {"id": "editorial-feature", "name": "Editorial Feature", "description": "Large editorial content feature block"},
-        {"id": "editorial-frame", "name": "Editorial Frame", "description": "Spacious editorial frame with high contrast"},
+        {
+            "id": "hero-split-editorial",
+            "name": "Split Editorial Hero",
+            "description": "High-contrast editorial hero with split layout",
+        },
+        {
+            "id": "hero-stacked-panel",
+            "name": "Stacked Panel Hero",
+            "description": "Balanced stacked hero with confident CTA",
+        },
+        {
+            "id": "hero-media-led",
+            "name": "Media-Led Hero",
+            "description": "Image-first hero with expressive palette",
+        },
+        {
+            "id": "services-grid",
+            "name": "Services Grid",
+            "description": "Dynamic grid layout for service offerings",
+        },
+        {
+            "id": "services-bento",
+            "name": "Services Bento",
+            "description": "Bento-style service grid with varied item sizes",
+        },
+        {
+            "id": "proof-carousel",
+            "name": "Proof Carousel",
+            "description": "Testimonial/proof carousel with movement",
+        },
+        {
+            "id": "proof-masonry",
+            "name": "Proof Masonry",
+            "description": "Masonry layout for proof points and highlights",
+        },
+        {
+            "id": "gallery-masonry",
+            "name": "Gallery Masonry",
+            "description": "Masonry work/portfolio gallery",
+        },
+        {
+            "id": "gallery-grid",
+            "name": "Gallery Grid",
+            "description": "Uniform grid gallery layout",
+        },
+        {
+            "id": "timeline-vertical",
+            "name": "Timeline Vertical",
+            "description": "Vertical process timeline",
+        },
+        {
+            "id": "timeline-horizontal",
+            "name": "Timeline Horizontal",
+            "description": "Horizontal process timeline",
+        },
+        {
+            "id": "cta-banner",
+            "name": "CTA Banner",
+            "description": "Full-width conversion-focused CTA panel",
+        },
+        {
+            "id": "cta-sticky",
+            "name": "Sticky CTA",
+            "description": "Sticky footer CTA bar",
+        },
+        {
+            "id": "editorial-feature",
+            "name": "Editorial Feature",
+            "description": "Large editorial content feature block",
+        },
+        {
+            "id": "editorial-frame",
+            "name": "Editorial Frame",
+            "description": "Spacious editorial frame with high contrast",
+        },
     ]
 
     async def capture_screenshots(
@@ -46,12 +106,12 @@ class ScreenshotAnalyzer:
     ) -> dict[str, Any]:
         """
         Capture full-page desktop and mobile screenshots of the preview page.
-        
+
         Args:
             site_id: ID of the generated site
             preview_url: Relative URL of the preview (e.g., "/sites/site-123")
             base_url: Base URL of the preview server
-        
+
         Returns:
             Dictionary with:
             - desktopScreenshot: bytes (PNG)
@@ -74,7 +134,7 @@ class ScreenshotAnalyzer:
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=True)
-                
+
                 # Desktop screenshot (1440x1200)
                 desktop_page = await browser.new_page(
                     viewport={"width": 1440, "height": 1200},
@@ -129,14 +189,14 @@ class ScreenshotAnalyzer:
     ) -> dict[str, Any]:
         """
         Analyze screenshot using Gemini Vision for visual QA.
-        
+
         Args:
             site_id: ID of the generated site
             desktop_screenshot: PNG screenshot bytes
             extraction_summary: Text summary of extracted site
             section_stack: List of section titles in order
             quality_threshold: Target quality score (0-100)
-        
+
         Returns:
             Dictionary with:
             - qualityScore: overall score (0-100)
@@ -146,12 +206,12 @@ class ScreenshotAnalyzer:
         """
         try:
             client = get_llm_client()
-            
+
             # Build QA prompt targeting strict premium design criteria
             qa_prompt = f"""You are a STRICT premium web design QA specialist. Analyze this screenshot with CRITICAL evaluation.
 
 Site ID: {site_id}
-Sections: {', '.join(section_stack[:8])}
+Sections: {", ".join(section_stack[:8])}
 
 PREMIUM DESIGN CRITERIA (each section must meet these):
 1. ADVANCED LAYOUT: Uses bento grids, masonry, carousels, timelines, or split layouts (NOT simple 2-column)
@@ -225,7 +285,9 @@ Return ONLY valid JSON, no markdown or additional text:
                 "sectionScores": qa_result.get("sectionScores", []),
                 "rawCritique": qa_response,
                 "passThreshold": qa_result.get("qualityScore", 0) >= quality_threshold,
-                "readinessAssessment": qa_result.get("readinessAssessment", "needs_refinement"),
+                "readinessAssessment": qa_result.get(
+                    "readinessAssessment", "needs_refinement"
+                ),
             }
         except Exception as e:
             logger.error(f"QA analysis failed for {site_id}: {e}")
@@ -242,14 +304,14 @@ Return ONLY valid JSON, no markdown or additional text:
         """
         Generate an improvement brief when quality score is below threshold.
         Uses Gemini to recommend section-level refinements.
-        
+
         Args:
             site_id: ID of the generated site
             extraction_summary: Text summary of extracted site
             section_stack: List of section titles
             qa_critique: Previous QA critique from vision analysis
             brand_summary: Summary of brand tokens
-        
+
         Returns:
             Dictionary with improvement recommendations per section
         """
@@ -260,7 +322,7 @@ Return ONLY valid JSON, no markdown or additional text:
 recommend targeted improvements to increase quality from below 75 to at least 85.
 
 Site ID: {site_id}
-Sections: {', '.join(section_stack[:8])}
+Sections: {", ".join(section_stack[:8])}
 Brand Summary: {brand_summary[:300]}
 Previous QA Critique:
 {qa_critique[:800]}
@@ -289,7 +351,9 @@ Only return valid JSON."""
             )
 
             try:
-                improvement_result = client.extract_json_from_response(improvement_response)
+                improvement_result = client.extract_json_from_response(
+                    improvement_response
+                )
             except ValueError as e:
                 logger.error(f"Failed to parse improvement response for {site_id}: {e}")
                 improvement_result = {
@@ -312,11 +376,11 @@ Only return valid JSON."""
         """
         Compare two screenshots by computing hash similarity.
         Returns a similarity score (0-1) where 1.0 is identical.
-        
+
         Args:
             screenshot1: First PNG screenshot bytes
             screenshot2: Second PNG screenshot bytes
-        
+
         Returns:
             Similarity score (0-1)
         """

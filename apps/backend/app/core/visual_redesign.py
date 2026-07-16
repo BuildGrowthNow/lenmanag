@@ -122,7 +122,8 @@ class VisualRedesignAnalyzer:
         # Try converting PascalCase to kebab-case
         # "HeroSplitEditorial" -> "hero-split-editorial"
         import re
-        kebab = re.sub(r'(?<!^)(?=[A-Z])', '-', component_id).lower()
+
+        kebab = re.sub(r"(?<!^)(?=[A-Z])", "-", component_id).lower()
         if kebab in valid_ids:
             logger.warning(f"Fixed component ID: {component_id} -> {kebab}")
             return kebab
@@ -161,27 +162,26 @@ class VisualRedesignAnalyzer:
         section_index: int,
     ) -> str:
         """Build prompt for analyzing a single section."""
-        
+
         components_list = "\n".join(
-            f"- {c['id']}: {c['description']}"
-            for c in self.AVAILABLE_COMPONENTS
+            f"- {c['id']}: {c['description']}" for c in self.AVAILABLE_COMPONENTS
         )
 
         prompt = f"""You are a premium, interactive web designer analyzing a website section for redesign.
 
 SECTION #{section_index}
 - Type: {section.type}
-- Heading: {section.heading or 'N/A'}
-- Body: {section.text[:200] if section.text else 'N/A'}
-- CTAs: {', '.join(section.ctas[:3]) if section.ctas else 'N/A'}
+- Heading: {section.heading or "N/A"}
+- Body: {section.text[:200] if section.text else "N/A"}
+- CTAs: {", ".join(section.ctas[:3]) if section.ctas else "N/A"}
 
 CLIENT BRAND:
-- Palette Mode: {client_brand.get('paletteMode', 'light')}
-- Primary Color: {client_brand.get('primaryColor', {}).get('value', '#000')}
-- Secondary Color: {client_brand.get('secondaryColor', {}).get('value', '#666')}
-- Accent Color: {client_brand.get('accentColor', {}).get('value', '#f97316')}
-- Typography: {client_brand.get('typography', {}).get('value', 'sans-serif')}
-- Motion: {client_brand.get('motionIntensity', {}).get('value', 'subtle')}
+- Palette Mode: {client_brand.get("paletteMode", "light")}
+- Primary Color: {client_brand.get("primaryColor", {}).get("value", "#000")}
+- Secondary Color: {client_brand.get("secondaryColor", {}).get("value", "#666")}
+- Accent Color: {client_brand.get("accentColor", {}).get("value", "#f97316")}
+- Typography: {client_brand.get("typography", {}).get("value", "sans-serif")}
+- Motion: {client_brand.get("motionIntensity", {}).get("value", "subtle")}
 
 AVAILABLE COMPONENTS (use exact kebab-case IDs):
 {components_list}
@@ -220,7 +220,7 @@ Return ONLY valid JSON (no markdown, no explanation):
   "visualDirection": "Description of interactive visual treatment with specific animations/interactions",
   "confidence": 85
 }}"""
-        
+
         return prompt
 
     async def analyze_section(
@@ -230,20 +230,20 @@ Return ONLY valid JSON (no markdown, no explanation):
         section_index: int,
     ) -> VisualCritique:
         """Analyze a single section and generate redesign critique."""
-        
+
         prompt = self._build_section_analysis_prompt(
             section, client_brand, section_index
         )
-        
+
         try:
             response = await self.gemini.generate_text(
                 prompt,
                 temperature=0.7,
                 max_tokens=1024,
             )
-            
+
             data = self.gemini.extract_json_from_response(response)
-            
+
             # Validate and fix componentId
             component_id = self._validate_and_fix_component_id(
                 data.get("recommendedComponent"), section.type
@@ -251,7 +251,7 @@ Return ONLY valid JSON (no markdown, no explanation):
             data["recommendedComponent"] = component_id
 
             return VisualCritique(**data)
-        
+
         except Exception as e:
             logger.error(f"Failed to analyze section {section_index}: {e}")
             # Return safe default
@@ -271,7 +271,7 @@ Return ONLY valid JSON (no markdown, no explanation):
         client_brand: dict[str, Any],
     ) -> list[VisualRedesignBrief]:
         """Generate visual redesign brief for all sections."""
-        
+
         redesign_briefs: list[VisualRedesignBrief] = []
 
         # Get sections from extraction
@@ -295,9 +295,7 @@ Return ONLY valid JSON (no markdown, no explanation):
         critiques: list[VisualCritique] = []
 
         for idx, section in enumerate(sections[:10]):  # Limit to 10 sections
-            critique = await self.analyze_section(
-                section, client_brand, idx
-            )
+            critique = await self.analyze_section(section, client_brand, idx)
             critiques.append(critique)
 
         if critiques:

@@ -6,7 +6,9 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-async def send_verification_email(email: str, verification_token: str, base_url: str) -> bool:
+async def send_verification_email(
+    email: str, verification_token: str, base_url: str
+) -> bool:
     try:
         from resend import Resend  # type: ignore[import-untyped]
 

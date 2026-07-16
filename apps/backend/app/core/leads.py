@@ -15,7 +15,10 @@ from app.core.audit import write_brief_audit_log
 from app.core.checkpoint import TaskCheckpoint, resume_or_start_task
 from app.core.config import get_settings
 from app.core.extraction import crawl_website
-from app.core.extraction_enrichment import enrich_extraction, validate_extraction_content
+from app.core.extraction_enrichment import (
+    enrich_extraction,
+    validate_extraction_content,
+)
 from app.core.mongo import get_database
 from app.schemas.brief import (
     BriefSourceKind,
@@ -205,7 +208,9 @@ def _asset_reference_from_cue(cue: dict[str, Any] | Any) -> dict[str, Any]:
     }
 
 
-def _brief_asset_provenance(asset_cues: list[dict[str, Any] | Any]) -> list[dict[str, Any]]:
+def _brief_asset_provenance(
+    asset_cues: list[dict[str, Any] | Any],
+) -> list[dict[str, Any]]:
     return _unique_by_key(
         [_asset_reference_from_cue(cue) for cue in asset_cues], _brief_reference_key
     )
@@ -486,7 +491,9 @@ class LeadRepository:
         await database["site_briefs"].create_index("leadId")
         await database["site_briefs"].create_index([("leadId", 1), ("version", -1)])
 
-    async def create_lead(self, request: LeadUpsertRequest, user_id: str) -> LeadActionResponse:
+    async def create_lead(
+        self, request: LeadUpsertRequest, user_id: str
+    ) -> LeadActionResponse:
         normalized_url, normalized_domain = _normalize_input_url(request.websiteUrl)
         pipeline_mode = request.pipelineMode or "auto"
         incoming = _build_lead_doc(
@@ -581,8 +588,9 @@ class LeadRepository:
                 "Auto-extraction failed for lead %s", lead_id
             )
             await self._set_pipeline_stage(
-                lead_id, "needs_attention",
-                detail="Extraction could not be started automatically."
+                lead_id,
+                "needs_attention",
+                detail="Extraction could not be started automatically.",
             )
 
     async def _set_pipeline_stage(
@@ -605,11 +613,13 @@ class LeadRepository:
         else:
             await database["leads"].update_one(
                 {"id": lead_id},
-                {"$set": {
-                    "pipelineStage": stage,
-                    "pipelineStatusDetail": detail,
-                    "updatedAt": now,
-                }},
+                {
+                    "$set": {
+                        "pipelineStage": stage,
+                        "pipelineStatusDetail": detail,
+                        "updatedAt": now,
+                    }
+                },
             )
 
     async def _get_pipeline_mode(self, lead_id: str) -> str:
@@ -627,17 +637,22 @@ class LeadRepository:
         mode = await self._get_pipeline_mode(lead_id)
         extraction = await self.get_extraction(lead_id)
         if extraction is None:
-            await self._set_pipeline_stage(lead_id, "needs_attention", detail="Extraction produced no snapshot.")
+            await self._set_pipeline_stage(
+                lead_id, "needs_attention", detail="Extraction produced no snapshot."
+            )
             return
 
         if extraction.crawlStatus == "failed":
-            await self._set_pipeline_stage(lead_id, "needs_attention", detail="Extraction failed.")
+            await self._set_pipeline_stage(
+                lead_id, "needs_attention", detail="Extraction failed."
+            )
             return
 
         confidence = extraction.confidenceScore or 0
         if confidence < 30:
             await self._set_pipeline_stage(
-                lead_id, "needs_attention",
+                lead_id,
+                "needs_attention",
                 detail=f"Low extraction confidence ({confidence}%). Review the crawl before continuing.",
             )
             return
@@ -650,7 +665,11 @@ class LeadRepository:
             try:
                 brief = await self.create_brief(lead_id)
                 if brief is None:
-                    await self._set_pipeline_stage(lead_id, "needs_attention", detail="Brief generation returned no result.")
+                    await self._set_pipeline_stage(
+                        lead_id,
+                        "needs_attention",
+                        detail="Brief generation returned no result.",
+                    )
                     return
                 # Auto-approve the brief
                 await self.approve_brief(lead_id, approved_by="auto")
@@ -659,7 +678,9 @@ class LeadRepository:
                 logging.getLogger("lenquant.pipeline").exception(
                     "Auto brief generation failed for lead %s", lead_id
                 )
-                await self._set_pipeline_stage(lead_id, "needs_attention", detail="Brief generation failed.")
+                await self._set_pipeline_stage(
+                    lead_id, "needs_attention", detail="Brief generation failed."
+                )
         else:
             # Manual mode: pause at extracted — operator approves brief
             await self._set_pipeline_stage(lead_id, "brief_ready")
@@ -669,26 +690,40 @@ class LeadRepository:
         await self._set_pipeline_stage(lead_id, "generating")
         try:
             from app.core.sites import site_repository
+
             job = await site_repository.queue_generation_job(lead_id)
             if job is None:
-                await self._set_pipeline_stage(lead_id, "needs_attention", detail="Site generation could not be queued.")
+                await self._set_pipeline_stage(
+                    lead_id,
+                    "needs_attention",
+                    detail="Site generation could not be queued.",
+                )
         except Exception:
             logging.getLogger("lenquant.pipeline").exception(
                 "Auto site generation queue failed for lead %s", lead_id
             )
-            await self._set_pipeline_stage(lead_id, "needs_attention", detail="Site generation failed to start.")
+            await self._set_pipeline_stage(
+                lead_id, "needs_attention", detail="Site generation failed to start."
+            )
 
-    async def advance_pipeline_after_generation(self, lead_id: str, quality_score: int) -> None:
+    async def advance_pipeline_after_generation(
+        self, lead_id: str, quality_score: int
+    ) -> None:
         """Called after site generation completes — QA check and advance."""
         await self._set_pipeline_stage(lead_id, "qa")
         mode = await self._get_pipeline_mode(lead_id)
         if mode == "auto":
             threshold = 75
             if quality_score >= threshold:
-                await self._set_pipeline_stage(lead_id, "ready", detail=f"QA passed with score {quality_score}/100.")
+                await self._set_pipeline_stage(
+                    lead_id,
+                    "ready",
+                    detail=f"QA passed with score {quality_score}/100.",
+                )
             else:
                 await self._set_pipeline_stage(
-                    lead_id, "needs_attention",
+                    lead_id,
+                    "needs_attention",
                     detail=f"QA score {quality_score}/100 is below threshold {threshold}. Review or regenerate.",
                 )
         # Manual mode: stays in QA — operator reviews in Review queue
@@ -710,7 +745,9 @@ class LeadRepository:
         # Validation 1: File size limit (10MB max)
         max_size = 10 * 1024 * 1024  # 10MB
         if len(csv_bytes) > max_size:
-            raise ValueError(f"csv_too_large: File size {len(csv_bytes)} bytes exceeds {max_size} bytes limit")
+            raise ValueError(
+                f"csv_too_large: File size {len(csv_bytes)} bytes exceeds {max_size} bytes limit"
+            )
 
         # Validation 2: Detect encoding and decode safely
         try:
@@ -719,12 +756,16 @@ class LeadRepository:
             try:
                 text = csv_bytes.decode("latin-1")
             except UnicodeDecodeError:
-                raise ValueError("csv_invalid_encoding: File must be UTF-8 or Latin-1 encoded")
+                raise ValueError(
+                    "csv_invalid_encoding: File must be UTF-8 or Latin-1 encoded"
+                )
 
         # Validation 3: Check for suspicious content (potential CSV injection)
         suspicious_prefixes = ["=", "+", "-", "@", "\t", "\r"]
         if any(text.lstrip().startswith(prefix) for prefix in suspicious_prefixes):
-            raise ValueError("csv_suspicious_content: CSV file contains potentially malicious content")
+            raise ValueError(
+                "csv_suspicious_content: CSV file contains potentially malicious content"
+            )
 
         # Validation 4: Parse CSV with size limits
         try:
@@ -917,6 +958,7 @@ class LeadRepository:
     ) -> None:
         from typing import cast
         from ..schemas.analytics import AnalyticsEventType
+
         await analytics_repository.record_admin_event(
             event_type=cast(AnalyticsEventType, event_type),
             event_name=event_name,
@@ -1040,6 +1082,7 @@ class LeadRepository:
 
     def _compute_pipeline_summary_memory(self):  # type: ignore[return]
         from app.schemas.lead import PipelineSummary
+
         counts = {
             "processing": 0,
             "needs_attention": 0,
@@ -1069,9 +1112,18 @@ class LeadRepository:
 
     async def _compute_pipeline_summary_db(self, database):  # type: ignore[return]
         from app.schemas.lead import PipelineSummary
+
         pipeline_stages = [
-            "new", "extracting", "extracted", "briefing", "brief_ready",
-            "generating", "qa", "ready", "published", "needs_attention",
+            "new",
+            "extracting",
+            "extracted",
+            "briefing",
+            "brief_ready",
+            "generating",
+            "qa",
+            "ready",
+            "published",
+            "needs_attention",
         ]
         counts = {
             "processing": 0,
@@ -1082,10 +1134,16 @@ class LeadRepository:
             "published": 0,
         }
         try:
-            agg = await database["leads"].aggregate([
-                {"$match": {"status": {"$ne": "archived"}}},
-                {"$group": {"_id": "$pipelineStage", "count": {"$sum": 1}}},
-            ]).to_list(length=len(pipeline_stages) + 5)
+            agg = (
+                await database["leads"]
+                .aggregate(
+                    [
+                        {"$match": {"status": {"$ne": "archived"}}},
+                        {"$group": {"_id": "$pipelineStage", "count": {"$sum": 1}}},
+                    ]
+                )
+                .to_list(length=len(pipeline_stages) + 5)
+            )
             processing_stages = {"extracting", "extracted", "briefing", "generating"}
             for entry in agg:
                 stage = entry.get("_id") or "new"
@@ -1115,7 +1173,9 @@ class LeadRepository:
             latest_job = await database["jobs"].find_one({"id": latest_job_id})
         return _lead_doc_to_list_item(doc, latest_job)
 
-    async def get_lead(self, lead_id: str, user_id: str | None = None) -> LeadDetail | None:
+    async def get_lead(
+        self, lead_id: str, user_id: str | None = None
+    ) -> LeadDetail | None:
         await self._maybe_ensure_indexes()
         database = get_database()
         if database is None:
@@ -1178,19 +1238,22 @@ class LeadRepository:
         if expected_version is not None:
             current_version = int(doc.get("version", 1))
             if current_version != expected_version:
-                raise ValueError(f"Concurrent modification detected. Expected version {expected_version}, found {current_version}")
+                raise ValueError(
+                    f"Concurrent modification detected. Expected version {expected_version}, found {current_version}"
+                )
 
         updated = self._apply_patch(doc, patch)
 
         # Use version in query for atomic check-and-update
         result = await database["leads"].replace_one(
-            {"id": lead_id, "version": doc.get("version", 1)},
-            updated
+            {"id": lead_id, "version": doc.get("version", 1)}, updated
         )
 
         if result.matched_count == 0:
             # Version mismatch - concurrent modification
-            raise ValueError("Concurrent modification detected. Please refresh and try again.")
+            raise ValueError(
+                "Concurrent modification detected. Please refresh and try again."
+            )
 
         return await self.get_lead(lead_id, user_id=user_id)
 
@@ -1230,8 +1293,12 @@ class LeadRepository:
         updated["updatedAt"] = _now()
         return updated
 
-    async def archive_lead(self, lead_id: str, user_id: str | None = None) -> LeadDetail | None:
-        return await self.update_lead(lead_id, LeadPatchRequest(status="archived"), user_id=user_id)
+    async def archive_lead(
+        self, lead_id: str, user_id: str | None = None
+    ) -> LeadDetail | None:
+        return await self.update_lead(
+            lead_id, LeadPatchRequest(status="archived"), user_id=user_id
+        )
 
     async def create_job(
         self,
@@ -1569,7 +1636,9 @@ class LeadRepository:
             )
         return results
 
-    async def delete_lead(self, lead_id: str, user_id: str | None = None) -> LeadDetail | None:
+    async def delete_lead(
+        self, lead_id: str, user_id: str | None = None
+    ) -> LeadDetail | None:
         return await self.archive_lead(lead_id, user_id=user_id)
 
     async def search_jobs_for_lead(self, lead_id: str) -> list[JobSummary]:
@@ -1608,7 +1677,7 @@ class LeadRepository:
         for page in page_inventory:
             if "meta" in page and isinstance(page["meta"], dict):
                 page["meta"] = {k: v for k, v in page["meta"].items() if v is not None}
-        
+
         return ExtractionSnapshot(
             id=str(doc["id"]),
             leadId=str(doc["leadId"]),
@@ -1747,8 +1816,8 @@ class LeadRepository:
                         sourceKind="inferred",
                         inferenceLabel="default",
                         confidence=0,
-                        references=[]
-                    )
+                        references=[],
+                    ),
                 )
 
         company_summary_raw = doc.get("companySummary")
@@ -1756,7 +1825,9 @@ class LeadRepository:
             doc.get("valuePropositionSummary") or company_summary_raw
         )
         company_summary = _ensure_text_recommendation(company_summary_raw)
-        value_proposition_summary = _ensure_text_recommendation(value_proposition_summary_raw)
+        value_proposition_summary = _ensure_text_recommendation(
+            value_proposition_summary_raw
+        )
         return SiteBrief(
             id=str(doc["id"]),
             leadId=str(doc["leadId"]),
@@ -1842,7 +1913,11 @@ class LeadRepository:
     ) -> dict[str, Any]:
         now = _now()
         asset_cues: list[dict[str, Any]] = [
-            cue.model_dump() if hasattr(cue, "model_dump") else dict(cue) if isinstance(cue, dict) else {}
+            cue.model_dump()
+            if hasattr(cue, "model_dump")
+            else dict(cue)
+            if isinstance(cue, dict)
+            else {}
             for cue in extraction.brandAssetCues
         ]
         source_refs = self._brief_source_references(
@@ -1874,7 +1949,9 @@ class LeadRepository:
             )
         elif lead.companyName:
             # Minimal fallback with company name
-            company_summary_value = f"{lead.companyName} is the lead record for {lead.websiteUrl}."
+            company_summary_value = (
+                f"{lead.companyName} is the lead record for {lead.websiteUrl}."
+            )
         else:
             # Last resort
             company_summary_value = f"Public positioning for {lead.websiteUrl} is sparse in the current crawl."
@@ -1909,9 +1986,7 @@ class LeadRepository:
                     if extraction.summary.audienceClues
                     else "clients"
                 )
-                value_proposition_signal = (
-                    f"{lead.companyName or 'We'} helps {audience} with {primary_service.lower()}"
-                )
+                value_proposition_signal = f"{lead.companyName or 'We'} helps {audience} with {primary_service.lower()}"
 
         value_proposition_value = (
             value_proposition_signal
@@ -2096,7 +2171,8 @@ class LeadRepository:
         if extraction.summary.serviceClues:
             section_items.append(
                 _brief_section_recommendation(
-                    title=_sanitize_section_title("Services or Offerings") or "Services",
+                    title=_sanitize_section_title("Services or Offerings")
+                    or "Services",
                     rationale=f"Surface the public service signal: {extraction.summary.serviceClues[0]}.",
                     source_kind="inferred",
                     inference_label="Inferred from service-oriented page language.",
@@ -2151,12 +2227,12 @@ class LeadRepository:
                 section_items.append(
                     _brief_section_recommendation(
                         title=sanitized_gap_title,
-                    rationale="Keep unresolved source gaps visible so the operator can review them before generation starts.",
-                    source_kind="inferred",
-                    inference_label="Derived from extraction gap items.",
-                    confidence=self._brief_confidence(
-                        60, extraction.confidenceScore, floor=45
-                    ),
+                        rationale="Keep unresolved source gaps visible so the operator can review them before generation starts.",
+                        source_kind="inferred",
+                        inference_label="Derived from extraction gap items.",
+                        confidence=self._brief_confidence(
+                            60, extraction.confidenceScore, floor=45
+                        ),
                         references=[],
                     )
                 )
@@ -2193,30 +2269,48 @@ class LeadRepository:
 
         visual_redesigns: list[dict[str, Any]] = []
         for page_item in extraction.pageInventory:
-            page_dict: dict[str, Any] = page_item.model_dump() if hasattr(page_item, "model_dump") else dict(page_item) if isinstance(page_item, dict) else {}
+            page_dict: dict[str, Any] = (
+                page_item.model_dump()
+                if hasattr(page_item, "model_dump")
+                else dict(page_item)
+                if isinstance(page_item, dict)
+                else {}
+            )
             if not page_dict.get("sections"):
                 continue
 
             critiques = []
             for sec in page_dict["sections"]:
                 sec_type = sec.get("type", "unknown")
-                critiques.append({
-                    "sectionType": sec_type,
-                    "originalStrengths": ["Captured original content successfully."] if sec.get("text") else [],
-                    "originalWeaknesses": sec.get("improvementNotes", []),
-                    "redesignGoal": "Make the offer immediately clear and premium." if sec_type == "hero" else "Improve visual hierarchy and premium feel.",
-                    "contentToReuse": [sec.get("heading")] if sec.get("heading") else [],
-                    "contentToRewrite": [],
-                    "recommendedComponent": "HeroSplitEditorial" if sec_type == "hero" else "SectionStandard",
-                    "visualDirection": "minimal-luxe",
-                    "confidence": sec.get("confidence", 50)
-                })
-            
-            visual_redesigns.append({
-                "pageUrl": page_dict["url"],
-                "critiques": critiques,
-                "artDirection": "minimal-luxe"
-            })
+                critiques.append(
+                    {
+                        "sectionType": sec_type,
+                        "originalStrengths": ["Captured original content successfully."]
+                        if sec.get("text")
+                        else [],
+                        "originalWeaknesses": sec.get("improvementNotes", []),
+                        "redesignGoal": "Make the offer immediately clear and premium."
+                        if sec_type == "hero"
+                        else "Improve visual hierarchy and premium feel.",
+                        "contentToReuse": [sec.get("heading")]
+                        if sec.get("heading")
+                        else [],
+                        "contentToRewrite": [],
+                        "recommendedComponent": "HeroSplitEditorial"
+                        if sec_type == "hero"
+                        else "SectionStandard",
+                        "visualDirection": "minimal-luxe",
+                        "confidence": sec.get("confidence", 50),
+                    }
+                )
+
+            visual_redesigns.append(
+                {
+                    "pageUrl": page_dict["url"],
+                    "critiques": critiques,
+                    "artDirection": "minimal-luxe",
+                }
+            )
 
         confidence_score = self._brief_confidence(
             company_confidence,
@@ -2496,7 +2590,10 @@ class LeadRepository:
         return snapshot
 
     async def update_brief(
-        self, lead_id: str, patch: SiteBriefPatchRequest, actor_user_id: str | None = None
+        self,
+        lead_id: str,
+        patch: SiteBriefPatchRequest,
+        actor_user_id: str | None = None,
     ) -> SiteBrief | None:
         await self._maybe_ensure_indexes()
         lead = await self.get_lead(lead_id)
@@ -2538,7 +2635,9 @@ class LeadRepository:
                 "approvalState": snapshot.approvalState,
             },
             metadata={
-                "patchFields": list(patch.model_dump(exclude_unset=True).keys()) if hasattr(patch, "model_dump") else [],
+                "patchFields": list(patch.model_dump(exclude_unset=True).keys())
+                if hasattr(patch, "model_dump")
+                else [],
             },
         )
 
@@ -2551,7 +2650,10 @@ class LeadRepository:
         return snapshot
 
     async def update_brief_visual_redesign(
-        self, lead_id: str, visual_redesign_briefs: list, actor_user_id: str | None = None
+        self,
+        lead_id: str,
+        visual_redesign_briefs: list,
+        actor_user_id: str | None = None,
     ) -> SiteBrief | None:
         """Update brief with visual redesign briefs."""
         await self._maybe_ensure_indexes()
@@ -2576,7 +2678,12 @@ class LeadRepository:
         else:
             await database["site_briefs"].update_one(
                 {"_id": previous_brief["_id"]},
-                {"$set": {"visualRedesign": previous_brief["visualRedesign"], "updatedAt": previous_brief["updatedAt"]}},
+                {
+                    "$set": {
+                        "visualRedesign": previous_brief["visualRedesign"],
+                        "updatedAt": previous_brief["updatedAt"],
+                    }
+                },
             )
 
         # Audit log the visual redesign update
@@ -2692,7 +2799,9 @@ class LeadRepository:
         database = get_database()
         if database is None:
             async with self._memory_lock:
-                self._memory.setdefault("master_briefs", {}).setdefault(lead_id, []).append(doc)
+                self._memory.setdefault("master_briefs", {}).setdefault(
+                    lead_id, []
+                ).append(doc)
         else:
             await database["master_briefs"].insert_one(doc)
 
@@ -2737,7 +2846,9 @@ class LeadRepository:
         database = get_database()
         if database is None:
             async with self._memory_lock:
-                self._memory.setdefault("master_briefs", {}).setdefault(lead_id, []).append(doc)
+                self._memory.setdefault("master_briefs", {}).setdefault(
+                    lead_id, []
+                ).append(doc)
         else:
             await database["master_briefs"].insert_one(doc)
 
@@ -2772,7 +2883,9 @@ class LeadRepository:
         database = get_database()
         if database is None:
             async with self._memory_lock:
-                briefs = self._memory.setdefault("master_briefs", {}).setdefault(lead_id, [])
+                briefs = self._memory.setdefault("master_briefs", {}).setdefault(
+                    lead_id, []
+                )
                 # Replace last version
                 if briefs:
                     briefs[-1] = doc
@@ -2782,13 +2895,15 @@ class LeadRepository:
             # Update in place
             await database["master_briefs"].update_one(
                 {"id": brief.id},
-                {"$set": {
-                    "approvalState": "approved",
-                    "approvedAt": doc["approvedAt"],
-                    "approvedBy": approved_by,
-                    "reviewNotes": notes,
-                    "updatedAt": doc["updatedAt"],
-                }},
+                {
+                    "$set": {
+                        "approvalState": "approved",
+                        "approvedAt": doc["approvedAt"],
+                        "approvedBy": approved_by,
+                        "reviewNotes": notes,
+                        "updatedAt": doc["updatedAt"],
+                    }
+                },
             )
 
         await self._record_brief_event(
@@ -2940,7 +3055,9 @@ class LeadRepository:
             "gapItems": crawl_data["gapItems"],
             "errors": crawl_data["errors"],
             "crawlBudgetUsed": crawl_data.get("crawlBudgetUsed", 0),
-            "crawlBudgetLimit": crawl_data.get("crawlBudgetLimit", get_settings().crawl_budget_bytes),
+            "crawlBudgetLimit": crawl_data.get(
+                "crawlBudgetLimit", get_settings().crawl_budget_bytes
+            ),
             "crawlTimeElapsedSeconds": crawl_data.get("crawlTimeElapsedSeconds"),
             "assetCacheStats": crawl_data.get("assetCacheStats", {}),
             "assetRetentionDays": get_settings().asset_retention_days,

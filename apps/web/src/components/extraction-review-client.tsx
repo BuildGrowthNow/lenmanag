@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Filter, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from "lucide-react";
+import { Filter, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { EmptyState } from "@/components/state/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -298,12 +298,6 @@ export function ExtractionReviewClient({ leadId, pages }: ExtractionReviewClient
                 <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
                 Refresh extraction
               </Button>
-              {selectedPage.errors.length > 0 && (
-                <Button variant="secondary" className="border-amber-500/40 bg-amber-500/10 text-amber-100">
-                  <AlertTriangle className="h-4 w-4 mr-2" />
-                  Flag as blocking
-                </Button>
-              )}
             </div>
           </CardContent>
         </Card>

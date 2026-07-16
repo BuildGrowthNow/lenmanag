@@ -281,7 +281,9 @@ async def regenerate_site_with_prompt(
     generate_request = SiteGenerateRequest(force=force, refinementPromptId=prompt_id)
 
     try:
-        job = await site_repository.queue_generation_job(site_id, request=generate_request)
+        job = await site_repository.queue_generation_job(
+            site_id, request=generate_request
+        )
     except ValueError as exc:
         if str(exc) == "brief_not_approved":
             raise HTTPException(

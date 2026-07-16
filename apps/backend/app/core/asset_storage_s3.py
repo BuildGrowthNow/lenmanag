@@ -29,7 +29,9 @@ class S3AssetStorage(AssetStorage):
         self._stats: Dict[str, int] = {"stored_files": 0, "stored_bytes": 0}
 
         if not self.bucket:
-            raise RuntimeError("ASSET_S3_BUCKET is required when ASSET_STORAGE_BACKEND=s3")
+            raise RuntimeError(
+                "ASSET_S3_BUCKET is required when ASSET_STORAGE_BACKEND=s3"
+            )
 
     def _validate_path_component(self, component: str) -> None:
         """Validate path component to prevent path traversal attacks."""
@@ -44,7 +46,9 @@ class S3AssetStorage(AssetStorage):
 
         # Ensure it's alphanumeric with limited special chars
         if not all(c.isalnum() or c in "-_" for c in component):
-            raise ValueError("Path component must be alphanumeric with hyphens/underscores only")
+            raise ValueError(
+                "Path component must be alphanumeric with hyphens/underscores only"
+            )
 
     def _key(self, lead_id: str, suffix: str) -> str:
         """Generate S3 key with path traversal protection."""
@@ -52,7 +56,9 @@ class S3AssetStorage(AssetStorage):
         self._validate_path_component(suffix)
         return f"{self.prefix}{lead_id}/{suffix}"
 
-    def upload_stream(self, stream: BinaryIO, lead_id: str, checksum: str, content_type: str) -> Tuple[str, int]:
+    def upload_stream(
+        self, stream: BinaryIO, lead_id: str, checksum: str, content_type: str
+    ) -> Tuple[str, int]:
         suffix = f"{secrets.token_hex(12)}"
         key = self._key(lead_id, suffix)
 
@@ -76,14 +82,14 @@ class S3AssetStorage(AssetStorage):
     def delete(self, uri: str) -> None:
         if not uri.startswith("s3://"):
             raise ValueError("invalid S3 uri")
-        path = uri[len("s3://"):]
+        path = uri[len("s3://") :]
         bucket, key = path.split("/", 1)
         self.client.delete_object(Bucket=bucket, Key=key)
 
     def generate_signed_url(self, uri: str, expires_seconds: int) -> str:
         if not uri.startswith("s3://"):
             raise ValueError("invalid S3 uri")
-        path = uri[len("s3://"):]
+        path = uri[len("s3://") :]
         bucket, key = path.split("/", 1)
         url = self.client.generate_presigned_url(
             "get_object",

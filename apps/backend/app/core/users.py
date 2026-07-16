@@ -28,7 +28,9 @@ class UserRepository:
         email: str,
         password: str,
     ) -> dict:
-        hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        hashed_password = bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
         verification_token = secrets.token_urlsafe(32)
 
         user_doc = {
@@ -49,6 +51,7 @@ class UserRepository:
 
     async def get_user_by_id(self, user_id: str) -> Optional[dict]:
         from bson import ObjectId
+
         try:
             return await self.collection.find_one({"_id": ObjectId(user_id)})
         except Exception:
@@ -59,7 +62,9 @@ class UserRepository:
         if not user:
             return None
 
-        if bcrypt.checkpw(password.encode("utf-8"), user["hashed_password"].encode("utf-8")):
+        if bcrypt.checkpw(
+            password.encode("utf-8"), user["hashed_password"].encode("utf-8")
+        ):
             return user
         return None
 
@@ -76,7 +81,7 @@ class UserRepository:
                     "verification_token": None,
                     "updated_at": _now(),
                 }
-            }
+            },
         )
 
         user["is_verified"] = True
@@ -92,7 +97,7 @@ class UserRepository:
                     "verification_token": verification_token,
                     "updated_at": _now(),
                 }
-            }
+            },
         )
 
         if result.modified_count > 0:

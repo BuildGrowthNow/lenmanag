@@ -5,7 +5,7 @@
  * Loads the bundle, provides brand tokens context, and handles errors.
  */
 
-import { useEffect, useState, Suspense, lazy } from 'react';
+import { useEffect, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 interface PreviewRendererProps {
@@ -59,21 +59,28 @@ export function PreviewRenderer({
       return;
     }
 
-    // Dynamically import the bundle
     const loadBundle = async () => {
       try {
-        // For production bundles served from storage
-        const bundleModule = await import(/* @vite-ignore */ bundleUrl);
-        const DefaultExport = bundleModule.default;
+        const response = await fetch(bundleUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch bundle: ${response.status}`);
+        }
+        const bundleCode = await response.text();
 
+        const moduleExports: { default?: React.ComponentType } = {};
+        const moduleFunc = new Function('exports', bundleCode);
+        moduleFunc(moduleExports);
+
+        const DefaultExport = moduleExports.default;
         if (!DefaultExport) {
           throw new Error('Bundle has no default export');
         }
 
         setComponent(() => DefaultExport);
-      } catch (err: any) {
-        console.error('Failed to load bundle:', err);
-        setLoadError(err?.message || 'Failed to load bundle');
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load bundle';
+        console.error('Failed to load bundle:', errorMessage);
+        setLoadError(errorMessage);
       }
     };
 
@@ -125,26 +132,37 @@ function BrandTokensProvider({
   useEffect(() => {
     if (!tokens) return;
 
-    // Inject brand tokens as CSS custom properties
     const root = document.documentElement;
+    const propertiesToSet: Array<[string, string]> = [];
+
     if (tokens.primaryColor?.value) {
-      root.style.setProperty('--brand-primary', tokens.primaryColor.value);
+      propertiesToSet.push(['--brand-primary', tokens.primaryColor.value]);
     }
     if (tokens.secondaryColor?.value) {
-      root.style.setProperty('--brand-secondary', tokens.secondaryColor.value);
+      propertiesToSet.push(['--brand-secondary', tokens.secondaryColor.value]);
     }
     if (tokens.accentColor?.value) {
-      root.style.setProperty('--brand-accent', tokens.accentColor.value);
+      propertiesToSet.push(['--brand-accent', tokens.accentColor.value]);
     }
     if (tokens.backgroundColor?.value) {
-      root.style.setProperty('--brand-bg', tokens.backgroundColor.value);
+      propertiesToSet.push(['--brand-bg', tokens.backgroundColor.value]);
     }
     if (tokens.textColor?.value) {
-      root.style.setProperty('--brand-text', tokens.textColor.value);
+      propertiesToSet.push(['--brand-text', tokens.textColor.value]);
     }
     if (tokens.borderColor?.value) {
-      root.style.setProperty('--brand-border', tokens.borderColor.value);
+      propertiesToSet.push(['--brand-border', tokens.borderColor.value]);
     }
+
+    propertiesToSet.forEach(([property, value]) => {
+      root.style.setProperty(property, value);
+    });
+
+    return () => {
+      propertiesToSet.forEach(([property]) => {
+        root.style.removeProperty(property);
+      });
+    };
   }, [tokens]);
 
   return <>{children}</>;

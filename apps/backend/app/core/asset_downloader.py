@@ -11,9 +11,15 @@ from typing import List, Optional
 import httpx
 import tempfile
 
-from tenacity import retry, stop_after_attempt, wait_exponential_jitter, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential_jitter,
+    retry_if_exception_type,
+)
 
 from .asset_storage import LocalAssetStorage
+
 try:
     from .asset_storage_gcs import GCSAssetStorage
 except Exception:  # pragma: no cover - optional dependency at import time
@@ -29,9 +35,13 @@ from .config import get_settings
 from .audit import write_asset_audit_log
 
 DOWNLOAD_COUNTER = Counter("asset_download_total", "Total asset download attempts")
-DOWNLOAD_FAILURES = Counter("asset_download_failures_total", "Total failed asset downloads")
+DOWNLOAD_FAILURES = Counter(
+    "asset_download_failures_total", "Total failed asset downloads"
+)
 DOWNLOAD_BYTES = Counter("asset_download_bytes_total", "Total bytes downloaded")
-DOWNLOAD_LATENCY = Histogram("asset_download_latency_seconds", "Histogram of asset download latencies")
+DOWNLOAD_LATENCY = Histogram(
+    "asset_download_latency_seconds", "Histogram of asset download latencies"
+)
 
 
 @dataclass
@@ -81,13 +91,21 @@ class AssetDownloader:
             max_bytes = self.settings.asset_max_file_bytes
         return len(content) <= max_bytes
 
-    def enforce_aggregate_limit(self, total_bytes: int, max_bytes: int | None = None) -> bool:
+    def enforce_aggregate_limit(
+        self, total_bytes: int, max_bytes: int | None = None
+    ) -> bool:
         if max_bytes is None:
             max_bytes = self.settings.asset_max_aggregate_bytes
         return total_bytes <= max_bytes
-    
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=0.1, max=5), retry=retry_if_exception_type(Exception))
-    async def _stream_to_tempfile(self, client: httpx.AsyncClient, url: str, temp_path: str, max_bytes: int) -> int:
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=0.1, max=5),
+        retry=retry_if_exception_type(Exception),
+    )
+    async def _stream_to_tempfile(
+        self, client: httpx.AsyncClient, url: str, temp_path: str, max_bytes: int
+    ) -> int:
         bytes_written = 0
         hasher = hashlib.sha256()
         async with client.stream("GET", url) as resp:
@@ -104,7 +122,9 @@ class AssetDownloader:
 
         return bytes_written
 
-    async def download_asset(self, url: str, lead_id: str, actor_user_id: Optional[str] = None) -> AssetDownloadResult:
+    async def download_asset(
+        self, url: str, lead_id: str, actor_user_id: Optional[str] = None
+    ) -> AssetDownloadResult:
         res = AssetDownloadResult(source_url=url, success=False)
         if not self.settings.asset_download_enabled:
             res.error = "asset download disabled"
@@ -118,7 +138,9 @@ class AssetDownloader:
             try:
                 DOWNLOAD_COUNTER.inc()
                 start = __import__("time").time()
-                async with httpx.AsyncClient(timeout=timeout, headers=headers, follow_redirects=True) as client:
+                async with httpx.AsyncClient(
+                    timeout=timeout, headers=headers, follow_redirects=True
+                ) as client:
                     async with client.stream("GET", url) as resp:
                         resp.raise_for_status()
                         res.content_type = resp.headers.get("content-type")
@@ -131,7 +153,9 @@ class AssetDownloader:
                         if cl:
                             try:
                                 if int(cl) > self.settings.asset_max_file_bytes:
-                                    res.error = f"file too large by content-length: {cl}"
+                                    res.error = (
+                                        f"file too large by content-length: {cl}"
+                                    )
                                     return res
                             except Exception:
                                 pass
@@ -143,7 +167,9 @@ class AssetDownloader:
 
                         # write streaming using helper
                         try:
-                            await self._stream_to_tempfile(client, url, temp_f, self.settings.asset_max_file_bytes)
+                            await self._stream_to_tempfile(
+                                client, url, temp_f, self.settings.asset_max_file_bytes
+                            )
                         except Exception as ex:
                             # cleanup
                             try:
@@ -165,10 +191,17 @@ class AssetDownloader:
 
                         # upload to storage
                         with open(temp_f, "rb") as fh:
-                            uri, stored_bytes = self.storage.upload_stream(fh, lead_id, checksum, res.content_type or "application/octet-stream")
+                            uri, stored_bytes = self.storage.upload_stream(
+                                fh,
+                                lead_id,
+                                checksum,
+                                res.content_type or "application/octet-stream",
+                            )
 
                         now = datetime.utcnow()
-                        expires = now + timedelta(days=self.settings.asset_retention_days)
+                        expires = now + timedelta(
+                            days=self.settings.asset_retention_days
+                        )
 
                         res.checksum = checksum
                         res.bytes = stored_bytes
@@ -228,7 +261,9 @@ class AssetDownloader:
             f.write(content)
         return path
 
-    async def download_batch(self, urls: List[str], lead_id: str) -> List[AssetDownloadResult]:
+    async def download_batch(
+        self, urls: List[str], lead_id: str
+    ) -> List[AssetDownloadResult]:
         results: List[AssetDownloadResult] = []
         total = 0
 

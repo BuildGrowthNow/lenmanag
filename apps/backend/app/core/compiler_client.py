@@ -66,7 +66,9 @@ class CompilerClient:
                 elif response.status_code == 400:
                     # Bad request
                     result = response.json()
-                    raise CompilerError(f"Bad request: {result.get('error', 'Unknown')}")
+                    raise CompilerError(
+                        f"Bad request: {result.get('error', 'Unknown')}"
+                    )
                 else:
                     # Server error
                     raise CompilerError(

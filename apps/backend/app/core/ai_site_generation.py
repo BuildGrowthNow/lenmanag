@@ -126,13 +126,15 @@ def _build_generation_prompt(
     brand_section = _build_brand_tokens_section(master_brief, extraction)
 
     # Extract content sections
-    sections_list = "\n".join([
-        f"  {i+1}. **{section.headline}** ({section.purpose})\n"
-        f"     Approach: {section.suggestedApproach}\n"
-        f"     Content: {section.contentSummary}\n"
-        f"     Key points: {', '.join(section.contentPoints[:3])}"
-        for i, section in enumerate(master_brief.sections)
-    ])
+    sections_list = "\n".join(
+        [
+            f"  {i + 1}. **{section.headline}** ({section.purpose})\n"
+            f"     Approach: {section.suggestedApproach}\n"
+            f"     Content: {section.contentSummary}\n"
+            f"     Key points: {', '.join(section.contentPoints[:3])}"
+            for i, section in enumerate(master_brief.sections)
+        ]
+    )
 
     prompt = f"""You are an expert React developer building a landing page.
 
@@ -148,7 +150,7 @@ def _build_generation_prompt(
 - Style: {master_brief.visualStyle}
 - Color Strategy: {master_brief.colorStrategy}
 - Motion Level: {master_brief.motionLevel}
-- Special Effects: {', '.join(master_brief.specialEffects) if master_brief.specialEffects else 'None'}
+- Special Effects: {", ".join(master_brief.specialEffects) if master_brief.specialEffects else "None"}
 
 **Hero**:
 - Headline: {master_brief.headline}
@@ -189,7 +191,7 @@ Import and use these libraries as needed:
 10. Aim for a premium, modern look (Awwwards-worthy)
 11. Use the brand colors provided - don't invent new ones
 12. Match the motion level specified: "{master_brief.motionLevel}"
-13. Implement special effects if specified: {', '.join(master_brief.specialEffects) if master_brief.specialEffects else 'none'}
+13. Implement special effects if specified: {", ".join(master_brief.specialEffects) if master_brief.specialEffects else "none"}
 
 ## Component Structure
 
@@ -279,7 +281,9 @@ def _build_brand_tokens_section(
     if master_brief.brandAssets.primaryColor:
         sections.append(f"**Primary Color**: {master_brief.brandAssets.primaryColor}")
     if master_brief.brandAssets.secondaryColor:
-        sections.append(f"**Secondary Color**: {master_brief.brandAssets.secondaryColor}")
+        sections.append(
+            f"**Secondary Color**: {master_brief.brandAssets.secondaryColor}"
+        )
 
     # Logo
     if master_brief.brandAssets.logoUrl:
@@ -291,7 +295,9 @@ def _build_brand_tokens_section(
 
     # Images
     if master_brief.brandAssets.imageUrls:
-        image_list = "\n  ".join([f"- {url}" for url in master_brief.brandAssets.imageUrls[:5]])
+        image_list = "\n  ".join(
+            [f"- {url}" for url in master_brief.brandAssets.imageUrls[:5]]
+        )
         sections.append(f"**Available Images**:\n  {image_list}")
 
     if not sections:
@@ -375,7 +381,9 @@ async def generate_with_retry(
     }
 
     for attempt in range(max_retries):
-        logger.info(f"Generation attempt {attempt + 1}/{max_retries} for site {site_id}")
+        logger.info(
+            f"Generation attempt {attempt + 1}/{max_retries} for site {site_id}"
+        )
 
         result = await generate_landing_page_code(
             master_brief=master_brief,
@@ -385,7 +393,9 @@ async def generate_with_retry(
         )
 
         if result["success"]:
-            logger.info(f"Successfully generated site {site_id} on attempt {attempt + 1}")
+            logger.info(
+                f"Successfully generated site {site_id} on attempt {attempt + 1}"
+            )
             return result
 
         # Prepare retry context

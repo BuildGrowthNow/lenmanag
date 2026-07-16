@@ -23,8 +23,9 @@ def screenshot_comparator():
 def sample_generated_site():
     """Create a sample generated site for testing."""
     from datetime import datetime
+
     now = datetime.utcnow()
-    
+
     return GeneratedSite(
         id="test-site-123",
         leadId="test-site-123",
@@ -260,9 +261,7 @@ class TestScreenshotComparator:
         assert similarity == 0.0
 
     @pytest.mark.asyncio
-    async def test_compare_layout_screenshot_success(
-        self, screenshot_comparator
-    ):
+    async def test_compare_layout_screenshot_success(self, screenshot_comparator):
         """Test successful screenshot comparison."""
         mock_analyzer = AsyncMock()
         mock_analyzer.capture_screenshots = AsyncMock(
@@ -279,7 +278,12 @@ class TestScreenshotComparator:
             return_value={
                 "qualityScore": 82,
                 "sectionScores": [
-                    {"sectionTitle": "Hero", "score": 90, "critique": "Good", "recommendation": None}
+                    {
+                        "sectionTitle": "Hero",
+                        "score": 90,
+                        "critique": "Good",
+                        "recommendation": None,
+                    }
                 ],
                 "rawCritique": "Good design",
                 "readinessAssessment": "production_ready",
@@ -288,7 +292,8 @@ class TestScreenshotComparator:
         )
 
         with patch(
-            "app.core.screenshot_comparator.get_screenshot_analyzer", return_value=mock_analyzer
+            "app.core.screenshot_comparator.get_screenshot_analyzer",
+            return_value=mock_analyzer,
         ):
             result = await screenshot_comparator.compare_layout_screenshot(
                 site_id="site-123",
@@ -304,9 +309,7 @@ class TestScreenshotComparator:
             assert "layoutHash" in result
 
     @pytest.mark.asyncio
-    async def test_compare_layout_screenshot_failure(
-        self, screenshot_comparator
-    ):
+    async def test_compare_layout_screenshot_failure(self, screenshot_comparator):
         """Test screenshot comparison failure handling."""
         mock_analyzer = AsyncMock()
         mock_analyzer.capture_screenshots = AsyncMock(
@@ -314,7 +317,8 @@ class TestScreenshotComparator:
         )
 
         with patch(
-            "app.core.screenshot_comparator.get_screenshot_analyzer", return_value=mock_analyzer
+            "app.core.screenshot_comparator.get_screenshot_analyzer",
+            return_value=mock_analyzer,
         ):
             result = await screenshot_comparator.compare_layout_screenshot(
                 site_id="site-123",
@@ -335,10 +339,10 @@ class TestIntegrationWithAnalyzer:
     async def test_end_to_end_screenshot_and_qa(self):
         """Test end-to-end screenshot capture and QA."""
         comparator = ScreenshotComparator()
-        
+
         mock_analyzer = AsyncMock()
         screenshot_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
-        
+
         mock_analyzer.capture_screenshots = AsyncMock(
             return_value={
                 "desktopScreenshot": screenshot_bytes,
@@ -349,14 +353,29 @@ class TestIntegrationWithAnalyzer:
                 "capturedAt": "2024-05-31T12:00:00Z",
             }
         )
-        
+
         mock_analyzer.perform_qa_analysis = AsyncMock(
             return_value={
                 "qualityScore": 88,
                 "sectionScores": [
-                    {"sectionTitle": "Hero", "score": 95, "critique": "Excellent hero", "recommendation": None},
-                    {"sectionTitle": "Services", "score": 85, "critique": "Good services section", "recommendation": None},
-                    {"sectionTitle": "CTA", "score": 82, "critique": "Clear CTA", "recommendation": "Add more spacing"},
+                    {
+                        "sectionTitle": "Hero",
+                        "score": 95,
+                        "critique": "Excellent hero",
+                        "recommendation": None,
+                    },
+                    {
+                        "sectionTitle": "Services",
+                        "score": 85,
+                        "critique": "Good services section",
+                        "recommendation": None,
+                    },
+                    {
+                        "sectionTitle": "CTA",
+                        "score": 82,
+                        "critique": "Clear CTA",
+                        "recommendation": "Add more spacing",
+                    },
                 ],
                 "rawCritique": "Overall excellent design with strong visual hierarchy",
                 "readinessAssessment": "production_ready",
@@ -365,7 +384,8 @@ class TestIntegrationWithAnalyzer:
         )
 
         with patch(
-            "app.core.screenshot_comparator.get_screenshot_analyzer", return_value=mock_analyzer
+            "app.core.screenshot_comparator.get_screenshot_analyzer",
+            return_value=mock_analyzer,
         ):
             result = await comparator.compare_layout_screenshot(
                 site_id="site-123",

@@ -29,25 +29,25 @@ def get_tone_presets() -> list[TonePreset]:
             id="professional",
             name="Professional",
             description="Formal and business-focused tone",
-            example="I hope this message finds you well. I would like to discuss..."
+            example="I hope this message finds you well. I would like to discuss...",
         ),
         TonePreset(
             id="casual",
             name="Casual",
             description="Relaxed and conversational tone",
-            example="Hey! Just wanted to reach out about..."
+            example="Hey! Just wanted to reach out about...",
         ),
         TonePreset(
             id="urgent",
             name="Urgent",
             description="Time-sensitive and action-oriented tone",
-            example="Quick update - time is of the essence for..."
+            example="Quick update - time is of the essence for...",
         ),
         TonePreset(
             id="friendly",
             name="Friendly",
             description="Warm and approachable tone",
-            example="Hi there! I'm excited to share with you..."
+            example="Hi there! I'm excited to share with you...",
         ),
     ]
 
@@ -59,21 +59,21 @@ def get_cta_variants() -> list[CtaVariant]:
             name="Primary CTA",
             description="Main call-to-action for the message",
             label="Review the preview",
-            position="bottom"
+            position="bottom",
         ),
         CtaVariant(
             id="secondary",
             name="Secondary CTA",
             description="Alternative call-to-action",
             label="See source notes",
-            position="bottom"
+            position="bottom",
         ),
         CtaVariant(
             id="tertiary",
             name="Tertiary CTA",
             description="Additional call-to-action option",
             label="Learn more",
-            position="inline"
+            position="inline",
         ),
     ]
 
@@ -85,29 +85,29 @@ def get_channel_config(channel: str) -> dict[str, Any]:
             "formatting": "plain",
             "supportsHtml": False,
             "supportsLinks": True,
-            "description": "WhatsApp message format"
+            "description": "WhatsApp message format",
         },
         "linkedin": {
             "characterLimit": 3000,
             "formatting": "markdown",
             "supportsHtml": False,
             "supportsLinks": True,
-            "description": "LinkedIn message format"
+            "description": "LinkedIn message format",
         },
         "email": {
             "characterLimit": 10000,
             "formatting": "html",
             "supportsHtml": True,
             "supportsLinks": True,
-            "description": "Email format"
+            "description": "Email format",
         },
         "generic": {
             "characterLimit": 5000,
             "formatting": "plain",
             "supportsHtml": False,
             "supportsLinks": True,
-            "description": "Generic message format"
-        }
+            "description": "Generic message format",
+        },
     }
     return configs.get(channel, configs["generic"])
 
@@ -121,19 +121,31 @@ class MessageRepository:
         database = get_database()
         if database is None or self._memory_ready:
             return
-        await database["message_drafts"].create_index([("leadId", 1), ("createdAt", -1)])
-        await database["message_drafts"].create_index([("siteId", 1), ("createdAt", -1)])
+        await database["message_drafts"].create_index(
+            [("leadId", 1), ("createdAt", -1)]
+        )
+        await database["message_drafts"].create_index(
+            [("siteId", 1), ("createdAt", -1)]
+        )
         self._memory_ready = True
 
     async def _message_docs(self, lead_id: str) -> list[dict[str, Any]]:
         database = get_database()
         if database is None:
-            return [dict(item) for item in self._memory.values() if item.get("leadId") == lead_id]
-        cursor = database["message_drafts"].find({"leadId": lead_id}).sort("createdAt", -1)
+            return [
+                dict(item)
+                for item in self._memory.values()
+                if item.get("leadId") == lead_id
+            ]
+        cursor = (
+            database["message_drafts"].find({"leadId": lead_id}).sort("createdAt", -1)
+        )
         docs = await cursor.to_list(length=100)
         return [dict(doc) for doc in docs]
 
-    async def create_draft(self, lead_id: str, request: MessageDraftCreateRequest) -> MessageDraft | None:
+    async def create_draft(
+        self, lead_id: str, request: MessageDraftCreateRequest
+    ) -> MessageDraft | None:
         await self._maybe_ensure_indexes()
         lead = await lead_repository.get_lead(lead_id)
         brief = await lead_repository.get_brief(lead_id)
@@ -141,11 +153,22 @@ class MessageRepository:
             return None
         site = await site_repository.get_site(lead_id)
         tone = brief.toneProfile.value or "clear"
-        angle = brief.conversionAngle.value or "Keep the outreach tied to the approved preview story."
+        angle = (
+            brief.conversionAngle.value
+            or "Keep the outreach tied to the approved preview story."
+        )
         cta_primary = site.ctaStrategy.primary if site else None
         cta_secondary = site.ctaStrategy.secondary if site else None
-        calendly_url = cta_primary.href if cta_primary and "calendly" in cta_primary.href.lower() else None
-        if calendly_url is None and cta_secondary and "calendly" in cta_secondary.href.lower():
+        calendly_url = (
+            cta_primary.href
+            if cta_primary and "calendly" in cta_primary.href.lower()
+            else None
+        )
+        if (
+            calendly_url is None
+            and cta_secondary
+            and "calendly" in cta_secondary.href.lower()
+        ):
             calendly_url = cta_secondary.href
         subject = f"{lead.companyName or 'Your site'} preview and next step"
         body = "\n".join(
@@ -169,7 +192,9 @@ class MessageRepository:
             briefId=brief.id,
             siteId=site.id if site else None,
             channel=request.channel,
-            deliveryChannel=request.channel if request.channel in ("whatsapp", "linkedin", "email", "generic") else "email",  # type: ignore[arg-type]
+            deliveryChannel=request.channel
+            if request.channel in ("whatsapp", "linkedin", "email", "generic")
+            else "email",  # type: ignore[arg-type]
             subject=subject,
             body=body,
             tone=tone,
@@ -180,11 +205,15 @@ class MessageRepository:
             ctaPosition=None,
             ctaPrimaryLabel=cta_primary.label if cta_primary else "Review the preview",
             ctaPrimaryHref=cta_primary.href if cta_primary else "#contact",
-            ctaSecondaryLabel=cta_secondary.label if cta_secondary else "See source notes",
+            ctaSecondaryLabel=cta_secondary.label
+            if cta_secondary
+            else "See source notes",
             ctaSecondaryHref=cta_secondary.href if cta_secondary else "#source-notes",
             calendlyUrl=calendly_url,
             previewUrl=site.previewUrl if site else None,
-            exportUrl=site.exportMetadata.exportPath if site and site.exportMetadata else None,
+            exportUrl=site.exportMetadata.exportPath
+            if site and site.exportMetadata
+            else None,
             status="draft",
             version=1,
             createdAt=now,
@@ -209,7 +238,9 @@ class MessageRepository:
         items = [MessageDraft.model_validate(doc) for doc in docs]
         return MessageDraftListResponse(leadId=lead_id, items=items)
 
-    async def update_draft(self, draft_id: str, request: MessageDraftPatchRequest) -> MessageDraft | None:
+    async def update_draft(
+        self, draft_id: str, request: MessageDraftPatchRequest
+    ) -> MessageDraft | None:
         await self._maybe_ensure_indexes()
         database = get_database()
         doc: dict[str, Any] | None = None
@@ -245,7 +276,16 @@ class MessageRepository:
             updated["calendlyUrl"] = request.calendlyUrl
         content_changed = any(
             value is not None
-            for value in (request.subject, request.body, request.tone, request.angle, request.tonePreset, request.customTone, request.ctaVariant, request.ctaPosition)
+            for value in (
+                request.subject,
+                request.body,
+                request.tone,
+                request.angle,
+                request.tonePreset,
+                request.customTone,
+                request.ctaVariant,
+                request.ctaPosition,
+            )
         )
         if request.status is not None:
             updated["status"] = request.status
@@ -256,9 +296,17 @@ class MessageRepository:
         if database is None:
             self._memory[draft_id] = updated
         else:
-            await database["message_drafts"].update_one({"id": draft_id}, {"$set": updated})
+            await database["message_drafts"].update_one(
+                {"id": draft_id}, {"$set": updated}
+            )
         snapshot = MessageDraft.model_validate(updated)
-        if request.subject is not None or request.body is not None or request.tone is not None or request.angle is not None or request.status is not None:
+        if (
+            request.subject is not None
+            or request.body is not None
+            or request.tone is not None
+            or request.angle is not None
+            or request.status is not None
+        ):
             await analytics_repository.record_admin_event(
                 event_type="message_draft_edited",
                 event_name="Message draft updated",
@@ -272,7 +320,9 @@ class MessageRepository:
         is_valid, errors = await self.validate_ready_status(draft_id)
         if not is_valid:
             raise ValueError(f"Cannot mark as ready: {', '.join(errors)}")
-        draft = await self.update_draft(draft_id, MessageDraftPatchRequest(status="ready"))
+        draft = await self.update_draft(
+            draft_id, MessageDraftPatchRequest(status="ready")
+        )
         if draft is not None:
             await analytics_repository.record_admin_event(
                 event_type="message_marked_ready",
@@ -294,7 +344,9 @@ class MessageRepository:
         draft = MessageDraft.model_validate(doc)
         if draft.status != "ready":
             raise ValueError("Can only mark sent messages as ready")
-        draft = await self.update_draft(draft_id, MessageDraftPatchRequest(status="sent"))
+        draft = await self.update_draft(
+            draft_id, MessageDraftPatchRequest(status="sent")
+        )
         if draft is not None:
             await analytics_repository.record_admin_event(
                 event_type="message_marked_sent",
@@ -306,7 +358,9 @@ class MessageRepository:
         return draft
 
     async def reset_to_draft(self, draft_id: str) -> MessageDraft | None:
-        draft = await self.update_draft(draft_id, MessageDraftPatchRequest(status="draft"))
+        draft = await self.update_draft(
+            draft_id, MessageDraftPatchRequest(status="draft")
+        )
         if draft is not None:
             await analytics_repository.record_admin_event(
                 event_type="message_reset_to_draft",
@@ -357,10 +411,12 @@ class MessageRepository:
             "ctaSecondaryLabel": draft.ctaSecondaryLabel,
             "ctaSecondaryHref": draft.ctaSecondaryHref,
             "calendlyUrl": draft.calendlyUrl,
-            "exportUrl": draft.exportUrl
+            "exportUrl": draft.exportUrl,
         }
 
-    async def get_copy(self, draft_id: str, channel: str | None = None) -> MessageCopyResponse | None:
+    async def get_copy(
+        self, draft_id: str, channel: str | None = None
+    ) -> MessageCopyResponse | None:
         await self._maybe_ensure_indexes()
         database = get_database()
         if database is None:

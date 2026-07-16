@@ -41,4 +41,3 @@ class LoginResponse(BaseModel):
 
 class LogoutResponse(BaseModel):
     status: Literal["logged_out"]
-

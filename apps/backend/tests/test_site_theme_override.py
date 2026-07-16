@@ -11,7 +11,9 @@ from app.schemas.site import SiteOverrideCreateRequest
 def test_operator_theme_override_applied():
     async def run_test():
         # Create a lead on a distinct domain to avoid cross-test collisions
-        req = LeadUpsertRequest(companyName="Test Co", websiteUrl="https://override.example.com")
+        req = LeadUpsertRequest(
+            companyName="Test Co", websiteUrl="https://override.example.com"
+        )
         action = await lead_repository.create_lead(req, user_id="test-user")
         lead = action.lead
         site_id = lead.id
@@ -62,7 +64,12 @@ def test_operator_theme_override_applied():
         assert site_before is not None
 
         # Apply operator override for themeKey
-        override_req = SiteOverrideCreateRequest(scope="brand", path="themeKey", value="signal-panel", reason="Operator selected theme")
+        override_req = SiteOverrideCreateRequest(
+            scope="brand",
+            path="themeKey",
+            value="signal-panel",
+            reason="Operator selected theme",
+        )
         created = await site_repository.create_override(site_id, override_req)
         assert created is not None
 
@@ -78,7 +85,9 @@ def test_operator_theme_override_applied():
 
         # Overrides persisted and overrideCount updated
         assert site.overrideCount >= 1
-        assert any(o.path == "themeKey" and o.value == "signal-panel" for o in site.overrides)
+        assert any(
+            o.path == "themeKey" and o.value == "signal-panel" for o in site.overrides
+        )
 
         # Disable override and ensure it is removed from subsequent generations
         disabled = await site_repository.disable_override(site_id, created.id)

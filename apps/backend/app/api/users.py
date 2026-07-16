@@ -38,7 +38,9 @@ def _user_to_response(user: dict) -> UserResponse:
 
 
 @router.post("/signup", response_model=ResponseEnvelope[TokenResponse])
-async def signup(payload: UserCreate, request: Request) -> ResponseEnvelope[TokenResponse]:
+async def signup(
+    payload: UserCreate, request: Request
+) -> ResponseEnvelope[TokenResponse]:
     if settings.signup_code and payload.signup_code != settings.signup_code:
         raise HTTPException(status_code=403, detail="Invalid signup code")
 
@@ -64,57 +66,83 @@ async def signup(payload: UserCreate, request: Request) -> ResponseEnvelope[Toke
     user_response = _user_to_response(user)
 
     await write_audit_log(
-        user["email"], "auth", user["email"], "signup", after={"user_id": str(user["_id"])}
+        user["email"],
+        "auth",
+        user["email"],
+        "signup",
+        after={"user_id": str(user["_id"])},
     )
 
     return success_response(
         TokenResponse(access_token=access_token, user=user_response),
-        meta=response_meta(request)
+        meta=response_meta(request),
     )
 
 
 @router.post("/login", response_model=ResponseEnvelope[TokenResponse])
-async def login_user(payload: UserLogin, request: Request) -> ResponseEnvelope[TokenResponse]:
+async def login_user(
+    payload: UserLogin, request: Request
+) -> ResponseEnvelope[TokenResponse]:
     repo = UserRepository()
     user = await repo.verify_password(email=payload.email, password=payload.password)
 
     if not user:
-        await write_audit_log(None, "auth", payload.email, "login_failed", after={"reason": "invalid_credentials"})
+        await write_audit_log(
+            None,
+            "auth",
+            payload.email,
+            "login_failed",
+            after={"reason": "invalid_credentials"},
+        )
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     access_token = create_access_token(user_id=str(user["_id"]), email=user["email"])
     user_response = _user_to_response(user)
 
     await write_audit_log(
-        user["email"], "auth", user["email"], "login", after={"user_id": str(user["_id"])}
+        user["email"],
+        "auth",
+        user["email"],
+        "login",
+        after={"user_id": str(user["_id"])},
     )
 
     return success_response(
         TokenResponse(access_token=access_token, user=user_response),
-        meta=response_meta(request)
+        meta=response_meta(request),
     )
 
 
 @router.post("/verify-email", response_model=ResponseEnvelope[dict])
-async def verify_email(payload: VerifyEmailRequest, request: Request) -> ResponseEnvelope[dict]:
+async def verify_email(
+    payload: VerifyEmailRequest, request: Request
+) -> ResponseEnvelope[dict]:
     repo = UserRepository()
     user = await repo.verify_email(token=payload.token)
 
     if not user:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired verification token"
+        )
 
     await write_audit_log(
-        user["email"], "auth", user["email"], "email_verified", after={"user_id": str(user["_id"])}
+        user["email"],
+        "auth",
+        user["email"],
+        "email_verified",
+        after={"user_id": str(user["_id"])},
     )
 
     return success_response(
         {"message": "Email verified successfully", "email": user["email"]},
-        meta=response_meta(request)
+        meta=response_meta(request),
     )
 
 
 @router.post("/resend-verification", response_model=ResponseEnvelope[dict])
-async def resend_verification(payload: ResendVerificationRequest, request: Request) -> ResponseEnvelope[dict]:
+async def resend_verification(
+    payload: ResendVerificationRequest, request: Request
+) -> ResponseEnvelope[dict]:
     repo = UserRepository()
     user = await repo.get_user_by_email(payload.email)
 
@@ -135,14 +163,12 @@ async def resend_verification(payload: ResendVerificationRequest, request: Reque
         )
 
     return success_response(
-        {"message": "Verification email sent"},
-        meta=response_meta(request)
+        {"message": "Verification email sent"}, meta=response_meta(request)
     )
 
 
 @router.get("/me", response_model=ResponseEnvelope[UserResponse])
 async def get_current_user_info(
-    user: CurrentUser,
-    request: Request
+    user: CurrentUser, request: Request
 ) -> ResponseEnvelope[UserResponse]:
     return success_response(_user_to_response(user), meta=response_meta(request))

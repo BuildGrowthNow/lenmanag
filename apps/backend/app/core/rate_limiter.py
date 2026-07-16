@@ -38,9 +38,7 @@ class InMemoryRateLimiter:
         now = time.time()
         cutoff = now - window_seconds
         self._requests[ip] = [
-            (ts, endpoint)
-            for ts, endpoint in self._requests[ip]
-            if ts > cutoff
+            (ts, endpoint) for ts, endpoint in self._requests[ip] if ts > cutoff
         ]
 
     def check_rate_limit(
@@ -74,7 +72,8 @@ class InMemoryRateLimiter:
 
         # Count recent requests for this endpoint
         recent_requests = [
-            ts for ts, ep in self._requests[ip]
+            ts
+            for ts, ep in self._requests[ip]
             if ep == endpoint and ts > now - window_seconds
         ]
 

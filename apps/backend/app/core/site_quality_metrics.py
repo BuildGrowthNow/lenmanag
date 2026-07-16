@@ -13,7 +13,9 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def calculate_visual_similarity_score(site_a: dict[str, Any], site_b: dict[str, Any]) -> float:
+def calculate_visual_similarity_score(
+    site_a: dict[str, Any], site_b: dict[str, Any]
+) -> float:
     """
     Calculate visual similarity between two generated sites.
     Returns a score from 0.0 (completely different) to 1.0 (identical).
@@ -31,7 +33,9 @@ def calculate_visual_similarity_score(site_a: dict[str, Any], site_b: dict[str, 
             "secondary_color": site.get("colors", {}).get("secondary", ""),
             "font_family": site.get("typography", {}).get("fontFamily", ""),
             "section_count": len(site.get("sections", [])),
-            "section_types": sorted([s.get("kind", "") for s in site.get("sections", [])]),
+            "section_types": sorted(
+                [s.get("kind", "") for s in site.get("sections", [])]
+            ),
             "has_nav": bool(site.get("navigationConfig")),
             "nav_style": site.get("navigationConfig", {}).get("style", ""),
         }
@@ -52,17 +56,23 @@ def calculate_visual_similarity_score(site_a: dict[str, Any], site_b: dict[str, 
     similarities.append(1.0 if dna_a["palette_mode"] == dna_b["palette_mode"] else 0.0)
 
     # Colors (compare hex values with tolerance)
-    color_sim = calculate_color_similarity(dna_a["primary_color"], dna_b["primary_color"])
+    color_sim = calculate_color_similarity(
+        dna_a["primary_color"], dna_b["primary_color"]
+    )
     similarities.append(color_sim)
 
-    color_sim_2 = calculate_color_similarity(dna_a["secondary_color"], dna_b["secondary_color"])
+    color_sim_2 = calculate_color_similarity(
+        dna_a["secondary_color"], dna_b["secondary_color"]
+    )
     similarities.append(color_sim_2)
 
     # Typography (binary)
     similarities.append(1.0 if dna_a["font_family"] == dna_b["font_family"] else 0.0)
 
     # Section structure (Jaccard similarity)
-    section_sim = calculate_jaccard_similarity(dna_a["section_types"], dna_b["section_types"])
+    section_sim = calculate_jaccard_similarity(
+        dna_a["section_types"], dna_b["section_types"]
+    )
     similarities.append(section_sim)
 
     # Navigation (binary)
@@ -95,7 +105,7 @@ def calculate_color_similarity(hex_a: str, hex_b: str) -> float:
     distance = ((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2) ** 0.5
 
     # Normalize to 0-1 (max distance is ~441 for RGB)
-    max_distance = (255 ** 2 + 255 ** 2 + 255 ** 2) ** 0.5
+    max_distance = (255**2 + 255**2 + 255**2) ** 0.5
     similarity = 1.0 - (distance / max_distance)
 
     return round(similarity, 3)
@@ -166,7 +176,15 @@ def measure_animation_coverage(site: dict[str, Any]) -> dict[str, Any]:
         section_str = str(section).lower()
         has_animation = any(
             keyword in section_str
-            for keyword in ["fade", "slide", "stagger", "reveal", "animate", "parallax", "hover"]
+            for keyword in [
+                "fade",
+                "slide",
+                "stagger",
+                "reveal",
+                "animate",
+                "parallax",
+                "hover",
+            ]
         )
         if has_animation:
             animated_sections += 1
@@ -277,7 +295,9 @@ def _score_to_grade(score: float) -> str:
         return "D"
 
 
-def compare_site_batches(batch_a: list[dict[str, Any]], batch_b: list[dict[str, Any]]) -> dict[str, Any]:
+def compare_site_batches(
+    batch_a: list[dict[str, Any]], batch_b: list[dict[str, Any]]
+) -> dict[str, Any]:
     """
     Compare two batches of generated sites (e.g., before/after system changes).
     Returns comparative metrics for A/B testing.
@@ -292,19 +312,33 @@ def compare_site_batches(batch_a: list[dict[str, Any]], batch_b: list[dict[str, 
         for site in batch:
             quality = calculate_overall_quality_score(site)
             quality_scores.append(quality["overall_score"])
-            color_diversity_scores.append(quality["metrics"]["color_diversity"]["score"])
-            animation_coverage_scores.append(quality["metrics"]["animation_coverage"]["score"])
-            component_variety_scores.append(quality["metrics"]["component_variety"]["score"])
+            color_diversity_scores.append(
+                quality["metrics"]["color_diversity"]["score"]
+            )
+            animation_coverage_scores.append(
+                quality["metrics"]["animation_coverage"]["score"]
+            )
+            component_variety_scores.append(
+                quality["metrics"]["component_variety"]["score"]
+            )
 
         return {
-            "avg_quality_score": round(sum(quality_scores) / len(quality_scores), 3) if quality_scores else 0.0,
-            "avg_color_diversity": round(sum(color_diversity_scores) / len(color_diversity_scores), 3)
+            "avg_quality_score": round(sum(quality_scores) / len(quality_scores), 3)
+            if quality_scores
+            else 0.0,
+            "avg_color_diversity": round(
+                sum(color_diversity_scores) / len(color_diversity_scores), 3
+            )
             if color_diversity_scores
             else 0.0,
-            "avg_animation_coverage": round(sum(animation_coverage_scores) / len(animation_coverage_scores), 3)
+            "avg_animation_coverage": round(
+                sum(animation_coverage_scores) / len(animation_coverage_scores), 3
+            )
             if animation_coverage_scores
             else 0.0,
-            "avg_component_variety": round(sum(component_variety_scores) / len(component_variety_scores), 3)
+            "avg_component_variety": round(
+                sum(component_variety_scores) / len(component_variety_scores), 3
+            )
             if component_variety_scores
             else 0.0,
             "site_count": len(batch),
@@ -315,7 +349,9 @@ def compare_site_batches(batch_a: list[dict[str, Any]], batch_b: list[dict[str, 
 
     # Calculate improvements
     improvements = {
-        "quality_improvement": round(metrics_b["avg_quality_score"] - metrics_a["avg_quality_score"], 3),
+        "quality_improvement": round(
+            metrics_b["avg_quality_score"] - metrics_a["avg_quality_score"], 3
+        ),
         "color_diversity_improvement": round(
             metrics_b["avg_color_diversity"] - metrics_a["avg_color_diversity"], 3
         ),
@@ -353,7 +389,9 @@ def compare_site_batches(batch_a: list[dict[str, Any]], batch_b: list[dict[str, 
             "similarity_reduction": round(similarity_a - similarity_b, 3),
             "batch_b_more_unique": similarity_b < similarity_a,
         },
-        "winner": "Batch B" if metrics_b["avg_quality_score"] > metrics_a["avg_quality_score"] else "Batch A",
+        "winner": "Batch B"
+        if metrics_b["avg_quality_score"] > metrics_a["avg_quality_score"]
+        else "Batch A",
     }
 
 
@@ -365,42 +403,42 @@ def generate_quality_report(site: dict[str, Any]) -> str:
     report = f"""
 # Site Quality Report
 
-**Overall Score:** {quality['overall_score']} ({quality['grade']})
-**Status:** {'✅ Passes quality threshold' if quality['passes_quality_threshold'] else '❌ Below quality threshold'}
+**Overall Score:** {quality["overall_score"]} ({quality["grade"]})
+**Status:** {"✅ Passes quality threshold" if quality["passes_quality_threshold"] else "❌ Below quality threshold"}
 
 ## Metrics Breakdown
 
-### Color Diversity: {quality['metrics']['color_diversity']['score']}
-- Unique colors: {quality['metrics']['color_diversity']['unique_color_count']}
-- Has mesh gradient: {quality['metrics']['color_diversity']['has_mesh_gradient']}
-- Has advanced colors: {quality['metrics']['color_diversity']['has_advanced_colors']}
-- Status: {'✅ Passes' if quality['metrics']['color_diversity']['passes_diversity_threshold'] else '❌ Needs improvement'}
+### Color Diversity: {quality["metrics"]["color_diversity"]["score"]}
+- Unique colors: {quality["metrics"]["color_diversity"]["unique_color_count"]}
+- Has mesh gradient: {quality["metrics"]["color_diversity"]["has_mesh_gradient"]}
+- Has advanced colors: {quality["metrics"]["color_diversity"]["has_advanced_colors"]}
+- Status: {"✅ Passes" if quality["metrics"]["color_diversity"]["passes_diversity_threshold"] else "❌ Needs improvement"}
 
-### Animation Coverage: {quality['metrics']['animation_coverage']['score']}
-- Animated sections: {quality['metrics']['animation_coverage']['animated_sections']} / {quality['metrics']['animation_coverage']['total_sections']}
-- Coverage: {quality['metrics']['animation_coverage']['coverage'] * 100:.1f}%
-- Status: {'✅ Passes' if quality['metrics']['animation_coverage']['passes_threshold'] else '❌ Needs improvement'}
+### Animation Coverage: {quality["metrics"]["animation_coverage"]["score"]}
+- Animated sections: {quality["metrics"]["animation_coverage"]["animated_sections"]} / {quality["metrics"]["animation_coverage"]["total_sections"]}
+- Coverage: {quality["metrics"]["animation_coverage"]["coverage"] * 100:.1f}%
+- Status: {"✅ Passes" if quality["metrics"]["animation_coverage"]["passes_threshold"] else "❌ Needs improvement"}
 
-### Component Variety: {quality['metrics']['component_variety']['score']}
-- Unique components: {quality['metrics']['component_variety']['unique_components']}
-- Total sections: {quality['metrics']['component_variety']['total_sections']}
-- Status: {'✅ Passes' if quality['metrics']['component_variety']['passes_threshold'] else '❌ Needs improvement'}
+### Component Variety: {quality["metrics"]["component_variety"]["score"]}
+- Unique components: {quality["metrics"]["component_variety"]["unique_components"]}
+- Total sections: {quality["metrics"]["component_variety"]["total_sections"]}
+- Status: {"✅ Passes" if quality["metrics"]["component_variety"]["passes_threshold"] else "❌ Needs improvement"}
 
 ## Recommendations
 
 """
 
     # Add specific recommendations
-    if not quality['metrics']['color_diversity']['passes_diversity_threshold']:
+    if not quality["metrics"]["color_diversity"]["passes_diversity_threshold"]:
         report += "- **Color Diversity:** Expand color palette to 8-12 colors. Use complementary and analogous colors.\n"
 
-    if not quality['metrics']['animation_coverage']['passes_threshold']:
+    if not quality["metrics"]["animation_coverage"]["passes_threshold"]:
         report += "- **Animation Coverage:** Add scroll-triggered animations to more sections. Target 80%+ coverage.\n"
 
-    if not quality['metrics']['component_variety']['passes_threshold']:
+    if not quality["metrics"]["component_variety"]["passes_threshold"]:
         report += "- **Component Variety:** Diversify component types. Avoid reusing the same component pattern.\n"
 
-    if quality['passes_quality_threshold']:
+    if quality["passes_quality_threshold"]:
         report += "- ✅ Site meets all quality thresholds. Great work!\n"
 
     return report
