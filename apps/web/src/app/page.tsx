@@ -16,11 +16,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Navbar } from "@/components/landing/navbar";
 import { SocialProofNotifications } from "@/components/landing/social-proof-notifications";
 import { AnimatedStats } from "@/components/landing/animated-stats";
 import { FloatingMockup } from "@/components/landing/floating-mockup";
 import { BentoFeatures } from "@/components/landing/bento-features";
 import { LogoWall } from "@/components/landing/logo-wall";
+import { ScreenshotCarousel } from "@/components/landing/screenshot-carousel";
 import { TestimonialsSection } from "@/components/landing/testimonials-section";
 import { FAQSection } from "@/components/landing/faq-section";
 import { PricingConfigurator } from "@/components/landing/pricing-configurator";
@@ -172,6 +174,9 @@ export default function SitesLandingPage() {
         }}
       />
 
+      {/* Navigation */}
+      <Navbar />
+
       {/* Social Proof Notifications */}
       <SocialProofNotifications />
 
@@ -268,17 +273,24 @@ export default function SitesLandingPage() {
 
             {/* Floating Mockup */}
             <FloatingMockup />
+
+            {/* Screenshot Carousel */}
+            <ScreenshotCarousel />
           </div>
         </section>
 
         {/* Logo Wall */}
-        <LogoWall />
+        <section id="trusted">
+          <LogoWall />
+        </section>
 
         {/* Features Section */}
-        <BentoFeatures />
+        <section id="features">
+          <BentoFeatures />
+        </section>
 
         {/* How It Works */}
-        <section className="relative px-6 py-24">
+        <section id="process" className="relative px-6 py-24">
           <div className="max-w-7xl mx-auto">
             <motion.div
               initial={{ opacity: 0 }}
@@ -375,7 +387,7 @@ export default function SitesLandingPage() {
         </section>
 
         {/* What You Get */}
-        <section className="relative px-6 py-24 bg-slate-900/50">
+        <section id="included" className="relative px-6 py-24 bg-slate-900/50">
           <div className="max-w-5xl mx-auto">
             <motion.div
               initial={{ opacity: 0 }}
@@ -423,7 +435,9 @@ export default function SitesLandingPage() {
         </section>
 
         {/* Testimonials Section */}
-        <TestimonialsSection />
+        <section id="testimonials">
+          <TestimonialsSection />
+        </section>
 
         {/* Pricing Configurator */}
         <section id="pricing" className="relative px-6 py-24">
@@ -557,7 +571,9 @@ export default function SitesLandingPage() {
         </section>
 
         {/* FAQ Section */}
-        <FAQSection />
+        <section id="faq">
+          <FAQSection />
+        </section>
 
         {/* Final CTA */}
         <section className="relative px-6 py-24 bg-gradient-to-br from-yellow-500/10 via-transparent to-purple-500/10">

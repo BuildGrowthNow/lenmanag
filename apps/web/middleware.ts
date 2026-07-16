@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const SESSION_COOKIE_NAME = "lenquant_session";
 
 const protectedRoutes = ["/nsa"];
-const publicRoutes = ["/", "/landing", "/login", "/api"];
+const publicRoutes = ["/", "/landing", "/login", "/sites", "/api"];
 
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
