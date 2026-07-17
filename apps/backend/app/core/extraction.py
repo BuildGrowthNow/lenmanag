@@ -23,6 +23,7 @@ from app.core.asset_downloader import AssetDownloader
 from app.core.config import get_settings
 
 USER_AGENT = "LenQuantBot/0.3 (+internal extraction)"
+BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 FETCH_TIMEOUT = 12
 
 settings = get_settings()
@@ -537,7 +538,7 @@ def _fetch_url(url: str) -> tuple[str, str, dict[str, str]]:
     request = Request(
         url,
         headers={
-            "User-Agent": USER_AGENT,
+            "User-Agent": BROWSER_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
     )
@@ -564,7 +565,7 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
             browser = pw.chromium.launch(headless=True)
             page = browser.new_page(
                 viewport={"width": 1440, "height": 900},
-                user_agent=USER_AGENT,
+                user_agent=BROWSER_USER_AGENT,
             )
             response = page.goto(url, wait_until="networkidle", timeout=20000)
             final_url = page.url
