@@ -61,48 +61,39 @@ export function PreviewRenderer({
 
     const loadBundle = async () => {
       try {
-        // Load bundle as ES module via script tag injection
+        // Ensure React is available globally from Next.js
+        if (typeof window !== 'undefined') {
+          (window as any).React = require('react');
+          (window as any).ReactDOM = require('react-dom');
+        }
+
+        // Fetch the IIFE bundle
         const response = await fetch(bundleUrl);
         if (!response.ok) {
           throw new Error(`Failed to fetch bundle: ${response.status}`);
         }
         const bundleCode = await response.text();
 
-        // Create a unique global variable name for this bundle
-        const globalName = `__BUNDLE_${slug.replace(/[^a-zA-Z0-9]/g, '_')}__`;
-
-        // Wrap the bundle code to expose the default export globally
-        const wrappedCode = `
-          (async () => {
-            const module = { exports: {} };
-            const exports = module.exports;
-            ${bundleCode}
-            window.${globalName} = exports.default || module.exports.default || module.exports;
-          })();
-        `;
-
-        // Create and inject script tag
+        // Create and inject script tag for IIFE bundle
         const script = document.createElement('script');
-        script.type = 'module';
-        script.textContent = wrappedCode;
+        script.textContent = bundleCode;
         document.head.appendChild(script);
 
-        // Wait for script to execute and component to be available
+        // Wait for LandingPageBundle to be available
         const maxAttempts = 50; // 5 seconds total
         for (let i = 0; i < maxAttempts; i++) {
-          if ((window as any)[globalName]) {
-            const DefaultExport = (window as any)[globalName];
+          if ((window as any).LandingPageBundle) {
+            const DefaultExport = (window as any).LandingPageBundle;
             setComponent(() => DefaultExport);
 
-            // Clean up
+            // Clean up script tag but keep global (might be needed for re-renders)
             document.head.removeChild(script);
-            delete (window as any)[globalName];
             return;
           }
           await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        throw new Error('Bundle loaded but component not found');
+        throw new Error('Bundle loaded but LandingPageBundle not found on window');
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load bundle';
         console.error('Failed to load bundle:', errorMessage);

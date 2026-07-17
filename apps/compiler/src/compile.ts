@@ -50,7 +50,8 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
         sourcefile: `${safeName}.tsx`,
       },
       bundle: true,
-      format: 'esm',
+      format: 'iife',
+      globalName: 'LandingPageBundle',
       target: 'es2020',
       jsx: 'automatic',
       jsxImportSource: 'react',
@@ -65,6 +66,10 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
         'react/jsx-runtime',
         'react/jsx-dev-runtime',
       ],
+      // Map external modules to global variables
+      banner: {
+        js: `var React = window.React; var ReactDOM = window.ReactDOM;`,
+      },
       // Enable tree-shaking and code splitting for optimal bundle size
       treeShaking: true,
       plugins: [createVirtualModulesPlugin()],
