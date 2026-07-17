@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Star, Quote } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { useSupportsHover } from "@/hooks/use-supports-hover";
 
 const TESTIMONIALS = [
   {
@@ -56,6 +57,8 @@ const TESTIMONIALS = [
 ];
 
 export function TestimonialsSection() {
+  const supportsHover = useSupportsHover();
+
   return (
     <section className="relative px-6 py-24 overflow-hidden">
       <div className="max-w-7xl mx-auto">
@@ -82,7 +85,7 @@ export function TestimonialsSection() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1, duration: 0.5 }}
               viewport={{ once: true }}
-              whileHover={{ y: -8, scale: 1.02 }}
+              {...(supportsHover && { whileHover: { y: -8, scale: 1.02 } })}
             >
               <Card className="p-6 h-full bg-white/5 border-white/10 hover:border-yellow-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-yellow-500/10 relative overflow-hidden group will-change-transform">
                 <Quote className="absolute top-4 right-4 w-12 h-12 text-yellow-500/10" />

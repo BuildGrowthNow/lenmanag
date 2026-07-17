@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useSupportsHover } from "@/hooks/use-supports-hover";
 import {
   CheckCircle2,
   ArrowRight,
@@ -44,6 +45,7 @@ export default function SitesLandingPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [step, setStep] = useState<"configure" | "details">("configure");
+  const supportsHover = useSupportsHover();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -268,7 +270,7 @@ export default function SitesLandingPage() {
               transition={{ delay: 0.8, duration: 0.5 }}
             >
               <motion.div
-                whileHover={{ scale: 1.05 }}
+                {...(supportsHover && { whileHover: { scale: 1.05 } })}
                 whileTap={{ scale: 0.95 }}
                 className="inline-block"
               >
@@ -365,7 +367,7 @@ export default function SitesLandingPage() {
                   viewport={{ once: true }}
                   className="relative"
                 >
-                  <motion.div whileHover={{ scale: 1.05 }} className="text-center">
+                  <motion.div {...(supportsHover && { whileHover: { scale: 1.05 } })} className="text-center">
                     <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center text-2xl font-bold shadow-2xl shadow-yellow-500/50 relative z-10">
                       {process.step}
                     </div>
@@ -451,7 +453,7 @@ export default function SitesLandingPage() {
                   whileInView={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05, duration: 0.3 }}
                   viewport={{ once: true }}
-                  whileHover={{ x: 10 }}
+                  {...(supportsHover && { whileHover: { x: 10 } })}
                   className="flex items-center gap-3 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/50 transition-all"
                 >
                   <CheckCircle2 className="w-6 h-6 text-yellow-500 flex-shrink-0" />
@@ -469,7 +471,7 @@ export default function SitesLandingPage() {
               viewport={{ once: true }}
             >
               <motion.div
-                whileHover={{ scale: 1.05 }}
+                {...(supportsHover && { whileHover: { scale: 1.05 } })}
                 whileTap={{ scale: 0.95 }}
               >
                 <Button
@@ -504,7 +506,7 @@ export default function SitesLandingPage() {
             viewport={{ once: true }}
           >
             <motion.div
-              whileHover={{ scale: 1.05 }}
+              {...(supportsHover && { whileHover: { scale: 1.05 } })}
               whileTap={{ scale: 0.95 }}
             >
               <Button
@@ -675,7 +677,7 @@ export default function SitesLandingPage() {
               <p className="text-xl text-slate-300 mb-10">
                 Join hundreds of business owners who trusted us to create their breakthrough website
               </p>
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <motion.div {...(supportsHover && { whileHover: { scale: 1.05 } })} whileTap={{ scale: 0.95 }}>
                 <Button
                   onClick={() =>
                     document

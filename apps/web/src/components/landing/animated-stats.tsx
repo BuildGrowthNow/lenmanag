@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import { Clock, Users, Star, TrendingUp } from "lucide-react";
+import { useSupportsHover } from "@/hooks/use-supports-hover";
 
 interface StatProps {
   icon: React.ElementType;
@@ -16,6 +17,7 @@ function AnimatedStat({ icon: Icon, value, suffix, label, delay = 0 }: StatProps
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true });
+  const supportsHover = useSupportsHover();
 
   useEffect(() => {
     if (!isInView) return;
@@ -45,7 +47,7 @@ function AnimatedStat({ icon: Icon, value, suffix, label, delay = 0 }: StatProps
       initial={{ opacity: 0, y: 40 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ delay, duration: 0.8 }}
-      whileHover={{ scale: 1.05 }}
+      {...(supportsHover && { whileHover: { scale: 1.05 } })}
       className="text-center p-4 md:p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/50 transition-all group"
     >
       <div className="mb-2 md:mb-3 flex justify-center">

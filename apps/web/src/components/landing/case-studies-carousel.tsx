@@ -3,6 +3,7 @@
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import { useState, useRef } from "react";
 import { ChevronLeft, ChevronRight, MoveHorizontal } from "lucide-react";
+import { useSupportsHover } from "@/hooks/use-supports-hover";
 
 const CASE_STUDIES = [
   {
@@ -184,6 +185,7 @@ function BeforeAfterSlider({ study }: { study: typeof CASE_STUDIES[0] }) {
 
 export function CaseStudiesCarousel() {
   const [current, setCurrent] = useState(0);
+  const supportsHover = useSupportsHover();
 
   const next = () => setCurrent((prev) => (prev + 1) % CASE_STUDIES.length);
   const prev = () =>
@@ -245,7 +247,7 @@ export function CaseStudiesCarousel() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.3 }}
-                whileHover={{ x: 5, scale: 1.02 }}
+                {...(supportsHover && { whileHover: { x: 5, scale: 1.02 } })}
                 className="flex items-center gap-3 cursor-pointer"
               >
                 <motion.span
@@ -261,7 +263,7 @@ export function CaseStudiesCarousel() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.4 }}
-                whileHover={{ x: 5, scale: 1.02 }}
+                {...(supportsHover && { whileHover: { x: 5, scale: 1.02 } })}
                 className="flex items-center gap-3 cursor-pointer"
               >
                 <motion.span
@@ -277,7 +279,7 @@ export function CaseStudiesCarousel() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.5 }}
-                whileHover={{ x: 5, scale: 1.02 }}
+                {...(supportsHover && { whileHover: { x: 5, scale: 1.02 } })}
                 className="flex items-center gap-3 cursor-pointer"
               >
                 <motion.span

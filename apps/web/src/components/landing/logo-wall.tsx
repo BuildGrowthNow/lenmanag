@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useSupportsHover } from "@/hooks/use-supports-hover";
 
 const COMPANY_LOGOS = [
   { name: "NexaTech", tagline: "Enterprise Solutions" },
@@ -18,6 +19,8 @@ const COMPANY_LOGOS = [
 ];
 
 export function LogoWall() {
+  const supportsHover = useSupportsHover();
+
   return (
     <section className="relative px-6 py-16 bg-slate-900/30">
       <div className="max-w-7xl mx-auto">
@@ -41,7 +44,7 @@ export function LogoWall() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05, duration: 0.5 }}
               viewport={{ once: true }}
-              whileHover={{ scale: 1.05, y: -5 }}
+              {...(supportsHover && { whileHover: { scale: 1.05, y: -5 } })}
               className="flex flex-col items-center justify-center p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/30 transition-all group"
             >
               <div className="text-center">

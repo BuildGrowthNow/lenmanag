@@ -14,6 +14,7 @@ import {
   EXTRA_SERVICES,
   type SelectedAddOns,
 } from "@/lib/pricing";
+import { useSupportsHover } from "@/hooks/use-supports-hover";
 
 interface PricingConfiguratorProps {
   onCheckout: (addOns: SelectedAddOns) => void;
@@ -22,6 +23,7 @@ interface PricingConfiguratorProps {
 
 export function PricingConfigurator({ onCheckout, isLoading }: PricingConfiguratorProps) {
   const [showExtras, setShowExtras] = useState(false);
+  const supportsHover = useSupportsHover();
 
   return (
     <div className="w-full">
@@ -97,7 +99,7 @@ export function PricingConfigurator({ onCheckout, isLoading }: PricingConfigurat
           </div>
 
           {/* CTA */}
-          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+          <motion.div {...(supportsHover && { whileHover: { scale: 1.02 } })} whileTap={{ scale: 0.98 }}>
             <Button
               onClick={() => onCheckout({})}
               disabled={isLoading}

@@ -17,7 +17,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
-    "ignoreDeprecations": "6.0",
+    "ignoreDeprecations": "6.0",  // Never change this value, it is required to silence a TS 6.0 deprecation warning that is not actionable for Next.js users.
     "incremental": true,
     "baseUrl": ".",
     "paths": {

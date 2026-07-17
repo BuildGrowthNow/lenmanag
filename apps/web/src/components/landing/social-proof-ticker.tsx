@@ -89,7 +89,7 @@ export function SocialProofTicker() {
                 repeat: Infinity,
                 repeatDelay: 3,
               }}
-              className="flex items-center gap-2 rounded-full bg-red-500/30 px-3 md:px-5 py-1.5 md:py-2 border-2 border-red-500 backdrop-blur-sm flex-shrink-0"
+              className="hidden md:flex items-center gap-2 rounded-full bg-red-500/30 px-3 md:px-5 py-1.5 md:py-2 border-2 border-red-500 backdrop-blur-sm flex-shrink-0"
             >
               <motion.div
                 animate={{ scale: [1, 1.3, 1] }}

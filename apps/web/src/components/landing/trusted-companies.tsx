@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { useSupportsHover } from "@/hooks/use-supports-hover";
 
 const COMPANIES = [
   { name: "Nexora", logo: "/logos/nexora.png" },
@@ -13,6 +14,8 @@ const COMPANIES = [
 ];
 
 export function TrustedCompanies() {
+  const supportsHover = useSupportsHover();
+
   return (
     <section className="relative px-6 py-8">
       <div className="max-w-7xl mx-auto">
@@ -36,7 +39,7 @@ export function TrustedCompanies() {
               whileInView={{ opacity: 1, scale: 1 }}
               transition={{ delay: i * 0.05, duration: 0.4 }}
               viewport={{ once: true }}
-              whileHover={{ scale: 1.05 }}
+              {...(supportsHover && { whileHover: { scale: 1.05 } })}
               className="flex items-center gap-2 group cursor-pointer"
             >
               <Image

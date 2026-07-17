@@ -109,7 +109,7 @@ export function SocialProofNotifications() {
             }}
             className="pointer-events-auto"
           >
-            <div className="bg-zinc-900 rounded-2xl shadow-2xl border-2 border-green-500 p-4 min-w-[320px] backdrop-blur-xl shadow-green-500/50">
+            <div className="bg-zinc-900 rounded-2xl shadow-md border-2 border-yellow-500 p-4 min-w-[320px] backdrop-blur-xl shadow-yellow-500/20 opacity-90">
               <div className="flex items-start gap-3">
                 {/* Avatar */}
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center flex-shrink-0 shadow-lg">

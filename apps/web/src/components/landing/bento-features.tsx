@@ -11,6 +11,7 @@ import {
   LineChart,
   Shield,
 } from "lucide-react";
+import { useSupportsHover } from "@/hooks/use-supports-hover";
 
 const FEATURES = [
   {
@@ -72,6 +73,8 @@ const FEATURES = [
 ];
 
 export function BentoFeatures() {
+  const supportsHover = useSupportsHover();
+
   return (
     <section className="relative px-6 py-24 bg-slate-900/50">
       <div className="max-w-7xl mx-auto">
@@ -103,11 +106,13 @@ export function BentoFeatures() {
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.05, duration: 0.5 }}
                 viewport={{ once: true }}
-                whileHover={{
-                  scale: 1.02,
-                  rotateY: 5,
-                  rotateX: 5,
-                }}
+                {...(supportsHover && {
+                  whileHover: {
+                    scale: 1.02,
+                    rotateY: 5,
+                    rotateX: 5,
+                  },
+                })}
                 className={`${colSpan} ${rowSpan} group`}
                 style={{ perspective: 1000 }}
               >
