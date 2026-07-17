@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.brief import BriefEvidence, BriefSourceReference
 
+VariantType = Literal["html_v1", "html_v2", "html_v3", "nextjs"]
 PaletteMode = Literal["zinc", "light", "colorful"]
 SiteReadinessStatus = Literal[
     "blocked", "needs_review", "ready_for_review", "ready_to_publish", "published"
@@ -356,6 +357,23 @@ class GeneratedSite(BaseModel):
     briefId: str
     briefVersion: int
     version: int
+
+    # NEW: Variant identification
+    variantType: VariantType = "nextjs"
+    variantLabel: str = "Next.js Site"
+    variantPosition: int = 1  # Display order: 1=first, 2=second, etc.
+
+    # NEW: Static HTML output (for HTML variants only)
+    staticHtml: Optional[str] = Field(
+        default=None, description="Full HTML content for static variants"
+    )
+    staticCssUrl: Optional[str] = Field(
+        default=None, description="S3 URL to styles.css for static variants"
+    )
+    staticJsUrl: Optional[str] = Field(
+        default=None, description="S3 URL to script.js for static variants"
+    )
+
     themeId: str
     themeKey: str
     themeName: str
@@ -399,10 +417,11 @@ class GeneratedSite(BaseModel):
     isManuallyRefined: bool = False
     improvementRecommendations: dict[str, Any] | None = None
     sourceCode: Optional[str] = Field(
-        default=None, description="AI-generated TSX source code for compilation"
+        default=None,
+        description="AI-generated TSX source code for compilation (Next.js) or HTML template (static)",
     )
     compiledBundleUrl: Optional[str] = Field(
-        default=None, description="URL to the compiled JavaScript bundle"
+        default=None, description="URL to the compiled JavaScript bundle (Next.js only)"
     )
     compilationStatus: Optional[str] = Field(
         default=None, description="Status of compilation: pending, success, failed"

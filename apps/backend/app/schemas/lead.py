@@ -4,6 +4,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
+GenerationType = Literal["html_v1", "html_v2", "html_v3", "nextjs"]
 LeadSourceType = Literal["csv", "manual", "crm", "future"]
 LeadStatus = Literal["new", "needs_review", "archived"]
 JobStatus = Literal["queued", "running", "completed", "failed"]
@@ -138,6 +139,14 @@ class LeadUpsertRequest(BaseModel):
     industry: Optional[str] = None
     notes: Optional[str] = None
     pipelineMode: PipelineMode = "auto"
+
+    # NEW: Generation types selection
+    generationTypes: list[GenerationType] = Field(
+        default=["nextjs"],
+        description="Types of sites to generate. Can select 1-4 options.",
+        min_length=1,
+        max_length=4,
+    )
 
 
 class LeadPatchRequest(BaseModel):
