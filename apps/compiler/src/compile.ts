@@ -66,9 +66,18 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
         'react/jsx-runtime',
         'react/jsx-dev-runtime',
       ],
-      // Map external modules to global variables
       banner: {
-        js: `var React = window.React; var ReactDOM = window.ReactDOM;`,
+        js: [
+          `var React = window.React;`,
+          `var ReactDOM = window.ReactDOM;`,
+          `var require = (function() {`,
+          `  var m = {'react': window.React, 'react-dom': window.ReactDOM, 'react/jsx-runtime': window.__reactJsxRuntime, 'react/jsx-dev-runtime': window.__reactJsxRuntime};`,
+          `  return function(id) { if (m[id]) return m[id]; throw new Error('Module not found: ' + id); };`,
+          `})();`,
+        ].join(' '),
+      },
+      footer: {
+        js: `if (typeof LandingPageBundle !== 'undefined') { window.LandingPageBundle = LandingPageBundle; }`,
       },
       // Enable tree-shaking and code splitting for optimal bundle size
       treeShaking: true,

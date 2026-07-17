@@ -61,10 +61,14 @@ export function PreviewRenderer({
 
     const loadBundle = async () => {
       try {
-        // Ensure React is available globally from Next.js
+        // Ensure React and JSX runtime are available globally for the bundle
         if (typeof window !== 'undefined') {
-          (window as any).React = require('react');
-          (window as any).ReactDOM = require('react-dom');
+          const react = require('react');
+          const reactDOM = require('react-dom');
+          const jsxRuntime = require('react/jsx-runtime');
+          (window as any).React = react;
+          (window as any).ReactDOM = reactDOM;
+          (window as any).__reactJsxRuntime = jsxRuntime;
         }
 
         // Fetch the IIFE bundle
@@ -79,21 +83,22 @@ export function PreviewRenderer({
         script.textContent = bundleCode;
         document.head.appendChild(script);
 
-        // Wait for LandingPageBundle to be available
-        const maxAttempts = 50; // 5 seconds total
-        for (let i = 0; i < maxAttempts; i++) {
-          if ((window as any).LandingPageBundle) {
-            const DefaultExport = (window as any).LandingPageBundle;
-            setComponent(() => DefaultExport);
-
-            // Clean up script tag but keep global (might be needed for re-renders)
-            document.head.removeChild(script);
-            return;
-          }
-          await new Promise(resolve => setTimeout(resolve, 100));
+        // The IIFE assigns to var LandingPageBundle AND our footer sets window.LandingPageBundle
+        const bundle = (window as any).LandingPageBundle;
+        if (!bundle) {
+          throw new Error('Bundle loaded but LandingPageBundle not found on window');
         }
 
-        throw new Error('Bundle loaded but LandingPageBundle not found on window');
+        // esbuild IIFE wraps exports: { default: Component, __esModule: true }
+        const ResolvedComponent = bundle.default || bundle;
+        if (typeof ResolvedComponent !== 'function') {
+          throw new Error(
+            `Bundle loaded but export is not a component (got ${typeof ResolvedComponent})`
+          );
+        }
+
+        setComponent(() => ResolvedComponent);
+        document.head.removeChild(script);
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load bundle';
         console.error('Failed to load bundle:', errorMessage);
