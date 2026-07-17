@@ -10,8 +10,8 @@ async def create_test_user():
     repo = UserRepository()
     await repo.ensure_indexes()
 
-    email = "test@lenmanag.local"
-    password = "TestPassword123!"
+    email = "ai-agent@lenquant.internal"
+    password = "LQ$aiAgent2026!Secure#TestOnly"
 
     # Check if user already exists
     existing = await repo.get_user_by_email(email)
@@ -21,7 +21,7 @@ async def create_test_user():
 
     # Create new user
     user = await repo.create_user(email=email, password=password)
-    print(f"✓ Created test user: {email}")
+    print(f"[OK] Created test user: {email}")
     print(f"  ID: {user['_id']}")
     print(f"  Password: {password}")
 
@@ -29,7 +29,7 @@ async def create_test_user():
     if user.get("verification_token"):
         verified = await repo.verify_email(user["verification_token"])
         if verified:
-            print("✓ Verified user email")
+            print("[OK] Verified user email")
 
     return user
 

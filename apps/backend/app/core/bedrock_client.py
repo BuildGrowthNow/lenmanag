@@ -38,7 +38,7 @@ class BedrockClient:
             region_name=region,
             retries={"max_attempts": 2, "mode": "adaptive"},
             connect_timeout=30,
-            read_timeout=FAST_TIMEOUT_SECONDS,
+            read_timeout=self.timeout_seconds,
         )
         return boto3.client("bedrock-runtime", config=boto_config)
 

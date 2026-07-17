@@ -14,6 +14,8 @@ Infrastructure: Docker Compose (prod), MongoDB Atlas + local, Redis, AWS S3, AWS
 
 *Important Rule: ALWAYS FOLLOW USER INSTRUCTIONS, DONT DRIFT OR ASSUME OTHER THINGS AND DONT BUILD THINGS THAT THE USER HAVENT SAID, IF YOU NEED CLARIFICATION OR ARE UNSURE OF SOMETHING OR HAVE A BETTER IDEA, TELL THE USER BEFORE STARTING THE TASK*
 
+Never change this: "ignoreDeprecations": "6.0" on tsconfig.
+
 ---
 
 ## Repository & Deployment
@@ -203,6 +205,97 @@ AUTH_ADMIN_PASSWORD=LENGROWTH2026
 ```
 
 Only emails in the allowlist or domains in the allowlist can authenticate. All use the same shared password.
+
+### AI Agent Test Credentials
+
+**For Claude AI Agents and automated testing**, a dedicated user account exists in MongoDB:
+
+| Field | Value |
+|-------|-------|
+| **Email** | `ai-agent@lenquant.internal` |
+| **Password** | `LQ$aiAgent2026!Secure#TestOnly` |
+| **User ID** | `6a59e2aca2a1aebf9b7dd127` |
+| **Endpoint** | `POST /api/v1/users/login` |
+| **Verified** | Yes |
+| **Token Type** | JWT Bearer |
+| **Database** | MongoDB Atlas (`lenmanag` database) |
+
+**Usage:**
+```bash
+# AI agent login (returns JWT access token, not session cookie)
+curl -X POST "http://localhost:8000/api/v1/users/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "ai-agent@lenquant.internal",
+    "password": "LQ$aiAgent2026!Secure#TestOnly"
+  }'
+
+# Response format:
+{
+  "status": "success",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "bearer",
+    "user": {
+      "id": "6a59e2aca2a1aebf9b7dd127",
+      "email": "ai-agent@lenquant.internal",
+      "is_verified": true,
+      "created_at": "2026-07-17T08:07:08.822000",
+      "updated_at": "2026-07-17T08:07:09.315000"
+    }
+  },
+  "error": null
+}
+
+# Use JWT token in Authorization header:
+curl -H "Authorization: Bearer <access_token>" \
+  "http://localhost:8000/api/v1/users/me"
+```
+
+**Notes:**
+- This account uses the `/users/login` endpoint (JWT-based), **not** `/auth/login` (session-based)
+- JWT tokens expire after 7 days (168 hours)
+- Password is bcrypt-hashed in MongoDB
+- To recreate user (with proper MongoDB connection):
+  ```bash
+  cd C:/Users/smikl/Desktop/Work/LenManag && \
+  export MONGODB_URI="mongodb+srv://fern2gue:hJk7CDkZuwssFDz4@lenmanag.zzbkrv.mongodb.net/" && \
+  export MONGODB_DB_NAME="lenmanag" && \
+  python apps/backend/create_test_user.py
+  ```
+
+**Quick Token Retrieval (for AI agents):**
+```bash
+# Use the helper script to get a token quickly
+cd apps/backend && python get_ai_agent_token.py
+
+# Output includes ready-to-use export command:
+# export TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+# curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/users/me
+```
+
+**Complete Working Example:**
+```bash
+# Step 1: Login and extract JWT token
+RESPONSE=$(curl -s -X POST "http://localhost:8000/api/v1/users/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "ai-agent@lenquant.internal",
+    "password": "LQ$aiAgent2026!Secure#TestOnly"
+  }')
+
+# Extract access_token from JSON response (requires jq, or parse manually)
+TOKEN=$(echo "$RESPONSE" | python -c "import sys, json; print(json.load(sys.stdin)['data']['access_token'])")
+
+# Step 2: Use token for authenticated requests
+# Get current user info
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/users/me"
+
+# Access any protected endpoint (example: list leads if implemented)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/leads?limit=10"
+```
 
 ### How to Authenticate for API Testing
 
