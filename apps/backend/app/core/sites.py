@@ -3440,7 +3440,7 @@ class SiteRepository:
                 lead.companyName or site_id, existing_slugs
             )
 
-        preview_url = f"{settings.preview_base_url}/st/{preview_slug}"
+        preview_url = f"{settings.preview_base_url}/{preview_slug}"
 
         source_attribution = _site_source_attribution(
             lead=lead,
