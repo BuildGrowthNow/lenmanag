@@ -218,7 +218,7 @@ def _build_generation_prompt(
     master_brief: MasterBrief,
     extraction: ExtractionSnapshot,
 ) -> str:
-    """Build the main generation prompt."""
+    """Build the main generation prompt — leads with inspiration, not restrictions."""
     # Extract brand tokens
     brand_section = _build_brand_tokens_section(master_brief, extraction)
 
@@ -233,33 +233,88 @@ def _build_generation_prompt(
         ]
     )
 
-    prompt = f"""You are an expert React developer building a landing page.
+    # Build creative direction section if available
+    creative_section = ""
+    if hasattr(master_brief, "creativeDirection") and master_brief.creativeDirection:
+        cd = master_brief.creativeDirection
+        micro_interactions = (
+            chr(10).join(f"  - {mi}" for mi in cd.microInteractions)
+            if cd.microInteractions
+            else "  - Smooth scroll-triggered reveals"
+        )
+        inspiration = (
+            ", ".join(cd.inspirationKeywords)
+            if cd.inspirationKeywords
+            else "modern, premium, engaging"
+        )
+        avoid = (
+            ", ".join(cd.avoidPatterns)
+            if cd.avoidPatterns
+            else "generic templates, centered-everything"
+        )
+        creative_section = f"""
+## CREATIVE DIRECTION (THIS IS YOUR NORTH STAR)
 
-## CRITICAL CONSTRAINTS — BROWSER-ONLY CODE
+**Design Concept**: {cd.designConcept}
+**Hero Treatment**: {cd.heroTreatment}
+**Signature Technique**: {cd.signatureTechnique} — THIS is what makes this site memorable. IMPLEMENT IT.
+**Layout Strategy**: {cd.layoutStrategy}
+**Scroll Behavior**: {cd.scrollBehavior}
+**Color Mood**: {cd.colorMood}
+**Typography Personality**: {cd.typographyPersonality}
 
-This is a React component that runs in the BROWSER, NOT Node.js.
-Violating ANY of these rules will cause immediate rejection:
+**Micro-interactions to implement**:
+{micro_interactions}
 
-- DO NOT import or use ANY Node.js built-in modules: fs, path, child_process, os, crypto, buffer, stream, net, http, https, url, util, events, cluster, dgram, dns, readline, tls, zlib, vm, worker_threads, perf_hooks
-- DO NOT use: __dirname, __filename, process.env, require(), module.exports
-- DO NOT use: eval(), Function() constructor, new Function(), or any dynamic code execution
-- DO NOT use filesystem operations of any kind (readFile, writeFile, readdir, etc.)
-- DO NOT reference any server-side APIs or Node.js globals
-- All data must come from props, React state, or hardcoded content from the brief
-- Images must use URLs (https://...) or data URIs, NEVER filesystem paths like ./image.png or /public/image.png
+**Inspiration keywords**: {inspiration}
 
-## ALLOWED IMPORTS (use ONLY these)
+**AVOID these patterns**: {avoid}
+"""
 
-- React and React hooks: import React, {{ useState, useEffect, useRef, useMemo, useCallback }} from 'react'
-- Framer Motion: import {{ motion, useScroll, useTransform, AnimatePresence, useInView }} from 'framer-motion'
-- GSAP: import gsap from 'gsap' and import {{ ScrollTrigger }} from 'gsap/ScrollTrigger'
-- Three.js: import {{ Canvas, useFrame }} from '@react-three/fiber' and import {{ Box, Sphere, OrbitControls }} from '@react-three/drei'
-- Lenis: import Lenis from 'lenis'
-- shadcn/ui: import {{ Button }} from '@/components/ui/button', import {{ Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }} from '@/components/ui/card', import {{ Badge }} from '@/components/ui/badge', import {{ Separator }} from '@/components/ui/separator'
-- Lucide React icons: import {{ Phone, Mail, MapPin, CheckCircle, ArrowRight, Star, Menu, X }} from 'lucide-react'
-- embla-carousel-react: import useEmblaCarousel from 'embla-carousel-react'
+    prompt = f"""You are building an Awwwards-worthy landing page. Your goal is to create something memorable — not a template, but an experience.
 
-## Master Brief
+## YOUR CREATIVE TOOLKIT
+
+You have access to powerful libraries. USE THEM CREATIVELY:
+
+### Animation & Motion
+- **framer-motion**: motion.div, useScroll, useTransform, useInView, AnimatePresence, variants, stagger
+  - Parallax: `useTransform(scrollYProgress, [0, 1], [0, -200])`
+  - Scroll-triggered reveals: `initial={{{{ opacity: 0, y: 50 }}}} whileInView={{{{ opacity: 1, y: 0 }}}}`
+  - Stagger children: `transition={{{{ staggerChildren: 0.1 }}}}`
+  - Magnetic effect: track mouse position, apply transform toward cursor
+
+- **GSAP + ScrollTrigger**: For complex timelines and scroll-driven animations
+  - Pin sections while content animates
+  - Scrub animations tied to scroll position
+  - Split text animations
+
+- **Lenis**: Smooth scrolling that makes the whole page feel premium
+
+### 3D & Visual Effects
+- **@react-three/fiber + @react-three/drei**: 3D scenes, floating objects, ambient backgrounds
+  - Floating product renders
+  - Particle systems
+  - Gradient spheres and abstract shapes
+
+### UI Components (FULL shadcn/ui library available)
+Import from '@/components/ui/*':
+- **Layout**: Card, Separator, AspectRatio, ScrollArea
+- **Interactive**: Button, Toggle, ToggleGroup, Tabs, Accordion, Collapsible, Dialog, Sheet, Drawer, DropdownMenu, NavigationMenu, Menubar, ContextMenu
+- **Forms**: Input, Textarea, Select, Checkbox, RadioGroup, Switch, Slider, Label, Form
+- **Feedback**: Alert, AlertDialog, Toast, Progress, Skeleton
+- **Data Display**: Avatar, Badge, Calendar, Table, HoverCard, Tooltip, Popover, Command
+- **Navigation**: Breadcrumb, Pagination
+
+### Icons
+- **lucide-react**: 1000+ icons — Menu, X, ArrowRight, ArrowUpRight, Check, Star, Phone, Mail, MapPin, Play, Pause, ChevronDown, ExternalLink, etc.
+
+### Carousel
+- **embla-carousel-react**: Smooth, accessible carousels
+
+{creative_section}
+
+## MASTER BRIEF
 
 **Business Goal**: {master_brief.businessGoal}
 **Target Audience**: {master_brief.primaryAudience}
@@ -271,7 +326,7 @@ Violating ANY of these rules will cause immediate rejection:
 - Style: {master_brief.visualStyle}
 - Color Strategy: {master_brief.colorStrategy}
 - Motion Level: {master_brief.motionLevel}
-- Special Effects: {", ".join(master_brief.specialEffects) if master_brief.specialEffects else "None"}
+- Special Effects: {", ".join(master_brief.specialEffects) if master_brief.specialEffects else "None specified"}
 
 **Hero**:
 - Headline: {master_brief.headline}
@@ -284,72 +339,93 @@ Violating ANY of these rules will cause immediate rejection:
 
 {brand_section}
 
-## Available Libraries
+## DESIGN PATTERNS TO CONSIDER
 
-Import and use these libraries as needed:
-- React 19 with hooks (useState, useEffect, useRef)
-- Tailwind CSS (utility-first styling, responsive breakpoints)
-- framer-motion (motion.div, useScroll, useTransform, AnimatePresence, useInView)
-- GSAP (gsap, ScrollTrigger for advanced animations)
-- Three.js via @react-three/fiber and @react-three/drei (Canvas, useFrame, Box, Sphere, etc.)
-- Lenis (smooth scrolling)
-- shadcn/ui components: Button from '@/components/ui/button', Card components from '@/components/ui/card', Badge from '@/components/ui/badge', Separator from '@/components/ui/separator'
-- Lucide React icons (import {{ IconName }} from 'lucide-react')
-- embla-carousel-react (for carousels)
+**Hero Patterns**:
+- Split-screen: video/3D left, text right (or reversed)
+- Oversized kinetic typography with scroll-reveal
+- Bento grid hero with multiple interactive cards
+- Full-bleed with floating elements and parallax layers
+- Gradient mesh or particle background with centered content
 
-## Rules
+**Section Patterns**:
+- Bento grids with varied card sizes (not uniform 3-column)
+- Alternating image/text with scroll-triggered reveals
+- Horizontal scroll galleries for features or testimonials
+- Sticky headers with scrolling content
+- Cards with 3D tilt on hover (transform: perspective + rotateX/Y)
+- Overlapping sections with negative margins
 
-1. Export a single default React component as the complete landing page
-2. Use TypeScript/TSX syntax with proper types
-3. All content must come from the brief - NO placeholder text or lorem ipsum
-4. Self-contained component (all sections in one file, no external imports except allowed libraries above)
-5. Use framer-motion for scroll animations and transitions
-6. Be creative with layout - vary section widths, use asymmetry, create visual interest
-7. Mobile responsive using Tailwind breakpoints (sm:, md:, lg:, xl:)
-8. Keep code clean and performant
-9. Images: use provided URLs from brand assets or leave image props empty — NEVER use filesystem paths
-10. Aim for a premium, modern look (Awwwards-worthy)
-11. Use the brand colors provided - don't invent new ones
-12. Match the motion level specified: "{master_brief.motionLevel}"
-13. Implement special effects if specified: {", ".join(master_brief.specialEffects) if master_brief.specialEffects else "none"}
-14. NEVER import fs, path, child_process, or any Node.js module
+**Micro-interactions**:
+- Magnetic buttons: track mouse, apply subtle transform toward cursor
+- Card tilt: `transform: perspective(1000px) rotateX(${{tiltY}}deg) rotateY(${{tiltX}}deg)`
+- Text reveals: `overflow-hidden` parent with `translateY(100%)` to `translateY(0)` child
+- Parallax layers: different `useTransform` multipliers for foreground/background
+- Hover state transitions: scale, shadow depth, color shifts
 
-## Component Structure
+**Typography**:
+- Display headlines: `text-6xl md:text-8xl lg:text-9xl font-bold tracking-tight`
+- Gradient text: `bg-gradient-to-r from-X to-Y bg-clip-text text-transparent`
+- Mixed weights: bold headlines, light body
+- Letter-spacing: tight for headlines (-0.02em), normal for body
+
+## OUTPUT REQUIREMENTS
+
+1. Export a single default React component
+2. Use TypeScript/TSX with proper types
+3. Use Tailwind CSS for styling (including arbitrary values like `text-[120px]`)
+4. Mobile responsive: sm:, md:, lg:, xl: breakpoints
+5. All content from the brief — NO placeholder text
+6. Implement the signature technique from creative direction
+7. Match the motion level: "{master_brief.motionLevel}"
+
+## BROWSER-ONLY CONSTRAINTS
+
+This runs in the browser, NOT Node.js:
+- NO fs, path, child_process, os, crypto, buffer, stream, net, http, https, url, util imports
+- NO __dirname, __filename, process.env, require(), module.exports
+- NO eval() or new Function()
+- Images: use URLs from brand assets or leave empty — NEVER filesystem paths like ./image.png
+
+## CODE STRUCTURE
 
 ```tsx
 'use client';
 
-import React, {{ useState, useEffect, useRef }} from 'react';
-import {{ motion, useScroll, useTransform, AnimatePresence }} from 'framer-motion';
-// ... other BROWSER-SAFE imports as needed (lucide-react, gsap, etc.)
+import React, {{ useState, useEffect, useRef, useMemo }} from 'react';
+import {{ motion, useScroll, useTransform, useInView, AnimatePresence }} from 'framer-motion';
+// Import GSAP if using complex scroll animations
+// import gsap from 'gsap';
+// import {{ ScrollTrigger }} from 'gsap/ScrollTrigger';
+// Import Lenis for smooth scroll
+// import Lenis from 'lenis';
+// Import shadcn components as needed
+import {{ Button }} from '@/components/ui/button';
+import {{ Card, CardContent }} from '@/components/ui/card';
+// Import Lucide icons as needed
+import {{ ArrowRight, Menu, X }} from 'lucide-react';
 
 export default function LandingPage() {{
-  // State and refs
+  // Scroll progress for parallax effects
+  const {{ scrollYProgress }} = useScroll();
 
-  // Animation hooks
+  // Refs for scroll-triggered animations
+  const heroRef = useRef(null);
+  const isHeroInView = useInView(heroRef, {{ once: true }});
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {{/* Navigation */}}
-      <nav className="...">...</nav>
-
-      {{/* Hero Section */}}
-      <section className="...">
-        {master_brief.headline}
-      </section>
-
-      {{/* Additional sections based on brief */}}
-
-      {{/* Footer with CTA */}}
+      {{/* Your creative, unique implementation */}}
     </div>
   );
 }}
 ```
 
-## Output
+## OUTPUT
 
-Return ONLY the complete TSX code. No markdown code fences, no explanations, just the raw TypeScript/React code.
+Return ONLY the complete TSX code. No markdown code fences, no explanations.
 Start with imports and end with the closing brace of the component.
+Make it worthy of Awwwards.
 """
 
     return prompt
@@ -365,7 +441,21 @@ def _build_correction_prompt(
     """Build correction prompt for failed compilation.
 
     Handles both syntax/validation errors and truncation issues.
+    Preserves creative intent from the original generation.
     """
+    # Build creative direction reminder if available
+    creative_reminder = ""
+    if hasattr(master_brief, "creativeDirection") and master_brief.creativeDirection:
+        cd = master_brief.creativeDirection
+        creative_reminder = f"""
+## PRESERVE CREATIVE INTENT
+When fixing errors, maintain the creative direction:
+- **Signature Technique**: {cd.signatureTechnique} — Keep this effect!
+- **Design Concept**: {cd.designConcept}
+- **Hero Treatment**: {cd.heroTreatment}
+Do NOT simplify or remove creative elements just to fix errors.
+"""
+
     # Detect truncation issues
     is_likely_truncated = (
         "Unexpected end of file" in error_message
@@ -381,6 +471,7 @@ def _build_correction_prompt(
 {error_message}
 
 The code you generated was cut off before completion. This is a CRITICAL issue.
+{creative_reminder}
 
 ## What You Must Do
 Generate a COMPLETE landing page with ALL sections FULLY closed:
@@ -407,6 +498,7 @@ Generate a COMPLETE landing page with ALL sections FULLY closed:
 3. Test each section is properly closed before moving to the next
 4. Return ONLY the complete TSX code, no markdown fences
 5. Make sure to close ALL tags before ending the response
+6. Keep all creative animations and effects from the previous attempt
 
 GENERATE THE COMPLETE CODE NOW:
 """
@@ -415,6 +507,7 @@ GENERATE THE COMPLETE CODE NOW:
 
 ## Error Message
 {error_message}
+{creative_reminder}
 
 ## Previous Code
 ```tsx
@@ -424,7 +517,7 @@ GENERATE THE COMPLETE CODE NOW:
 ## Instructions
 1. Analyze the error message carefully
 2. Fix the specific issues (syntax errors, import problems, type errors)
-3. Keep the same design intent and content
+3. **Keep the same creative design, animations, and visual effects**
 4. Return ONLY the corrected TSX code, no markdown or explanations
 
 ## Common Issues to Check
@@ -435,6 +528,8 @@ GENERATE THE COMPLETE CODE NOW:
 - Using unavailable libraries
 - Node.js modules (fs, path, etc.) - NEVER use these
 - Unclosed tags or components
+
+**Remember**: Fix the errors but preserve the creative elements (animations, micro-interactions, unique layouts).
 
 Return the corrected TSX code now:
 """
@@ -500,7 +595,7 @@ async def _retry_generation_with_validation_feedback(
     llm: Any,
     original_code: str,
     validation_errors: list[str],
-    master_brief: MasterBrief,  # noqa: ARG001
+    master_brief: MasterBrief,
     extraction: ExtractionSnapshot,  # noqa: ARG001
     max_retries: int = 2,
 ) -> str:
@@ -508,9 +603,22 @@ async def _retry_generation_with_validation_feedback(
     Retry code generation with validation error feedback.
 
     Sends the LLM the original code with specific validation errors
-    and asks it to fix the issues while keeping the same design.
+    and asks it to fix the issues while keeping the same design and creative direction.
     """
     errors_text = "\n".join(f"  - {error}" for error in validation_errors)
+
+    # Build creative direction reminder if available
+    creative_reminder = ""
+    if hasattr(master_brief, "creativeDirection") and master_brief.creativeDirection:
+        cd = master_brief.creativeDirection
+        creative_reminder = f"""
+## PRESERVE CREATIVE DIRECTION
+When fixing errors, maintain these creative elements:
+- **Signature Technique**: {cd.signatureTechnique}
+- **Design Concept**: {cd.designConcept}
+- **Micro-interactions**: {", ".join(cd.microInteractions[:3]) if cd.microInteractions else "scroll reveals, hover effects"}
+Do NOT simplify or remove animations/effects just to fix validation errors.
+"""
 
     for attempt in range(max_retries):
         logger.info(
@@ -523,6 +631,7 @@ async def _retry_generation_with_validation_feedback(
 
 ## VALIDATION ERRORS (must fix ALL of these):
 {errors_text}
+{creative_reminder}
 
 ## CRITICAL RULES — BROWSER-ONLY CODE:
 - This is a React component that runs in the BROWSER, NOT Node.js
@@ -535,11 +644,11 @@ async def _retry_generation_with_validation_feedback(
 
 ## ALLOWED IMPORTS ONLY:
 - React and hooks from 'react'
-- framer-motion for animations
+- framer-motion for animations (motion.div, useScroll, useTransform, useInView, AnimatePresence)
 - GSAP and ScrollTrigger
 - Three.js via @react-three/fiber and @react-three/drei
 - Lenis for smooth scrolling
-- shadcn/ui: Button from '@/components/ui/button', Card/CardHeader/CardTitle/CardContent/CardFooter from '@/components/ui/card', Badge from '@/components/ui/badge', Separator from '@/components/ui/separator'
+- shadcn/ui components from '@/components/ui/*'
 - Lucide React icons from 'lucide-react'
 - embla-carousel-react
 
@@ -550,9 +659,10 @@ async def _retry_generation_with_validation_feedback(
 
 ## INSTRUCTIONS:
 1. Fix ALL validation errors listed above
-2. Keep the same design intent, layout, and content
+2. **Keep the same creative design, animations, micro-interactions, and visual effects**
 3. Remove any Node.js imports (fs, path, etc.) and replace with browser-safe alternatives
 4. Return ONLY the corrected TSX code — no markdown fences, no explanations
+5. Preserve the Awwwards-worthy quality of the design
 """
 
         response = await llm.generate_text(
