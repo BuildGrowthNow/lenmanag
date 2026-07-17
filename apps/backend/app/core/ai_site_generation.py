@@ -169,8 +169,7 @@ Violating ANY of these rules will cause immediate rejection:
 - GSAP: import gsap from 'gsap' and import {{ ScrollTrigger }} from 'gsap/ScrollTrigger'
 - Three.js: import {{ Canvas, useFrame }} from '@react-three/fiber' and import {{ Box, Sphere, OrbitControls }} from '@react-three/drei'
 - Lenis: import Lenis from 'lenis'
-- shadcn/ui: import {{ Button, Card, Badge, Separator, Dialog }} from their respective paths
-- Radix UI: import * from '@radix-ui/react-*'
+- shadcn/ui: import {{ Button }} from '@/components/ui/button', import {{ Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }} from '@/components/ui/card', import {{ Badge }} from '@/components/ui/badge', import {{ Separator }} from '@/components/ui/separator'
 - Lucide React icons: import {{ Phone, Mail, MapPin, CheckCircle, ArrowRight, Star, Menu, X }} from 'lucide-react'
 - embla-carousel-react: import useEmblaCarousel from 'embla-carousel-react'
 
@@ -208,8 +207,7 @@ Import and use these libraries as needed:
 - GSAP (gsap, ScrollTrigger for advanced animations)
 - Three.js via @react-three/fiber and @react-three/drei (Canvas, useFrame, Box, Sphere, etc.)
 - Lenis (smooth scrolling)
-- shadcn/ui components (Button, Card, Badge, Separator, Dialog)
-- Radix UI primitives (@radix-ui/react-*)
+- shadcn/ui components: Button from '@/components/ui/button', Card components from '@/components/ui/card', Badge from '@/components/ui/badge', Separator from '@/components/ui/separator'
 - Lucide React icons (import {{ IconName }} from 'lucide-react')
 - embla-carousel-react (for carousels)
 
@@ -455,8 +453,7 @@ async def _retry_generation_with_validation_feedback(
 - GSAP and ScrollTrigger
 - Three.js via @react-three/fiber and @react-three/drei
 - Lenis for smooth scrolling
-- shadcn/ui components
-- Radix UI primitives
+- shadcn/ui: Button from '@/components/ui/button', Card/CardHeader/CardTitle/CardContent/CardFooter from '@/components/ui/card', Badge from '@/components/ui/badge', Separator from '@/components/ui/separator'
 - Lucide React icons from 'lucide-react'
 - embla-carousel-react
 

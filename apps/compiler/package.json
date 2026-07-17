@@ -10,12 +10,31 @@
     "compile": "node dist/compile.js"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.2",
+    "@radix-ui/react-dropdown-menu": "^2.1.2",
+    "@radix-ui/react-separator": "^1.1.0",
+    "@radix-ui/react-slot": "^1.1.1",
+    "@radix-ui/react-tabs": "^1.1.1",
+    "@radix-ui/react-tooltip": "^1.1.6",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "embla-carousel-react": "^8.5.2",
     "esbuild": "^0.20.0",
     "fastify": "^5.2.0",
+    "framer-motion": "^12.42.2",
+    "gsap": "^3.12.5",
+    "lenis": "^1.1.19",
+    "lucide-react": "^1.25.0",
+    "tailwind-merge": "^2.6.0",
+    "three": "^0.171.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
+    "@types/react": "^19.2.17",
+    "react": "^19.2.7",
     "tsx": "^4.19.0",
     "typescript": "^5.6.3"
   }

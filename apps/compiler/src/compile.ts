@@ -5,6 +5,7 @@
 
 import * as esbuild from 'esbuild';
 import { validateTsxSource, sanitizeComponentName } from './validate.js';
+import { createVirtualModulesPlugin } from './virtual-modules-plugin.js';
 
 export interface CompileRequest {
   sourceCode: string;
@@ -56,15 +57,17 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
       write: false,
       minify: true,
       sourcemap: false,
+      // External: only React runtime (loaded via CDN in preview shell)
+      // All other libraries (framer-motion, lucide-react, gsap, etc.) will be bundled
       external: [
         'react',
         'react-dom',
         'react/jsx-runtime',
         'react/jsx-dev-runtime',
       ],
-      // Bundle these libraries into the output
-      // They'll be available via CDN fallback in preview shell
-      plugins: [],
+      // Enable tree-shaking and code splitting for optimal bundle size
+      treeShaking: true,
+      plugins: [createVirtualModulesPlugin()],
       logLevel: 'silent',
       metafile: true,
     });
