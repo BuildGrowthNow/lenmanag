@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
+from app.api.bundles import router as bundles_router
 from app.api.messages import router as messages_router
 from app.api.jobs import router as jobs_router
 from app.api.leads import router as leads_router
@@ -30,6 +31,7 @@ api_v1_router.include_router(themes_router)
 api_v1_router.include_router(messages_router)
 api_v1_router.include_router(analytics_router)
 api_v1_router.include_router(public_router)
+api_v1_router.include_router(bundles_router)
 api_v1_router.include_router(assets_router)
 api_v1_router.include_router(metrics_router)
 api_v1_router.include_router(admin_router)

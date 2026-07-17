@@ -69,11 +69,15 @@ def _upload_bundle_to_s3(bundle_code: str, css_code: str | None, site_id: str) -
             CacheControl="public, max-age=3600",
         )
 
-    # Generate public URL
-    region = settings.asset_s3_region or "us-east-1"
-    bundle_url = f"https://{bucket}.s3.{region}.amazonaws.com/{bundle_key}"
+    # Generate public URL via backend proxy (includes CORS headers)
+    # In production, this should be https://sites-api.lenquant.com
+    # In development, this is http://localhost:8000
+    import os
 
-    logger.info(f"Uploaded bundle for site {site_id} to {bundle_url}")
+    api_base_url = os.getenv("BACKEND_PUBLIC_URL", "http://localhost:8000")
+    bundle_url = f"{api_base_url}/api/v1/bundles/{site_id}/bundle.js"
+
+    logger.info(f"Uploaded bundle for site {site_id} to S3, proxied URL: {bundle_url}")
     return bundle_url
 
 
@@ -172,7 +176,9 @@ async def generate_landing_page_code(
             try:
                 bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id)
             except Exception as upload_error:
-                logger.error(f"Failed to upload bundle for site {site_id}: {upload_error}")
+                logger.error(
+                    f"Failed to upload bundle for site {site_id}: {upload_error}"
+                )
                 return {
                     "success": False,
                     "sourceCode": source_code,
