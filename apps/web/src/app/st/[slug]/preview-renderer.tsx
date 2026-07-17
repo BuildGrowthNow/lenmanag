@@ -61,22 +61,31 @@ export function PreviewRenderer({
 
     const loadBundle = async () => {
       try {
+        // Load bundle as ES module via dynamic import using a blob URL
         const response = await fetch(bundleUrl);
         if (!response.ok) {
           throw new Error(`Failed to fetch bundle: ${response.status}`);
         }
         const bundleCode = await response.text();
 
-        const moduleExports: { default?: React.ComponentType } = {};
-        const moduleFunc = new Function('exports', bundleCode);
-        moduleFunc(moduleExports);
+        // Create a blob URL for the module
+        const blob = new Blob([bundleCode], { type: 'application/javascript' });
+        const blobUrl = URL.createObjectURL(blob);
 
-        const DefaultExport = moduleExports.default;
-        if (!DefaultExport) {
-          throw new Error('Bundle has no default export');
+        try {
+          // Dynamic import the module
+          const loadedModule = await import(/* @vite-ignore */ blobUrl);
+
+          const DefaultExport = loadedModule.default;
+          if (!DefaultExport) {
+            throw new Error('Bundle has no default export');
+          }
+
+          setComponent(() => DefaultExport);
+        } finally {
+          // Clean up blob URL
+          URL.revokeObjectURL(blobUrl);
         }
-
-        setComponent(() => DefaultExport);
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load bundle';
         console.error('Failed to load bundle:', errorMessage);
