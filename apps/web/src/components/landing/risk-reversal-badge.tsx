@@ -14,7 +14,7 @@ export function RiskReversalBadge() {
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 1 }}
-        className="hidden md:block fixed left-6 bottom-20 z-20 max-w-xs"
+        className="hidden md:block fixed left-6 bottom-6 z-20 max-w-xs"
       >
         <motion.button
           onClick={() => setIsExpanded(!isExpanded)}

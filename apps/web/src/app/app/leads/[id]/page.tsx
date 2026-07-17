@@ -11,6 +11,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadBriefReview } from "@/components/lead-brief-review";
 import { LeadExtractionControls } from "@/components/lead-extraction-controls";
+import { LeadVariantsView } from "@/components/lead-variants-view";
 import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages, getLeadAnalysis } from "@/lib/api/leads";
 import { getSite } from "@/lib/api/sites";
 import { evaluateExtractionHealth } from "@/lib/extraction-health";
@@ -558,6 +559,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         {/* Right column — stage workspace */}
         <div className="space-y-4">
           <StageWorkspace lead={lead} extraction={extraction} brief={brief} site={site} />
+
+          {/* Variants section */}
+          <LeadVariantsView leadId={lead.id} />
 
           {/* Extraction evidence (always accessible, collapsed) */}
           {extraction ? (

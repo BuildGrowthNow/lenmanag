@@ -21,6 +21,10 @@ import type {
 } from "@/lib/types";
 import { API_BASE_URL } from "@/lib/constants";
 
+export async function getVariantsForLead(leadId: string): Promise<GeneratedSite[]> {
+  return safeRequest<GeneratedSite[]>(`/api/sites/variants/${leadId}`, []);
+}
+
 export async function getSites(params: { limit?: number; offset?: number } = {}): Promise<GeneratedSite[]> {
   const searchParams = new URLSearchParams();
   if (typeof params.limit === "number") {

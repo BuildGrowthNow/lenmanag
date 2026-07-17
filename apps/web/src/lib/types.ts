@@ -49,6 +49,10 @@ export type PipelineStage =
 
 export type PipelineMode = "auto" | "manual";
 
+// Multi-variant generation types
+export type VariantType = "html_v1" | "html_v2" | "html_v3" | "nextjs";
+export type GenerationType = VariantType;
+
 export type PipelineSummary = {
   processing: number;
   needs_attention: number;
@@ -583,6 +587,25 @@ export type GeneratedSiteVersion = {
   publishedAt: string | null;
 };
 
+export type SiteVariant = {
+  id: string;
+  leadId: string;
+  variantType: VariantType;
+  variantLabel: string;
+  variantPosition: number;
+  previewSlug: string;
+  previewUrl: string;
+  briefId: string;
+  readinessStatus: SiteReadinessStatus;
+  qaStatus: SiteQaStatus;
+  staticHtml?: string;
+  staticCssUrl?: string;
+  staticJsUrl?: string;
+  compiledBundleUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type GeneratedSite = {
   id: string;
   leadId: string;
@@ -590,6 +613,13 @@ export type GeneratedSite = {
   briefId: string;
   briefVersion: number;
   version: number;
+  // Variant fields
+  variantType?: VariantType;
+  variantLabel?: string;
+  variantPosition?: number;
+  staticHtml?: string;
+  staticCssUrl?: string;
+  staticJsUrl?: string;
   themeId: string;
   themeKey: string;
   themeName: string;
@@ -1182,6 +1212,7 @@ export type LeadUpsertPayload = {
   industry?: string | null;
   notes?: string | null;
   pipelineMode?: PipelineMode;
+  generationTypes?: GenerationType[];
 };
 
 export type LeadPatchPayload = {

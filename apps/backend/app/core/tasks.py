@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from app.core.celery_app import celery_app
 from app.core.leads import lead_repository
 from app.core.sites import site_repository
 from app.schemas.site import SiteGenerateRequest
 from app.core.asset_retention import AssetRetentionManager
+
+logger = logging.getLogger(__name__)
 
 
 def _run(coro):
@@ -161,3 +164,219 @@ def purge_expired_assets_task() -> dict:
         "purged_bytes": result.purged_bytes,
         "errors": result.errors,
     }
+
+
+@celery_app.task(
+    name="lenquant.jobs.run_multi_variant_generation",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=1800,  # 30 minutes max
+    retry_jitter=True,
+    max_retries=2,
+)
+def run_multi_variant_generation_task(
+    self,
+    lead_id: str,
+    job_id: str,
+    generation_types: list[str],
+) -> None:
+    """
+    Generate multiple site variants for a lead.
+
+    Uses distributed lock to ensure sequential execution globally.
+    Each variant generation is atomic and sequential.
+    """
+    try:
+        _run(_run_multi_variant_generation_async(lead_id, job_id, generation_types))
+    except Exception as exc:
+        logger.error(
+            f"Multi-variant generation failed for lead {lead_id}, job {job_id}. "
+            f"Retry {self.request.retries}/{self.max_retries}",
+            exc_info=True,
+        )
+        # Update job status
+        try:
+            _run(
+                lead_repository._update_job(
+                    job_id=job_id,
+                    status="failed",
+                    error_message=f"Generation failed: {str(exc)}",
+                    finished=self.request.retries >= self.max_retries,
+                )
+            )
+        except Exception:
+            pass
+        raise
+
+
+async def _run_multi_variant_generation_async(
+    lead_id: str,
+    job_id: str,
+    generation_types: list[str],
+) -> None:
+    """Async implementation of multi-variant generation."""
+    import time
+
+    from app.core.generation_lock import generation_lock
+    from app.core.generation_metrics import (
+        GenerationMetricsCollector,
+        log_generation_complete,
+        log_generation_start,
+        log_variant_progress,
+    )
+    from app.core.variant_strategy import get_variant_strategies
+    from app.schemas.lead import LeadPatchRequest
+    from app.schemas.site import VariantType
+
+    # Initialize metrics collector
+    metrics_collector = GenerationMetricsCollector()
+    generation_start_time = time.monotonic()
+
+    # Get lead and extraction (shared across all variants)
+    lead = await lead_repository.get_lead(lead_id)
+    if not lead:
+        raise ValueError(f"Lead {lead_id} not found")
+
+    extraction = await lead_repository.get_extraction(lead_id)
+    if not extraction or extraction.crawlStatus != "completed":
+        raise ValueError(f"Extraction not completed for lead {lead_id}")
+
+    analysis = await lead_repository.get_analysis(lead_id)
+
+    # Get variant strategies - industry from lead or analysis
+    industry = lead.industry
+    if not industry and analysis and hasattr(analysis, "analysis"):
+        # ExtractionAnalysisResponse wraps ExtractionAnalysis
+        industry = getattr(analysis.analysis, "industry", None)
+    strategies = get_variant_strategies(industry)
+
+    # Log generation start
+    total_variants = len(generation_types)
+    log_generation_start(lead_id, generation_types, total_variants)
+
+    # Generate each variant sequentially with distributed lock
+    generated_sites = []
+    failed_variants = 0
+
+    for i, variant_type_str in enumerate(generation_types):
+        # Cast to VariantType for type safety
+        variant_type: VariantType = variant_type_str  # type: ignore[assignment]
+
+        # Log progress
+        log_variant_progress(lead_id, variant_type_str, i + 1, total_variants)
+
+        # Update job progress
+        progress = int((i / total_variants) * 100)
+        await lead_repository._update_job(
+            job_id=job_id,
+            status="running",
+            progress=progress,
+            step=f"Generating {variant_type} ({i + 1}/{total_variants})",
+        )
+
+        # Track this variant's metrics
+        async with metrics_collector.track_generation(
+            lead_id, variant_type_str
+        ) as metrics:
+            try:
+                # Track lock wait time
+                lock_start = time.monotonic()
+
+                # Acquire global lock and generate
+                async with generation_lock(timeout_seconds=600):  # 10 min timeout
+                    metrics.lock_wait_seconds = time.monotonic() - lock_start
+
+                    logger.info(
+                        f"Generating variant {variant_type} for lead {lead_id} "
+                        f"(lock_wait={metrics.lock_wait_seconds:.1f}s)"
+                    )
+
+                    # Get strategy for this variant type (cast for dict lookup)
+                    strategy = strategies.get(variant_type)  # type: ignore[arg-type]
+                    if not strategy and variant_type_str == "nextjs":
+                        # NextJS uses default strategy
+                        strategy = {
+                            "variantType": "nextjs",
+                            "variantLabel": "Next.js Site",
+                            "variantPosition": 4,
+                            "designMode": "interactive",
+                            "paletteMode": "zinc",
+                            "creativeBriefGuidance": "",
+                            "inspirationKeywords": [],
+                            "avoidPatterns": [],
+                        }
+
+                    if not strategy:
+                        logger.warning(
+                            f"Unknown variant type {variant_type}, skipping"
+                        )
+                        metrics.success = False
+                        metrics.error_message = "Unknown variant type"
+                        failed_variants += 1
+                        continue
+
+                    site = await site_repository.generate_site_variant(
+                        lead_id=lead_id,
+                        variant_type=variant_type,
+                        variant_strategy=dict(strategy),
+                        extraction=extraction,
+                        analysis=analysis,
+                        user_id=lead.user_id,
+                    )
+
+                    generated_sites.append(site)
+                    metrics.success = True
+                    metrics.model_used = "bedrock"  # TODO: Track actual model
+
+                    logger.info(
+                        f"Variant {variant_type} completed ({i + 1}/{total_variants}): "
+                        f"{site.previewUrl}"
+                    )
+
+            except Exception as e:
+                logger.error(
+                    f"Variant {variant_type} failed for lead {lead_id}: {e}",
+                    exc_info=True,
+                )
+                metrics.success = False
+                metrics.error_message = str(e)
+                failed_variants += 1
+                # Continue with next variant instead of failing entire job
+
+    # Log metrics summary
+    total_time = time.monotonic() - generation_start_time
+    metrics_collector.log_summary()
+    log_generation_complete(
+        lead_id,
+        successful=len(generated_sites),
+        failed=failed_variants,
+        total_seconds=total_time,
+    )
+
+    # Mark job complete
+    await lead_repository._update_job(
+        job_id=job_id,
+        status="completed",
+        progress=100,
+        step=f"Generated {len(generated_sites)}/{total_variants} variants",
+        finished=True,
+    )
+
+    # Update lead pipeline stage (only if at least one succeeded)
+    if generated_sites:
+        await lead_repository.update_lead(
+            lead_id,
+            LeadPatchRequest(pipelineStage="ready"),
+        )
+    else:
+        await lead_repository.update_lead(
+            lead_id,
+            LeadPatchRequest(pipelineStage="needs_attention"),
+        )
+
+    logger.info(
+        f"Multi-variant generation completed for lead {lead_id}: "
+        f"{len(generated_sites)} sites generated, {failed_variants} failed, "
+        f"total_time={total_time:.1f}s"
+    )

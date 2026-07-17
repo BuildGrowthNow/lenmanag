@@ -14,6 +14,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.llm import get_llm_client
+from app.core.variant_strategy import get_variant_strategy
 from app.schemas.brief import (
     BrandAssets,
     CreativeDirection,
@@ -21,6 +22,7 @@ from app.schemas.brief import (
     MasterBriefSection,
 )
 from app.schemas.extraction import ExtractionSnapshot
+from app.schemas.site import VariantType
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,8 @@ async def generate_master_brief(
     extraction: ExtractionSnapshot,
     feedback: str | None = None,
     previous_brief: MasterBrief | None = None,
+    variant_type: VariantType | None = None,
+    industry: str | None = None,
 ) -> MasterBrief:
     """
     Generate a master brief using AI from extraction data.
@@ -44,6 +48,8 @@ async def generate_master_brief(
         extraction: Extraction snapshot with all source data
         feedback: Optional user feedback for refinement
         previous_brief: Previous brief version if regenerating
+        variant_type: If provided, tailor brief to variant strategy
+        industry: Industry context for variant strategy selection
 
     Returns:
         AI-generated MasterBrief
@@ -53,15 +59,31 @@ async def generate_master_brief(
     # Build extraction summary
     extraction_summary = _build_extraction_summary(extraction)
 
+    # Get variant guidance if variant type specified (for HTML variants)
+    variant_guidance = None
+    if variant_type and variant_type != "nextjs":
+        try:
+            strategy = get_variant_strategy(variant_type, industry)
+            variant_guidance = strategy["creativeBriefGuidance"]
+            logger.info(
+                f"Using variant strategy for {variant_type}: {strategy['variantLabel']}"
+            )
+        except ValueError:
+            logger.warning(f"Unknown variant type {variant_type}, using default brief")
+
     # Build prompt
     if feedback and previous_brief:
         prompt = _build_refinement_prompt(
             extraction_summary=extraction_summary,
             previous_brief=previous_brief,
             feedback=feedback,
+            variant_guidance=variant_guidance,
         )
     else:
-        prompt = _build_initial_prompt(extraction_summary=extraction_summary)
+        prompt = _build_initial_prompt(
+            extraction_summary=extraction_summary,
+            variant_guidance=variant_guidance,
+        )
 
     # Call LLM
     response = await llm.generate_text(
@@ -202,7 +224,10 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
     return "\n".join(summary_parts)
 
 
-def _build_initial_prompt(extraction_summary: str) -> str:
+def _build_initial_prompt(
+    extraction_summary: str,
+    variant_guidance: str | None = None,
+) -> str:
     """Build the initial master brief generation prompt."""
     prompt = f"""You are an award-winning creative director designing a landing page. Your goal is to create something that would win an Awwwards Site of the Day — not a template, but a memorable experience.
 
@@ -322,6 +347,22 @@ CRITICAL:
 
 Return ONLY valid JSON, no markdown formatting."""
 
+    # Inject variant guidance if provided (for HTML variant generation)
+    if variant_guidance:
+        prompt += f"""
+
+VARIANT CREATIVE DIRECTION:
+This is variant-specific generation. Follow this creative direction STRICTLY:
+{variant_guidance}
+
+Ensure the brief reflects this distinct creative direction in:
+- visualStyle field
+- colorStrategy field
+- creativeDirection object (all fields)
+- designMode selection
+- motionLevel choice
+"""
+
     return prompt
 
 
@@ -329,6 +370,7 @@ def _build_refinement_prompt(
     extraction_summary: str,
     previous_brief: MasterBrief,
     feedback: str,
+    variant_guidance: str | None = None,
 ) -> str:
     """Build a refinement prompt incorporating user feedback."""
     previous_summary = {
@@ -403,6 +445,15 @@ Return a JSON object with this structure:
 }}
 
 Return ONLY valid JSON, no markdown formatting."""
+
+    # Inject variant guidance if provided
+    if variant_guidance:
+        prompt += f"""
+
+VARIANT CREATIVE DIRECTION:
+Follow this specific creative direction for this variant:
+{variant_guidance}
+"""
 
     return prompt
 

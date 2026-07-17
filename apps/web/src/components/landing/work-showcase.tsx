@@ -233,7 +233,7 @@ export function WorkShowcase() {
             See Our <span className="text-yellow-500">Work</span>
           </h2>
           <p className="text-xl text-slate-400">
-            Real websites we built. Click any to explore it live.
+            Real websites we built. Click any to check.
           </p>
         </motion.div>
 

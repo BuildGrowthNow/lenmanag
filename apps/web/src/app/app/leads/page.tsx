@@ -15,7 +15,7 @@ import { PageFrame } from "@/components/shell/page-frame";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { archiveLead, createLead, importLeads, listLeads } from "@/lib/api/leads";
-import type { LeadImportResponse, LeadListItem, LeadListResponse, PipelineMode, PipelineStage } from "@/lib/types";
+import type { LeadImportResponse, LeadListItem, LeadListResponse, PipelineMode, PipelineStage, GenerationType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 25;
@@ -134,9 +134,17 @@ type AddLeadModalProps = {
   onCreated: () => void;
 };
 
+const GENERATION_TYPE_OPTIONS: { key: GenerationType; label: string; description: string }[] = [
+  { key: "html_v1", label: "HTML V1 - Professional", description: "Clean, corporate design with subtle gradients" },
+  { key: "html_v2", label: "HTML V2 - Bold", description: "Bold startup aesthetic with vibrant colors" },
+  { key: "html_v3", label: "HTML V3 - Creative", description: "Creative direction with unique layouts" },
+  { key: "nextjs", label: "Next.js Site", description: "Full React-based site with components" },
+];
+
 function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
   const [form, setForm] = useState({ companyName: "", websiteUrl: "", notes: "" });
   const [mode, setMode] = useState<PipelineMode>("auto");
+  const [generationTypes, setGenerationTypes] = useState<GenerationType[]>(["nextjs"]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -144,9 +152,19 @@ function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
     if (open) {
       setForm({ companyName: "", websiteUrl: "", notes: "" });
       setMode("auto");
+      setGenerationTypes(["nextjs"]);
       setError(null);
     }
   }, [open]);
+
+  function toggleGenerationType(type: GenerationType) {
+    setGenerationTypes(prev => {
+      if (prev.includes(type)) {
+        return prev.filter(t => t !== type);
+      }
+      return [...prev, type];
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -158,6 +176,7 @@ function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
         websiteUrl: form.websiteUrl.trim(),
         notes: form.notes.trim() || null,
         pipelineMode: mode,
+        generationTypes: generationTypes.length > 0 ? generationTypes : ["nextjs"],
       });
       onCreated();
       onClose();
@@ -216,6 +235,44 @@ function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs uppercase tracking-[0.2em] text-muted">Site Variants</label>
+            <div className="grid grid-cols-2 gap-2">
+              {GENERATION_TYPE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => toggleGenerationType(opt.key)}
+                  className={cn(
+                    "rounded-xl border px-3 py-2 text-left text-sm transition",
+                    generationTypes.includes(opt.key)
+                      ? "border-accent/60 bg-accent/10 text-accent"
+                      : "border-line text-muted hover:border-white/20 hover:text-text"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={cn(
+                      "h-4 w-4 rounded border flex items-center justify-center",
+                      generationTypes.includes(opt.key)
+                        ? "border-accent bg-accent"
+                        : "border-line"
+                    )}>
+                      {generationTypes.includes(opt.key) && (
+                        <svg className="h-3 w-3 text-background" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <span className="font-medium">{opt.label}</span>
+                  </div>
+                  <div className="mt-0.5 text-xs opacity-70 pl-6">{opt.description}</div>
+                </button>
+              ))}
+            </div>
+            {generationTypes.length === 0 && (
+              <p className="text-xs text-amber-400">Select at least one variant type</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <button

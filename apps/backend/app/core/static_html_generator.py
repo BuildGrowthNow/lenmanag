@@ -1,0 +1,287 @@
+"""
+Static HTML generation for multi-variant output.
+
+Generates standalone HTML/CSS/JS files (no React runtime) from master brief.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from typing import Any
+
+import boto3
+from botocore.exceptions import ClientError
+
+from app.core.config import get_settings
+from app.core.llm import get_llm_client
+from app.schemas.brief import MasterBrief
+from app.schemas.extraction import ExtractionSnapshot
+
+logger = logging.getLogger(__name__)
+
+
+async def generate_static_html(
+    *,
+    master_brief: MasterBrief,
+    extraction: ExtractionSnapshot,
+    variant_type: str,
+    site_id: str,
+) -> dict[str, Any]:
+    """
+    Generate static HTML/CSS/JS from master brief.
+
+    Returns:
+        {
+            "html": "<html>...</html>",
+            "cssUrl": "https://s3.../styles.css",
+            "jsUrl": "https://s3.../script.js",
+        }
+    """
+    llm = get_llm_client()
+
+    # Build HTML generation prompt
+    prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
+
+    # Generate HTML, CSS, JS via LLM
+    logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
+    response = await llm.generate_text(
+        prompt=prompt,
+        temperature=0.7,
+        max_tokens=8192,
+    )
+
+    # Parse response
+    html_content, css_content, js_content = _parse_llm_response(response)
+
+    # Upload CSS and JS to S3
+    settings = get_settings()
+    css_url = _upload_to_s3(
+        content=css_content,
+        filename=f"{site_id}/styles.css",
+        content_type="text/css",
+        bucket=settings.asset_s3_bucket,
+        prefix=settings.asset_s3_prefix,
+    )
+    js_url = _upload_to_s3(
+        content=js_content,
+        filename=f"{site_id}/script.js",
+        content_type="application/javascript",
+        bucket=settings.asset_s3_bucket,
+        prefix=settings.asset_s3_prefix,
+    )
+
+    # Inject CSS/JS URLs into HTML
+    html_final = html_content
+    if css_url:
+        html_final = html_final.replace(
+            "</head>", f'<link rel="stylesheet" href="{css_url}">\n</head>'
+        )
+    if js_url:
+        html_final = html_final.replace(
+            "</body>", f'<script src="{js_url}"></script>\n</body>'
+        )
+
+    logger.info(f"Static HTML generated successfully for site {site_id}")
+
+    return {
+        "html": html_final,
+        "cssUrl": css_url,
+        "jsUrl": js_url,
+    }
+
+
+def _build_static_html_prompt(
+    brief: MasterBrief,
+    extraction: ExtractionSnapshot,
+    variant_type: str,
+) -> str:
+    """Build LLM prompt for static HTML generation."""
+    # Build sections summary
+    sections_summary = "\n".join(
+        f"  - {s.purpose}: {s.headline}" for s in brief.sections[:7]
+    )
+
+    # Get brand info
+    logo_url = brief.brandAssets.logoUrl or "None"
+    primary_color = brief.brandAssets.primaryColor or "#000000"
+    secondary_color = brief.brandAssets.secondaryColor or "#666666"
+    font_family = brief.brandAssets.fontFamily or "system-ui, sans-serif"
+
+    # Get company name
+    company_name = extraction.summary.companyName or "Company"
+
+    return f"""Generate a complete, production-ready static HTML landing page.
+
+MASTER BRIEF:
+- Business Goal: {brief.businessGoal}
+- Primary Audience: {brief.primaryAudience}
+- Value Proposition: {brief.valueProposition}
+- Tone & Voice: {brief.toneAndVoice}
+- Visual Style: {brief.visualStyle}
+- Color Strategy: {brief.colorStrategy}
+- Motion Level: {brief.motionLevel}
+
+CREATIVE DIRECTION:
+- Design Concept: {brief.creativeDirection.designConcept}
+- Hero Treatment: {brief.creativeDirection.heroTreatment}
+- Signature Technique: {brief.creativeDirection.signatureTechnique}
+- Layout Strategy: {brief.creativeDirection.layoutStrategy}
+- Color Mood: {brief.creativeDirection.colorMood}
+- Typography: {brief.creativeDirection.typographyPersonality}
+
+CONTENT BLUEPRINT:
+- Hero Headline: {brief.headline}
+- Hero Subheadline: {brief.subheadline}
+- Sections:
+{sections_summary}
+- CTA Strategy: {brief.ctaStrategy}
+
+BRAND ASSETS:
+- Company Name: {company_name}
+- Logo URL: {logo_url}
+- Primary Color: {primary_color}
+- Secondary Color: {secondary_color}
+- Font Family: {font_family}
+
+VARIANT TYPE: {variant_type}
+
+REQUIREMENTS:
+1. Generate THREE separate code blocks:
+   - HTML: Complete semantic HTML5 structure
+   - CSS: All styles in a single stylesheet
+   - JavaScript: Vanilla JS for interactions (no frameworks)
+
+2. HTML Structure:
+   - Semantic tags (<header>, <main>, <section>, <footer>)
+   - Proper meta tags (viewport, description, title)
+   - Accessibility: ARIA labels, alt text, semantic structure
+   - Include all sections from the master brief
+   - Use brand logo if available (as img src)
+   - NO inline styles or scripts
+   - Use placeholder image URLs from https://images.unsplash.com for any images
+
+3. CSS Requirements:
+   - Use CSS custom properties for colors/spacing
+   - Responsive design (mobile-first with media queries)
+   - Smooth animations matching motion level
+   - Follow the creative direction's color mood and typography
+   - Include hover states for interactive elements
+   - Modern CSS (flexbox, grid)
+
+4. JavaScript Requirements:
+   - Vanilla JS only (no jQuery, no React, no frameworks)
+   - Smooth scroll behavior for anchor links
+   - Mobile menu toggle
+   - Simple scroll-triggered fade-in animations
+   - Form validation if contact form present
+
+5. Design Quality:
+   - Match the visual style and creative direction
+   - Implement the design concept prominently
+   - Use the specified color strategy
+   - Typography should reflect the personality described
+   - Professional, polished appearance
+
+OUTPUT FORMAT:
+Return your response in this exact format (three code blocks):
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="...">
+    <title>...</title>
+</head>
+<body>
+    ...complete HTML here...
+</body>
+</html>
+```
+
+```css
+/* styles.css */
+:root {{
+  --primary-color: {primary_color};
+  --secondary-color: {secondary_color};
+}}
+...complete CSS here...
+```
+
+```javascript
+// script.js
+document.addEventListener('DOMContentLoaded', () => {{
+  ...complete JS here...
+}});
+```
+
+Generate high-quality, production-ready code that implements this brief faithfully.
+"""
+
+
+def _parse_llm_response(response: str) -> tuple[str, str, str]:
+    """Parse HTML, CSS, JS from LLM response."""
+
+    # Extract HTML
+    html_match = re.search(r"```html\s*([\s\S]*?)```", response)
+    if not html_match:
+        raise ValueError("No HTML code block found in LLM response")
+    html = html_match.group(1).strip()
+
+    # Extract CSS
+    css_match = re.search(r"```css\s*([\s\S]*?)```", response)
+    if not css_match:
+        raise ValueError("No CSS code block found in LLM response")
+    css = css_match.group(1).strip()
+
+    # Extract JS
+    js_match = re.search(r"```(?:javascript|js)\s*([\s\S]*?)```", response)
+    if not js_match:
+        logger.warning("No JavaScript code block found, using minimal JS")
+        js = "// Minimal script\ndocument.addEventListener('DOMContentLoaded', () => {});"
+    else:
+        js = js_match.group(1).strip()
+
+    return html, css, js
+
+
+def _upload_to_s3(
+    content: str,
+    filename: str,
+    content_type: str,
+    bucket: str | None,
+    prefix: str,
+) -> str | None:
+    """Upload file to S3 and return public URL."""
+
+    if not bucket:
+        logger.warning("S3 bucket not configured (ASSET_S3_BUCKET), skipping upload")
+        return None
+
+    settings = get_settings()
+
+    try:
+        s3_client = boto3.client("s3", region_name=settings.asset_s3_region)
+
+        key = f"{prefix}static-sites/{filename}"
+
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=content.encode("utf-8"),
+            ContentType=content_type,
+            CacheControl="public, max-age=3600",
+        )
+
+        # Return CDN URL
+        url = f"https://{bucket}.s3.amazonaws.com/{key}"
+
+        logger.info(f"Uploaded {content_type} to S3: {url}")
+
+        return url
+
+    except ClientError as e:
+        logger.error(f"Failed to upload to S3: {e}")
+        return None

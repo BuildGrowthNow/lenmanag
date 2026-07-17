@@ -20,13 +20,22 @@ from app.core.industry_detection import get_industry_design_config
 from app.core.leads import lead_repository
 from app.core.mongo import get_database
 from app.core.screenshot_comparator import ScreenshotComparator
-from app.schemas.brief import SiteBrief, VisualCritique, VisualRedesignBrief
+from app.schemas.brief import (
+    BriefEvidence,
+    SiteBrief,
+    VisualCritique,
+    VisualRedesignBrief,
+)
 from app.schemas.extraction import ExtractionSnapshot
 from app.schemas.lead import JobSummary
 from app.schemas.site import (
+    BrandTokens,
+    CtaAction,
+    CtaStrategy,
     GeneratedSite,
     GeneratedSiteVersion,
     GeneratedSiteVersionResponse,
+    HeroVariant,
     PaletteMode,
     PublishApprovalState,
     RefinementPromptRecord,
@@ -48,8 +57,10 @@ from app.schemas.site import (
     SiteReviewRequest,
     SiteScreenshotMetadata,
     SiteSourceAttribution,
+    SiteToken,
     ThemeLibraryResponse,
     ThemeVariant,
+    VariantType,
 )
 
 logger = logging.getLogger(__name__)
@@ -2654,6 +2665,347 @@ class SiteRepository:
         if doc is None:
             doc = await database["generated_sites"].find_one({"id": slug})
         return _site_doc_to_current(doc) if doc else None
+
+    async def list_sites_by_lead(self, lead_id: str) -> list[GeneratedSite]:
+        """Get all site variants for a lead."""
+        await self._maybe_ensure_indexes()
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                sites = [
+                    _site_doc_to_current(doc)
+                    for doc in self._sites.values()
+                    if doc.get("leadId") == lead_id
+                ]
+                return sorted(sites, key=lambda s: s.variantPosition)
+
+        cursor = database["generated_sites"].find({"leadId": lead_id})
+        docs = await cursor.to_list(length=100)
+        sites = [_site_doc_to_current(doc) for doc in docs]
+        return sorted(sites, key=lambda s: s.variantPosition)
+
+    async def generate_site_variant(
+        self,
+        *,
+        lead_id: str,
+        variant_type: VariantType,
+        variant_strategy: dict[str, Any],
+        extraction: ExtractionSnapshot,
+        analysis: Any,
+        user_id: str,
+    ) -> GeneratedSite:
+        """
+        Generate a single site variant (HTML or Next.js).
+
+        Args:
+            lead_id: Lead identifier
+            variant_type: Type of variant to generate
+            variant_strategy: Strategy definition from variant_strategy.py
+            extraction: Extraction snapshot (shared across variants)
+            analysis: Analysis results (shared across variants)
+            user_id: User ID for audit trail
+
+        Returns:
+            Generated site variant
+        """
+        from app.core.master_brief import generate_master_brief
+        from app.core.static_html_generator import generate_static_html
+        from app.core.ai_site_generation import generate_landing_page_code
+
+        # Step 1: Generate variant-specific master brief
+        industry = None
+        if analysis and hasattr(analysis, "analysis"):
+            industry = getattr(analysis.analysis, "industry", None)
+
+        logger.info(f"Generating master brief for {variant_type} (lead {lead_id})")
+        master_brief = await generate_master_brief(
+            lead_id=lead_id,
+            extraction=extraction,
+            variant_type=variant_type,
+            industry=industry,
+        )
+
+        # Save brief to database
+        database = get_database()
+        if database is not None:
+            await database["master_briefs"].insert_one(
+                master_brief.model_dump(by_alias=True)
+            )
+
+        # Step 2: Generate site based on variant type
+        site_id = str(uuid4())
+        slug = self._generate_variant_slug(
+            lead_id, variant_type, extraction.summary.companyName
+        )
+
+        # Get existing slugs to avoid duplicates
+        existing_slugs = await self._get_existing_slugs()
+
+        # Ensure slug is unique
+        base_slug = slug
+        counter = 2
+        while slug in existing_slugs:
+            slug = f"{base_slug[:6]}{counter}"
+            counter += 1
+
+        if variant_type == "nextjs":
+            # Use existing Next.js generation
+            logger.info(f"Generating Next.js site for {variant_type} (site {site_id})")
+            try:
+                code_result = await generate_landing_page_code(
+                    master_brief=master_brief,
+                    extraction=extraction,
+                    site_id=site_id,
+                )
+            except Exception as e:
+                logger.error(f"Next.js generation failed: {e}")
+                code_result = {}
+
+            site = self._build_nextjs_site(
+                site_id=site_id,
+                lead_id=lead_id,
+                master_brief=master_brief,
+                variant_strategy=variant_strategy,
+                slug=slug,
+                code_result=code_result,
+                extraction=extraction,
+            )
+        else:
+            # Generate static HTML
+            logger.info(f"Generating static HTML for {variant_type} (site {site_id})")
+            try:
+                html_result = await generate_static_html(
+                    master_brief=master_brief,
+                    extraction=extraction,
+                    variant_type=variant_type,
+                    site_id=site_id,
+                )
+            except Exception as e:
+                logger.error(f"Static HTML generation failed: {e}")
+                html_result = {"html": "", "cssUrl": None, "jsUrl": None}
+
+            site = self._build_static_html_site(
+                site_id=site_id,
+                lead_id=lead_id,
+                master_brief=master_brief,
+                variant_strategy=variant_strategy,
+                slug=slug,
+                html_result=html_result,
+                extraction=extraction,
+            )
+
+        # Save site to database
+        if database is not None:
+            await database["generated_sites"].insert_one(site.model_dump(by_alias=True))
+        else:
+            async with self._memory_lock:
+                self._sites[site.id] = site.model_dump(by_alias=True)
+
+        logger.info(f"Variant {variant_type} generated: {site.previewUrl}")
+
+        return site
+
+    def _generate_variant_slug(
+        self,
+        lead_id: str,
+        variant_type: VariantType,
+        company_name: str | None,
+    ) -> str:
+        """Generate preview slug for variant."""
+        # Base slug from company name or lead ID
+        if company_name:
+            base = company_name.lower().replace(" ", "-").replace("_", "-")
+            base = "".join(c for c in base if c.isalnum() or c == "-")
+            base = base[:8]  # Truncate to 8 chars
+        else:
+            base = lead_id[:8]
+
+        # Add variant suffix
+        if variant_type == "html_v1":
+            return f"{base}-v1"
+        elif variant_type == "html_v2":
+            return f"{base}-v2"
+        elif variant_type == "html_v3":
+            return f"{base}-v3"
+        else:  # nextjs
+            return base
+
+    async def _get_existing_slugs(self) -> set[str]:
+        """Get all existing preview slugs."""
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                return {doc.get("previewSlug", "") for doc in self._sites.values()}
+
+        cursor = database["generated_sites"].find({}, {"previewSlug": 1})
+        docs = await cursor.to_list(length=10000)
+        return {doc.get("previewSlug", "") for doc in docs}
+
+    def _build_nextjs_site(
+        self,
+        *,
+        site_id: str,
+        lead_id: str,
+        master_brief: Any,
+        variant_strategy: dict[str, Any],
+        slug: str,
+        code_result: dict[str, Any],
+        extraction: ExtractionSnapshot,
+    ) -> GeneratedSite:
+        """Build GeneratedSite for Next.js variant."""
+        settings = get_settings()
+        preview_base = settings.preview_base_url.rstrip("/")
+
+        return GeneratedSite(
+            id=site_id,
+            leadId=lead_id,
+            briefId=master_brief.id,
+            briefVersion=master_brief.version,
+            version=1,
+            variantType="nextjs",
+            variantLabel=variant_strategy.get("variantLabel", "Next.js Site"),
+            variantPosition=variant_strategy.get("variantPosition", 4),
+            themeId="nextjs-generated",
+            themeKey="nextjs-generated",
+            themeName="Next.js Generated",
+            themeRationale="AI-generated Next.js site",
+            paletteMode=variant_strategy.get("paletteMode", "zinc"),
+            paletteRationale="From variant strategy",
+            brandTokens=self._default_brand_tokens(),
+            heroVariant=self._default_hero_variant(),
+            sectionStack=[],
+            ctaStrategy=self._default_cta_strategy(),
+            qualityScore=75,
+            readinessStatus="ready_for_review",
+            qaStatus="warn",
+            previewSlug=slug,
+            previewUrl=f"{preview_base}/st/{slug}",
+            overrideCount=0,
+            sourceCode=code_result.get("sourceCode"),
+            compiledBundleUrl=code_result.get("bundleUrl"),
+            compilationStatus="success" if code_result.get("sourceCode") else "pending",
+            createdAt=_now(),
+            updatedAt=_now(),
+        )
+
+    def _build_static_html_site(
+        self,
+        *,
+        site_id: str,
+        lead_id: str,
+        master_brief: Any,
+        variant_strategy: dict[str, Any],
+        slug: str,
+        html_result: dict[str, Any],
+        extraction: ExtractionSnapshot,
+    ) -> GeneratedSite:
+        """Build GeneratedSite for static HTML variant."""
+        settings = get_settings()
+        preview_base = settings.preview_base_url.rstrip("/")
+
+        return GeneratedSite(
+            id=site_id,
+            leadId=lead_id,
+            briefId=master_brief.id,
+            briefVersion=master_brief.version,
+            version=1,
+            variantType=variant_strategy.get("variantType", "html_v1"),
+            variantLabel=variant_strategy.get("variantLabel", "Static HTML"),
+            variantPosition=variant_strategy.get("variantPosition", 1),
+            staticHtml=html_result.get("html"),
+            staticCssUrl=html_result.get("cssUrl"),
+            staticJsUrl=html_result.get("jsUrl"),
+            themeId="static-html",
+            themeKey="static-html",
+            themeName="Static HTML",
+            themeRationale="AI-generated static HTML",
+            paletteMode=variant_strategy.get("paletteMode", "light"),
+            paletteRationale="From variant strategy",
+            brandTokens=self._default_brand_tokens(),
+            heroVariant=self._default_hero_variant(),
+            sectionStack=[],
+            ctaStrategy=self._default_cta_strategy(),
+            qualityScore=70,
+            readinessStatus="ready_for_review",
+            qaStatus="warn",
+            previewSlug=slug,
+            previewUrl=f"{preview_base}/st/{slug}",
+            overrideCount=0,
+            sourceCode=html_result.get("html"),
+            createdAt=_now(),
+            updatedAt=_now(),
+        )
+
+    def _default_brand_tokens(self) -> BrandTokens:
+        """Return default brand tokens."""
+        default_evidence = BriefEvidence(
+            sourceKind="inferred",
+            inferenceLabel="Default value",
+            confidence=50,
+        )
+        return BrandTokens(
+            paletteMode="zinc",
+            primaryColor=SiteToken(value="#3b82f6", evidence=default_evidence),
+            secondaryColor=SiteToken(value="#64748b", evidence=default_evidence),
+            accentColor=SiteToken(value="#f97316", evidence=default_evidence),
+            backgroundColor=SiteToken(value="#0f172a", evidence=default_evidence),
+            textColor=SiteToken(value="#f8fafc", evidence=default_evidence),
+            borderColor=SiteToken(value="#1e293b", evidence=default_evidence),
+            logoAsset=None,
+            typography=SiteToken(
+                value="system-ui, sans-serif", evidence=default_evidence
+            ),
+            imageStyle=SiteToken(value="modern", evidence=default_evidence),
+            visualTone=SiteToken(value="professional", evidence=default_evidence),
+            motionIntensity=SiteToken(value="subtle", evidence=default_evidence),
+            layoutDensity=SiteToken(value="balanced", evidence=default_evidence),
+        )
+
+    def _default_hero_variant(self) -> HeroVariant:
+        """Return default hero variant."""
+        default_evidence = BriefEvidence(
+            sourceKind="inferred",
+            inferenceLabel="Default hero content",
+            confidence=40,
+        )
+        return HeroVariant(
+            headline="Welcome",
+            subheadline="Discover what we offer",
+            supportingLine="Professional services for your needs",
+            primaryCta="Get Started",
+            secondaryCta="Learn More",
+            layout="centered",
+            visualTreatment="clean",
+            evidence=default_evidence,
+        )
+
+    def _default_cta_strategy(self) -> CtaStrategy:
+        """Return default CTA strategy."""
+        default_evidence = BriefEvidence(
+            sourceKind="inferred",
+            inferenceLabel="Default CTA",
+            confidence=50,
+        )
+        return CtaStrategy(
+            primary=CtaAction(
+                label="Get Started",
+                href="#contact",
+                rationale="Primary conversion action",
+                evidence=default_evidence,
+            ),
+            secondary=CtaAction(
+                label="Learn More",
+                href="#about",
+                rationale="Secondary exploration action",
+                evidence=default_evidence,
+            ),
+            footer=CtaAction(
+                label="Contact Us",
+                href="#contact",
+                rationale="Footer contact action",
+                evidence=default_evidence,
+            ),
+        )
 
     async def list_versions(self, site_id: str) -> GeneratedSiteVersionResponse | None:
         await self._maybe_ensure_indexes()

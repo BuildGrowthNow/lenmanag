@@ -99,6 +99,20 @@ async def diversity_report(
     )
 
 
+@router.get("/variants/{lead_id}", response_model=ResponseEnvelope[list[GeneratedSite]])
+async def list_variants_for_lead(
+    lead_id: str,
+    request: Request,
+    _user_id: CurrentUserId,
+) -> ResponseEnvelope[list[GeneratedSite]]:
+    """Get all site variants for a lead."""
+    sites = await site_repository.list_sites_by_lead(lead_id)
+    return cast(
+        ResponseEnvelope[list[GeneratedSite]],
+        success_response(sites, meta=response_meta(request)),
+    )
+
+
 @router.get("/{site_id}", response_model=ResponseEnvelope[GeneratedSite | None])
 async def get_site(
     site_id: str, request: Request, _user_id: CurrentUserId
