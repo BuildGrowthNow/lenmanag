@@ -588,8 +588,29 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
             )
             page = context.new_page()
             response = page.goto(url, wait_until="domcontentloaded", timeout=20000)
+
+            # Handle Cloudflare/bot challenge pages: wait for challenge to complete
+            # Cloudflare usually redirects within 5-10 seconds if the challenge passes
+            initial_status = response.status if response else 0
+            if initial_status == 403 or "just a moment" in (page.title() or "").lower():
+                try:
+                    # Wait for URL change (challenge redirect) or timeout
+                    page.wait_for_url(
+                        lambda url_str: "__cf_chl" not in url_str, timeout=10000
+                    )
+                    time.sleep(1)  # Brief settle time after redirect
+                except Exception:
+                    # Challenge didn't pass or timed out - proceed with what we have
+                    logger.warning(f"Cloudflare challenge may have failed for {url}")
+
             final_url = page.url
-            status = response.status if response else 0
+            # If we're still on a challenge page after waiting, return 403
+            # Otherwise assume the page loaded successfully
+            title_lower = (page.title() or "").lower()
+            if "just a moment" in title_lower or "__cf_chl" in final_url:
+                status = 403
+            else:
+                status = 200 if initial_status == 403 else initial_status
 
             rendered_html = page.content()
 
