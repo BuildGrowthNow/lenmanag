@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiry_hours: int = 24 * 7  # 7 days
     signup_code: str = ""
+    verification_token_expiry_hours: int = 48
+    password_reset_token_expiry_hours: int = 24
+    require_email_verification: bool = True
+    frontend_url: str = "http://localhost:3000"
     auth_allowlist_emails: str = "operator@example.com"
     auth_allowlist_domains: str = ""
     resend_api_key: str = ""

@@ -1,11 +1,26 @@
+"use client";
+
 import { ReactNode } from "react";
 
+import { EmailVerificationBanner } from "@/components/shell/email-verification-banner";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
+import { useAuth } from "@/lib/auth-context";
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_26%),linear-gradient(180deg,_#0c1016_0%,_#070a0f_100%)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-text" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_26%),linear-gradient(180deg,_#0c1016_0%,_#070a0f_100%)] text-text">
+      <EmailVerificationBanner user={user} />
       <div className="flex min-h-screen">
         <div className="hidden w-80 shrink-0 lg:block">
           <Sidebar />

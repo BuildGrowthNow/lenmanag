@@ -9,6 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+const PASSWORD_REQUIREMENTS = [
+  { test: (p: string) => p.length >= 8, label: "At least 8 characters" },
+  { test: (p: string) => /[A-Z]/.test(p), label: "One uppercase letter" },
+  { test: (p: string) => /[a-z]/.test(p), label: "One lowercase letter" },
+  { test: (p: string) => /\d/.test(p), label: "One number" },
+  { test: (p: string) => /[!@#$%^&*(),.?":{}|<>_\-+=[\]\\;'/`~]/.test(p), label: "One special character" },
+];
+
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -16,6 +24,8 @@ export default function SignupPage() {
   const [signupCode, setSignupCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const allRequirementsMet = PASSWORD_REQUIREMENTS.every((req) => req.test(password));
 
   async function handleSubmit() {
     setBusy(true);
@@ -67,9 +77,22 @@ export default function SignupPage() {
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && void handleSubmit()}
               placeholder="••••••••"
             />
+            {password.length > 0 && (
+              <div className="space-y-1">
+                <ul className="space-y-1 text-xs">
+                  {PASSWORD_REQUIREMENTS.map((req, i) => (
+                    <li
+                      key={i}
+                      className={req.test(password) ? "text-success" : "text-muted"}
+                    >
+                      {req.test(password) ? "✓" : "○"} {req.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-sm text-muted" htmlFor="signup-code">
@@ -92,7 +115,7 @@ export default function SignupPage() {
           ) : null}
           <Button
             className="w-full"
-            disabled={busy || !email || !password || !signupCode}
+            disabled={busy || !email || !allRequirementsMet || !signupCode}
             onClick={() => void handleSubmit()}
           >
             {busy ? "Creating account…" : "Sign up"}

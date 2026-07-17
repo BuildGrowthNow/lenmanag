@@ -8,13 +8,16 @@ from pymongo.errors import DuplicateKeyError
 from app.core.audit import write_audit_log
 from app.core.auth_dependencies import CurrentUser
 from app.core.config import get_settings
-from app.core.email_service import send_verification_email
+from app.core.email_service import send_password_reset_email, send_verification_email
 from app.core.jwt_handler import create_access_token
+from app.core.rate_limiter import check_auth_rate_limit
 from app.core.users import UserRepository
 from app.core.versioning import response_meta
 from app.schemas.response import ResponseEnvelope, success_response
 from app.schemas.user import (
+    ForgotPasswordRequest,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     TokenResponse,
     UserCreate,
     UserLogin,
@@ -41,6 +44,8 @@ def _user_to_response(user: dict) -> UserResponse:
 async def signup(
     payload: UserCreate, request: Request
 ) -> ResponseEnvelope[TokenResponse]:
+    check_auth_rate_limit(request, "users:signup")
+
     if settings.signup_code and payload.signup_code != settings.signup_code:
         raise HTTPException(status_code=403, detail="Invalid signup code")
 
@@ -52,14 +57,12 @@ async def signup(
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="Email already registered")
 
-    base_url = str(request.base_url).rstrip("/")
     verification_token = user.get("verification_token")
 
     if verification_token:
         await send_verification_email(
             email=user["email"],
             verification_token=verification_token,
-            base_url=base_url,
         )
 
     access_token = create_access_token(user_id=str(user["_id"]), email=user["email"])
@@ -83,6 +86,8 @@ async def signup(
 async def login_user(
     payload: UserLogin, request: Request
 ) -> ResponseEnvelope[TokenResponse]:
+    check_auth_rate_limit(request, "users:login")
+
     repo = UserRepository()
     user = await repo.verify_password(email=payload.email, password=payload.password)
 
@@ -143,6 +148,8 @@ async def verify_email(
 async def resend_verification(
     payload: ResendVerificationRequest, request: Request
 ) -> ResponseEnvelope[dict]:
+    check_auth_rate_limit(request, "users:resend-verification")
+
     repo = UserRepository()
     user = await repo.get_user_by_email(payload.email)
 
@@ -155,15 +162,70 @@ async def resend_verification(
     verification_token = await repo.update_verification_token(payload.email)
 
     if verification_token:
-        base_url = str(request.base_url).rstrip("/")
         await send_verification_email(
             email=user["email"],
             verification_token=verification_token,
-            base_url=base_url,
         )
 
     return success_response(
         {"message": "Verification email sent"}, meta=response_meta(request)
+    )
+
+
+@router.post("/forgot-password", response_model=ResponseEnvelope[dict])
+async def forgot_password(
+    payload: ForgotPasswordRequest, request: Request
+) -> ResponseEnvelope[dict]:
+    check_auth_rate_limit(request, "users:forgot-password")
+
+    repo = UserRepository()
+    reset_token = await repo.create_password_reset_token(payload.email)
+
+    if reset_token:
+        await send_password_reset_email(
+            email=payload.email,
+            reset_token=reset_token,
+        )
+
+        await write_audit_log(
+            payload.email,
+            "auth",
+            payload.email,
+            "password_reset_requested",
+            after={},
+        )
+
+    return success_response(
+        {"message": "If the email exists, a password reset link has been sent"},
+        meta=response_meta(request),
+    )
+
+
+@router.post("/reset-password", response_model=ResponseEnvelope[dict])
+async def reset_password(
+    payload: ResetPasswordRequest, request: Request
+) -> ResponseEnvelope[dict]:
+    check_auth_rate_limit(request, "users:reset-password")
+
+    repo = UserRepository()
+    user = await repo.reset_password(token=payload.token, new_password=payload.new_password)
+
+    if not user:
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired password reset token"
+        )
+
+    await write_audit_log(
+        user["email"],
+        "auth",
+        user["email"],
+        "password_reset_completed",
+        after={"user_id": str(user["_id"])},
+    )
+
+    return success_response(
+        {"message": "Password reset successfully"},
+        meta=response_meta(request),
     )
 
 

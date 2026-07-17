@@ -97,6 +97,38 @@ export async function resendVerification(email: string): Promise<{ message: stri
   return json.data;
 }
 
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/users/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    throw new Error(json.detail || "Request failed");
+  }
+
+  return json.data;
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/api/v1/users/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    throw new Error(json.detail || "Reset failed");
+  }
+
+  return json.data;
+}
+
 export async function getCurrentUser(): Promise<UserResponse> {
   const token = localStorage.getItem("access_token");
 
