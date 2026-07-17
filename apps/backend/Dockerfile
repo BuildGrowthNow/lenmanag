@@ -47,14 +47,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Playwright and Chromium browser
-RUN pip install --no-cache-dir playwright==1.44.0 && \
-    playwright install chromium || true
-
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir -e ".[gemini]"
+
+# Install Playwright Chromium browser as appuser so it lands in /home/appuser/.cache
+USER appuser
+RUN playwright install chromium
+USER root
 
 COPY . .
 
