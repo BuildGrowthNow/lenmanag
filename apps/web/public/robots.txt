@@ -3,7 +3,7 @@ User-agent: *
 Allow: /
 
 # Disallow admin areas
-Disallow: /nsa
+Disallow: /app
 Disallow: /api
 
 # Sitemap location

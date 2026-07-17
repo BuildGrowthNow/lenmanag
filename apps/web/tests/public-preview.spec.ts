@@ -46,15 +46,15 @@ test.describe('Public website preview', () => {
     await page.getByLabel('Email').fill('operator@example.com');
     await page.getByLabel('Display name').fill('Operator');
     const [nav] = await Promise.all([
-      page.waitForURL(/\/nsa(\/.*)?$/),
+      page.waitForURL(/\/app(\/.*)?$/),
       page.locator('button:has-text("Enter workspace")').click(),
     ]);
-    await expect(page).toHaveURL(/\/nsa$/);
-    await page.goto(`${BASE_URL}/nsa/sites`);
-    await expect(page).toHaveURL(/\/nsa\/sites$/);
+    await expect(page).toHaveURL(/\/app$/);
+    await page.goto(`${BASE_URL}/app/sites`);
+    await expect(page).toHaveURL(/\/app\/sites$/);
     await expect(page.getByText('Sites')).toBeVisible({ timeout: 10_000 }).catch(() => {});
-    await page.goto(`${BASE_URL}/nsa/sites/${SLUG}`);
-    await expect(page).toHaveURL(new RegExp(`/nsa/sites/${SLUG}$`));
+    await page.goto(`${BASE_URL}/app/sites/${SLUG}`);
+    await expect(page).toHaveURL(new RegExp(`/app/sites/${SLUG}$`));
   });
 
   test('public preview renders client-facing page without internal terms', async ({ page }) => {
