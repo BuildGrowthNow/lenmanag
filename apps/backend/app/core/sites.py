@@ -3164,7 +3164,7 @@ class SiteRepository:
 
         # AI-native generation from master brief
         if use_ai_generation and master_brief is not None:
-            from app.core.ai_site_generation import generate_landing_page_code
+            from app.core.ai_site_generation import generate_with_retry
 
             await lead_repository._update_job(  # noqa: SLF001
                 job_id,
@@ -3172,10 +3172,11 @@ class SiteRepository:
                 step="Generating landing page code from master brief",
             )
 
-            result = await generate_landing_page_code(
+            result = await generate_with_retry(
                 master_brief=master_brief,
                 extraction=extraction,
                 site_id=site_id,
+                max_retries=3,
             )
 
             if not result.get("success"):

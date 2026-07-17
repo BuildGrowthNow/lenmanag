@@ -61,7 +61,7 @@ async def generate_landing_page_code(
     response = await llm.generate_text(
         prompt=prompt,
         temperature=0.8,  # Higher creativity for unique designs
-        max_tokens=8192,  # Full page needs more tokens
+        max_tokens=16384,  # Increased limit for complete landing pages
     )
 
     # Extract code from response
@@ -273,20 +273,68 @@ Start with imports and end with the closing brace of the component.
 
 def _build_correction_prompt(
     *,
-    master_brief: MasterBrief,  # noqa: ARG001
+    master_brief: MasterBrief,
     extraction: ExtractionSnapshot,  # noqa: ARG001
     previous_code: str,
     error_message: str,
 ) -> str:
-    """Build correction prompt for failed compilation."""
-    prompt = f"""The landing page code you generated has compilation errors. Please fix them.
+    """Build correction prompt for failed compilation.
+
+    Handles both syntax/validation errors and truncation issues.
+    """
+    # Detect truncation issues
+    is_likely_truncated = (
+        "Unexpected end of file" in error_message
+        or "Expected '>' but found end of file" in error_message
+        or "closing tag" in error_message.lower()
+        or len(previous_code) < 2000  # Very short code is suspicious
+    )
+
+    if is_likely_truncated:
+        prompt = f"""CRITICAL: Your previous landing page code was TRUNCATED (incomplete).
+
+## The Problem
+{error_message}
+
+The code you generated was cut off before completion. This is a CRITICAL issue.
+
+## What You Must Do
+Generate a COMPLETE landing page with ALL sections FULLY closed:
+1. Start with proper imports
+2. Build the complete component with ALL sections from the master brief
+3. **ENSURE every opening tag has a matching closing tag**
+4. **ENSURE the component's return statement is fully complete**
+5. **ENSURE the component function closes properly**
+6. End with the closing braces
+
+## Master Brief Requirements
+**Sections to include** (ALL must be complete):
+{chr(10).join(f"  - {section.headline}" for section in master_brief.sections[:10])}
+
+## Previous Code (INCOMPLETE - DO NOT REPEAT THIS)
+```tsx
+{previous_code[:1000]}
+... [TRUNCATED]
+```
+
+## Instructions
+1. Generate COMPLETE code that includes ALL sections
+2. Do NOT truncate or abbreviate - write the full implementation
+3. Test each section is properly closed before moving to the next
+4. Return ONLY the complete TSX code, no markdown fences
+5. Make sure to close ALL tags before ending the response
+
+GENERATE THE COMPLETE CODE NOW:
+"""
+    else:
+        prompt = f"""The landing page code you generated has compilation errors. Please fix them.
 
 ## Error Message
 {error_message}
 
 ## Previous Code
 ```tsx
-{previous_code}
+{previous_code[:8000]}
 ```
 
 ## Instructions
@@ -301,6 +349,8 @@ def _build_correction_prompt(
 - Type errors
 - Invalid JSX structure
 - Using unavailable libraries
+- Node.js modules (fs, path, etc.) - NEVER use these
+- Unclosed tags or components
 
 Return the corrected TSX code now:
 """
@@ -425,7 +475,7 @@ async def _retry_generation_with_validation_feedback(
         response = await llm.generate_text(
             prompt=feedback_prompt,
             temperature=0.5,
-            max_tokens=8192,
+            max_tokens=16384,  # Match increased limit
         )
 
         fixed_code = _extract_tsx_code(response)
@@ -525,6 +575,11 @@ async def generate_with_retry(
     """
     Generate landing page code with automatic retry on compilation failure.
 
+    Handles both validation errors and compilation errors (422) by:
+    1. First attempt: Generate fresh code
+    2. On failure: Use correction prompt with error details
+    3. Retry up to max_retries times with correction context
+
     Returns final result after retries.
     """
     retry_context = None
@@ -552,22 +607,51 @@ async def generate_with_retry(
             )
             return result
 
-        # Prepare retry context
-        retry_context = {
-            "sourceCode": result["sourceCode"],
-            "errorMessage": result.get("error", "Unknown error"),
-            "attempt": attempt + 1,
-        }
+        # Log failure details
+        compilation_status = result.get("compilationStatus", "unknown")
+        error_message = result.get("error", "Unknown error")
 
         logger.warning(
-            f"Attempt {attempt + 1} failed for site {site_id}: {result.get('error')}"
+            f"Attempt {attempt + 1} failed for site {site_id}:\n"
+            f"  Status: {compilation_status}\n"
+            f"  Error: {error_message[:200]}"
         )
 
+        # Check if this is a compilation error (422) or validation error
+        # Both should trigger correction prompt
+        if compilation_status in (
+            "compilation_failed",
+            "compiler_error",
+            "validation_failed",
+        ):
+            # Prepare retry context with full error details
+            retry_context = {
+                "sourceCode": result.get("sourceCode", ""),
+                "errorMessage": error_message,
+                "compilationStatus": compilation_status,
+                "validationErrors": result.get("validationErrors", []),
+                "attempt": attempt + 1,
+            }
+            logger.info(
+                "Will retry with correction prompt (compilation/validation error detected)"
+            )
+        else:
+            # For other errors (network, timeout, etc.), prepare basic retry context
+            retry_context = {
+                "sourceCode": result.get("sourceCode", ""),
+                "errorMessage": error_message,
+                "attempt": attempt + 1,
+            }
+
     # All retries exhausted
-    logger.error(f"All {max_retries} generation attempts failed for site {site_id}")
+    logger.error(
+        f"All {max_retries} generation attempts failed for site {site_id}:\n"
+        f"  Final status: {result.get('compilationStatus')}\n"
+        f"  Final error: {result.get('error', 'Unknown')[:300]}"
+    )
     return {
         "success": False,
         "compilationStatus": "retries_exhausted",
-        "error": f"Failed after {max_retries} attempts",
+        "error": f"Failed after {max_retries} attempts: {result.get('error', 'Unknown')}",
         "finalAttemptResult": result,
     }

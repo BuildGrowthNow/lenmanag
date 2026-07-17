@@ -2134,7 +2134,14 @@ class LeadRepository:
         try:
             # Convert crawl_data to ExtractionSnapshot for analysis
             temp_snapshot = self._extraction_doc_to_snapshot(
-                {**crawl_data, "leadId": lead_id, "analysis": None}
+                {
+                    "id": f"temp-{lead_id}",
+                    **crawl_data,
+                    "leadId": lead_id,
+                    "analysis": None,
+                    "createdAt": _now(),
+                    "updatedAt": _now(),
+                }
             )
 
             # Run LLM analysis
