@@ -223,6 +223,19 @@ Create a landing page brief that:
 - Every field must have real content, no placeholders
 - Match the brand's industry and audience while being creative
 
+## Design Mode Selection
+
+Based on the brand personality and audience, select ONE design mode that fits best:
+
+- **editorial**: Magazine-inspired layouts, heavy typography focus, asymmetric grids, lots of whitespace, mixed media
+- **immersive**: Full-bleed visuals, cinematic parallax, ambient motion, atmospheric backgrounds, story-driven scroll
+- **interactive**: Abundant hover states, cursor effects, animated transitions, gamified elements, delightful micro-interactions
+- **minimalist**: Dramatic whitespace, bold contrasts, few elements with maximum impact, restrained color palette
+- **playful**: Organic shapes, bouncy animations, vibrant colors, unexpected layouts, personality-forward
+- **corporate**: Structured grids with subtle polish, professional motion, trust-building design, refined but not boring
+
+Choose the mode in your response under "designMode" — this will guide the code generation phase.
+
 ## Output Format
 
 Return a JSON object with this structure:
@@ -260,6 +273,7 @@ Return a JSON object with this structure:
     }}
   ],
   "ctaStrategy": "How CTAs work across the page (e.g., 'Sticky header CTA + mid-page floating CTA + footer full-width CTA bar')",
+  "designMode": "editorial|immersive|interactive|minimalist|playful|corporate",
   "aiReasoning": "Why these creative choices fit this brand and audience",
   "confidenceScore": 85
 }}
@@ -347,6 +361,7 @@ Return a JSON object with this structure:
     }}
   ],
   "ctaStrategy": "Primary + secondary CTAs approach",
+  "designMode": "editorial|immersive|interactive|minimalist|playful|corporate",
   "aiReasoning": "Why these choices were made and how feedback was incorporated",
   "confidenceScore": 85
 }}
@@ -463,6 +478,19 @@ def _build_master_brief_from_response(
     if motion_level not in ["none", "subtle", "moderate", "dramatic"]:
         motion_level = "subtle"
 
+    # Validate design mode
+    design_mode = brief_data.get("designMode")
+    valid_design_modes = [
+        "editorial",
+        "immersive",
+        "interactive",
+        "minimalist",
+        "playful",
+        "corporate",
+    ]
+    if design_mode not in valid_design_modes:
+        design_mode = None
+
     master_brief = MasterBrief(
         id=str(uuid4()),
         leadId=lead_id,
@@ -480,6 +508,7 @@ def _build_master_brief_from_response(
         motionLevel=motion_level,
         specialEffects=brief_data.get("specialEffects", []),
         creativeDirection=creative_direction,
+        designMode=design_mode,
         headline=brief_data.get(
             "headline", extraction.summary.companyName or "Welcome"
         ),

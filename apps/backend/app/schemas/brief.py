@@ -8,6 +8,15 @@ from pydantic import BaseModel, Field
 from app.schemas.extraction import EvidenceType
 
 BriefApprovalState = Literal["draft", "needs_review", "approved"]
+
+DesignMode = Literal[
+    "editorial",  # Heavy typography, asymmetric layouts, magazine feel
+    "immersive",  # Full-bleed hero, parallax, ambient motion, cinematic
+    "interactive",  # Lots of hover states, scroll triggers, micro-animations
+    "minimalist",  # High contrast, few elements, dramatic whitespace
+    "playful",  # Organic shapes, bouncy animations, vibrant colors
+    "corporate",  # Professional but not boring — structured with subtle polish
+]
 BriefSourceKind = Literal["source_backed", "inferred", "extraction"]
 BriefReferenceKind = Literal["page", "asset"]
 
@@ -216,6 +225,19 @@ class MasterBrief(BaseModel):
     creativeDirection: CreativeDirection = Field(
         default_factory=CreativeDirection,
         description="Detailed art direction for the page design",
+    )
+    designMode: Optional[
+        Literal[
+            "editorial",
+            "immersive",
+            "interactive",
+            "minimalist",
+            "playful",
+            "corporate",
+        ]
+    ] = Field(
+        default=None,
+        description="Design mode that influences overall creative direction",
     )
 
     # Content Blueprint

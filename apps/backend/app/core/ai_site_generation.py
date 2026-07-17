@@ -271,6 +271,55 @@ def _build_generation_prompt(
 **AVOID these patterns**: {avoid}
 """
 
+    # Build design mode guidance if available
+    design_mode_guidance = ""
+    if hasattr(master_brief, "designMode") and master_brief.designMode:
+        mode_details = {
+            "editorial": """
+**EDITORIAL MODE**: Think magazine spread. Heavy typography moments. Asymmetric layouts.
+Mixed font sizes (huge headlines, small captions). Image/text juxtaposition. Generous whitespace.
+- Use text-8xl or larger for key headlines
+- Mix serif and sans-serif for contrast
+- Consider pull quotes, drop caps, full-bleed images
+- Sections should feel like turning pages""",
+            "immersive": """
+**IMMERSIVE MODE**: Think cinematic experience. Full-bleed everything. Parallax depth layers.
+Ambient backgrounds (gradients, particles, video). Story-driven scroll progression.
+- Use useScroll + useTransform extensively for parallax
+- Consider ambient Three.js backgrounds
+- Sections should flow like a film, not a document
+- Sound/motion cues (even if just visual representations)""",
+            "interactive": """
+**INTERACTIVE MODE**: Make everything respond. Cursor effects. Hover transformations.
+Click feedback. Scroll-triggered reveals everywhere. Gamified elements.
+- Every card should have a hover state with transform
+- Consider magnetic buttons, cursor trails
+- Text should reveal on scroll with stagger
+- Add micro-celebrations (confetti, pulses, glows)""",
+            "minimalist": """
+**MINIMALIST MODE**: Less is more, but what's there is BOLD. Dramatic whitespace.
+Few colors. High contrast. Typography as architecture.
+- Limit to 2-3 colors max
+- Use scale contrast (tiny vs huge)
+- Generous padding and margins
+- Let elements breathe — avoid cramped layouts""",
+            "playful": """
+**PLAYFUL MODE**: Personality first. Organic shapes. Bouncy spring animations.
+Vibrant colors. Unexpected layouts. Fun > formal.
+- Use spring physics in framer-motion
+- Consider blob shapes, wavy dividers
+- Bright, saturated colors
+- Quirky micro-copy and CTAs""",
+            "corporate": """
+**CORPORATE MODE**: Professional polish, not boring. Structured grids with life.
+Subtle motion. Trust signals. Refined color usage.
+- Clean grid layouts but with visual interest
+- Subtle hover states and transitions
+- Trust badges, testimonials, social proof prominent
+- Motion should feel confident, not flashy""",
+        }
+        design_mode_guidance = mode_details.get(master_brief.designMode, "")
+
     prompt = f"""You are building an Awwwards-worthy landing page. Your goal is to create something memorable — not a template, but an experience.
 
 ## YOUR CREATIVE TOOLKIT
@@ -313,6 +362,7 @@ Import from '@/components/ui/*':
 - **embla-carousel-react**: Smooth, accessible carousels
 
 {creative_section}
+{design_mode_guidance}
 
 ## MASTER BRIEF
 

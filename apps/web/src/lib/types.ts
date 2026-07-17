@@ -1149,6 +1149,8 @@ export type CreativeDirection = {
   avoidPatterns: string[];
 };
 
+export type DesignMode = "editorial" | "immersive" | "interactive" | "minimalist" | "playful" | "corporate";
+
 export type MasterBrief = {
   id: string;
   leadId: string;
@@ -1163,6 +1165,7 @@ export type MasterBrief = {
   motionLevel: "none" | "subtle" | "moderate" | "dramatic";
   specialEffects: string[];
   creativeDirection?: CreativeDirection;
+  designMode?: DesignMode;
   headline: string;
   subheadline: string;
   sections: MasterBriefSection[];
