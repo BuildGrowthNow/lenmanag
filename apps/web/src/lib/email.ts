@@ -67,7 +67,7 @@ export async function sendNewOrderNotification(data: NewOrderEmailData): Promise
     await resend.emails.send({
       from: fromEmail,
       to: teamEmails,
-      subject: `🎉 NEW PAID ORDER - $${data.price.toLocaleString()} - ${data.name}`,
+      subject: `🎉 Lenquant - NEW PAID ORDER - $${data.price.toLocaleString()} - ${data.name}`,
       html: `
 <!DOCTYPE html>
 <html>
@@ -175,14 +175,20 @@ export async function sendNewOrderNotification(data: NewOrderEmailData): Promise
         minute: "2-digit",
       })}
     </p>
+    <p style="color: #94A3B8; font-size: 14px; margin: 16px 0 0 0;">
+      <a href="${appUrl}/app/orders" style="background: #EAB308; color: #1E293B; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">View Order Details</a>
+    </p>
   </div>
 
   <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #E2E8F0; text-align: center;">
     <p style="color: #64748B; font-size: 13px; margin: 0;">
-      <strong style="color: #1E293B;">Lenquant</strong> - Premium websites delivered in 3 days
+      <strong style="color: #1E293B;">Lenquant</strong>
     </p>
-    <p style="color: #94A3B8; font-size: 12px; margin: 8px 0 0 0;">
-      This is an automated notification from your landing page order system.
+    <p style="color: #94A3B8; font-size: 12px; margin: 8px 0;">
+      🌐 <a href="https://sites.lenquant.com" style="color: #94A3B8; text-decoration: none;">sites.lenquant.com</a>
+    </p>
+    <p style="color: #94A3B8; font-size: 12px; margin: 0;">
+      Premium websites delivered in 3 days
     </p>
   </div>
 
@@ -242,7 +248,7 @@ export async function sendCustomerConfirmation(data: CustomerConfirmationEmailDa
     await resend.emails.send({
       from: fromEmail,
       to: data.email,
-      subject: "✅ Payment Received - Let's Schedule Your Kickoff Call!",
+      subject: "✅ Lenquant - Payment Received - Let's Schedule Your Kickoff Call!",
       html: `
 <!DOCTYPE html>
 <html>
@@ -340,6 +346,9 @@ export async function sendCustomerConfirmation(data: CustomerConfirmationEmailDa
       <strong style="color: #1E293B;">Lenquant</strong>
     </p>
     <p style="color: #94A3B8; font-size: 12px; margin: 8px 0;">
+      🌐 <a href="https://sites.lenquant.com" style="color: #94A3B8; text-decoration: none;">sites.lenquant.com</a>
+    </p>
+    <p style="color: #94A3B8; font-size: 12px; margin: 0;">
       Premium websites delivered in 3 days or less
     </p>
   </div>
