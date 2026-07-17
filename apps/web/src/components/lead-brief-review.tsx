@@ -36,6 +36,15 @@ function confidenceLabel(confidence: number) {
   return "Low";
 }
 
+const designModeLabels: Record<string, string> = {
+  editorial: "Editorial",
+  immersive: "Immersive",
+  interactive: "Interactive",
+  minimalist: "Minimalist",
+  playful: "Playful",
+  corporate: "Corporate",
+};
+
 export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefReviewProps) {
   const router = useRouter();
   const [busyAction, setBusyAction] = useState<"create" | "approve" | null>(null);
@@ -176,6 +185,9 @@ export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefRe
             <Badge className={approvalBadgeClass(brief.approvalState)}>{brief.approvalState.replace(/_/g, " ")}</Badge>
             <Badge>v{brief.version}</Badge>
             <Badge className={confidenceBadgeClass(brief.confidenceScore)}>{confidenceLabel(brief.confidenceScore)} confidence</Badge>
+            {brief.designMode && designModeLabels[brief.designMode] && (
+              <Badge className="border-violet-500/40 bg-violet-500/10 text-violet-100">{designModeLabels[brief.designMode]}</Badge>
+            )}
           </div>
         </div>
       </CardHeader>

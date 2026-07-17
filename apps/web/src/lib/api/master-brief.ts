@@ -25,6 +25,8 @@ export interface CreativeDirection {
   avoidPatterns: string[];
 }
 
+export type DesignMode = "editorial" | "immersive" | "interactive" | "minimalist" | "playful" | "corporate";
+
 export interface BrandAssets {
   logoUrl?: string;
   primaryColor?: string;
@@ -50,6 +52,7 @@ export interface MasterBrief {
   motionLevel: 'none' | 'subtle' | 'moderate' | 'dramatic';
   specialEffects: string[];
   creativeDirection?: CreativeDirection;
+  designMode?: DesignMode;
   headline: string;
   subheadline: string;
   sections: MasterBriefSection[];

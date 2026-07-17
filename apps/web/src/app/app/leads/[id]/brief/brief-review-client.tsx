@@ -65,6 +65,15 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
     dramatic: 'Dramatic',
   }[brief.motionLevel];
 
+  const designModeLabels: Record<string, { label: string; description: string }> = {
+    editorial: { label: 'Editorial', description: 'Magazine-style with heavy typography' },
+    immersive: { label: 'Immersive', description: 'Cinematic parallax and ambient motion' },
+    interactive: { label: 'Interactive', description: 'Abundant hover states and micro-animations' },
+    minimalist: { label: 'Minimalist', description: 'Dramatic whitespace and bold contrasts' },
+    playful: { label: 'Playful', description: 'Organic shapes and bouncy animations' },
+    corporate: { label: 'Corporate', description: 'Professional polish with subtle motion' },
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -206,7 +215,21 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
 
             {/* Creative Direction */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-zinc-300">Creative Direction</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-zinc-300">Creative Direction</h2>
+                {brief.designMode && designModeLabels[brief.designMode] && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-500">Design Mode:</span>
+                    <span className="text-sm px-3 py-1 bg-gradient-to-r from-violet-600/30 to-blue-600/30 border border-violet-500/30 rounded-full text-violet-300 font-medium">
+                      {designModeLabels[brief.designMode].label}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {brief.designMode && designModeLabels[brief.designMode] && (
+                <p className="text-sm text-zinc-400 -mt-2">{designModeLabels[brief.designMode].description}</p>
+              )}
 
               {brief.creativeDirection && (
                 <div className="space-y-4">
