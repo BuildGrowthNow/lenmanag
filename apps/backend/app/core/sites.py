@@ -12,6 +12,7 @@ from io import BytesIO
 from typing import Any, cast
 from uuid import uuid4
 
+from pymongo.results import UpdateResult
 from app.core.analytics import analytics_repository
 from app.core.color_system import generate_color_system
 from app.core.config import get_settings
@@ -3509,12 +3510,12 @@ class SiteRepository:
             return
 
         # Persist to MongoDB with upsert
-        result = await database["generated_sites"].replace_one(
+        db_result: UpdateResult = await database["generated_sites"].replace_one(
             {"id": site_id}, site_doc, upsert=True
         )
 
         # CRITICAL FIX: Verify persistence succeeded
-        if result.matched_count == 0 and result.upserted_id is None:
+        if db_result.matched_count == 0 and db_result.upserted_id is None:
             error_msg = f"Failed to persist site {site_id} version {version}: replace_one returned no match or upsert"
             logger.error(error_msg)
             raise RuntimeError(error_msg)
@@ -3536,8 +3537,8 @@ class SiteRepository:
             "Successfully persisted AI-generated site %s version %d (MongoDB, matched=%d, upserted=%s)",
             site_id,
             version,
-            result.matched_count,
-            result.upserted_id is not None,
+            db_result.matched_count,
+            db_result.upserted_id is not None,
         )
 
     async def _dispatch_generation_job(

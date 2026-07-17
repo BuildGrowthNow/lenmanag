@@ -12,7 +12,6 @@ async def list_users():
 
     if not users:
         print("[INFO] No users found in database")
-        print(f"[INFO] Database: {repo.db.name}")
         return
 
     print(f"[INFO] Found {len(users)} users:")

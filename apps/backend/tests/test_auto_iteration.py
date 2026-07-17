@@ -67,9 +67,9 @@ async def test_automatic_second_pass_visual_redesign_iteration():
         await database["site_extractions"].insert_one(extraction_doc)
 
         # Create and approve a brief so generation is allowed
-        brief = await lead_repository.create_brief(site_id)
+        brief = await lead_repository.create_master_brief(site_id)
         assert brief is not None
-        await lead_repository.approve_brief(site_id, approved_by="tester")
+        await lead_repository.approve_master_brief(site_id, approved_by="tester")
 
         # Mock visual redesign brief generation to produce baseline components
         initial_redesign = [

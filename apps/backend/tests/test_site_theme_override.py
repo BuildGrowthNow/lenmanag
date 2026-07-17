@@ -55,9 +55,9 @@ def test_operator_theme_override_applied():
         await database["site_extractions"].insert_one(extraction_doc)
 
         # Create and approve a brief so generation is allowed
-        brief = await lead_repository.create_brief(site_id)
+        brief = await lead_repository.create_master_brief(site_id)
         assert brief is not None
-        await lead_repository.approve_brief(site_id, approved_by="tester")
+        await lead_repository.approve_master_brief(site_id, approved_by="tester")
 
         # First generation to create the site document
         site_before = await site_repository.generate_site(site_id)

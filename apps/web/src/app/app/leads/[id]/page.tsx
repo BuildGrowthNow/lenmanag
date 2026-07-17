@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { PageFrame } from "@/components/shell/page-frame";
 import { Badge } from "@/components/ui/badge";
@@ -7,10 +11,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadBriefReview } from "@/components/lead-brief-review";
 import { LeadExtractionControls } from "@/components/lead-extraction-controls";
-import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages } from "@/lib/api/leads";
+import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages, getLeadAnalysis } from "@/lib/api/leads";
 import { getSite } from "@/lib/api/sites";
 import { evaluateExtractionHealth } from "@/lib/extraction-health";
-import type { LeadDetail, ExtractionSnapshot, MasterBrief, GeneratedSite, PipelineStage } from "@/lib/types";
+import type { LeadDetail, ExtractionSnapshot, MasterBrief, GeneratedSite, PipelineStage, ExtractionAnalysisResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -179,9 +183,11 @@ function StageWorkspace({
                 <span className="text-base font-normal text-muted"> / 100{!hasScreenshotQa ? " (no visual QA)" : ""}</span>
               </div>
             </div>
-            {site ? (
-              <Link href={`/st/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
-            ) : null}
+            {site && site.previewSlug ? (
+              <Link href={`/sites/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
+            ) : (
+              <Button variant="secondary" disabled>Preview (loading...)</Button>
+            )}
           </div>
           {site ? (
             <div className="space-y-2">
@@ -219,9 +225,11 @@ function StageWorkspace({
             <span className="font-semibold text-emerald-300">{score}/100</span>.
           </p>
           <div className="flex flex-wrap gap-2">
-            {site ? (
-              <Link href={`/st/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
-            ) : null}
+            {site && site.previewSlug ? (
+              <Link href={`/sites/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
+            ) : (
+              <Button variant="secondary" disabled>Preview (loading...)</Button>
+            )}
             <Link href={`/app/sites/${lead.id}`} className={buttonVariants()}>Publish →</Link>
           </div>
         </div>
@@ -233,11 +241,13 @@ function StageWorkspace({
     return (
       <WorkspaceCard title="Published">
         <div className="space-y-4">
-          {site ? (
+          {site && site.previewUrl ? (
             <a href={site.previewUrl} target="_blank" rel="noreferrer" className="text-accent hover:underline break-all text-sm">
               {site.previewUrl} ↗
             </a>
-          ) : null}
+          ) : (
+            <p className="text-sm text-muted">Site preview URL not available yet</p>
+          )}
           {site?.publishedAt ? (
             <p className="text-xs text-muted">Published {formatDateTime(site.publishedAt)}</p>
           ) : null}
@@ -308,15 +318,103 @@ function WorkspaceCard({
 
 // ── Page ──────────────────────────────────────────────────────────────────
 
-export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const [lead, extraction, pages, brief, site] = await Promise.all([
-    getLead(id),
-    getLeadExtraction(id),
-    getLeadPages(id),
-    getLeadMasterBrief(id),
-    getSite(id),
-  ]);
+export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
+  const [id, setId] = useState<string | null>(null);
+  const [lead, setLead] = useState<LeadDetail | null>(null);
+  const [extraction, setExtraction] = useState<ExtractionSnapshot | null>(null);
+  const [analysis, setAnalysis] = useState<ExtractionAnalysisResponse | null>(null);
+  const [pages, setPages] = useState<{ pages: any[] } | null>(null);
+  const [brief, setBrief] = useState<MasterBrief | null>(null);
+  const [site, setSite] = useState<GeneratedSite | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load params
+  useEffect(() => {
+    let mounted = true;
+    async function loadParams() {
+      const p = await params;
+      if (mounted) setId(p.id);
+    }
+    void loadParams();
+    return () => { mounted = false; };
+  }, [params]);
+
+  // Initial data load
+  useEffect(() => {
+    if (!id) return;
+    let mounted = true;
+
+    async function loadData() {
+      try {
+        const [leadData, extractionData, pagesData, briefData, siteData, analysisData] = await Promise.all([
+          getLead(id),
+          getLeadExtraction(id),
+          getLeadPages(id),
+          getLeadMasterBrief(id),
+          getSite(id),
+          getLeadAnalysis(id),
+        ]);
+
+        if (!mounted) return;
+
+        setLead(leadData);
+        setExtraction(extractionData);
+        setPages(pagesData);
+        setBrief(briefData);
+        setSite(siteData);
+        setAnalysis(analysisData);
+        setLoading(false);
+      } catch (error) {
+        console.error("Failed to load lead data:", error);
+        setLoading(false);
+      }
+    }
+
+    void loadData();
+    return () => { mounted = false; };
+  }, [id]);
+
+  // Auto-refresh polling when jobs are running
+  useEffect(() => {
+    if (!id || !lead) return;
+
+    const hasRunningJob = lead.latestJob?.status === "running";
+    const isGenerating = lead.pipelineStage === "generating" || lead.pipelineStage === "extracting" || lead.pipelineStage === "briefing";
+
+    if (!hasRunningJob && !isGenerating) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const [updatedLead, updatedSite, updatedAnalysis] = await Promise.all([
+          getLead(id),
+          getSite(id),
+          getLeadAnalysis(id),
+        ]);
+
+        setLead(updatedLead);
+        if (updatedSite) setSite(updatedSite);
+        if (updatedAnalysis) setAnalysis(updatedAnalysis);
+
+        // Stop polling if job completed
+        if (updatedLead?.latestJob?.status !== "running") {
+          router.refresh();
+        }
+      } catch (error) {
+        console.error("Polling error:", error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [id, lead, router]);
+
+  if (loading) {
+    return (
+      <PageFrame eyebrow="Lead detail" title="Loading..." description="">
+        <div className="text-sm text-muted">Loading lead details...</div>
+      </PageFrame>
+    );
+  }
 
   if (!lead) {
     return (
@@ -482,6 +580,49 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                     <div className="mt-0.5 text-xs text-muted">Sitemap: {extraction.sitemapStatus}</div>
                   </div>
                 </div>
+
+                {/* Analysis Results */}
+                {analysis && analysis.analysis ? (
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-emerald-300 mb-2">AI Analysis</div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted">Confidence</span>
+                        <span className="font-semibold text-emerald-300">{analysis.analysis.confidence}%</span>
+                      </div>
+                      {analysis.analysis.valueProposition ? (
+                        <div>
+                          <div className="text-xs text-muted mb-1">Value Proposition:</div>
+                          <p className="text-xs text-text">{analysis.analysis.valueProposition}</p>
+                        </div>
+                      ) : null}
+                      {analysis.analysis.positioning ? (
+                        <div>
+                          <div className="text-xs text-muted mb-1">Positioning:</div>
+                          <p className="text-xs text-text">{analysis.analysis.positioning}</p>
+                        </div>
+                      ) : null}
+                      {analysis.analysis.services && analysis.analysis.services.length > 0 ? (
+                        <div className="pt-2">
+                          <div className="text-xs text-muted mb-1">Services Detected:</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {analysis.analysis.services.slice(0, 5).map((service, idx) => (
+                              <Badge key={idx} className="border-emerald-500/30 bg-emerald-500/10 text-emerald-200 text-xs">
+                                {service}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {analysis.analysis.tone ? (
+                        <div className="text-xs">
+                          <span className="text-muted">Tone: </span>
+                          <span className="text-text">{analysis.analysis.tone}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
 
                 {gapItems.length > 0 ? (
                   <div>

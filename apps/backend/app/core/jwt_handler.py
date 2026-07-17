@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import jwt
+import jwt  # type: ignore[import-untyped]
 
 from app.core.config import get_settings
 

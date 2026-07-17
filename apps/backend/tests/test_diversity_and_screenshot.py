@@ -727,9 +727,9 @@ def test_phase17_screenshot_qa_and_improvement_brief():
         await database["site_extractions"].insert_one(extraction_doc)
 
         # Create and approve a brief so generation is allowed
-        brief = await lead_repository.create_brief(site_id)
+        brief = await lead_repository.create_master_brief(site_id)
         assert brief is not None
-        await lead_repository.approve_brief(site_id, approved_by="tester")
+        await lead_repository.approve_master_brief(site_id, approved_by="tester")
 
         # Prepare mocked screenshot comparator and analyzer
         comparator = ScreenshotComparator()

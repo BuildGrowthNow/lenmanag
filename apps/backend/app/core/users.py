@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Optional
 
-import bcrypt
+import bcrypt  # type: ignore[import-untyped]
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.mongo import get_database

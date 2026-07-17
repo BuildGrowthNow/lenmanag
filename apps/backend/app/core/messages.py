@@ -148,13 +148,13 @@ class MessageRepository:
     ) -> MessageDraft | None:
         await self._maybe_ensure_indexes()
         lead = await lead_repository.get_lead(lead_id)
-        brief = await lead_repository.get_brief(lead_id)
+        brief = await lead_repository.get_master_brief(lead_id)
         if lead is None or brief is None or brief.approvalState != "approved":
             return None
         site = await site_repository.get_site(lead_id)
-        tone = brief.toneProfile.value or "clear"
+        tone = brief.toneAndVoice or "clear"
         angle = (
-            brief.conversionAngle.value
+            brief.conversionAction
             or "Keep the outreach tied to the approved preview story."
         )
         cta_primary = site.ctaStrategy.primary if site else None
@@ -398,12 +398,12 @@ class MessageRepository:
         if doc is None:
             return None
         draft = MessageDraft.model_validate(doc)
-        brief = await lead_repository.get_brief(draft.leadId)
+        brief = await lead_repository.get_master_brief(draft.leadId)
         site = await site_repository.get_site(draft.leadId)
         return {
             "draftId": draft.id,
             "leadId": draft.leadId,
-            "briefSummary": brief.valuePropositionSummary.value if brief else None,
+            "briefSummary": brief.valueProposition if brief else None,
             "sitePreviewUrl": site.previewUrl if site else None,
             "sitePreviewSlug": site.previewSlug if site else None,
             "ctaPrimaryLabel": draft.ctaPrimaryLabel,

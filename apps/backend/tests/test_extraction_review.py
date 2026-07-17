@@ -201,12 +201,12 @@ async def test_approve_brief_blocked_by_critical_gaps():
     await database["site_extractions"].insert_one(extraction_doc)
 
     # Create a brief
-    brief = await lead_repository.create_brief(lead_id)
+    brief = await lead_repository.create_master_brief(lead_id)
     assert brief is not None
 
     # Attempt to approve brief with critical gaps should raise ValueError
     try:
-        await lead_repository.approve_brief(lead_id, approved_by="tester")
+        await lead_repository.approve_master_brief(lead_id, approved_by="tester")
         assert False, "Expected ValueError for critical gaps"
     except ValueError as exc:
         assert str(exc) == "brief_requires_critical_gaps_resolved"
@@ -272,11 +272,11 @@ async def test_approve_brief_succeeds_without_critical_gaps():
     await database["site_extractions"].insert_one(extraction_doc)
 
     # Create a brief
-    brief = await lead_repository.create_brief(lead_id)
+    brief = await lead_repository.create_master_brief(lead_id)
     assert brief is not None
 
     # Approve brief should succeed with non-critical gaps
-    approved_brief = await lead_repository.approve_brief(lead_id, approved_by="tester")
+    approved_brief = await lead_repository.approve_master_brief(lead_id, approved_by="tester")
     assert approved_brief is not None
     assert approved_brief.approvalState == "approved"
     assert approved_brief.approvedBy == "tester"
