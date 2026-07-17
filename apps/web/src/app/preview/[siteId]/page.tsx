@@ -13,7 +13,7 @@ interface PageProps {
 
 async function fetchSiteBundle(siteId: string) {
   const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-  const res = await fetch(`${apiUrl}/api/v1/sites/${siteId}`, {
+  const res = await fetch(`${apiUrl}/api/v1/public/st/${siteId}`, {
     cache: 'no-store',
   });
 
