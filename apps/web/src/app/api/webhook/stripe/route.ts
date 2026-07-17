@@ -63,11 +63,15 @@ export async function POST(request: NextRequest) {
               orderId: leadId,
               price: lead.price,
               currency: lead.currency,
+              lineItems: lead.lineItems,
             }),
             sendCustomerConfirmation({
               name: lead.name,
               email: lead.email,
               orderId: leadId,
+              price: lead.price,
+              currency: lead.currency,
+              lineItems: lead.lineItems,
             }),
           ]).catch((error) => {
             console.error("Error sending email notifications:", error);

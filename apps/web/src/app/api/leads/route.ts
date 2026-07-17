@@ -73,6 +73,8 @@ export async function POST(request: NextRequest) {
         name: body.name,
         email: body.email,
         orderId: result.insertedId.toString(),
+        price: lead.price,
+        currency: lead.currency,
       }),
     ]).catch((error) => {
       console.error("Error sending email notifications:", error);
