@@ -36,6 +36,14 @@ interface LandingLead {
   currency: string;
   createdAt: string;
   updatedAt: string;
+  selectedServices?: { [key: string]: number };
+  lineItems?: Array<{
+    id: string;
+    name: string;
+    price: number;
+    quantity: number;
+    billingCycle: "one-time" | "monthly";
+  }>;
   metadata?: {
     userAgent?: string | null;
     referrer?: string | null;
@@ -159,6 +167,15 @@ export default function OrdersPage() {
     }
   }
 
+  // Calculate monthly recurring revenue
+  const monthlyRecurring = leads
+    .filter((l) => l.paymentStatus === "paid" && l.lineItems)
+    .reduce((sum, l) => {
+      const monthlyItems = l.lineItems?.filter((item) => item.billingCycle === "monthly") || [];
+      const monthlyTotal = monthlyItems.reduce((itemSum, item) => itemSum + item.price * item.quantity, 0);
+      return sum + monthlyTotal;
+    }, 0);
+
   const stats = {
     total: leads.length,
     pending: leads.filter((l) => l.status === "pending").length,
@@ -166,6 +183,7 @@ export default function OrdersPage() {
     totalRevenue: leads
       .filter((l) => l.paymentStatus === "paid")
       .reduce((sum, l) => sum + l.price, 0),
+    monthlyRecurring,
   };
 
   return (
@@ -196,8 +214,14 @@ export default function OrdersPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Revenue</CardDescription>
+            <CardDescription>Total Revenue</CardDescription>
             <CardTitle className="text-3xl">{formatCurrency(stats.totalRevenue, "USD")}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>Monthly Recurring</CardDescription>
+            <CardTitle className="text-3xl">{formatCurrency(stats.monthlyRecurring, "USD")}</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -256,13 +280,27 @@ export default function OrdersPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {getStatusBadge(lead.status)}
-                      {getPaymentBadge(lead.paymentStatus)}
-                      <Badge className="border-accent/40 bg-accent/10 text-accent">
-                        <DollarSign className="mr-1 h-3 w-3" />
-                        {formatCurrency(lead.price, lead.currency)}
-                      </Badge>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        {getStatusBadge(lead.status)}
+                        {getPaymentBadge(lead.paymentStatus)}
+                        <Badge className="border-accent/40 bg-accent/10 text-accent">
+                          <DollarSign className="mr-1 h-3 w-3" />
+                          {formatCurrency(lead.price, lead.currency)}
+                        </Badge>
+                      </div>
+                      {/* Inline service summary */}
+                      {lead.lineItems && lead.lineItems.length > 1 && (
+                        <div className="text-xs text-muted">
+                          {lead.lineItems.slice(1).map((item, idx) => (
+                            <span key={idx}>
+                              {idx > 0 && ", "}
+                              {item.quantity > 1 ? `${item.quantity}x ` : ""}
+                              {item.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -283,6 +321,32 @@ export default function OrdersPage() {
                   {/* Expanded Details */}
                   {selectedLead?._id === lead._id && (
                     <div className="mt-6 space-y-4 border-t border-line pt-6">
+                      {/* Order Items Breakdown */}
+                      {lead.lineItems && lead.lineItems.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-text mb-2">Order Items</h4>
+                          <div className="space-y-2">
+                            {lead.lineItems.map((item, i) => (
+                              <div key={i} className="flex justify-between text-sm">
+                                <span className="text-muted">
+                                  {item.quantity > 1 ? `${item.quantity}x ` : ""}{item.name}
+                                  <Badge className="ml-2 text-[10px]">
+                                    {item.billingCycle === "monthly" ? "MONTHLY" : "ONE-TIME"}
+                                  </Badge>
+                                </span>
+                                <span className="font-medium text-text">
+                                  ${(item.price * item.quantity).toLocaleString()}
+                                </span>
+                              </div>
+                            ))}
+                            <div className="border-t border-line pt-2 mt-2 flex justify-between text-base font-bold">
+                              <span>Total</span>
+                              <span className="text-accent">{formatCurrency(lead.price, lead.currency)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Project Details */}
                       <div>
                         <h4 className="text-sm font-semibold text-text mb-2">Project Details</h4>

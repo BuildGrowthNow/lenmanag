@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { connectToDatabase } from "@/lib/mongodb";
-import { ADD_ONS, BASE_PRICE, calculateTotal, type SelectedAddOns } from "@/lib/pricing";
+import { EXTRA_SERVICES, BASE_PRICE, calculateTotal, getSelectedItems, type SelectedAddOns } from "@/lib/pricing";
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,6 +25,18 @@ export async function POST(request: NextRequest) {
 
     const selectedAddOns: SelectedAddOns = addOns || {};
     const totalPrice = calculateTotal(selectedAddOns);
+    const lineItems = getSelectedItems(selectedAddOns);
+
+    // Build service summary for metadata
+    const servicesSummary = lineItems
+      .slice(1) // Skip base package
+      .map((item) => {
+        if (item.quantity > 1) {
+          return `${item.quantity}x ${item.name}`;
+        }
+        return item.name;
+      })
+      .join(", ");
 
     // Save lead to MongoDB first
     const { db } = await connectToDatabase();
@@ -40,7 +52,8 @@ export async function POST(request: NextRequest) {
       orderType: "website_generation",
       price: totalPrice,
       currency: "USD",
-      addOns: selectedAddOns,
+      selectedServices: selectedAddOns,
+      lineItems: lineItems,
       createdAt: new Date(),
       updatedAt: new Date(),
       metadata: {
@@ -56,8 +69,8 @@ export async function POST(request: NextRequest) {
     const result = await db.collection("landing_leads").insertOne(lead);
     const leadId = result.insertedId.toString();
 
-    // Build Stripe line items
-    const lineItems: { price_data: { currency: string; product_data: { name: string; description?: string }; unit_amount: number }; quantity: number }[] = [
+    // Build Stripe line items from selected services
+    const stripeLineItems: { price_data: { currency: string; product_data: { name: string; description?: string }; unit_amount: number }; quantity: number }[] = [
       {
         price_data: {
           currency: "usd",
@@ -71,17 +84,17 @@ export async function POST(request: NextRequest) {
       },
     ];
 
-    for (const addon of ADD_ONS) {
-      const qty = selectedAddOns[addon.id] || 0;
+    for (const service of EXTRA_SERVICES) {
+      const qty = selectedAddOns[service.id] || 0;
       if (qty > 0) {
-        lineItems.push({
+        stripeLineItems.push({
           price_data: {
             currency: "usd",
             product_data: {
-              name: addon.name,
-              description: addon.description,
+              name: service.name,
+              description: `${service.description}${service.billingCycle === "monthly" ? " (Monthly recurring)" : ""}`,
             },
-            unit_amount: addon.price * 100,
+            unit_amount: service.price * 100,
           },
           quantity: qty,
         });
@@ -95,11 +108,12 @@ export async function POST(request: NextRequest) {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: email,
-      line_items: lineItems,
+      line_items: stripeLineItems,
       metadata: {
         leadId,
         customerName: name,
         company: company || "",
+        servicesSummary: servicesSummary || "Base package only",
       },
       success_url: `${appUrl}/landing?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/landing?canceled=true`,

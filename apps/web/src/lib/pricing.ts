@@ -25,6 +25,11 @@ export interface AddOn {
   popular?: boolean;
 }
 
+export interface ExtraService extends PricingOption {
+  type: "toggle" | "quantity";
+  maxQuantity?: number;
+}
+
 export const BASE_PRICE = 1000;
 export const BASE_PAGES = 1;
 export const CURRENCY = "usd";
@@ -47,14 +52,16 @@ export const MAIN_PACKAGE: PricingOption = {
 };
 
 // Extra Services (Collapsible Dropdown Section)
-export const EXTRA_SERVICES: PricingOption[] = [
+export const EXTRA_SERVICES: ExtraService[] = [
   {
     id: "extra_pages",
     name: "Additional Pages",
-    price: 150,
+    price: 50,
     billingCycle: "one-time",
     description: "Per page (up to 50 pages)",
     category: "addon",
+    type: "quantity",
+    maxQuantity: 50,
     features: [
       { text: "Add more pages to your site" },
       { text: "Same beautiful design quality" },
@@ -67,6 +74,7 @@ export const EXTRA_SERVICES: PricingOption[] = [
     billingCycle: "one-time",
     description: "Starting at $300",
     category: "addon",
+    type: "toggle",
     features: [
       { text: "Connect to special tools" },
       { text: "Custom functionality for your business" },
@@ -80,6 +88,7 @@ export const EXTRA_SERVICES: PricingOption[] = [
     billingCycle: "monthly",
     description: "Ongoing support and updates",
     category: "service",
+    type: "toggle",
     features: [
       { text: "1-hour strategy meeting every month" },
       { text: "3 updates or changes per month" },
@@ -94,6 +103,7 @@ export const EXTRA_SERVICES: PricingOption[] = [
     billingCycle: "monthly",
     description: "Fast and reliable hosting",
     category: "service",
+    type: "toggle",
     features: [
       { text: "Fast, reliable website hosting" },
       { text: "Automatic scaling" },
@@ -103,74 +113,33 @@ export const EXTRA_SERVICES: PricingOption[] = [
   },
 ];
 
-export const ADD_ONS: AddOn[] = [
-  {
-    id: "extra_pages",
-    name: "Extra Pages",
-    description: "Additional pages beyond the included landing page (up to 4 more)",
-    price: 200,
-    type: "quantity",
-    maxQuantity: 4,
-  },
-  {
-    id: "custom_domain",
-    name: "Custom Domain",
-    description: "Domain registration, DNS setup & SSL certificate",
-    price: 150,
-    type: "toggle",
-  },
-  {
-    id: "advanced_seo",
-    name: "Advanced SEO",
-    description: "Keyword research, schema markup, sitemap & Search Console setup",
-    price: 300,
-    type: "toggle",
-    popular: true,
-  },
-  {
-    id: "blog_cms",
-    name: "Blog / CMS",
-    description: "Content management system with blog functionality",
-    price: 250,
-    type: "toggle",
-  },
-  {
-    id: "analytics_tracking",
-    name: "Analytics & Tracking",
-    description: "GA4, heatmaps & conversion tracking setup",
-    price: 100,
-    type: "toggle",
-  },
-  {
-    id: "priority_delivery",
-    name: "Priority Delivery (1 day)",
-    description: "Get your website delivered in 24 hours instead of 3 days",
-    price: 500,
-    type: "toggle",
-  },
-];
-
 export interface SelectedAddOns {
-  [addonId: string]: number; // quantity (0 = not selected, 1+ = selected/qty)
+  [serviceId: string]: number; // 0 = not selected, 1 = toggle selected, 2+ = quantity
 }
 
-export function calculateTotal(selectedAddOns: SelectedAddOns): number {
+export function calculateTotal(selectedServices: SelectedAddOns): number {
   let total = BASE_PRICE;
-  for (const addon of ADD_ONS) {
-    const qty = selectedAddOns[addon.id] || 0;
-    total += addon.price * qty;
+  for (const service of EXTRA_SERVICES) {
+    const qty = selectedServices[service.id] || 0;
+    total += service.price * qty;
   }
   return total;
 }
 
-export function getSelectedItems(selectedAddOns: SelectedAddOns) {
-  const items: { name: string; price: number; quantity: number }[] = [
-    { name: "Professional Website (Landing Page)", price: BASE_PRICE, quantity: 1 },
+export function getSelectedItems(selectedServices: SelectedAddOns) {
+  const items: { id: string; name: string; price: number; quantity: number; billingCycle: "one-time" | "monthly" }[] = [
+    { id: "professional", name: "Professional Website", price: BASE_PRICE, quantity: 1, billingCycle: "one-time" },
   ];
-  for (const addon of ADD_ONS) {
-    const qty = selectedAddOns[addon.id] || 0;
+  for (const service of EXTRA_SERVICES) {
+    const qty = selectedServices[service.id] || 0;
     if (qty > 0) {
-      items.push({ name: addon.name, price: addon.price, quantity: qty });
+      items.push({
+        id: service.id,
+        name: service.name,
+        price: service.price,
+        quantity: qty,
+        billingCycle: service.billingCycle,
+      });
     }
   }
   return items;

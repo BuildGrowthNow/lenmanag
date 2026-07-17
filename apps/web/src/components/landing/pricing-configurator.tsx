@@ -1,17 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
   Zap,
   ChevronDown,
   Star,
+  Plus,
+  Minus,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   MAIN_PACKAGE,
   EXTRA_SERVICES,
+  BASE_PRICE,
+  calculateTotal,
   type SelectedAddOns,
 } from "@/lib/pricing";
 import { useSupportsHover } from "@/hooks/use-supports-hover";
@@ -23,7 +28,45 @@ interface PricingConfiguratorProps {
 
 export function PricingConfigurator({ onCheckout, isLoading }: PricingConfiguratorProps) {
   const [showExtras, setShowExtras] = useState(false);
+  const [selectedServices, setSelectedServices] = useState<SelectedAddOns>({});
+  const [totalPrice, setTotalPrice] = useState(BASE_PRICE);
   const supportsHover = useSupportsHover();
+
+  useEffect(() => {
+    setTotalPrice(calculateTotal(selectedServices));
+  }, [selectedServices]);
+
+  const handleToggleService = (serviceId: string) => {
+    setSelectedServices((prev) => {
+      const current = prev[serviceId] || 0;
+      return {
+        ...prev,
+        [serviceId]: current > 0 ? 0 : 1,
+      };
+    });
+  };
+
+  const handleIncrementQuantity = (serviceId: string, maxQuantity: number) => {
+    setSelectedServices((prev) => {
+      const current = prev[serviceId] || 0;
+      if (current >= maxQuantity) return prev;
+      return {
+        ...prev,
+        [serviceId]: current + 1,
+      };
+    });
+  };
+
+  const handleDecrementQuantity = (serviceId: string) => {
+    setSelectedServices((prev) => {
+      const current = prev[serviceId] || 0;
+      if (current <= 0) return prev;
+      return {
+        ...prev,
+        [serviceId]: current - 1,
+      };
+    });
+  };
 
   return (
     <div className="w-full">
@@ -81,10 +124,18 @@ export function PricingConfigurator({ onCheckout, isLoading }: PricingConfigurat
               <p className="text-slate-400">{MAIN_PACKAGE.description}</p>
             </div>
             <div>
-              <div className="text-4xl md:text-5xl font-bold text-white">
-                ${MAIN_PACKAGE.price.toLocaleString()}
+              <motion.div
+                key={totalPrice}
+                initial={{ scale: 1 }}
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 0.3 }}
+                className="text-4xl md:text-5xl font-bold text-yellow-500"
+              >
+                ${totalPrice.toLocaleString()}
+              </motion.div>
+              <div className="text-sm text-slate-400">
+                {totalPrice > BASE_PRICE ? "total price" : "one-time payment"}
               </div>
-              <div className="text-sm text-slate-400">one-time payment</div>
             </div>
           </div>
 
@@ -101,7 +152,7 @@ export function PricingConfigurator({ onCheckout, isLoading }: PricingConfigurat
           {/* CTA */}
           <motion.div {...(supportsHover && { whileHover: { scale: 1.02 } })} whileTap={{ scale: 0.98 }}>
             <Button
-              onClick={() => onCheckout({})}
+              onClick={() => onCheckout(selectedServices)}
               disabled={isLoading}
               className="w-full py-6 text-lg font-bold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-xl shadow-2xl shadow-yellow-500/50 transition-all disabled:opacity-50"
             >
@@ -147,47 +198,103 @@ export function PricingConfigurator({ onCheckout, isLoading }: PricingConfigurat
               className="overflow-hidden"
             >
               <div className="pt-4 space-y-4">
-                {EXTRA_SERVICES.map((service) => (
-                  <div
-                    key={service.id}
-                    className="p-5 rounded-2xl bg-white/5 border border-white/10"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <h4 className="font-semibold text-white">{service.name}</h4>
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${
-                              service.billingCycle === "monthly"
-                                ? "bg-blue-500/20 text-blue-400"
-                                : "bg-green-500/20 text-green-400"
-                            }`}
-                          >
-                            {service.billingCycle === "monthly" ? "MONTHLY" : "ONE-TIME"}
-                          </span>
-                        </div>
-                        <p className="text-sm text-slate-400 mt-1">{service.description}</p>
-                      </div>
-                      <div className="text-right flex-shrink-0 ml-4">
-                        <div className="text-xl font-bold text-white">
-                          ${service.price}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {service.billingCycle === "monthly" ? "/month" : "per page"}
-                        </div>
-                      </div>
-                    </div>
+                {EXTRA_SERVICES.map((service) => {
+                  const quantity = selectedServices[service.id] || 0;
+                  const isSelected = quantity > 0;
 
-                    <div className="space-y-2">
-                      {service.features.map((feature, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-                          <span className="text-sm text-slate-300">{feature.text}</span>
+                  return (
+                    <div
+                      key={service.id}
+                      className={`p-5 rounded-2xl border transition-all ${
+                        isSelected
+                          ? "bg-yellow-500/10 border-yellow-500/50"
+                          : "bg-white/5 border-white/10"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <h4 className="font-semibold text-white">{service.name}</h4>
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${
+                                service.billingCycle === "monthly"
+                                  ? "bg-blue-500/20 text-blue-400"
+                                  : "bg-green-500/20 text-green-400"
+                              }`}
+                            >
+                              {service.billingCycle === "monthly" ? "MONTHLY" : "ONE-TIME"}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-400 mt-1">{service.description}</p>
                         </div>
-                      ))}
+                        <div className="text-right flex-shrink-0 ml-4">
+                          <div className="text-xl font-bold text-white">
+                            ${service.price}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {service.billingCycle === "monthly" ? "/month" : service.type === "quantity" ? "/page" : ""}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 mb-4">
+                        {service.features.map((feature, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                            <span className="text-sm text-slate-300">{feature.text}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Action Controls */}
+                      {service.type === "quantity" && service.maxQuantity ? (
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleDecrementQuantity(service.id)}
+                            disabled={quantity === 0}
+                            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                          >
+                            <Minus className="w-5 h-5 text-white" />
+                          </button>
+                          <div className="flex-1 text-center">
+                            <div className="text-lg font-bold text-white">{quantity}</div>
+                            <div className="text-xs text-slate-400">
+                              {quantity === 0 ? "Not added" : `${quantity} page${quantity > 1 ? "s" : ""}`}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleIncrementQuantity(service.id, service.maxQuantity!)}
+                            disabled={quantity >= service.maxQuantity}
+                            className="w-10 h-10 rounded-full bg-yellow-500 hover:bg-yellow-600 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                          >
+                            <Plus className="w-5 h-5 text-slate-900" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleToggleService(service.id)}
+                          className={`w-full py-3 rounded-xl font-semibold transition-all ${
+                            isSelected
+                              ? "bg-yellow-500 hover:bg-yellow-600 text-slate-900"
+                              : "bg-white/10 hover:bg-white/20 text-white"
+                          }`}
+                        >
+                          {isSelected ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <Check className="w-5 h-5" />
+                              Added
+                            </span>
+                          ) : (
+                            <span className="flex items-center justify-center gap-2">
+                              <Plus className="w-5 h-5" />
+                              Add Service
+                            </span>
+                          )}
+                        </button>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </motion.div>
           )}
