@@ -32,7 +32,7 @@ export type DashboardSummary = {
 export type LeadSourceType = "csv" | "manual" | "crm" | "future";
 export type LeadStatus = "new" | "needs_review" | "archived";
 export type JobStatus = "queued" | "running" | "completed" | "failed";
-export type LeadJobType = "lead_import" | "lead_create" | "lead_merge" | "site_crawl" | "site_refresh" | "site_generate" | "site_republish";
+export type LeadJobType = "lead_import" | "lead_create" | "lead_merge" | "site_crawl" | "site_refresh" | "site_generate" | "site_republish" | "analysis_refresh";
 
 export type PipelineStage =
   | "new"
@@ -185,6 +185,23 @@ export type ExtractionSnapshot = {
   assetRetentionDays?: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ExtractionAnalysis = {
+  services: string[];
+  tone: string;
+  primaryCTAs: string[];
+  audience: string;
+  valueProposition: string;
+  positioning: string;
+  confidence: number;
+  analyzedAt: string | null;
+};
+
+export type ExtractionAnalysisResponse = {
+  analysis: ExtractionAnalysis;
+  extractionId: string;
+  extractionVersion: number;
 };
 
 export type PageInventoryResponse = {

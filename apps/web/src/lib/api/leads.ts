@@ -1,5 +1,6 @@
 import { request, safeRequest } from "@/lib/api/client";
 import type {
+  ExtractionAnalysisResponse,
   ExtractionJobResponse,
   ExtractionSnapshot,
   LeadActionResponse,
@@ -10,7 +11,6 @@ import type {
   PageInventoryResponse,
   LeadUpsertPayload,
   MasterBrief,
-  MasterBriefApprovalRequest
 } from "@/lib/types";
 
 type LeadListQuery = {
@@ -120,6 +120,16 @@ export async function getLeadExtraction(id: string): Promise<ExtractionSnapshot 
 
 export async function getLeadPages(id: string): Promise<PageInventoryResponse | null> {
   return safeRequest<PageInventoryResponse | null>(`/api/leads/${id}/pages`, null);
+}
+
+// Analysis API
+
+export async function startLeadAnalysis(id: string): Promise<ExtractionJobResponse> {
+  return request(`/api/leads/${id}/analysis/start`, { method: "POST" });
+}
+
+export async function getLeadAnalysis(id: string): Promise<ExtractionAnalysisResponse | null> {
+  return safeRequest<ExtractionAnalysisResponse | null>(`/api/leads/${id}/analysis`, null);
 }
 
 // Master Brief API (AI-native brief system)

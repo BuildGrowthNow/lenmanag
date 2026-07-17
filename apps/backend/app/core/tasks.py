@@ -128,6 +128,30 @@ def run_site_generation_job_task(
         raise
 
 
+@celery_app.task(
+    name="lenquant.jobs.run_analysis_refresh",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=2,
+)
+def run_analysis_refresh_task(self, lead_id: str, job_id: str) -> None:
+    """Run analysis refresh on existing extraction data."""
+    try:
+        _run(lead_repository.run_analysis_refresh_job(lead_id=lead_id, job_id=job_id))
+    except Exception:
+        import logging
+
+        logging.error(
+            f"Analysis refresh failed for lead {lead_id}, job {job_id}. "
+            f"Retry {self.request.retries}/{self.max_retries}",
+            exc_info=True,
+        )
+        raise
+
+
 @celery_app.task(name="lenquant.jobs.purge_expired_assets")
 def purge_expired_assets_task() -> dict:
     mgr = AssetRetentionManager()

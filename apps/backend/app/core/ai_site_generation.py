@@ -67,17 +67,28 @@ async def generate_landing_page_code(
     # Extract code from response
     source_code = _extract_tsx_code(response)
 
-    # Validate syntax
+    # Validate syntax — retry with feedback if validation fails
     validation_errors = _validate_tsx_source(source_code)
     if validation_errors:
-        logger.warning(f"TSX validation errors: {validation_errors}")
-        return {
-            "success": False,
-            "sourceCode": source_code,
-            "compilationStatus": "validation_failed",
-            "validationErrors": validation_errors,
-            "error": f"Code validation failed: {', '.join(validation_errors[:3])}",
-        }
+        logger.warning(f"TSX validation errors on first attempt: {validation_errors}")
+        source_code = await _retry_generation_with_validation_feedback(
+            llm=llm,
+            original_code=source_code,
+            validation_errors=validation_errors,
+            master_brief=master_brief,
+            extraction=extraction,
+        )
+        # Re-validate after retry
+        final_errors = _validate_tsx_source(source_code)
+        if final_errors:
+            logger.error(f"TSX validation still failing after retry: {final_errors}")
+            return {
+                "success": False,
+                "sourceCode": source_code,
+                "compilationStatus": "validation_failed",
+                "validationErrors": final_errors,
+                "error": f"Code validation failed after retry: {', '.join(final_errors[:3])}",
+            }
 
     # Compile code
     logger.info(f"Compiling TSX code for site {site_id}")
@@ -138,6 +149,31 @@ def _build_generation_prompt(
 
     prompt = f"""You are an expert React developer building a landing page.
 
+## CRITICAL CONSTRAINTS — BROWSER-ONLY CODE
+
+This is a React component that runs in the BROWSER, NOT Node.js.
+Violating ANY of these rules will cause immediate rejection:
+
+- DO NOT import or use ANY Node.js built-in modules: fs, path, child_process, os, crypto, buffer, stream, net, http, https, url, util, events, cluster, dgram, dns, readline, tls, zlib, vm, worker_threads, perf_hooks
+- DO NOT use: __dirname, __filename, process.env, require(), module.exports
+- DO NOT use: eval(), Function() constructor, new Function(), or any dynamic code execution
+- DO NOT use filesystem operations of any kind (readFile, writeFile, readdir, etc.)
+- DO NOT reference any server-side APIs or Node.js globals
+- All data must come from props, React state, or hardcoded content from the brief
+- Images must use URLs (https://...) or data URIs, NEVER filesystem paths like ./image.png or /public/image.png
+
+## ALLOWED IMPORTS (use ONLY these)
+
+- React and React hooks: import React, {{ useState, useEffect, useRef, useMemo, useCallback }} from 'react'
+- Framer Motion: import {{ motion, useScroll, useTransform, AnimatePresence, useInView }} from 'framer-motion'
+- GSAP: import gsap from 'gsap' and import {{ ScrollTrigger }} from 'gsap/ScrollTrigger'
+- Three.js: import {{ Canvas, useFrame }} from '@react-three/fiber' and import {{ Box, Sphere, OrbitControls }} from '@react-three/drei'
+- Lenis: import Lenis from 'lenis'
+- shadcn/ui: import {{ Button, Card, Badge, Separator, Dialog }} from their respective paths
+- Radix UI: import * from '@radix-ui/react-*'
+- Lucide React icons: import {{ Phone, Mail, MapPin, CheckCircle, ArrowRight, Star, Menu, X }} from 'lucide-react'
+- embla-carousel-react: import useEmblaCarousel from 'embla-carousel-react'
+
 ## Master Brief
 
 **Business Goal**: {master_brief.businessGoal}
@@ -182,16 +218,17 @@ Import and use these libraries as needed:
 1. Export a single default React component as the complete landing page
 2. Use TypeScript/TSX syntax with proper types
 3. All content must come from the brief - NO placeholder text or lorem ipsum
-4. Self-contained component (all sections in one file, no external imports except libraries)
+4. Self-contained component (all sections in one file, no external imports except allowed libraries above)
 5. Use framer-motion for scroll animations and transitions
 6. Be creative with layout - vary section widths, use asymmetry, create visual interest
 7. Mobile responsive using Tailwind breakpoints (sm:, md:, lg:, xl:)
 8. Keep code clean and performant
-9. Images: use provided URLs from brand assets or leave image props empty
+9. Images: use provided URLs from brand assets or leave image props empty — NEVER use filesystem paths
 10. Aim for a premium, modern look (Awwwards-worthy)
 11. Use the brand colors provided - don't invent new ones
 12. Match the motion level specified: "{master_brief.motionLevel}"
 13. Implement special effects if specified: {", ".join(master_brief.specialEffects) if master_brief.specialEffects else "none"}
+14. NEVER import fs, path, child_process, or any Node.js module
 
 ## Component Structure
 
@@ -200,7 +237,7 @@ Import and use these libraries as needed:
 
 import React, {{ useState, useEffect, useRef }} from 'react';
 import {{ motion, useScroll, useTransform, AnimatePresence }} from 'framer-motion';
-// ... other imports as needed
+// ... other BROWSER-SAFE imports as needed (lucide-react, gsap, etc.)
 
 export default function LandingPage() {{
   // State and refs
@@ -324,27 +361,144 @@ def _extract_tsx_code(response: str) -> str:
     return code.strip()
 
 
+async def _retry_generation_with_validation_feedback(
+    *,
+    llm: Any,
+    original_code: str,
+    validation_errors: list[str],
+    master_brief: MasterBrief,  # noqa: ARG001
+    extraction: ExtractionSnapshot,  # noqa: ARG001
+    max_retries: int = 2,
+) -> str:
+    """
+    Retry code generation with validation error feedback.
+
+    Sends the LLM the original code with specific validation errors
+    and asks it to fix the issues while keeping the same design.
+    """
+    errors_text = "\n".join(f"  - {error}" for error in validation_errors)
+
+    for attempt in range(max_retries):
+        logger.info(
+            "Validation retry attempt %d/%d for code generation",
+            attempt + 1,
+            max_retries,
+        )
+
+        feedback_prompt = f"""Your previously generated React landing page component was REJECTED due to validation errors.
+
+## VALIDATION ERRORS (must fix ALL of these):
+{errors_text}
+
+## CRITICAL RULES — BROWSER-ONLY CODE:
+- This is a React component that runs in the BROWSER, NOT Node.js
+- DO NOT import or use ANY Node.js built-in modules: fs, path, child_process, os, crypto, buffer, stream, net, http, https, url, util
+- DO NOT use: __dirname, __filename, process.env, require(), module.exports
+- DO NOT use: eval(), new Function(), or any dynamic code execution
+- DO NOT use filesystem operations of any kind
+- All data must be hardcoded from the brief content or come from React state
+- Images must use URLs (https://...) or data URIs, NEVER filesystem paths
+
+## ALLOWED IMPORTS ONLY:
+- React and hooks from 'react'
+- framer-motion for animations
+- GSAP and ScrollTrigger
+- Three.js via @react-three/fiber and @react-three/drei
+- Lenis for smooth scrolling
+- shadcn/ui components
+- Radix UI primitives
+- Lucide React icons from 'lucide-react'
+- embla-carousel-react
+
+## PREVIOUS CODE (with errors):
+```tsx
+{original_code[:6000]}
+```
+
+## INSTRUCTIONS:
+1. Fix ALL validation errors listed above
+2. Keep the same design intent, layout, and content
+3. Remove any Node.js imports (fs, path, etc.) and replace with browser-safe alternatives
+4. Return ONLY the corrected TSX code — no markdown fences, no explanations
+"""
+
+        response = await llm.generate_text(
+            prompt=feedback_prompt,
+            temperature=0.5,
+            max_tokens=8192,
+        )
+
+        fixed_code = _extract_tsx_code(response)
+        new_errors = _validate_tsx_source(fixed_code)
+
+        if not new_errors:
+            logger.info("Validation retry succeeded on attempt %d", attempt + 1)
+            return fixed_code
+
+        logger.warning(
+            "Validation retry %d still has errors: %s",
+            attempt + 1,
+            new_errors[:3],
+        )
+        original_code = fixed_code
+        errors_text = "\n".join(f"  - {error}" for error in new_errors)
+
+    return original_code
+
+
 def _validate_tsx_source(source_code: str) -> list[str]:
     """
-    Basic validation of TSX source code for safety and correctness.
+    Validate generated TSX source code for safety and correctness.
 
     Returns list of validation errors, empty list if valid.
     """
     errors = []
 
-    # Check for dangerous imports/patterns
+    # Check for dangerous Node.js imports/patterns
     dangerous_patterns = [
-        ("fs", "File system access not allowed"),
-        ("child_process", "Process spawning not allowed"),
-        ("eval(", "eval() not allowed"),
-        ("Function(", "Function constructor not allowed"),
-        ("__dirname", "Node.js paths not allowed"),
-        ("process.env", "Environment access not allowed"),
+        ("import fs", "File system import not allowed (Node.js module)"),
+        ("from 'fs'", "File system import not allowed (Node.js module)"),
+        ("require('fs')", "File system require not allowed (Node.js module)"),
+        ('from "fs"', "File system import not allowed (Node.js module)"),
+        ("import path", "Path module import not allowed (Node.js module)"),
+        ("from 'path'", "Path module import not allowed (Node.js module)"),
+        ('from "path"', "Path module import not allowed (Node.js module)"),
+        ("child_process", "Process spawning not allowed (Node.js module)"),
+        ("from 'os'", "OS module not allowed (Node.js module)"),
+        ('from "os"', "OS module not allowed (Node.js module)"),
+        ("from 'crypto'", "Crypto module not allowed (Node.js module)"),
+        ('from "crypto"', "Crypto module not allowed (Node.js module)"),
+        ("from 'buffer'", "Buffer module not allowed (Node.js module)"),
+        ('from "buffer"', "Buffer module not allowed (Node.js module)"),
+        ("from 'stream'", "Stream module not allowed (Node.js module)"),
+        ('from "stream"', "Stream module not allowed (Node.js module)"),
+        ("eval(", "eval() not allowed — dynamic code execution is forbidden"),
+        (
+            "new Function(",
+            "Function constructor not allowed — dynamic code execution is forbidden",
+        ),
+        ("__dirname", "Node.js path global not allowed (browser-only code)"),
+        ("__filename", "Node.js path global not allowed (browser-only code)"),
+        ("process.env", "process.env not allowed (browser-only code)"),
+        ("require(", "require() not allowed — use ES module imports only"),
+        ("module.exports", "module.exports not allowed — use ES module exports only"),
+        ("readFileSync", "Filesystem operations not allowed"),
+        ("writeFileSync", "Filesystem operations not allowed"),
+        ("readFile(", "Filesystem operations not allowed"),
+        ("writeFile(", "Filesystem operations not allowed"),
     ]
 
     for pattern, message in dangerous_patterns:
         if pattern in source_code:
-            errors.append(message)
+            lines = source_code.split("\n")
+            matching_lines = [
+                f"Line {i + 1}: {line.strip()}"
+                for i, line in enumerate(lines)
+                if pattern in line
+            ]
+            error_detail = f"{message} (found in: {'; '.join(matching_lines[:3])})"
+            errors.append(error_detail)
+            logger.error("TSX validation error: %s", error_detail)
 
     # Check for export
     if "export default" not in source_code:

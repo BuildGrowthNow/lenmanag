@@ -12,6 +12,7 @@ from app.schemas.brief import (
     MasterBriefRefinementRequest,
 )
 from app.schemas.extraction import (
+    ExtractionAnalysisResponse,
     ExtractionJobResponse,
     ExtractionSnapshot,
     PageInventoryResponse,
@@ -202,6 +203,58 @@ async def get_pages(
     if pages is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     return success_response(pages, meta=response_meta(http_request))
+
+
+# Analysis Endpoints
+
+
+@router.post(
+    "/{lead_id}/analysis/start",
+    response_model=ResponseEnvelope[ExtractionJobResponse],
+)
+async def start_lead_analysis(
+    lead_id: str,
+    user_id: CurrentUserId,
+    http_request: Request,
+) -> ResponseEnvelope[ExtractionJobResponse]:
+    """Re-run LLM analysis on existing extraction data without re-crawling."""
+    try:
+        result = await lead_repository.start_analysis_refresh(lead_id)
+    except ValueError as exc:
+        if str(exc) == "extraction_not_completed":
+            raise HTTPException(
+                status_code=400,
+                detail="Extraction must be completed before running analysis.",
+            ) from exc
+        raise
+    if result is None:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+    await write_audit_log(
+        user_id,
+        "lead",
+        lead_id,
+        "analysis_refresh_start",
+        after=result.model_dump(),
+    )
+    return success_response(result, meta=response_meta(http_request))
+
+
+@router.get(
+    "/{lead_id}/analysis",
+    response_model=ResponseEnvelope[ExtractionAnalysisResponse],
+)
+async def get_lead_analysis(
+    lead_id: str,
+    _user_id: CurrentUserId,
+    http_request: Request,
+) -> ResponseEnvelope[ExtractionAnalysisResponse]:
+    """Get the latest LLM analysis for a lead's extraction."""
+    analysis_response = await lead_repository.get_analysis(lead_id)
+    if analysis_response is None:
+        raise HTTPException(
+            status_code=404, detail="No analysis available for this lead."
+        )
+    return success_response(analysis_response, meta=response_meta(http_request))
 
 
 # Master Brief Endpoints (AI-Native)

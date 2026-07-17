@@ -15,6 +15,7 @@ JobType = Literal[
     "site_refresh",
     "site_generate",
     "site_republish",
+    "analysis_refresh",
 ]
 
 # Pipeline stage reflects where a lead sits in the automation flow

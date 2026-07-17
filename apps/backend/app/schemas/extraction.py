@@ -190,6 +190,14 @@ class ExtractionJobResponse(BaseModel):
     extraction: Optional[ExtractionSnapshot] = None
 
 
+class ExtractionAnalysisResponse(BaseModel):
+    """Response model for the analysis endpoint."""
+
+    analysis: ExtractionAnalysis
+    extractionId: str
+    extractionVersion: int
+
+
 class PageInventoryResponse(BaseModel):
     leadId: str
     extractionId: Optional[str] = None

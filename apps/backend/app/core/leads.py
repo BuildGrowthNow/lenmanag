@@ -24,6 +24,8 @@ from app.schemas.brief import (
     MasterBrief,
 )
 from app.schemas.extraction import (
+    ExtractionAnalysis,
+    ExtractionAnalysisResponse,
     ExtractionJobResponse,
     ExtractionSnapshot,
     ExtractionSummary,
@@ -1719,6 +1721,129 @@ class LeadRepository:
             errors=list(doc.get("errors", [])),
             updatedAt=_utc(doc["updatedAt"]) or _now(),
         )
+
+    # Analysis Methods
+
+    async def get_analysis(self, lead_id: str) -> ExtractionAnalysisResponse | None:
+        """Get the latest analysis for a lead's extraction."""
+        doc = await self._latest_extraction_doc(lead_id)
+        if doc is None:
+            return None
+        analysis_data = doc.get("analysis")
+        if not analysis_data:
+            return None
+        return ExtractionAnalysisResponse(
+            analysis=ExtractionAnalysis(**analysis_data)
+            if isinstance(analysis_data, dict)
+            else analysis_data,
+            extractionId=str(doc["id"]),
+            extractionVersion=int(doc.get("version", 1)),
+        )
+
+    async def start_analysis_refresh(
+        self, lead_id: str
+    ) -> ExtractionJobResponse | None:
+        """Re-run LLM analysis on existing extraction without re-crawling."""
+        await self._maybe_ensure_indexes()
+        lead = await self.get_lead(lead_id)
+        if lead is None:
+            return None
+
+        extraction = await self.get_extraction(lead_id)
+        if extraction is None or extraction.crawlStatus != "completed":
+            raise ValueError("extraction_not_completed")
+
+        job = await self._create_job(
+            lead_ids=[lead_id],
+            job_type="analysis_refresh",
+            status="queued",
+            progress=0,
+            step="Queued for analysis refresh",
+            metadata={"leadId": lead_id, "extractionId": extraction.id},
+        )
+
+        self._dispatch_analysis_job(job_id=job.id, lead_id=lead_id)
+
+        return ExtractionJobResponse(job=job, extraction=extraction)
+
+    def _dispatch_analysis_job(self, *, job_id: str, lead_id: str) -> None:
+        """Dispatch analysis refresh job to Celery."""
+        from app.core.celery_app import celery_app
+
+        celery_app.send_task(
+            "lenquant.jobs.run_analysis_refresh",
+            args=[lead_id, job_id],
+        )
+
+    async def run_analysis_refresh_job(self, *, lead_id: str, job_id: str) -> None:
+        """Run the analysis refresh job (called by Celery task)."""
+        await self._update_job(
+            job_id,
+            status="running",
+            progress=20,
+            step="Loading extraction data",
+            lead_ids=[lead_id],
+        )
+
+        extraction = await self.get_extraction(lead_id)
+        if extraction is None or extraction.crawlStatus != "completed":
+            await self._update_job(
+                job_id,
+                status="failed",
+                progress=100,
+                step="Extraction not available",
+                finished=True,
+                lead_ids=[lead_id],
+                error_message="No completed extraction found for analysis",
+            )
+            return
+
+        await self._update_job(
+            job_id,
+            status="running",
+            progress=50,
+            step="Running LLM analysis",
+            lead_ids=[lead_id],
+        )
+
+        try:
+            analysis_result = await analyze_extraction(extraction)
+        except Exception as exc:
+            logger.error("Analysis refresh failed for lead %s: %s", lead_id, exc)
+            await self._update_job(
+                job_id,
+                status="failed",
+                progress=100,
+                step="Analysis failed",
+                finished=True,
+                lead_ids=[lead_id],
+                error_message=str(exc),
+            )
+            return
+
+        # Save analysis to extraction doc
+        database = get_database()
+        if database is not None:
+            await database["extractions"].find_one_and_update(
+                {"leadId": lead_id},
+                {
+                    "$set": {
+                        "analysis": analysis_result,
+                        "updatedAt": _now(),
+                    }
+                },
+                sort=[("version", -1)],
+            )
+
+        await self._update_job(
+            job_id,
+            status="completed",
+            progress=100,
+            step="Analysis complete",
+            finished=True,
+            lead_ids=[lead_id],
+        )
+        logger.info("Analysis refresh complete for lead %s", lead_id)
 
     # Master Brief Methods (AI-Native)
 
