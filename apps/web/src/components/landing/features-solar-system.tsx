@@ -178,7 +178,7 @@ export function FeaturesSolarSystem() {
               return (
                 <motion.div
                   key={`orbit-container-${orbitIdx}`}
-                  className="absolute inset-0"
+                  className="absolute inset-0 will-change-transform"
                   style={{
                     left: "50%",
                     top: "50%",

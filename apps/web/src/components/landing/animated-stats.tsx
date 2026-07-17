@@ -21,7 +21,7 @@ function AnimatedStat({ icon: Icon, value, suffix, label, delay = 0 }: StatProps
     if (!isInView) return;
 
     const duration = 2000; // 2 seconds
-    const steps = 60;
+    const steps = 20; // Reduced from 60 for better performance
     const increment = value / steps;
     const stepDuration = duration / steps;
 

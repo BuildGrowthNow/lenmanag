@@ -188,11 +188,11 @@ export default function SitesLandingPage() {
       <SocialProofNotifications />
 
       <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-white overflow-hidden">
-        {/* Animated Background */}
-        <div className="fixed inset-0 opacity-30 pointer-events-none">
+        {/* Animated Background - Optimized for performance */}
+        <div className="fixed inset-0 opacity-30 pointer-events-none hidden lg:block will-change-transform">
           <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
           <motion.div
-            className="absolute top-0 -left-4 w-96 h-96 bg-yellow-500/30 rounded-full mix-blend-multiply filter blur-3xl"
+            className="absolute top-0 -left-4 w-96 h-96 bg-yellow-500/30 rounded-full mix-blend-multiply filter blur-3xl will-change-transform"
             animate={{
               x: [0, 150, -100, 50, 0],
               y: [0, 80, -60, 40, 0],
@@ -204,7 +204,7 @@ export default function SitesLandingPage() {
             }}
           />
           <motion.div
-            className="absolute top-0 right-4 w-96 h-96 bg-purple-500/20 rounded-full mix-blend-multiply filter blur-3xl"
+            className="absolute top-0 right-4 w-96 h-96 bg-purple-500/20 rounded-full mix-blend-multiply filter blur-3xl will-change-transform"
             animate={{
               x: [0, -150, 100, -50, 0],
               y: [0, 100, -80, 50, 0],
@@ -216,7 +216,7 @@ export default function SitesLandingPage() {
             }}
           />
           <motion.div
-            className="absolute bottom-0 left-1/2 w-80 h-80 bg-cyan-500/10 rounded-full mix-blend-multiply filter blur-3xl"
+            className="absolute bottom-0 left-1/2 w-80 h-80 bg-cyan-500/10 rounded-full mix-blend-multiply filter blur-3xl will-change-transform"
             animate={{
               x: [0, 80, -100, 40, 0],
               y: [0, -60, 80, -40, 0],
