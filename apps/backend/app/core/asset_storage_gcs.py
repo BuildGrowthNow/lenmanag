@@ -101,8 +101,8 @@ class GCSAssetStorage:
             stream,
             content_type=content_type,
             timeout=settings.asset_download_timeout,
-            retry=self._gcloud_retry(),
-        )  # type: ignore[arg-type]
+            retry=self._gcloud_retry(),  # pyright: ignore[reportArgumentType]
+        )
 
         # update stats
         try:

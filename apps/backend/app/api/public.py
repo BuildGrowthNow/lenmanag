@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import cast
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.core.config import get_settings
 from app.core.sites import site_repository
@@ -31,8 +31,8 @@ async def get_public_site(
     )
 
 
-@router.get("/preview/{slug}")
-async def preview_site_variant(slug: str) -> HTMLResponse | RedirectResponse:
+@router.get("/preview/{slug}", response_class=Response)
+async def preview_site_variant(slug: str) -> Response:
     """
     Public preview of a site variant (HTML or Next.js).
 
@@ -43,14 +43,12 @@ async def preview_site_variant(slug: str) -> HTMLResponse | RedirectResponse:
     if site is None:
         raise HTTPException(status_code=404, detail="Site preview not found")
 
-    # Serve static HTML if variant is HTML type
     if site.variantType in ["html_v1", "html_v2", "html_v3"]:
         if not site.staticHtml:
             raise HTTPException(status_code=500, detail="Static HTML not generated")
 
         return HTMLResponse(content=site.staticHtml)
 
-    # For Next.js variants, redirect to frontend preview
     settings = get_settings()
     preview_base = settings.preview_base_url.rstrip("/")
     return RedirectResponse(url=f"{preview_base}/st/{site.previewSlug}")

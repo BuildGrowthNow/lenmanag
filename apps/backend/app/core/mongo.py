@@ -96,6 +96,9 @@ class _AsyncMongoMockDatabase:
     def __getitem__(self, name: str) -> _AsyncMongoMockCollection:
         return _AsyncMongoMockCollection(self._database[name])  # type: ignore[attr-defined]
 
+    async def list_collection_names(self) -> list[str]:
+        return self._database.list_collection_names()
+
 
 class _AsyncMongoMockClient:
     def __init__(self):
