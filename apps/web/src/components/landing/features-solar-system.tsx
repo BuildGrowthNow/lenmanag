@@ -110,7 +110,7 @@ export function FeaturesSolarSystem() {
         </motion.div>
 
         {/* Solar System Visualization - Desktop */}
-        <div className="hidden md:flex items-center justify-center overflow-visible" style={{ minHeight: "900px" }}>
+        <div className="hidden md:flex items-center justify-center overflow-visible" style={{ minHeight: "700px" }}>
           <div className="relative overflow-visible" style={{ width: "700px", height: "700px" }}>
             {/* Center Circle */}
             <motion.div

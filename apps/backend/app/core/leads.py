@@ -1637,6 +1637,11 @@ class LeadRepository:
             confidenceScore=int(doc.get("confidenceScore", 0)),
             gapItems=list(doc.get("gapItems", [])),
             errors=list(doc.get("errors", [])),
+            analysis=doc.get("analysis"),
+            extractedTestimonials=list(doc.get("extractedTestimonials", [])),
+            extractedClientLogos=list(doc.get("extractedClientLogos", [])),
+            extractedFonts=list(doc.get("extractedFonts", [])),
+            extractedImages=list(doc.get("extractedImages", [])),
             createdAt=_utc(doc["createdAt"]) or _now(),
             updatedAt=_utc(doc["updatedAt"]) or _now(),
         )
@@ -1674,6 +1679,11 @@ class LeadRepository:
             confidenceScore=0,
             gapItems=["crawl_not_started"],
             errors=[],
+            analysis=None,
+            extractedTestimonials=[],
+            extractedClientLogos=[],
+            extractedFonts=[],
+            extractedImages=[],
             createdAt=now,
             updatedAt=now,
         )
@@ -2280,6 +2290,11 @@ class LeadRepository:
             "gapItems": crawl_data["gapItems"],
             "errors": crawl_data["errors"],
             "analysis": crawl_data.get("analysis"),
+            # Enhanced extraction data
+            "extractedTestimonials": crawl_data.get("extractedTestimonials", []),
+            "extractedClientLogos": crawl_data.get("extractedClientLogos", []),
+            "extractedFonts": crawl_data.get("extractedFonts", []),
+            "extractedImages": crawl_data.get("extractedImages", []),
             "crawlBudgetUsed": crawl_data.get("crawlBudgetUsed", 0),
             "crawlBudgetLimit": crawl_data.get(
                 "crawlBudgetLimit", get_settings().crawl_budget_bytes

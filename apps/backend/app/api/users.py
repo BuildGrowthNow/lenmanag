@@ -208,7 +208,9 @@ async def reset_password(
     check_auth_rate_limit(request, "users:reset-password")
 
     repo = UserRepository()
-    user = await repo.reset_password(token=payload.token, new_password=payload.new_password)
+    user = await repo.reset_password(
+        token=payload.token, new_password=payload.new_password
+    )
 
     if not user:
         raise HTTPException(

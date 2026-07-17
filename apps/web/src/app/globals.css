@@ -35,3 +35,34 @@ a {
   text-decoration: none;
 }
 
+@keyframes marquee-up {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes marquee-down {
+  0% {
+    transform: translateY(-50%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-marquee-up {
+  animation: marquee-up var(--marquee-speed, 35s) linear infinite;
+}
+
+.animate-marquee-down {
+  animation: marquee-down var(--marquee-speed, 40s) linear infinite;
+}
+
+.paused .animate-marquee-up,
+.paused .animate-marquee-down {
+  animation-play-state: paused;
+}
+

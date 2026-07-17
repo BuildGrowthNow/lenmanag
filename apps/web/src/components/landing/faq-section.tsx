@@ -13,12 +13,12 @@ const FAQS = [
   {
     question: "What if I need changes after delivery?",
     answer:
-      "Your package includes 30 days of free minor updates. This covers text changes, image swaps, and small adjustments. For major redesigns or new features, we offer additional services at competitive rates.",
+      "Your package includes 7 days of free minor revisions after delivery. This covers text changes, image swaps, and small adjustments. For ongoing support beyond that, we offer a Maintenance Service ($500/month) that includes 3 updates per month plus a monthly strategy call.",
   },
   {
     question: "Do I own the website after purchase?",
     answer:
-      "Absolutely! You receive full ownership of all design files, code, and assets. The first year of hosting is included, and after that you can choose to continue with us or migrate to your own hosting provider.",
+      "Absolutely! You receive full ownership of all design files, code, and assets. Hosting is not included in the base package—you can add our Hosting Service ($200/month) for fast, reliable hosting with SSL and automatic backups, or deploy it to your own provider.",
   },
   {
     question: "What happens if I'm not satisfied?",
@@ -28,12 +28,12 @@ const FAQS = [
   {
     question: "What are the add-ons and how does pricing work?",
     answer:
-      "The base package starts at $1,000 for a professional landing page. You can add extra pages ($200 each, up to 5 total), a custom domain ($150), advanced SEO ($300), blog/CMS ($250), analytics tracking ($100), or priority 24-hour delivery ($500). Pick only what you need—the configurator updates your total in real time.",
+      "The base package is $1,000 for a professional landing page delivered in 3 days. You can add extra pages ($50 each, up to 50), advanced features like API integrations or custom functionality ($300), monthly maintenance ($500/month), or hosting ($200/month). Pick only what you need—the configurator updates your total in real time.",
   },
   {
     question: "Can you handle e-commerce or complex features?",
     answer:
-      "Yes! While our base package covers professional websites and landing pages, we can add e-commerce functionality, payment integrations, booking systems, and more. Contact us to discuss your specific needs.",
+      "Yes! Our Advanced Features add-on covers custom integrations, payment systems, booking tools, and more. For anything beyond that, contact us directly and we'll scope it out for your specific needs.",
   },
   {
     question: "What do I need to provide to get started?",

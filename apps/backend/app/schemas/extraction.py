@@ -43,6 +43,89 @@ SectionType = Literal[
     "footer",
     "unknown",
 ]
+ImageCategory = Literal[
+    "hero",  # Main hero/banner images
+    "product",  # Product photos
+    "team",  # Team/staff photos
+    "facility",  # Office/building/facility photos
+    "testimonial",  # Photos accompanying testimonials
+    "client_logo",  # Client/partner logos
+    "gallery",  # Portfolio/gallery images
+    "decorative",  # UI/decorative elements
+    "unknown",
+]
+
+
+class ExtractedTestimonial(BaseModel):
+    """A real testimonial/review extracted from the website."""
+
+    quote: str = Field(description="The actual testimonial text")
+    authorName: Optional[str] = Field(
+        default=None, description="Name of the person giving testimonial"
+    )
+    authorTitle: Optional[str] = Field(
+        default=None, description="Title/role of the author"
+    )
+    authorCompany: Optional[str] = Field(
+        default=None, description="Company of the author"
+    )
+    authorPhotoUrl: Optional[str] = Field(
+        default=None, description="URL to author's photo"
+    )
+    rating: Optional[int] = Field(
+        default=None, ge=1, le=5, description="Star rating if present (1-5)"
+    )
+    resultMetric: Optional[str] = Field(
+        default=None, description="Specific result mentioned (e.g., '50% increase')"
+    )
+    sourceUrl: str = Field(description="Page URL where testimonial was found")
+    confidence: int = Field(default=70, ge=0, le=100)
+
+
+class ExtractedClientLogo(BaseModel):
+    """Client/partner logo extracted from trust sections."""
+
+    imageUrl: str
+    altText: Optional[str] = None
+    companyName: Optional[str] = None
+    sourceUrl: str
+    confidence: int = Field(default=60, ge=0, le=100)
+
+
+class ExtractedFontFile(BaseModel):
+    """Font file reference with actual download URL."""
+
+    fontFamily: str = Field(description="CSS font-family name")
+    fontUrl: Optional[str] = Field(
+        default=None, description="Direct URL to font file (.woff, .woff2, .ttf)"
+    )
+    fontWeight: Optional[str] = Field(
+        default=None, description="Font weight (400, 700)"
+    )
+    fontStyle: Optional[str] = Field(
+        default=None, description="Font style (normal, italic)"
+    )
+    sourceType: str = Field(
+        default="css", description="Source: css, google_fonts, adobe_fonts, link_tag"
+    )
+    sourceUrl: str = Field(description="URL of CSS/page where font was found")
+    confidence: int = Field(default=60, ge=0, le=100)
+
+
+class ExtractedImage(BaseModel):
+    """Categorized image with metadata."""
+
+    url: str
+    altText: Optional[str] = None
+    title: Optional[str] = None
+    category: ImageCategory = "unknown"
+    width: Optional[int] = None
+    height: Optional[int] = None
+    sourceUrl: str = Field(description="Page URL where image was found")
+    inSection: Optional[str] = Field(
+        default=None, description="Section type where image was found"
+    )
+    confidence: int = Field(default=60, ge=0, le=100)
 
 
 class PageCitation(BaseModel):
@@ -129,6 +212,22 @@ class PageInventoryItem(BaseModel):
     visualCapture: Optional[PageVisualCapture] = None
 
 
+class ValidatedTestimonial(BaseModel):
+    """LLM-validated testimonial (cleaned from raw extraction)."""
+
+    quote: str
+    authorName: Optional[str] = None
+    authorTitle: Optional[str] = None
+    authorCompany: Optional[str] = None
+    isVerified: bool = False
+
+
+class ValidatedClientLogo(BaseModel):
+    """LLM-validated client logo."""
+
+    companyName: str
+
+
 class ExtractionAnalysis(BaseModel):
     """LLM-analyzed semantic data from extraction."""
 
@@ -140,6 +239,9 @@ class ExtractionAnalysis(BaseModel):
     positioning: str = ""
     confidence: int = 0
     analyzedAt: Optional[datetime] = None
+    # LLM-validated content (cleaned from raw extraction)
+    testimonials: list[ValidatedTestimonial] = Field(default_factory=list)
+    clientLogos: list[ValidatedClientLogo] = Field(default_factory=list)
 
 
 class ExtractionSummary(BaseModel):
@@ -181,6 +283,11 @@ class ExtractionSnapshot(BaseModel):
     gapItems: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     analysis: Optional[ExtractionAnalysis] = None
+    # Enhanced extracted content (raw, pre-LLM analysis)
+    extractedTestimonials: list[ExtractedTestimonial] = Field(default_factory=list)
+    extractedClientLogos: list[ExtractedClientLogo] = Field(default_factory=list)
+    extractedFonts: list[ExtractedFontFile] = Field(default_factory=list)
+    extractedImages: list[ExtractedImage] = Field(default_factory=list)
     createdAt: datetime
     updatedAt: datetime
 

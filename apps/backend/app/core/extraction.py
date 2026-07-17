@@ -93,6 +93,11 @@ class PageSignals:
     body_text: list[str] = field(default_factory=list)
     sections: list[dict[str, Any]] = field(default_factory=list)
     assets: list[dict[str, Any]] = field(default_factory=list)
+    # Enhanced extraction fields
+    font_files: list[dict[str, Any]] = field(default_factory=list)
+    testimonials: list[dict[str, Any]] = field(default_factory=list)
+    client_logos: list[dict[str, Any]] = field(default_factory=list)
+    categorized_images: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -223,11 +228,22 @@ class _SignalParser(HTMLParser):
             + len(state.ctas) * 10
             + min(len(text), 500) // 20,
         )
+
+        section_type = self._section_type(state)
+
+        # Extract testimonials from proof sections
+        if section_type == "proof":
+            self._extract_testimonials_from_section(state, text)
+            self._extract_client_logos_from_section(state)
+
+        # Categorize images based on section type
+        self._categorize_section_images(state, section_type)
+
         self.signals.sections.append(
             {
                 "id": f"section-{self._section_index}",
                 "index": self._section_index,
-                "type": self._section_type(state),
+                "type": section_type,
                 "tagName": state.tag_name,
                 "selector": state.selector,
                 "heading": state.headings[0] if state.headings else None,
@@ -240,6 +256,205 @@ class _SignalParser(HTMLParser):
             }
         )
         self._section_index += 1
+
+    def _extract_testimonials_from_section(
+        self, state: _SectionState, section_text: str
+    ) -> None:
+        """Extract testimonial data from a proof/testimonial section."""
+        # Look for quote patterns in section text
+        # Common patterns: "quote" - Name, Title at Company
+        # Or: blockquote content followed by citation
+
+        # Split text into potential testimonial blocks (by double newlines or long gaps)
+        text_blocks = re.split(r"\n{2,}|\s{4,}", section_text)
+
+        for block in text_blocks:
+            block = block.strip()
+            if len(block) < 30:  # Too short to be a testimonial
+                continue
+
+            testimonial: dict[str, Any] = {"confidence": 60}
+
+            # Look for quoted text
+            quote_match = re.search(r'["""]([^"""]{30,500})["""]', block, re.DOTALL)
+            if quote_match:
+                testimonial["quote"] = quote_match.group(1).strip()
+                testimonial["confidence"] = 75
+            elif len(block) > 50 and block[0].isupper():
+                # Might be an unquoted testimonial
+                testimonial["quote"] = block[:500]
+                testimonial["confidence"] = 55
+
+            if not testimonial.get("quote"):
+                continue
+
+            # Look for author attribution patterns
+            # Pattern: "- Name" or "— Name" at end
+            author_patterns = [
+                r"[-—–]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*(?:,\s*(.+))?$",
+                r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*,\s*([^,]+?)(?:,\s*(.+?))?$",
+            ]
+            remaining_text = block[len(testimonial.get("quote", "")) :].strip()
+
+            for pattern in author_patterns:
+                author_match = re.search(pattern, remaining_text)
+                if author_match:
+                    testimonial["authorName"] = author_match.group(1).strip()
+                    if author_match.lastindex and author_match.lastindex >= 2:
+                        title_or_company = author_match.group(2)
+                        if title_or_company:
+                            # Determine if it's a title or company
+                            if any(
+                                kw in title_or_company.lower()
+                                for kw in [
+                                    "ceo",
+                                    "founder",
+                                    "director",
+                                    "manager",
+                                    "owner",
+                                ]
+                            ):
+                                testimonial["authorTitle"] = title_or_company.strip()
+                            else:
+                                testimonial["authorCompany"] = title_or_company.strip()
+                    if author_match.lastindex and author_match.lastindex >= 3:
+                        testimonial["authorCompany"] = author_match.group(3).strip()
+                    testimonial["confidence"] = min(90, testimonial["confidence"] + 15)
+                    break
+
+            # Look for star ratings (★ or "5/5" or "5 stars")
+            rating_match = re.search(r"(\d)\s*(?:/\s*5|★|stars?)", block, re.IGNORECASE)
+            if rating_match:
+                testimonial["rating"] = int(rating_match.group(1))
+
+            # Look for result metrics ("50% increase", "3x growth", "$100k saved")
+            metric_match = re.search(
+                r"(\d+[%xX]|\$[\d,]+[kKmM]?)\s*(?:increase|growth|saved|more|better|faster)",
+                block,
+                re.IGNORECASE,
+            )
+            if metric_match:
+                testimonial["resultMetric"] = metric_match.group(0)
+
+            # Associate image from section if it looks like a headshot
+            for img in state.images[:3]:
+                img_lower = img.lower()
+                if any(
+                    kw in img_lower
+                    for kw in [
+                        "headshot",
+                        "avatar",
+                        "portrait",
+                        "team",
+                        "person",
+                        "author",
+                    ]
+                ):
+                    testimonial["authorPhotoUrl"] = img
+                    break
+
+            if testimonial.get("quote"):
+                self.signals.testimonials.append(testimonial)
+
+    def _extract_client_logos_from_section(self, state: _SectionState) -> None:
+        """Extract client/partner logos from proof sections."""
+        hint = " ".join(
+            filter(
+                None,
+                [state.attrs.get("id"), state.attrs.get("class"), *state.headings[:2]],
+            )
+        ).lower()
+
+        # Check if this is a "trusted by" / "our clients" section
+        is_client_section = any(
+            kw in hint
+            for kw in [
+                "client",
+                "partner",
+                "trusted",
+                "logo",
+                "customer",
+                "work with",
+                "featured",
+            ]
+        )
+
+        if not is_client_section:
+            return
+
+        for img_url in state.images:
+            img_lower = img_url.lower()
+            # Filter out UI icons and generic images
+            if any(
+                pattern in img_lower
+                for pattern in [
+                    "/icon",
+                    "icon-",
+                    "icon_",
+                    "/ui/",
+                    "/icons/",
+                    "material",
+                    "fa-",
+                    "feather",
+                ]
+            ):
+                continue
+
+            # Likely a client logo if in this section
+            self.signals.client_logos.append(
+                {
+                    "imageUrl": img_url,
+                    "altText": None,  # Would need to track alt from img parsing
+                    "confidence": 65,
+                }
+            )
+
+    def _categorize_section_images(
+        self, state: _SectionState, section_type: str
+    ) -> None:
+        """Categorize images based on the section they appear in."""
+        category_map = {
+            "hero": "hero",
+            "header": "hero",
+            "about": "team",
+            "gallery": "gallery",
+            "proof": "testimonial",
+            "services": "product",
+        }
+        default_category = category_map.get(section_type, "unknown")
+
+        for img_url in state.images:
+            img_lower = img_url.lower()
+
+            # Determine category based on image URL patterns
+            if any(kw in img_lower for kw in ["team", "staff", "employee", "about"]):
+                category = "team"
+            elif any(kw in img_lower for kw in ["product", "item", "service"]):
+                category = "product"
+            elif any(
+                kw in img_lower for kw in ["office", "building", "facility", "location"]
+            ):
+                category = "facility"
+            elif any(kw in img_lower for kw in ["logo", "client", "partner"]):
+                category = "client_logo"
+            elif any(kw in img_lower for kw in ["hero", "banner", "header"]):
+                category = "hero"
+            elif any(
+                kw in img_lower
+                for kw in ["icon", "ui", "arrow", "check", "decoration", "pattern"]
+            ):
+                category = "decorative"
+            else:
+                category = default_category
+
+            self.signals.categorized_images.append(
+                {
+                    "url": img_url,
+                    "category": category,
+                    "inSection": section_type,
+                    "confidence": 60 if category == default_category else 70,
+                }
+            )
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr_map = {key.lower(): value for key, value in attrs}
@@ -287,9 +502,37 @@ class _SignalParser(HTMLParser):
                 self._asset("icon", href, rel, "link")
             if "stylesheet" in rel and href:
                 self._asset("stylesheet", href, rel, "link")
+                # Detect Google Fonts
+                if "fonts.googleapis.com" in href.lower():
+                    self._extract_google_fonts(href)
+                # Detect Adobe Fonts (Typekit)
+                if "use.typekit.net" in href.lower():
+                    self.signals.font_files.append(
+                        {
+                            "fontFamily": "Adobe Fonts (Typekit)",
+                            "fontUrl": href.strip(),
+                            "sourceType": "adobe_fonts",
+                            "confidence": 70,
+                        }
+                    )
             if "font" in rel and href:
                 self.signals.font_family = href.strip()
                 self._asset("font", href, rel, "link")
+            # Direct font file links (preload)
+            if rel == "preload" and href:
+                href_lower = href.lower()
+                if any(
+                    ext in href_lower for ext in [".woff2", ".woff", ".ttf", ".otf"]
+                ):
+                    self.signals.font_files.append(
+                        {
+                            "fontFamily": "Preloaded Font",
+                            "fontUrl": href.strip(),
+                            "sourceType": "link_tag",
+                            "confidence": 80,
+                        }
+                    )
+                    self._asset("font", href, "preload", "link")
 
         if self._current_tag == "script":
             src = attr_map.get("src") or ""
@@ -421,6 +664,47 @@ class _SignalParser(HTMLParser):
             self._in_style = True
             self._style_chunks = []
 
+    def _extract_google_fonts(self, url: str) -> None:
+        """Extract font families from Google Fonts URL."""
+        try:
+            parsed = urlparse(url)
+            query = parsed.query
+
+            # CSS2 API format
+            if "css2" in parsed.path:
+                family_matches = re.findall(r"family=([^&]+)", query)
+                for family in family_matches:
+                    font_name = family.split(":")[0].replace("+", " ")
+                    weights = re.findall(r"wght@([\d;]+)", family)
+                    self.signals.font_files.append(
+                        {
+                            "fontFamily": font_name,
+                            "fontUrl": url,
+                            "fontWeight": weights[0] if weights else "400",
+                            "sourceType": "google_fonts",
+                            "confidence": 85,
+                        }
+                    )
+            else:
+                # CSS1 API format
+                family_param = re.search(r"family=([^&]+)", query)
+                if family_param:
+                    families = family_param.group(1).split("|")
+                    for family in families:
+                        font_name = family.split(":")[0].replace("+", " ")
+                        weights = family.split(":")[1] if ":" in family else "400"
+                        self.signals.font_files.append(
+                            {
+                                "fontFamily": font_name,
+                                "fontUrl": url,
+                                "fontWeight": weights,
+                                "sourceType": "google_fonts",
+                                "confidence": 85,
+                            }
+                        )
+        except Exception:
+            pass
+
     def handle_data(self, data: str) -> None:
         text = re.sub(r"\s+", " ", data.strip())
         if not text:
@@ -476,6 +760,8 @@ class _SignalParser(HTMLParser):
                 )
                 if font_match:
                     self.signals.font_family = font_match.group(1).strip().strip("\"'")
+            # Extract @font-face declarations with actual font file URLs
+            self._extract_font_faces(style_text)
             self._in_style = False
             self._style_chunks = []
 
@@ -485,6 +771,63 @@ class _SignalParser(HTMLParser):
                 self._finish_section(state)
             elif self._section_stack:
                 self._section_stack.append(state)
+
+    def _extract_font_faces(self, css_text: str) -> None:
+        """Extract @font-face declarations from CSS."""
+        font_face_pattern = re.compile(
+            r"@font-face\s*\{([^}]+)\}", re.IGNORECASE | re.DOTALL
+        )
+        for match in font_face_pattern.finditer(css_text):
+            block = match.group(1)
+            font_data: dict[str, Any] = {"sourceType": "css"}
+
+            # Extract font-family
+            family_match = re.search(
+                r"font-family\s*:\s*['\"]?([^;'\"]+)['\"]?", block, re.IGNORECASE
+            )
+            if family_match:
+                font_data["fontFamily"] = family_match.group(1).strip()
+
+            # Extract font-weight
+            weight_match = re.search(
+                r"font-weight\s*:\s*(\d+|normal|bold)", block, re.IGNORECASE
+            )
+            if weight_match:
+                font_data["fontWeight"] = weight_match.group(1)
+
+            # Extract font-style
+            style_match = re.search(
+                r"font-style\s*:\s*(normal|italic|oblique)", block, re.IGNORECASE
+            )
+            if style_match:
+                font_data["fontStyle"] = style_match.group(1)
+
+            # Extract font URL from src (prioritize woff2, then woff, then ttf)
+            src_match = re.search(r"src\s*:\s*([^;]+)", block, re.IGNORECASE)
+            if src_match:
+                src_value = src_match.group(1)
+                # Find URL patterns
+                url_patterns = re.findall(
+                    r"url\(['\"]?([^)'\"]+)['\"]?\)", src_value, re.IGNORECASE
+                )
+                # Prioritize by format
+                best_url = None
+                for url in url_patterns:
+                    if ".woff2" in url.lower():
+                        best_url = url
+                        break
+                    elif ".woff" in url.lower() and not best_url:
+                        best_url = url
+                    elif (
+                        ".ttf" in url.lower() or ".otf" in url.lower()
+                    ) and not best_url:
+                        best_url = url
+                if best_url:
+                    font_data["fontUrl"] = best_url
+
+            if font_data.get("fontFamily"):
+                font_data["confidence"] = 75 if font_data.get("fontUrl") else 50
+                self.signals.font_files.append(font_data)
 
     def close(self) -> None:
         super().close()
@@ -1449,6 +1792,11 @@ def crawl_website(
                 "ctaClues": [],
                 "toneClues": [],
             },
+            # Enhanced extraction data (empty on failure)
+            "extractedTestimonials": [],
+            "extractedClientLogos": [],
+            "extractedFonts": [],
+            "extractedImages": [],
         }
 
     homepage_url = homepage_result["finalUrl"]
@@ -1589,6 +1937,11 @@ def crawl_website(
     tone_clues: list[str] = []
     body_text_for_audience: list[str] = []
     crawled_count = 0
+    # Enhanced extraction collections
+    extracted_testimonials: list[dict[str, Any]] = []
+    extracted_client_logos: list[dict[str, Any]] = []
+    extracted_fonts: list[dict[str, Any]] = []
+    extracted_images: list[dict[str, Any]] = []
 
     for url, source, depth in ordered_candidates:
         # time budget enforcement
@@ -1675,6 +2028,31 @@ def crawl_website(
         if page_data.get("sections"):
             logger.info(f"Extracted {len(page_data['sections'])} sections from {url}")
         brand_asset_cues.extend(_extract_brand_asset_cues(url, signals))
+
+        # Collect enhanced extraction data from signals
+        for testimonial in signals.testimonials:
+            testimonial["sourceUrl"] = url
+            extracted_testimonials.append(testimonial)
+
+        for client_logo in signals.client_logos:
+            client_logo["sourceUrl"] = url
+            extracted_client_logos.append(client_logo)
+
+        for font in signals.font_files:
+            font["sourceUrl"] = url
+            # Resolve relative font URLs
+            if font.get("fontUrl") and not font["fontUrl"].startswith(
+                ("http", "data:")
+            ):
+                font["fontUrl"] = _absolute_url(url, font["fontUrl"])
+            extracted_fonts.append(font)
+
+        for img in signals.categorized_images:
+            img["sourceUrl"] = url
+            # Resolve relative image URLs
+            if img.get("url") and not img["url"].startswith(("http", "data:")):
+                img["url"] = _absolute_url(url, img["url"])
+            extracted_images.append(img)
         if url == homepage_url:
             asset_urls = [
                 value
@@ -2100,6 +2478,43 @@ def crawl_website(
         f"status={crawl_status}, sitemap={sitemap_status}"
     )
 
+    # Deduplicate enhanced extraction results
+    seen_testimonials: set[tuple[str, str | None]] = set()
+    unique_testimonials = []
+    for t in extracted_testimonials:
+        key = (t.get("quote", "")[:100], t.get("authorName"))
+        if key not in seen_testimonials:
+            seen_testimonials.add(key)
+            unique_testimonials.append(t)
+
+    seen_logos: set[str] = set()
+    unique_client_logos = []
+    for logo in extracted_client_logos:
+        if logo.get("imageUrl") not in seen_logos:
+            seen_logos.add(logo.get("imageUrl", ""))
+            unique_client_logos.append(logo)
+
+    seen_fonts: set[tuple[str, str | None]] = set()
+    unique_fonts = []
+    for font in extracted_fonts:
+        key = (font.get("fontFamily", ""), font.get("fontUrl"))
+        if key not in seen_fonts:
+            seen_fonts.add(key)
+            unique_fonts.append(font)
+
+    seen_images: set[str] = set()
+    unique_images = []
+    for img in extracted_images:
+        if img.get("url") not in seen_images:
+            seen_images.add(img.get("url", ""))
+            unique_images.append(img)
+
+    logger.info(
+        f"Enhanced extraction: {len(unique_testimonials)} testimonials, "
+        f"{len(unique_client_logos)} client logos, {len(unique_fonts)} fonts, "
+        f"{len(unique_images)} categorized images"
+    )
+
     return {
         "crawlStatus": crawl_status,
         "sitemapStatus": sitemap_status,
@@ -2122,4 +2537,9 @@ def crawl_website(
         "crawlBudgetUsed": total_bytes_downloaded,
         "crawlBudgetLimit": settings.crawl_budget_bytes,
         "crawlTimeElapsedSeconds": int(time.time() - crawl_start),
+        # Enhanced extraction data
+        "extractedTestimonials": unique_testimonials[:20],
+        "extractedClientLogos": unique_client_logos[:30],
+        "extractedFonts": unique_fonts[:15],
+        "extractedImages": unique_images[:50],
     }

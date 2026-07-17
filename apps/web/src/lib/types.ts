@@ -156,6 +156,72 @@ export type ExtractionSummary = {
   toneClues: string[];
 };
 
+// Enhanced extraction types
+export type ImageCategory =
+  | "hero"
+  | "product"
+  | "team"
+  | "facility"
+  | "testimonial"
+  | "client_logo"
+  | "gallery"
+  | "decorative"
+  | "unknown";
+
+export type ExtractedTestimonial = {
+  quote: string;
+  authorName: string | null;
+  authorTitle: string | null;
+  authorCompany: string | null;
+  authorPhotoUrl: string | null;
+  rating: number | null;
+  resultMetric: string | null;
+  sourceUrl: string;
+  confidence: number;
+};
+
+export type ExtractedClientLogo = {
+  imageUrl: string;
+  altText: string | null;
+  companyName: string | null;
+  sourceUrl: string;
+  confidence: number;
+};
+
+export type ExtractedFontFile = {
+  fontFamily: string;
+  fontUrl: string | null;
+  fontWeight: string | null;
+  fontStyle: string | null;
+  sourceType: string;
+  sourceUrl: string;
+  confidence: number;
+};
+
+export type ExtractedImage = {
+  url: string;
+  altText: string | null;
+  title: string | null;
+  category: ImageCategory;
+  width: number | null;
+  height: number | null;
+  sourceUrl: string;
+  inSection: string | null;
+  confidence: number;
+};
+
+export type ValidatedTestimonial = {
+  quote: string;
+  authorName: string | null;
+  authorTitle: string | null;
+  authorCompany: string | null;
+  isVerified: boolean;
+};
+
+export type ValidatedClientLogo = {
+  companyName: string;
+};
+
 export type ExtractionSnapshot = {
   id: string;
   leadId: string;
@@ -183,6 +249,12 @@ export type ExtractionSnapshot = {
   crawlTimeElapsedSeconds?: number | null;
   assetCacheStats?: Record<string, number>;
   assetRetentionDays?: number;
+  // Enhanced extraction data
+  analysis?: ExtractionAnalysis | null;
+  extractedTestimonials?: ExtractedTestimonial[];
+  extractedClientLogos?: ExtractedClientLogo[];
+  extractedFonts?: ExtractedFontFile[];
+  extractedImages?: ExtractedImage[];
   createdAt: string;
   updatedAt: string;
 };
@@ -196,6 +268,9 @@ export type ExtractionAnalysis = {
   positioning: string;
   confidence: number;
   analyzedAt: string | null;
+  // LLM-validated content
+  testimonials?: ValidatedTestimonial[];
+  clientLogos?: ValidatedClientLogo[];
 };
 
 export type ExtractionAnalysisResponse = {

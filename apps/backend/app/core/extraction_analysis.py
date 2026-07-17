@@ -108,6 +108,24 @@ def _build_analysis_context(extraction: ExtractionSnapshot) -> dict[str, Any]:
     # All CTAs (buttons, links with action text)
     all_ctas = extraction.summary.ctaClues if extraction.summary.ctaClues else []
 
+    # Pre-extracted testimonials (raw, need validation)
+    raw_testimonials = []
+    if extraction.extractedTestimonials:
+        for t in extraction.extractedTestimonials[:10]:
+            if hasattr(t, "model_dump"):
+                raw_testimonials.append(t.model_dump())
+            else:
+                raw_testimonials.append(dict(t) if hasattr(t, "__iter__") else {})
+
+    # Pre-extracted client logos
+    raw_client_logos = []
+    if extraction.extractedClientLogos:
+        for logo in extraction.extractedClientLogos[:15]:
+            if hasattr(logo, "model_dump"):
+                raw_client_logos.append(logo.model_dump())
+            else:
+                raw_client_logos.append(dict(logo) if hasattr(logo, "__iter__") else {})
+
     return {
         "company_name": extraction.summary.companyName or "this company",
         "website_url": extraction.canonicalWebsiteUrl,
@@ -115,13 +133,37 @@ def _build_analysis_context(extraction: ExtractionSnapshot) -> dict[str, Any]:
         "additional_pages_text": "\n\n".join(all_text_chunks[1:3]),
         "section_headings": section_headings,
         "section_texts": section_texts,
-        "all_ctas": all_ctas[:20],  # Limit to first 20
+        "all_ctas": all_ctas[:20],
         "raw_positioning": extraction.summary.positioningSummary or "",
+        "raw_testimonials": raw_testimonials,
+        "raw_client_logos": raw_client_logos,
     }
 
 
 def _build_analysis_prompt(context: dict[str, Any]) -> str:
     """Build the LLM prompt for extraction analysis."""
+
+    # Format raw testimonials for validation
+    testimonials_section = ""
+    if context.get("raw_testimonials"):
+        testimonials_section = "\n# Pre-Extracted Testimonials (need validation)\n"
+        for i, t in enumerate(context["raw_testimonials"][:8], 1):
+            testimonials_section += f'{i}. Quote: "{t.get("quote", "")[:200]}"\n'
+            if t.get("authorName"):
+                testimonials_section += f"   Author: {t.get('authorName')}"
+                if t.get("authorTitle"):
+                    testimonials_section += f", {t.get('authorTitle')}"
+                if t.get("authorCompany"):
+                    testimonials_section += f" at {t.get('authorCompany')}"
+                testimonials_section += "\n"
+
+    # Format raw client logos
+    client_logos_section = ""
+    if context.get("raw_client_logos"):
+        client_logos_section = "\n# Pre-Extracted Client Logos (need validation)\n"
+        for logo in context["raw_client_logos"][:10]:
+            name = logo.get("companyName") or logo.get("altText") or "Unknown"
+            client_logos_section += f"- {name}\n"
 
     prompt = f"""You are analyzing a business website to extract semantic meaning for landing page generation.
 
@@ -140,7 +182,7 @@ Website: {context["website_url"]}
 
 # All CTA Buttons/Links Found
 {chr(10).join(f"- {cta}" for cta in context["all_ctas"][:20])}
-
+{testimonials_section}{client_logos_section}
 ---
 
 ## Task
@@ -172,8 +214,18 @@ Analyze this content and extract semantic meaning. Return a JSON object with:
 
 7. **confidence** (number 0-100): How confident you are in this analysis
 
+8. **testimonials** (array of objects): Validated testimonials from the pre-extracted list
+   - ONLY include testimonials that appear to be REAL customer quotes (not generic filler)
+   - Clean up and rephrase for clarity if needed, but preserve the meaning
+   - Each object: {{"quote": "...", "authorName": "...", "authorCompany": "...", "isVerified": true/false}}
+   - NEVER invent testimonials - only validate/clean what was extracted
+
+9. **clientLogos** (array of strings): Validated client/partner company names
+   - ONLY include names that appear to be real companies (not generic icons)
+
 ## Rules
 - Base answers ONLY on the content provided
+- NEVER invent or fabricate testimonials, quotes, or company names
 - If something is unclear, be conservative (lower confidence)
 - Use the language of the content (if Spanish site, answer in Spanish)
 - Be specific, not generic
@@ -186,7 +238,9 @@ Return ONLY valid JSON, no markdown formatting:
   "audience": "Audience description",
   "valueProposition": "Value prop",
   "positioning": "Positioning summary",
-  "confidence": 85
+  "confidence": 85,
+  "testimonials": [{{"quote": "...", "authorName": "...", "authorCompany": "...", "isVerified": true}}],
+  "clientLogos": ["Company A", "Company B"]
 }}
 """
 
@@ -195,6 +249,35 @@ Return ONLY valid JSON, no markdown formatting:
 
 def _validate_analysis(analysis: dict[str, Any]) -> dict[str, Any]:
     """Validate and clean LLM analysis response."""
+
+    # Validate testimonials
+    validated_testimonials = []
+    for t in analysis.get("testimonials", [])[:10]:
+        if not isinstance(t, dict):
+            continue
+        quote = str(t.get("quote", "")).strip()
+        if len(quote) < 20:  # Too short
+            continue
+        validated_testimonials.append(
+            {
+                "quote": quote[:500],
+                "authorName": str(t.get("authorName", "")).strip()[:100] or None,
+                "authorTitle": str(t.get("authorTitle", "")).strip()[:100] or None,
+                "authorCompany": str(t.get("authorCompany", "")).strip()[:100] or None,
+                "isVerified": bool(t.get("isVerified", False)),
+            }
+        )
+
+    # Validate client logos
+    validated_client_logos = []
+    for logo in analysis.get("clientLogos", [])[:20]:
+        name = str(logo).strip() if logo else ""
+        if len(name) > 2 and name.lower() not in ["logo", "icon", "image", "unknown"]:
+            validated_client_logos.append(
+                {
+                    "companyName": name[:100],
+                }
+            )
 
     return {
         "services": [
@@ -214,6 +297,8 @@ def _validate_analysis(analysis: dict[str, Any]) -> dict[str, Any]:
         or "",
         "positioning": str(analysis.get("positioning", "")).strip()[:1000] or "",
         "confidence": min(100, max(0, int(analysis.get("confidence", 50)))),
+        "testimonials": validated_testimonials,
+        "clientLogos": validated_client_logos,
     }
 
 
@@ -227,4 +312,6 @@ def _empty_analysis() -> dict[str, Any]:
         "valueProposition": "",
         "positioning": "",
         "confidence": 0,
+        "testimonials": [],
+        "clientLogos": [],
     }

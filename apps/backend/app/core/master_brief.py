@@ -142,20 +142,56 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
         summary_parts.append("\n## Value Proposition")
         summary_parts.append(extraction.analysis.valueProposition)
 
-    # Brand assets (unchanged - these are fine)
-    if extraction.brandAssetCues:
+    # Brand assets (enhanced with font files)
+    if extraction.brandAssetCues or extraction.extractedFonts:
         summary_parts.append("\n## Brand Assets")
-        colors = [c for c in extraction.brandAssetCues if c.assetType == "color"]
-        if colors:
-            summary_parts.append(f"Colors: {', '.join(c.value for c in colors[:3])}")
+        if extraction.brandAssetCues:
+            colors = [c for c in extraction.brandAssetCues if c.assetType == "color"]
+            if colors:
+                summary_parts.append(
+                    f"Colors: {', '.join(c.value for c in colors[:3])}"
+                )
 
-        logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
-        if logos:
-            summary_parts.append(f"Logo: {logos[0].label}")
+            logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
+            if logos:
+                summary_parts.append(f"Logo: {logos[0].label}")
 
-        fonts = [c for c in extraction.brandAssetCues if c.assetType == "typography"]
-        if fonts:
-            summary_parts.append(f"Typography: {fonts[0].value}")
+        # Use extracted font files (more accurate than generic typography cue)
+        if extraction.extractedFonts:
+            font_names = list(
+                dict.fromkeys(
+                    f.fontFamily
+                    for f in extraction.extractedFonts[:5]
+                    if f.fontFamily
+                    and f.fontFamily not in ["Preloaded Font", "Adobe Fonts (Typekit)"]
+                )
+            )
+            if font_names:
+                summary_parts.append(f"Typography: {', '.join(font_names[:3])}")
+        elif extraction.brandAssetCues:
+            fonts = [
+                c for c in extraction.brandAssetCues if c.assetType == "typography"
+            ]
+            if fonts:
+                summary_parts.append(f"Typography: {fonts[0].value}")
+
+    # LLM-validated testimonials
+    if extraction.analysis and extraction.analysis.testimonials:
+        summary_parts.append("\n## Customer Testimonials (Verified)")
+        for t in extraction.analysis.testimonials[:3]:
+            quote_preview = t.quote[:150] + "..." if len(t.quote) > 150 else t.quote
+            author_info = t.authorName or "Anonymous"
+            if t.authorCompany:
+                author_info += f" at {t.authorCompany}"
+            summary_parts.append(f'- "{quote_preview}" — {author_info}')
+
+    # LLM-validated client logos
+    if extraction.analysis and extraction.analysis.clientLogos:
+        summary_parts.append("\n## Clients/Partners (Verified)")
+        client_names = [
+            logo.companyName for logo in extraction.analysis.clientLogos[:8]
+        ]
+        summary_parts.append(f"Trusted by: {', '.join(client_names)}")
 
     # Analysis confidence indicator
     if extraction.analysis and extraction.analysis.confidence > 0:

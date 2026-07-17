@@ -25,6 +25,8 @@ import { AnimatedStats } from "@/components/landing/animated-stats";
 import { TrustedCompanies } from "@/components/landing/trusted-companies";
 import { FeaturesSolarSystem } from "@/components/landing/features-solar-system";
 import { CaseStudiesCarousel } from "@/components/landing/case-studies-carousel";
+import { WorkShowcase } from "@/components/landing/work-showcase";
+import { HeroSiteColumns } from "@/components/landing/hero-site-columns";
 import { SocialWall } from "@/components/landing/social-wall";
 import { FAQSection } from "@/components/landing/faq-section";
 import { PricingConfigurator } from "@/components/landing/pricing-configurator";
@@ -186,6 +188,9 @@ export default function SitesLandingPage() {
       {/* Navigation */}
       <Navbar />
 
+      {/* Hero Background - Site columns behind everything */}
+      <HeroSiteColumns />
+
       {/* Social Proof Notifications */}
       <SocialProofNotifications />
 
@@ -233,7 +238,7 @@ export default function SitesLandingPage() {
 
         {/* Hero Section */}
         <section className="relative px-6 pt-20 pb-32">
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-7xl mx-auto relative">
             {/* Money-Back Guarantee Badge */}
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -443,9 +448,9 @@ export default function SitesLandingPage() {
                 "Secure and trusted by visitors",
                 "Connect with your customers easily",
                 "Share your success on social media",
-                "Fast, reliable hosting included for a year",
-                "We watch your site's health for you",
-                "Free small changes for 30 days after launch",
+                "Full ownership of all code and assets",
+                "Delivered ready to deploy anywhere",
+                "Free minor revisions for 7 days after launch",
               ].map((item, i) => (
                 <motion.div
                   key={i}
@@ -489,6 +494,9 @@ export default function SitesLandingPage() {
             </motion.div>
           </div>
         </section>
+
+        {/* Work Showcase - Real Sites */}
+        <WorkShowcase />
 
         {/* Case Studies Section */}
         <CaseStudiesCarousel />
