@@ -61,7 +61,7 @@ async def generate_landing_page_code(
     response = await llm.generate_text(
         prompt=prompt,
         temperature=0.8,  # Higher creativity for unique designs
-        max_tokens=16384,  # Increased limit for complete landing pages
+        max_tokens=32768,  # Large limit to ensure complete landing pages (never truncate)
     )
 
     # Extract code from response
@@ -475,7 +475,7 @@ async def _retry_generation_with_validation_feedback(
         response = await llm.generate_text(
             prompt=feedback_prompt,
             temperature=0.5,
-            max_tokens=16384,  # Match increased limit
+            max_tokens=32768,  # Match increased limit for complete code
         )
 
         fixed_code = _extract_tsx_code(response)
