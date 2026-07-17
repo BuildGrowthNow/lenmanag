@@ -14,7 +14,12 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.llm import get_llm_client
-from app.schemas.brief import BrandAssets, MasterBrief, MasterBriefSection
+from app.schemas.brief import (
+    BrandAssets,
+    CreativeDirection,
+    MasterBrief,
+    MasterBriefSection,
+)
 from app.schemas.extraction import ExtractionSnapshot
 
 logger = logging.getLogger(__name__)
@@ -163,49 +168,107 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
 
 def _build_initial_prompt(extraction_summary: str) -> str:
     """Build the initial master brief generation prompt."""
-    prompt = f"""You are a landing page strategist. Given the following ANALYZED data about a business, create a master brief for a high-converting landing page.
+    prompt = f"""You are an award-winning creative director designing a landing page. Your goal is to create something that would win an Awwwards Site of the Day — not a template, but a memorable experience.
 
-IMPORTANT: This data has been pre-analyzed by AI. The services, tone, and audience descriptions are already synthesized - use them as-is, don't try to re-interpret them.
+IMPORTANT: This data has been pre-analyzed by AI. The services, tone, and audience descriptions are already synthesized — use them as-is, don't re-interpret them.
 
 {extraction_summary}
 
+## Your Mission
+
+Create a landing page brief that:
+1. Has a SIGNATURE MOMENT — one thing visitors will remember
+2. Breaks at least one "safe" convention (centered layouts, stock grids, generic heroes)
+3. Uses motion and interactivity as design tools, not decorations
+4. Matches the brand's personality while pushing creative boundaries
+
+## Design Vocabulary (use these concepts)
+
+**Hero Treatments** (pick one, be specific):
+- Split-screen with video/animation on one side
+- Oversized kinetic typography that responds to scroll
+- 3D object or scene that rotates/morphs
+- Full-bleed image with text reveal on scroll
+- Bento grid hero with multiple interactive cards
+- Ambient gradient mesh or particle background
+
+**Layout Strategies** (break the mold):
+- Asymmetric bento grids (varied card sizes, not uniform)
+- Horizontal scroll sections for galleries/features
+- Alternating full-bleed and contained sections
+- Sticky sidebars with scrolling content
+- Overlapping elements and negative space
+- Magazine/editorial layouts with mixed media
+
+**Micro-interactions** (make it feel alive):
+- Magnetic buttons that pull toward cursor
+- Cards that tilt on hover (3D transform)
+- Text that reveals character-by-character
+- Parallax depth layers (foreground/background move differently)
+- Scroll-triggered reveals (fade up, slide in, scale)
+- Cursor effects (custom cursor, trailing elements, glow)
+
+**Typography Treatments**:
+- Oversized display text (100px+) with tight letter-spacing
+- Mixed serif/sans-serif for contrast
+- Animated text (typewriter, morphing, bouncing)
+- Variable font weight animations
+- Text masks revealing images/videos
+
 ## Constraints
 - This is a SINGLE landing page (not a multi-page site)
-- Keep all content concise - headlines under 8 words, descriptions under 2 sentences
+- Keep content concise — headlines under 8 words, descriptions under 2 sentences
 - The page must have a clear conversion goal
 - Choose 4-7 sections maximum
-- Be specific about visual direction - not generic
-- DO NOT generate empty or placeholder fields - every field must have real content
+- Every field must have real content, no placeholders
+- Match the brand's industry and audience while being creative
 
 ## Output Format
+
 Return a JSON object with this structure:
 {{
-  "businessGoal": "What this landing page should achieve (specific, not generic)",
-  "primaryAudience": "Who we're talking to (use the analyzed audience data)",
-  "conversionAction": "The one thing we want them to do (use the primary CTA)",
-  "valueProposition": "Why they should care (use analyzed value prop, expand if needed)",
-  "toneAndVoice": "How we sound (use the analyzed tone)",
-  "visualStyle": "Description of look/feel (be specific, not 'clean and modern')",
-  "colorStrategy": "How colors should be used (specific strategy)",
+  "businessGoal": "What this landing page should achieve",
+  "primaryAudience": "Who we're talking to",
+  "conversionAction": "The one thing we want them to do",
+  "valueProposition": "Why they should care (1-2 sentences)",
+  "toneAndVoice": "How we sound (e.g., 'confident and direct, not corporate-speak')",
+  "visualStyle": "Overall aesthetic (be specific, not 'clean and modern')",
+  "colorStrategy": "How colors create mood (e.g., 'dark canvas with electric blue accents for tech authority')",
   "motionLevel": "none|subtle|moderate|dramatic",
-  "specialEffects": ["3d-hero", "parallax-scroll"] or [],
+  "specialEffects": ["parallax-scroll", "3d-hero", "particle-bg", "cursor-glow", "morphing-shapes"],
+  "creativeDirection": {{
+    "designConcept": "One sentence capturing the creative vision (e.g., 'A dark command center where data comes alive')",
+    "heroTreatment": "Specific hero design (e.g., 'Split-screen: left side has looping product video, right side has oversized headline with scroll-triggered subtext reveal')",
+    "signatureTechnique": "The ONE thing that makes this site memorable (e.g., 'Floating 3D product that follows cursor movement')",
+    "layoutStrategy": "How sections are arranged (e.g., 'Asymmetric bento grid for features, full-bleed testimonial, sticky pricing sidebar')",
+    "scrollBehavior": "parallax-layers|snap-sections|smooth-reveal|horizontal-scroll-section",
+    "microInteractions": ["button magnetic pull", "card 3D tilt on hover", "text fade-up on scroll", "cursor trailing gradient"],
+    "colorMood": "Emotional color story (e.g., 'Deep charcoal base with warm amber accents — feels premium but approachable')",
+    "typographyPersonality": "How type creates personality (e.g., 'Massive 120px headlines in a geometric sans, body in a warm serif')",
+    "inspirationKeywords": ["editorial", "dark-mode", "glassmorphism", "depth", "kinetic"],
+    "avoidPatterns": ["centered-everything", "generic-icon-grid", "stock-photo-hero", "blue-gradient-cta"]
+  }},
   "headline": "Main hero headline (8 words max, compelling)",
   "subheadline": "Supporting line (2 sentences max)",
   "sections": [
     {{
-      "purpose": "social-proof|services|process|cta|about|etc",
+      "purpose": "social-proof|services|process|cta|about|features|pricing|faq|gallery|testimonials",
       "headline": "Section headline (clear, specific)",
-      "contentSummary": "What goes in this section (detailed, not vague)",
-      "suggestedApproach": "testimonial carousel, bento grid, icon list, etc",
-      "contentPoints": ["key point 1 (specific)", "key point 2 (specific)", "key point 3"]
+      "contentSummary": "What goes in this section (detailed)",
+      "suggestedApproach": "Specific component approach (e.g., 'Bento grid with 3 large + 2 small cards, hover reveals detail overlay')",
+      "contentPoints": ["specific point 1", "specific point 2", "specific point 3"]
     }}
   ],
-  "ctaStrategy": "Primary + secondary CTAs approach (be specific)",
-  "aiReasoning": "Why these choices were made based on the analyzed data",
+  "ctaStrategy": "How CTAs work across the page (e.g., 'Sticky header CTA + mid-page floating CTA + footer full-width CTA bar')",
+  "aiReasoning": "Why these creative choices fit this brand and audience",
   "confidenceScore": 85
 }}
 
-CRITICAL: Every field must be populated with real, specific content. No empty arrays, no generic descriptions, no "TBD" placeholders.
+CRITICAL:
+- Every field must be populated with real, specific content
+- The creativeDirection must have SPECIFIC techniques, not generic descriptions
+- suggestedApproach for each section should describe a specific component pattern
+- Think like an Awwwards judge — what makes this site worth featuring?
 
 Return ONLY valid JSON, no markdown formatting."""
 
@@ -227,9 +290,14 @@ def _build_refinement_prompt(
         ],
         "visualStyle": previous_brief.visualStyle,
         "motionLevel": previous_brief.motionLevel,
+        "creativeDirection": {
+            "designConcept": previous_brief.creativeDirection.designConcept,
+            "heroTreatment": previous_brief.creativeDirection.heroTreatment,
+            "signatureTechnique": previous_brief.creativeDirection.signatureTechnique,
+        },
     }
 
-    prompt = f"""You are a landing page strategist. Refine the master brief based on user feedback.
+    prompt = f"""You are an award-winning creative director. Refine the master brief based on user feedback while maintaining creative excellence.
 
 ## Original Extraction Data
 {extraction_summary}
@@ -241,7 +309,7 @@ def _build_refinement_prompt(
 {feedback}
 
 ## Task
-Regenerate the master brief incorporating the user's feedback. Keep what works, change what they requested.
+Regenerate the master brief incorporating the user's feedback. Keep what works, change what they requested. Maintain Awwwards-level creative direction.
 
 ## Output Format
 Return a JSON object with this structure:
@@ -250,11 +318,23 @@ Return a JSON object with this structure:
   "primaryAudience": "Who we're talking to",
   "conversionAction": "The one thing we want them to do",
   "valueProposition": "Why they should care (1-2 sentences)",
-  "toneAndVoice": "How we sound (casual/professional/bold/etc)",
-  "visualStyle": "Description of look/feel",
+  "toneAndVoice": "How we sound (e.g., 'confident and direct')",
+  "visualStyle": "Description of look/feel (be specific)",
   "colorStrategy": "How colors should be used",
   "motionLevel": "none|subtle|moderate|dramatic",
   "specialEffects": ["3d-hero", "parallax-scroll"],
+  "creativeDirection": {{
+    "designConcept": "One sentence capturing the creative vision",
+    "heroTreatment": "Specific hero design approach",
+    "signatureTechnique": "The ONE thing that makes this site memorable",
+    "layoutStrategy": "How sections are arranged",
+    "scrollBehavior": "parallax-layers|snap-sections|smooth-reveal|horizontal-scroll-section",
+    "microInteractions": ["specific interaction 1", "specific interaction 2"],
+    "colorMood": "Emotional color story",
+    "typographyPersonality": "How type creates personality",
+    "inspirationKeywords": ["keyword1", "keyword2"],
+    "avoidPatterns": ["pattern to avoid 1", "pattern to avoid 2"]
+  }},
   "headline": "Main hero headline",
   "subheadline": "Supporting line",
   "sections": [
@@ -262,7 +342,7 @@ Return a JSON object with this structure:
       "purpose": "social-proof|services|process|cta|etc",
       "headline": "Section headline",
       "contentSummary": "What goes in this section",
-      "suggestedApproach": "testimonial carousel, bento grid, etc",
+      "suggestedApproach": "Specific component pattern",
       "contentPoints": ["key point 1", "key point 2"]
     }}
   ],
@@ -345,6 +425,27 @@ def _build_master_brief_from_response(
             )
         )
 
+    # Build creative direction
+    creative_data = brief_data.get("creativeDirection", {})
+    creative_direction = CreativeDirection(
+        designConcept=creative_data.get("designConcept", "Modern and engaging"),
+        heroTreatment=creative_data.get(
+            "heroTreatment", "Full-width hero with centered content"
+        ),
+        signatureTechnique=creative_data.get(
+            "signatureTechnique", "Smooth scroll animations"
+        ),
+        layoutStrategy=creative_data.get("layoutStrategy", "Clean grid layout"),
+        scrollBehavior=creative_data.get("scrollBehavior", "smooth-reveal"),
+        microInteractions=creative_data.get("microInteractions", []),
+        colorMood=creative_data.get("colorMood", "Professional with brand accents"),
+        typographyPersonality=creative_data.get(
+            "typographyPersonality", "Clean sans-serif with clear hierarchy"
+        ),
+        inspirationKeywords=creative_data.get("inspirationKeywords", []),
+        avoidPatterns=creative_data.get("avoidPatterns", []),
+    )
+
     # Determine version
     version = 1
     if previous_brief:
@@ -378,6 +479,7 @@ def _build_master_brief_from_response(
         colorStrategy=brief_data.get("colorStrategy", "Neutral with subtle accents"),
         motionLevel=motion_level,
         specialEffects=brief_data.get("specialEffects", []),
+        creativeDirection=creative_direction,
         headline=brief_data.get(
             "headline", extraction.summary.companyName or "Welcome"
         ),

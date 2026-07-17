@@ -12,6 +12,19 @@ export interface MasterBriefSection {
   contentPoints: string[];
 }
 
+export interface CreativeDirection {
+  designConcept: string;
+  heroTreatment: string;
+  signatureTechnique: string;
+  layoutStrategy: string;
+  scrollBehavior: string;
+  microInteractions: string[];
+  colorMood: string;
+  typographyPersonality: string;
+  inspirationKeywords: string[];
+  avoidPatterns: string[];
+}
+
 export interface BrandAssets {
   logoUrl?: string;
   primaryColor?: string;
@@ -36,6 +49,7 @@ export interface MasterBrief {
   colorStrategy: string;
   motionLevel: 'none' | 'subtle' | 'moderate' | 'dramatic';
   specialEffects: string[];
+  creativeDirection?: CreativeDirection;
   headline: string;
   subheadline: string;
   sections: MasterBriefSection[];

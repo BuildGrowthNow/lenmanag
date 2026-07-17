@@ -243,6 +243,50 @@ export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefRe
           </div>
         )}
 
+        {brief.creativeDirection && (
+          <div className="space-y-3">
+            <div className="text-xs uppercase tracking-[0.18em] text-muted font-semibold">Creative Direction</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted">Design Concept</div>
+                <div className="mt-2 text-sm text-text">{brief.creativeDirection.designConcept}</div>
+              </div>
+              <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted">Hero Treatment</div>
+                <div className="mt-2 text-sm text-text">{brief.creativeDirection.heroTreatment}</div>
+              </div>
+              <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted">Signature Technique</div>
+                <div className="mt-2 text-sm font-medium text-text">{brief.creativeDirection.signatureTechnique}</div>
+              </div>
+              <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted">Layout Strategy</div>
+                <div className="mt-2 text-sm text-text">{brief.creativeDirection.layoutStrategy}</div>
+              </div>
+              {brief.creativeDirection.microInteractions.length > 0 && (
+                <div className="rounded-2xl border border-line bg-panel-2 p-4 md:col-span-2">
+                  <div className="text-xs uppercase tracking-[0.18em] text-muted">Micro-interactions</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {brief.creativeDirection.microInteractions.map((interaction, i) => (
+                      <span key={i} className="text-xs px-2 py-1 bg-panel-3 rounded-full text-text">{interaction}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {brief.creativeDirection.inspirationKeywords.length > 0 && (
+                <div className="rounded-2xl border border-line bg-panel-2 p-4 md:col-span-2">
+                  <div className="text-xs uppercase tracking-[0.18em] text-muted">Inspiration Keywords</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {brief.creativeDirection.inspirationKeywords.map((keyword, i) => (
+                      <span key={i} className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full">{keyword}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="rounded-2xl border border-line bg-panel-2 p-4">
           <div className="text-xs uppercase tracking-[0.18em] text-muted">CTA Strategy</div>
           <div className="mt-2 text-sm text-text">{brief.ctaStrategy}</div>

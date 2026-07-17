@@ -106,6 +106,51 @@ class SiteBriefPatchRequest(BaseModel):
 # Phase 2: Master Brief Schema (AI-Native)
 
 
+class CreativeDirection(BaseModel):
+    """Art direction block for the landing page design"""
+
+    designConcept: str = Field(
+        default="Modern and engaging",
+        description="One-sentence creative concept (e.g., 'Floating glass cards emerging from a dark cosmos')",
+    )
+    heroTreatment: str = Field(
+        default="Full-width hero with centered content",
+        description="Specific hero approach (e.g., 'Split-screen with looping video left, kinetic typography right')",
+    )
+    signatureTechnique: str = Field(
+        default="Smooth scroll animations",
+        description="One memorable effect that makes this site stand out (e.g., 'Cursor-following gradient orb')",
+    )
+    layoutStrategy: str = Field(
+        default="Clean grid layout",
+        description="Grid philosophy (e.g., 'Asymmetric bento grid, no full-width sections except hero')",
+    )
+    scrollBehavior: str = Field(
+        default="smooth-reveal",
+        description="How the page responds to scroll (e.g., 'parallax-layers', 'snap-sections', 'smooth-reveal')",
+    )
+    microInteractions: list[str] = Field(
+        default_factory=list,
+        description="Specific hover/click/scroll micro-interactions (e.g., 'hover card tilt', 'button magnetic pull')",
+    )
+    colorMood: str = Field(
+        default="Professional with brand accents",
+        description="Emotional color direction (e.g., 'Dark mode with electric accents')",
+    )
+    typographyPersonality: str = Field(
+        default="Clean sans-serif with clear hierarchy",
+        description="Type treatment (e.g., 'Oversized display headings with tight tracking')",
+    )
+    inspirationKeywords: list[str] = Field(
+        default_factory=list,
+        description="Design vocabulary (e.g., 'editorial', 'brutalist', 'glassmorphism')",
+    )
+    avoidPatterns: list[str] = Field(
+        default_factory=list,
+        description="What NOT to do for this brand (e.g., 'generic stock photo grids', 'centered everything')",
+    )
+
+
 class BrandAssets(BaseModel):
     """Brand assets extracted from source site"""
 
@@ -167,6 +212,10 @@ class MasterBrief(BaseModel):
     )
     specialEffects: list[str] = Field(
         default_factory=list, description="3d-hero, parallax-scroll, particle-bg, etc"
+    )
+    creativeDirection: CreativeDirection = Field(
+        default_factory=CreativeDirection,
+        description="Detailed art direction for the page design",
     )
 
     # Content Blueprint

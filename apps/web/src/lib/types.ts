@@ -1136,6 +1136,19 @@ export type MasterBriefSection = {
   contentPoints: string[];
 };
 
+export type CreativeDirection = {
+  designConcept: string;
+  heroTreatment: string;
+  signatureTechnique: string;
+  layoutStrategy: string;
+  scrollBehavior: string;
+  microInteractions: string[];
+  colorMood: string;
+  typographyPersonality: string;
+  inspirationKeywords: string[];
+  avoidPatterns: string[];
+};
+
 export type MasterBrief = {
   id: string;
   leadId: string;
@@ -1149,6 +1162,7 @@ export type MasterBrief = {
   colorStrategy: string;
   motionLevel: "none" | "subtle" | "moderate" | "dramatic";
   specialEffects: string[];
+  creativeDirection?: CreativeDirection;
   headline: string;
   subheadline: string;
   sections: MasterBriefSection[];

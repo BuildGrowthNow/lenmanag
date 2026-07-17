@@ -207,7 +207,83 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
             {/* Creative Direction */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
               <h2 className="text-lg font-semibold text-zinc-300">Creative Direction</h2>
-              <div className="grid grid-cols-2 gap-4">
+
+              {brief.creativeDirection && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-gradient-to-r from-blue-950/30 to-purple-950/30 border border-blue-900/30 rounded-lg">
+                    <h3 className="text-sm text-blue-400 mb-1">Design Concept</h3>
+                    <p className="text-sm font-medium">{brief.creativeDirection.designConcept}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="text-sm text-zinc-500 mb-1">Hero Treatment</h3>
+                      <p className="text-sm">{brief.creativeDirection.heroTreatment}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-sm text-zinc-500 mb-1">Signature Technique</h3>
+                      <p className="text-sm text-blue-400">{brief.creativeDirection.signatureTechnique}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-sm text-zinc-500 mb-1">Layout Strategy</h3>
+                      <p className="text-sm">{brief.creativeDirection.layoutStrategy}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-sm text-zinc-500 mb-1">Scroll Behavior</h3>
+                      <p className="text-sm">{brief.creativeDirection.scrollBehavior}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-sm text-zinc-500 mb-1">Color Mood</h3>
+                      <p className="text-sm">{brief.creativeDirection.colorMood}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-sm text-zinc-500 mb-1">Typography</h3>
+                      <p className="text-sm">{brief.creativeDirection.typographyPersonality}</p>
+                    </div>
+                  </div>
+
+                  {brief.creativeDirection.microInteractions.length > 0 && (
+                    <div>
+                      <h3 className="text-sm text-zinc-500 mb-2">Micro-interactions</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {brief.creativeDirection.microInteractions.map((item) => (
+                          <span key={item} className="text-xs px-2 py-1 bg-green-900/30 text-green-400 rounded">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {brief.creativeDirection.inspirationKeywords.length > 0 && (
+                    <div>
+                      <h3 className="text-sm text-zinc-500 mb-2">Inspiration Keywords</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {brief.creativeDirection.inspirationKeywords.map((keyword) => (
+                          <span key={keyword} className="text-xs px-2 py-1 bg-purple-900/30 text-purple-400 rounded">
+                            {keyword}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {brief.creativeDirection.avoidPatterns.length > 0 && (
+                    <div>
+                      <h3 className="text-sm text-zinc-500 mb-2">Avoid These Patterns</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {brief.creativeDirection.avoidPatterns.map((pattern) => (
+                          <span key={pattern} className="text-xs px-2 py-1 bg-red-900/30 text-red-400 rounded line-through">
+                            {pattern}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-800">
                 <div>
                   <h3 className="text-sm text-zinc-500 mb-1">Visual Style</h3>
                   <p className="text-sm">{brief.visualStyle}</p>
@@ -225,6 +301,7 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
                   <p className="text-sm">{brief.ctaStrategy}</p>
                 </div>
               </div>
+
               {brief.specialEffects.length > 0 && (
                 <div>
                   <h3 className="text-sm text-zinc-500 mb-2">Special Effects</h3>
