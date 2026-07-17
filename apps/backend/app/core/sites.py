@@ -2382,6 +2382,7 @@ class SiteRepository:
 
         settings = get_settings()
         if not settings.visual_redesign_enabled:
+            logger.info("Auto-iteration disabled: visual_redesign_enabled=False")
             return
 
         # Treat values <= 1 as "no automatic iteration".
@@ -2390,6 +2391,10 @@ class SiteRepository:
         except Exception:
             max_iterations = 0
         if max_iterations <= 1:
+            logger.info(
+                "Auto-iteration disabled: max_iterations=%d (must be > 1)",
+                max_iterations,
+            )
             return
 
         try:
@@ -2397,6 +2402,7 @@ class SiteRepository:
             # improvement recommendations produced during screenshot QA.
             site = await self.get_site(site_id)
             if site is None:
+                logger.warning("Auto-iteration skipped: site %s not found", site_id)
                 return
 
             try:
@@ -2405,15 +2411,60 @@ class SiteRepository:
                 job_doc = None
 
             metadata = (job_doc or {}).get("metadata", {}) or {}
+
+            # Guard: verify the current generation actually persisted by
+            # comparing the site version against the job's expected version.
+            # Without this, a persistence failure would leave a stale version
+            # and the iteration logic could loop indefinitely.
+            expected_version = metadata.get("nextVersion")
+            if expected_version is not None:
+                current_version_actual = int(getattr(site, "version", 0))
+                if current_version_actual < int(expected_version):
+                    logger.warning(
+                        "Auto-iteration skipped for %s: site version %d < expected %d "
+                        "(generation may not have persisted)",
+                        site_id,
+                        current_version_actual,
+                        int(expected_version),
+                    )
+                    return
+
             screenshot_qa = metadata.get("screenshotQA") or {}
             screenshot_quality = screenshot_qa.get("qualityScore")
             screenshot_success = screenshot_qa.get("success", False)
 
-            if not screenshot_success or screenshot_quality is None:
+            # CRITICAL FIX: Only proceed if screenshot QA actually ran and has results
+            # Without this, we would loop infinitely on every successful generation
+            if not screenshot_qa:
+                logger.info(
+                    "Auto-iteration skipped for %s: No screenshot QA data in job metadata",
+                    site_id,
+                )
+                return
+
+            if not screenshot_success:
+                logger.info(
+                    "Auto-iteration skipped for %s: screenshot QA failed (success=%s)",
+                    site_id,
+                    screenshot_success,
+                )
+                return
+
+            if screenshot_quality is None:
+                logger.info(
+                    "Auto-iteration skipped for %s: screenshot QA quality score is None",
+                    site_id,
+                )
                 return
 
             threshold = int(getattr(settings, "visual_redesign_quality_threshold", 95))
             if int(screenshot_quality) >= threshold:
+                logger.info(
+                    "Auto-iteration skipped for %s: quality score %d >= threshold %d",
+                    site_id,
+                    screenshot_quality,
+                    threshold,
+                )
                 return
 
             # Enforce a hard cap on how many generations we will run
@@ -2421,16 +2472,27 @@ class SiteRepository:
             # max_iterations=2 we allow a single follow-up pass.
             current_version = int(getattr(site, "version", 0))
             if current_version >= max_iterations:
+                logger.info(
+                    "Auto-iteration skipped for %s: current version %d >= max_iterations %d",
+                    site_id,
+                    current_version,
+                    max_iterations,
+                )
                 return
 
             if not getattr(site, "improvementRecommendations", None):
+                logger.info(
+                    "Auto-iteration skipped for %s: no improvement recommendations available",
+                    site_id,
+                )
                 return
 
             logger.info(
-                "Queuing automatic refinement generation for %s (version %s -> %s)",
+                "Queuing automatic refinement generation for %s (version %s -> %s, quality score: %d)",
                 site_id,
                 current_version,
                 current_version + 1,
+                screenshot_quality,
             )
 
             force_flag = bool(getattr(request, "force", False)) if request else False
@@ -3191,6 +3253,58 @@ class SiteRepository:
                 )
                 return None
 
+            # Persist generated site record to database
+            logger.info(
+                "Persisting AI-generated site %s version %d", site_id, next_version
+            )
+            await self._persist_ai_generated_site(
+                site_id=site_id,
+                job_id=job_id,
+                lead=lead,
+                master_brief=master_brief,
+                extraction=extraction,
+                result=result,
+                version=next_version,
+                current=current,
+            )
+
+            # Verify site was persisted successfully
+            persisted_site = await self.get_site(site_id)
+            if persisted_site is None:
+                error_msg = f"Site {site_id} not found after persistence"
+                logger.error(error_msg)
+                await lead_repository._update_job(  # noqa: SLF001
+                    job_id,
+                    status="failed",
+                    progress=100,
+                    step="Site persistence verification failed",
+                    error_message=error_msg,
+                    finished=True,
+                    lead_ids=[site_id],
+                )
+                raise RuntimeError(error_msg)
+
+            if persisted_site.version != next_version:
+                error_msg = f"Site {site_id} version mismatch: expected {next_version}, got {persisted_site.version}"
+                logger.error(error_msg)
+                await lead_repository._update_job(  # noqa: SLF001
+                    job_id,
+                    status="failed",
+                    progress=100,
+                    step="Site persistence version mismatch",
+                    error_message=error_msg,
+                    finished=True,
+                    lead_ids=[site_id],
+                )
+                raise RuntimeError(error_msg)
+
+            logger.info(
+                "Successfully verified site %s version %d persistence (quality score: %d)",
+                site_id,
+                persisted_site.version,
+                persisted_site.qualityScore,
+            )
+
             await lead_repository._update_job(  # noqa: SLF001
                 job_id,
                 progress=100,
@@ -3199,7 +3313,232 @@ class SiteRepository:
                 finished=True,
                 lead_ids=[site_id],
             )
-            return await self.get_site(site_id)
+            return persisted_site
+
+    async def _persist_ai_generated_site(
+        self,
+        *,
+        site_id: str,
+        job_id: str,
+        lead: Any,
+        master_brief: Any,
+        extraction: ExtractionSnapshot,
+        result: dict[str, Any],
+        version: int,
+        current: GeneratedSite | None,
+    ) -> None:
+        """Persist generated site record after successful AI code generation."""
+        now = _now()
+        settings = get_settings()
+
+        signals = " ".join(
+            [
+                _text(lead.companyName),
+                _text(getattr(lead, "industry", None)),
+                _text(master_brief.valueProposition),
+                _text(master_brief.primaryAudience),
+                _text(master_brief.toneAndVoice),
+                _text(master_brief.conversionAction),
+                _text(extraction.summary.positioningSummary),
+                " ".join(extraction.summary.toneClues),
+                " ".join(cue.label for cue in extraction.brandAssetCues),
+                " ".join(cue.value for cue in extraction.brandAssetCues),
+            ]
+        )
+        theme, theme_rationale = _theme_for_signals(signals, extraction)
+        palette_mode, palette_rationale = _palette_mode_from_signals(
+            " ".join(
+                [
+                    _text(master_brief.toneAndVoice),
+                    _text(extraction.summary.positioningSummary),
+                    " ".join(extraction.summary.toneClues),
+                    " ".join(
+                        cue.label
+                        for cue in extraction.brandAssetCues
+                        if cue.assetType == "color"
+                    ),
+                    " ".join(
+                        cue.value
+                        for cue in extraction.brandAssetCues
+                        if cue.assetType == "color"
+                    ),
+                ]
+            ),
+            extraction,
+        )
+
+        default_evidence = {
+            "sourceKind": "extraction",
+            "inferenceLabel": "AI-generated",
+            "confidence": 80,
+            "references": [],
+        }
+        brand_tokens = {
+            "paletteMode": palette_mode,
+            "primaryColor": {"value": "#1a1a2e", "evidence": default_evidence},
+            "secondaryColor": {"value": "#16213e", "evidence": default_evidence},
+            "accentColor": {"value": "#0f3460", "evidence": default_evidence},
+            "backgroundColor": {"value": "#ffffff", "evidence": default_evidence},
+            "textColor": {"value": "#1a1a2e", "evidence": default_evidence},
+            "borderColor": {"value": "#e2e8f0", "evidence": default_evidence},
+            "typography": {
+                "value": "system-ui, sans-serif",
+                "evidence": default_evidence,
+            },
+            "imageStyle": {"value": "clean", "evidence": default_evidence},
+            "visualTone": {
+                "value": master_brief.visualStyle or "modern",
+                "evidence": default_evidence,
+            },
+            "motionIntensity": {
+                "value": master_brief.motionLevel or "subtle",
+                "evidence": default_evidence,
+            },
+            "layoutDensity": {"value": "balanced", "evidence": default_evidence},
+        }
+
+        hero_variant = {
+            "headline": master_brief.headline,
+            "subheadline": master_brief.subheadline,
+            "supportingLine": master_brief.valueProposition,
+            "primaryCta": master_brief.ctaStrategy,
+            "secondaryCta": "Learn more",
+            "layout": theme.get("heroFamily", "stacked-panel"),
+            "visualTreatment": master_brief.visualStyle or "modern",
+            "evidence": default_evidence,
+        }
+
+        cta_strategy = {
+            "primary": {
+                "label": _ensure_client_safe_cta("Get started"),
+                "href": "#",
+                "rationale": "Primary conversion action",
+                "evidence": default_evidence,
+            },
+            "secondary": {
+                "label": _ensure_client_safe_cta("Learn more"),
+                "href": "#",
+                "rationale": "Secondary engagement action",
+                "evidence": default_evidence,
+            },
+            "footer": {
+                "label": _ensure_client_safe_cta("Get started"),
+                "href": "#",
+                "rationale": "Footer conversion action",
+                "evidence": default_evidence,
+            },
+        }
+
+        # Generate or reuse preview slug
+        if current and current.previewSlug:
+            preview_slug = current.previewSlug
+        else:
+            all_sites = await self._list_sites(limit=200, offset=0)
+            existing_slugs = {s.previewSlug for s in all_sites}
+            preview_slug = _generate_friendly_slug(
+                lead.companyName or site_id, existing_slugs
+            )
+
+        preview_url = f"{settings.preview_base_url}/st/{preview_slug}"
+
+        source_attribution = _site_source_attribution(
+            lead=lead,
+            brief=master_brief,
+            extraction=extraction,
+            theme=theme,
+            palette_mode=palette_mode,
+        )
+
+        site_doc: dict[str, Any] = {
+            "id": site_id,
+            "leadId": site_id,
+            "generationJobId": job_id,
+            "briefId": master_brief.id,
+            "briefVersion": master_brief.version,
+            "version": version,
+            "themeId": theme["id"],
+            "themeKey": theme["themeKey"],
+            "themeName": theme["name"],
+            "themeRationale": theme_rationale,
+            "paletteMode": palette_mode,
+            "paletteRationale": palette_rationale,
+            "brandTokens": brand_tokens,
+            "heroVariant": hero_variant,
+            "sectionStack": [],
+            "ctaStrategy": cta_strategy,
+            "qualityScore": 70,
+            "readinessStatus": "needs_review",
+            "qaStatus": "warn",
+            "reviewRubric": [],
+            "comparisonEntries": [],
+            "sourceTraceability": [],
+            "missingRequirements": list(master_brief.missingRequirements or []),
+            "sourceAttribution": source_attribution,
+            "browserReviewState": "not_reviewed",
+            "publishApprovalState": "pending",
+            "screenshotRefs": [],
+            "diversityNotes": [],
+            "diversityScore": 50,
+            "layoutHash": "",
+            "previewSlug": preview_slug,
+            "previewUrl": preview_url,
+            "overrideCount": 0,
+            "overrides": [],
+            "overrideDiffs": [],
+            "refinementPromptId": None,
+            "promptHistory": [],
+            "isManuallyRefined": False,
+            "improvementRecommendations": None,
+            "sourceCode": result.get("sourceCode"),
+            "compiledBundleUrl": result.get("compiledBundleUrl"),
+            "compilationStatus": result.get("compilationStatus", "success"),
+            "compilationError": None,
+            "createdAt": current.createdAt if current else now,
+            "updatedAt": now,
+        }
+
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                self._sites[site_id] = site_doc
+            logger.info(
+                "Persisted AI-generated site %s version %d (in-memory)",
+                site_id,
+                version,
+            )
+            return
+
+        # Persist to MongoDB with upsert
+        result = await database["generated_sites"].replace_one(
+            {"id": site_id}, site_doc, upsert=True
+        )
+
+        # CRITICAL FIX: Verify persistence succeeded
+        if result.matched_count == 0 and result.upserted_id is None:
+            error_msg = f"Failed to persist site {site_id} version {version}: replace_one returned no match or upsert"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        # Verify the site can be retrieved
+        verification = await database["generated_sites"].find_one({"id": site_id})
+        if verification is None:
+            error_msg = f"Site {site_id} version {version} not found after persistence"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        persisted_version = verification.get("version", 0)
+        if persisted_version != version:
+            error_msg = f"Version mismatch for site {site_id}: expected {version}, got {persisted_version}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        logger.info(
+            "Successfully persisted AI-generated site %s version %d (MongoDB, matched=%d, upserted=%s)",
+            site_id,
+            version,
+            result.matched_count,
+            result.upserted_id is not None,
+        )
 
     async def _dispatch_generation_job(
         self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None
