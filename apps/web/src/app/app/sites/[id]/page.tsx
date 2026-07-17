@@ -259,7 +259,7 @@ function BriefTabContent({
   brief,
   leadId,
 }: {
-  brief: Awaited<ReturnType<typeof import("@/lib/api/leads").getLeadBrief>>;
+  brief: Awaited<ReturnType<typeof import("@/lib/api/leads").getLeadMasterBrief>>;
   leadId: string;
 }) {
   if (!brief) {
@@ -292,12 +292,12 @@ function BriefTabContent({
 
       {(
         [
-          ["Positioning", brief.companySummary?.value],
-          ["Value proposition", brief.valuePropositionSummary?.value],
-          ["Audience", brief.audienceHypothesis?.value],
-          ["Tone", brief.toneProfile?.value],
-          ["Conversion angle", brief.conversionAngle?.value],
-          ["Recommended hero", brief.recommendedHero?.value],
+          ["Business Goal", brief.businessGoal],
+          ["Primary Audience", brief.primaryAudience],
+          ["Value Proposition", brief.valueProposition],
+          ["Tone & Voice", brief.toneAndVoice],
+          ["Visual Style", brief.visualStyle],
+          ["Color Strategy", brief.colorStrategy],
         ] as Array<[string, string | undefined]>
       ).map(([label, value]) =>
         value ? (
@@ -308,16 +308,16 @@ function BriefTabContent({
         ) : null
       )}
 
-      {brief.recommendedSections.length > 0 && (
+      {brief.sections.length > 0 && (
         <div className="rounded-2xl border border-line bg-panel-2 p-4">
-          <div className="text-xs uppercase tracking-[0.18em] text-muted">Recommended sections</div>
+          <div className="text-xs uppercase tracking-[0.18em] text-muted">Sections</div>
           <div className="mt-3 space-y-2">
-            {brief.recommendedSections.map((section, idx) => (
+            {brief.sections.map((section, idx) => (
               <div key={idx} className="flex items-start gap-2 text-sm">
                 <Badge className="mt-0.5 shrink-0 border-white/10 bg-white/5 text-text">
-                  {section.title}
+                  {section.headline}
                 </Badge>
-                <span className="text-muted">{section.rationale}</span>
+                <span className="text-muted">{section.purpose}</span>
               </div>
             ))}
           </div>
@@ -726,7 +726,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                       <OverrideDiffBadgeWrapper
                         diff={diff}
                         siteId={id}
-                        onDisable={disableOverrideAction}
+                        onDisable={(overrideId) => disableOverrideAction(id, overrideId)}
                       />
                       <Badge className="border-white/10 bg-white/5 text-text">{diff.scope}</Badge>
                       <span className="text-xs text-muted">{diff.path}</span>

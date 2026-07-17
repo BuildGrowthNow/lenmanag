@@ -12,6 +12,8 @@
 
 Infrastructure: Docker Compose (prod), MongoDB Atlas + local, Redis, AWS S3, AWS Bedrock (Claude Sonnet), Nginx reverse proxy.
 
+*Important Rule: ALWAYS FOLLOW USER INSTRUCTIONS, DONT DRIFT OR ASSUME OTHER THINGS AND DONT BUILD THINGS THAT THE USER HAVENT SAID, IF YOU NEED CLARIFICATION OR ARE UNSURE OF SOMETHING OR HAVE A BETTER IDEA, TELL THE USER BEFORE STARTING THE TASK*
+
 ---
 
 ## Repository & Deployment

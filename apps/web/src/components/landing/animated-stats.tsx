@@ -46,18 +46,18 @@ function AnimatedStat({ icon: Icon, value, suffix, label, delay = 0 }: StatProps
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ delay, duration: 0.8 }}
       whileHover={{ scale: 1.05 }}
-      className="text-center p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/50 transition-all group"
+      className="text-center p-4 md:p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/50 transition-all group"
     >
-      <div className="mb-3 flex justify-center">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-yellow-500/30">
-          <Icon className="w-6 h-6 text-white" />
+      <div className="mb-2 md:mb-3 flex justify-center">
+        <div className="w-10 md:w-12 h-10 md:h-12 rounded-xl bg-gradient-to-br from-yellow-500 to-yellow-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-yellow-500/30">
+          <Icon className="w-5 md:w-6 h-5 md:h-6 text-white" />
         </div>
       </div>
-      <div className="text-4xl font-bold text-white mb-1 tabular-nums">
+      <div className="text-2xl md:text-4xl font-bold text-white mb-1 tabular-nums">
         {count}
         {suffix}
       </div>
-      <div className="text-sm text-slate-400">{label}</div>
+      <div className="text-xs md:text-sm text-slate-400">{label}</div>
     </motion.div>
   );
 }

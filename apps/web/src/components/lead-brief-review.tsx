@@ -101,7 +101,7 @@ export function LeadBriefReview({ leadId, brief, extractionHealth }: LeadBriefRe
       setMessage("Master brief generated from the latest extraction snapshot.");
       void sendAnalyticsEvent({
         leadId,
-        eventType: "brief_created",
+        eventType: "brief_edited",
         eventName: "Master brief generated",
         metadata: { scope: "brief_editor" }
       });

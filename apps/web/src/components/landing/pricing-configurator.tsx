@@ -71,14 +71,14 @@ export function PricingConfigurator({ onCheckout, isLoading }: PricingConfigurat
           </div>
 
           {/* Title & Price */}
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
-            <div>
+          <div className="flex flex-col items-center md:items-end md:justify-between gap-4 mb-8 text-center md:text-right md:flex-row">
+            <div className="md:text-left">
               <h3 className="text-2xl md:text-3xl font-bold text-white mb-1">
                 {MAIN_PACKAGE.name}
               </h3>
               <p className="text-slate-400">{MAIN_PACKAGE.description}</p>
             </div>
-            <div className="text-right">
+            <div>
               <div className="text-4xl md:text-5xl font-bold text-white">
                 ${MAIN_PACKAGE.price.toLocaleString()}
               </div>
@@ -87,9 +87,9 @@ export function PricingConfigurator({ onCheckout, isLoading }: PricingConfigurat
           </div>
 
           {/* Features */}
-          <div className="grid sm:grid-cols-2 gap-3 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
             {MAIN_PACKAGE.features.map((feature, i) => (
-              <div key={i} className="flex items-center gap-3">
+              <div key={i} className="flex items-center gap-3 sm:items-start">
                 <CheckCircle2 className="w-5 h-5 text-yellow-500 flex-shrink-0" />
                 <span className="text-white">{feature.text}</span>
               </div>

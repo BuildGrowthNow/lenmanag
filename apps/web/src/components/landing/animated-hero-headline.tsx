@@ -3,15 +3,26 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
-const PHRASES = ["In 3 Days", "$1,000", "with a Master Design"];
+const PHRASES_DESKTOP = ["In 3 Days", "$1,000", "with a Master Design"];
+const PHRASES_MOBILE = ["In 3 Days", "$1,000", "Best Design"];
 
 export function AnimatedHeroHeadline() {
   const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
   const [displayedText, setDisplayedText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [showCursor, setShowCursor] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  useEffect(() => {
+    const PHRASES = isMobile ? PHRASES_MOBILE : PHRASES_DESKTOP;
     const currentPhrase = PHRASES[currentPhraseIndex];
 
     if (!isDeleting && displayedText === currentPhrase) {
@@ -37,7 +48,7 @@ export function AnimatedHeroHeadline() {
     }, typingSpeed);
 
     return () => clearTimeout(timer);
-  }, [displayedText, isDeleting, currentPhraseIndex]);
+  }, [displayedText, isDeleting, currentPhraseIndex, isMobile]);
 
   useEffect(() => {
     const cursorTimer = setInterval(() => {
@@ -52,8 +63,7 @@ export function AnimatedHeroHeadline() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="mb-4"
-      >
+        >
         <h1 className="text-5xl md:text-7xl font-bold text-white">
           Your Website
         </h1>
@@ -63,9 +73,9 @@ export function AnimatedHeroHeadline() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.2 }}
-        className="mb-8 min-h-[60px] md:min-h-[80px] flex items-center justify-center"
+        className="mb-3 flex items-center justify-center"
       >
-        <h2 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500 bg-clip-text text-transparent">
+        <h2 className="text-5xl md:text-7xl font-bold leading-normal bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-500 bg-clip-text text-transparent">
           {displayedText}
           <span
             className={`inline-block w-1 h-[1em] ml-1 bg-yellow-500 ${
@@ -84,7 +94,7 @@ export function AnimatedHeroHeadline() {
         Premium, custom-crafted websites built by design experts.
         <br className="hidden md:block" />
         <span className="text-yellow-500 font-semibold">
-          No compromises. No delays. Just masterfully executed results.
+          &nbsp;No compromises. No delays. Just masterfully executed results.
         </span>
       </motion.p>
     </div>

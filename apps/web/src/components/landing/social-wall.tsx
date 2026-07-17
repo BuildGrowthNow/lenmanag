@@ -3,6 +3,20 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Star } from "lucide-react";
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  return isMobile;
+}
+
 const CUSTOMERS = [
   {
     id: 1,
@@ -192,7 +206,7 @@ const CUSTOMERS = [
     id: 24,
     name: "Brandon",
     title: "Electrician",
-    avatar: "https://images.unsplash.com/photo-1548449112-96a38a643324?w=80&h=80&fit=crop&crop=face",
+    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&crop=face",
     text: "My competitor had a website and I didn't. Now mine looks way better. Getting all the calls.",
     rating: 5,
   },
@@ -226,7 +240,57 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
-function CarouselRow({
+function MobileCarouselRow({
+  customers,
+  direction,
+  duration,
+}: {
+  customers: typeof CUSTOMERS;
+  direction: "left" | "right";
+  duration: number;
+}) {
+  const duplicated = [...customers, ...customers];
+  const animationName = direction === "left" ? "scroll-left" : "scroll-right";
+
+  return (
+    <div className="overflow-hidden w-full">
+      <div
+        className="flex gap-3 will-change-transform"
+        style={{
+          animation: `${animationName} ${duration}s linear infinite`,
+        }}
+      >
+        {duplicated.map((customer, i) => (
+          <div
+            key={`${customer.id}-${i}`}
+            className="flex-shrink-0 w-60 p-3 rounded-xl border bg-white/5 border-white/10"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-white/20">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={customer.avatar}
+                  alt={customer.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div>
+                <h4 className="font-semibold text-white text-xs">{customer.name}</h4>
+                <p className="text-[10px] text-zinc-400">{customer.title}</p>
+              </div>
+            </div>
+            <StarRating rating={customer.rating} />
+            <p className="text-zinc-300 text-[11px] leading-relaxed mt-1.5 line-clamp-3">
+              &quot;{customer.text}&quot;
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DesktopCarouselRow({
   customers,
   direction,
   speed,
@@ -319,9 +383,20 @@ function CarouselRow({
 
 export function SocialWall() {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const isMobile = useIsMobile();
 
   return (
     <HoverContext.Provider value={{ hoveredId, setHoveredId }}>
+      <style jsx global>{`
+        @keyframes scroll-left {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        @keyframes scroll-right {
+          from { transform: translateX(-50%); }
+          to { transform: translateX(0); }
+        }
+      `}</style>
       <section className="relative py-16 overflow-hidden">
         <div className="text-center mb-10 px-6">
           <p className="text-yellow-500 text-sm font-bold uppercase mb-2">
@@ -335,11 +410,19 @@ export function SocialWall() {
           </p>
         </div>
 
-        <div className="space-y-4">
-          <CarouselRow customers={ROW_1} direction="left" speed={0.5} />
-          <CarouselRow customers={ROW_2} direction="right" speed={0.4} />
-          <CarouselRow customers={ROW_3} direction="left" speed={0.6} />
-        </div>
+        {isMobile ? (
+          <div className="space-y-3">
+            <MobileCarouselRow customers={ROW_1} direction="left" duration={60} />
+            <MobileCarouselRow customers={ROW_2} direction="right" duration={70} />
+            <MobileCarouselRow customers={ROW_3} direction="left" duration={65} />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <DesktopCarouselRow customers={ROW_1} direction="left" speed={0.5} />
+            <DesktopCarouselRow customers={ROW_2} direction="right" speed={0.4} />
+            <DesktopCarouselRow customers={ROW_3} direction="left" speed={0.6} />
+          </div>
+        )}
       </section>
     </HoverContext.Provider>
   );

@@ -27,15 +27,15 @@ import type {
   DeliveryChannel,
   GeneratedSite,
   LeadDetail,
+  MasterBrief,
   MessageDraft,
-  SiteBrief,
   TonePreset,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type MessageLeadSummary = {
   lead: LeadDetail;
-  brief: SiteBrief | null;
+  brief: MasterBrief | null;
   site: GeneratedSite | null;
   drafts: MessageDraft[];
 };

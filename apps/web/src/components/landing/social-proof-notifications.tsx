@@ -49,6 +49,15 @@ const TIME_PHRASES = [
 
 export function SocialProofNotifications() {
   const [notification, setNotification] = useState<Notification | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   useEffect(() => {
     const showRandomNotification = () => {
@@ -85,7 +94,7 @@ export function SocialProofNotifications() {
   }, []);
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 pointer-events-none">
+    <div className={`fixed z-50 pointer-events-none ${isMobile ? "bottom-6 left-1/2 -translate-x-1/2" : "bottom-6 right-6"}`}>
       <AnimatePresence>
         {notification && (
           <motion.div
@@ -100,7 +109,7 @@ export function SocialProofNotifications() {
             }}
             className="pointer-events-auto"
           >
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-4 min-w-[320px] backdrop-blur-xl">
+            <div className="bg-zinc-900 rounded-2xl shadow-2xl border-2 border-green-500 p-4 min-w-[320px] backdrop-blur-xl shadow-green-500/50">
               <div className="flex items-start gap-3">
                 {/* Avatar */}
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center flex-shrink-0 shadow-lg">

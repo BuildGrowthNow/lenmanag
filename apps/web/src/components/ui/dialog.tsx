@@ -7,26 +7,24 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+function Dialog(props: DialogPrimitive.Root.Props) {
+  return <DialogPrimitive.Root data-slot="dialog" {...(props as any)} />
 }
 
-function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
+function DialogTrigger(props: DialogPrimitive.Trigger.Props) {
+  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...(props as any)} />
 }
 
-function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+function DialogPortal(props: DialogPrimitive.Portal.Props) {
+  return <DialogPrimitive.Portal data-slot="dialog-portal" {...(props as any)} />
 }
 
-function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
+function DialogClose(props: DialogPrimitive.Close.Props) {
+  return <DialogPrimitive.Close data-slot="dialog-close" {...(props as any)} />
 }
 
-function DialogOverlay({
-  className,
-  ...props
-}: DialogPrimitive.Backdrop.Props) {
+function DialogOverlay(props: DialogPrimitive.Backdrop.Props) {
+  const { className, ...rest } = props
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
@@ -34,19 +32,17 @@ function DialogOverlay({
         "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
-      {...props}
+      {...(rest as any)}
     />
   )
 }
 
-function DialogContent({
-  className,
-  children,
-  showCloseButton = true,
-  ...props
-}: DialogPrimitive.Popup.Props & {
-  showCloseButton?: boolean
-}) {
+function DialogContent(
+  props_: DialogPrimitive.Popup.Props & {
+    showCloseButton?: boolean
+  }
+) {
+  const { className, children, showCloseButton = true, ...props } = props_
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -56,7 +52,7 @@ function DialogContent({
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
-        {...props}
+        {...(props as any)}
       >
         {children}
         {showCloseButton && (
@@ -117,7 +113,8 @@ function DialogFooter({
   )
 }
 
-function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
+function DialogTitle(props: DialogPrimitive.Title.Props) {
+  const { className, ...rest } = props
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
@@ -125,15 +122,15 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
         "text-base leading-none font-medium",
         className
       )}
-      {...props}
+      {...(rest as any)}
     />
   )
 }
 
-function DialogDescription({
-  className,
-  ...props
-}: DialogPrimitive.Description.Props) {
+function DialogDescription(
+  props: DialogPrimitive.Description.Props
+) {
+  const { className, ...rest } = props
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
@@ -141,7 +138,7 @@ function DialogDescription({
         "text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
         className
       )}
-      {...props}
+      {...(rest as any)}
     />
   )
 }

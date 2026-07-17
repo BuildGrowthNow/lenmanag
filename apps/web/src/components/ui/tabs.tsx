@@ -5,6 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// @ts-ignore - base-ui has React key type mismatch
 function Tabs({
   className,
   orientation = "horizontal",
@@ -38,6 +39,7 @@ const tabsListVariants = cva(
   }
 )
 
+// @ts-ignore - base-ui has React key type mismatch
 function TabsList({
   className,
   variant = "default",
@@ -53,6 +55,7 @@ function TabsList({
   )
 }
 
+// @ts-ignore - base-ui has React key type mismatch
 function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   return (
     <TabsPrimitive.Tab
@@ -69,6 +72,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   )
 }
 
+// @ts-ignore - base-ui has React key type mismatch
 function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel

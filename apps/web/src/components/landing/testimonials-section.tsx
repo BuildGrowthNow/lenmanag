@@ -84,22 +84,9 @@ export function TestimonialsSection() {
               viewport={{ once: true }}
               whileHover={{ y: -8, scale: 1.02 }}
             >
-              <Card className="p-6 h-full bg-white/5 backdrop-blur-sm border-white/10 hover:border-yellow-500/50 transition-all hover:shadow-2xl hover:shadow-yellow-500/20 relative overflow-hidden group">
-                <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/5 to-yellow-500/0 pointer-events-none"
-                  animate={{
-                    opacity: [0.2, 0.4, 0.2],
-                  }}
-                  transition={{
-                    duration: 4,
-                    repeat: Infinity,
-                    delay: i * 0.15,
-                  }}
-                />
-                {/* Quote Icon */}
+              <Card className="p-6 h-full bg-white/5 border-white/10 hover:border-yellow-500/50 transition-all duration-300 hover:shadow-xl hover:shadow-yellow-500/10 relative overflow-hidden group will-change-transform">
                 <Quote className="absolute top-4 right-4 w-12 h-12 text-yellow-500/10" />
 
-                {/* Stars */}
                 <div className="flex gap-1 mb-4">
                   {Array.from({ length: testimonial.rating }, (_, i) => (
                     <Star
@@ -109,15 +96,13 @@ export function TestimonialsSection() {
                   ))}
                 </div>
 
-                {/* Testimonial Text */}
                 <p className="text-slate-300 mb-6 leading-relaxed relative z-10">
                   &quot;{testimonial.text}&quot;
                 </p>
 
-                {/* Author */}
                 <div className="flex items-center gap-3 relative z-10">
                   <div
-                    className={`w-12 h-12 rounded-full bg-gradient-to-br ${testimonial.gradient} flex items-center justify-center shadow-lg`}
+                    className={`w-12 h-12 rounded-full bg-gradient-to-br ${testimonial.gradient} flex items-center justify-center shadow-lg flex-shrink-0`}
                   >
                     <span className="text-white font-bold text-sm">
                       {testimonial.avatar}
