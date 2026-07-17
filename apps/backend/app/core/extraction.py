@@ -562,12 +562,32 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
 
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True)
-            page = browser.new_page(
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                ],
+            )
+            context = browser.new_context(
                 viewport={"width": 1440, "height": 900},
                 user_agent=BROWSER_USER_AGENT,
+                locale="en-US",
+                timezone_id="America/New_York",
             )
-            response = page.goto(url, wait_until="networkidle", timeout=20000)
+            context.set_extra_http_headers(
+                {
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "Upgrade-Insecure-Requests": "1",
+                }
+            )
+            page = context.new_page()
+            response = page.goto(url, wait_until="domcontentloaded", timeout=20000)
             final_url = page.url
             status = response.status if response else 0
 
@@ -738,6 +758,7 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
             """)
 
             page.close()
+            context.close()
             browser.close()
 
             if status >= 400:
@@ -1242,20 +1263,41 @@ def _capture_page_visuals(
 
     try:
         with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                ],
+            )
+            context = browser.new_context(
+                viewport={
+                    "width": int(get_settings().extraction_screenshot_width),
+                    "height": int(get_settings().extraction_screenshot_height),
+                },
+                user_agent=BROWSER_USER_AGENT,
+                locale="en-US",
+                timezone_id="America/New_York",
+            )
+            context.set_extra_http_headers(
+                {
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "Upgrade-Insecure-Requests": "1",
+                }
+            )
             for page_index, url in enumerate(urls):
                 base_name = (
                     f"{page_index:02d}-{_safe_filename(urlparse(url).path or 'home')}"
                 )
                 capture: dict[str, Any] = {"sections": []}
                 try:
-                    page = browser.new_page(
-                        viewport={
-                            "width": int(get_settings().extraction_screenshot_width),
-                            "height": int(get_settings().extraction_screenshot_height),
-                        }
-                    )
-                    page.goto(url, wait_until="networkidle", timeout=20000)
+                    page = context.new_page()
+                    page.goto(url, wait_until="domcontentloaded", timeout=20000)
                     desktop_path = os.path.join(target_dir, f"{base_name}-desktop.png")
                     page.screenshot(path=desktop_path, full_page=True)
                     capture.update(
@@ -1345,6 +1387,7 @@ def _capture_page_visuals(
                 except Exception as exc:
                     capture["error"] = str(exc)[:240]
                 captures[url] = capture
+            context.close()
             browser.close()
     except Exception as exc:
         return {url: {"error": str(exc)[:240], "sections": []} for url in urls}
