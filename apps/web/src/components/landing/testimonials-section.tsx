@@ -87,7 +87,7 @@ export function TestimonialsSection() {
               viewport={{ once: true, amount: 0.3 }}
               {...(supportsHover && { whileHover: { y: -8, scale: 1.02 } })}
             >
-              <Card className="p-6 h-full bg-white/5 border-white/10 [@media(hover:hover)]:hover:border-yellow-500/50 transition-all duration-300 [@media(hover:hover)]:hover:shadow-xl [@media(hover:hover)]:hover:shadow-yellow-500/10 relative overflow-hidden group will-change-transform">
+              <Card className="p-6 h-full bg-white/5 border-white/10 [@media(hover:hover)]:hover:border-yellow-500/50 md:transition-all duration-300 [@media(hover:hover)]:hover:shadow-xl [@media(hover:hover)]:hover:shadow-yellow-500/10 relative overflow-hidden group will-change-transform">
                 <Quote className="absolute top-4 right-4 w-12 h-12 text-yellow-500/10" />
 
                 <div className="flex gap-1 mb-4">

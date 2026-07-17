@@ -300,7 +300,7 @@ export function FeaturesSolarSystem() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05, duration: 0.4 }}
                 viewport={{ once: true }}
-                className="p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-yellow-500/30 transition-all group text-center"
+                className="p-4 rounded-xl bg-white/5 md:backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-yellow-500/30 md:transition-all group text-center"
               >
                 <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border border-white/20 flex items-center justify-center [@media(hover:hover)]:group-hover:border-yellow-500/50 transition-colors">
                   <Icon className="w-6 h-6 text-yellow-500" />

@@ -117,7 +117,7 @@ export function BentoFeatures() {
                 style={{ perspective: 1000 }}
               >
                 <div
-                  className={`h-full p-8 rounded-3xl bg-white/5 backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-white/20 transition-all relative overflow-hidden ${
+                  className={`h-full p-8 rounded-3xl bg-white/5 md:backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-white/20 md:transition-all relative overflow-hidden ${
                     isLarge ? "min-h-[300px]" : "min-h-[200px]"
                   }`}
                 >

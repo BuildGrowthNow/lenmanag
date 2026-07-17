@@ -454,7 +454,7 @@ export default function SitesLandingPage() {
                   transition={{ delay: i * 0.05, duration: 0.3 }}
                   viewport={{ once: true, amount: 0.3 }}
                   {...(supportsHover && { whileHover: { x: 10 } })}
-                  className="flex items-center gap-3 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-yellow-500/50 transition-all"
+                  className="flex items-center gap-3 p-4 rounded-xl bg-white/5 md:backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-yellow-500/50 md:transition-all"
                 >
                   <CheckCircle2 className="w-6 h-6 text-yellow-500 flex-shrink-0" />
                   <span className="text-lg text-white">{item}</span>
