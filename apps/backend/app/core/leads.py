@@ -1753,6 +1753,43 @@ class LeadRepository:
         if extraction is None or extraction.crawlStatus != "completed":
             raise ValueError("extraction_not_completed")
 
+        # Prevent duplicate analysis jobs
+        database = get_database()
+        if database is not None:
+            existing_job = await database["jobs"].find_one(
+                {
+                    "leadId": lead_id,
+                    "jobType": "analysis_refresh",
+                    "status": {"$in": ["queued", "running"]},
+                }
+            )
+            if existing_job is not None:
+                logger.info(
+                    "Analysis refresh already in progress for lead %s (job %s)",
+                    lead_id,
+                    existing_job["id"],
+                )
+                return ExtractionJobResponse(
+                    job=_job_doc_to_summary(existing_job), extraction=extraction
+                )
+        else:
+            # In-memory duplicate check
+            async with self._memory_lock:
+                for job_id, job_doc in self._jobs.items():
+                    if (
+                        job_doc.get("leadId") == lead_id
+                        and job_doc.get("jobType") == "analysis_refresh"
+                        and job_doc.get("status") in ["queued", "running"]
+                    ):
+                        logger.info(
+                            "Analysis refresh already in progress for lead %s (job %s)",
+                            lead_id,
+                            job_id,
+                        )
+                        return ExtractionJobResponse(
+                            job=_job_doc_to_summary(job_doc), extraction=extraction
+                        )
+
         job = await self._create_job(
             lead_ids=[lead_id],
             job_type="analysis_refresh",
@@ -1824,7 +1861,7 @@ class LeadRepository:
         # Save analysis to extraction doc
         database = get_database()
         if database is not None:
-            await database["extractions"].find_one_and_update(
+            await database["site_extractions"].find_one_and_update(
                 {"leadId": lead_id},
                 {
                     "$set": {
@@ -2019,6 +2056,47 @@ class LeadRepository:
         lead = await self.get_lead(lead_id)
         if lead is None:
             return None
+
+        # Prevent duplicate jobs: check if extraction is already queued or running
+        database = get_database()
+        if database is not None:
+            existing_job = await database["jobs"].find_one(
+                {
+                    "leadId": lead_id,
+                    "jobType": {"$in": ["site_crawl", "site_refresh"]},
+                    "status": {"$in": ["queued", "running"]},
+                }
+            )
+            if existing_job is not None:
+                logger.info(
+                    "Extraction already in progress for lead %s (job %s)",
+                    lead_id,
+                    existing_job["id"],
+                )
+                # Return the existing job instead of creating a new one
+                existing_snapshot = await self.get_extraction(lead_id)
+                return ExtractionJobResponse(
+                    job=_job_doc_to_summary(existing_job), extraction=existing_snapshot
+                )
+        else:
+            # In-memory duplicate check
+            async with self._memory_lock:
+                for job_id, job_doc in self._jobs.items():
+                    if (
+                        job_doc.get("leadId") == lead_id
+                        and job_doc.get("jobType") in ["site_crawl", "site_refresh"]
+                        and job_doc.get("status") in ["queued", "running"]
+                    ):
+                        logger.info(
+                            "Extraction already in progress for lead %s (job %s)",
+                            lead_id,
+                            job_id,
+                        )
+                        existing_snapshot = await self.get_extraction(lead_id)
+                        return ExtractionJobResponse(
+                            job=_job_doc_to_summary(job_doc),
+                            extraction=existing_snapshot,
+                        )
 
         job_type = "site_refresh" if refresh else "site_crawl"
         job = await self._create_job(
