@@ -77,10 +77,10 @@ export function FAQSection() {
               >
                 <button
                   onClick={() => setOpenIndex(isOpen ? null : i)}
-                  className="w-full text-left p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/50 transition-all group"
+                  className="w-full text-left p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-yellow-500/50 transition-all group"
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <h3 className="text-lg font-semibold text-white pr-8 group-hover:text-yellow-500 transition-colors">
+                    <h3 className="text-lg font-semibold text-white pr-8 [@media(hover:hover)]:group-hover:text-yellow-500 transition-colors">
                       {faq.question}
                     </h3>
                     <div className="flex-shrink-0 w-6 h-6 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-500 group-hover:bg-yellow-500 group-hover:text-white transition-all">

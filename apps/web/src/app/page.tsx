@@ -364,7 +364,7 @@ export default function SitesLandingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.15, duration: 0.5 }}
-                  viewport={{ once: true }}
+                  viewport={{ once: true, amount: 0.3 }}
                   className="relative"
                 >
                   <motion.div {...(supportsHover && { whileHover: { scale: 1.05 } })} className="text-center">
@@ -452,9 +452,9 @@ export default function SitesLandingPage() {
                   initial={{ opacity: 0, x: -20 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05, duration: 0.3 }}
-                  viewport={{ once: true }}
+                  viewport={{ once: true, amount: 0.3 }}
                   {...(supportsHover && { whileHover: { x: 10 } })}
-                  className="flex items-center gap-3 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/50 transition-all"
+                  className="flex items-center gap-3 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-yellow-500/50 transition-all"
                 >
                   <CheckCircle2 className="w-6 h-6 text-yellow-500 flex-shrink-0" />
                   <span className="text-lg text-white">{item}</span>

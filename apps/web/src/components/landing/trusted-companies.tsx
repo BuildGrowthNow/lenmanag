@@ -38,7 +38,7 @@ export function TrustedCompanies() {
               initial={{ opacity: 0, scale: 0.8 }}
               whileInView={{ opacity: 1, scale: 1 }}
               transition={{ delay: i * 0.05, duration: 0.4 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0.3 }}
               {...(supportsHover && { whileHover: { scale: 1.05 } })}
               className="flex items-center gap-2 group cursor-pointer"
             >
@@ -47,9 +47,9 @@ export function TrustedCompanies() {
                 alt={company.name}
                 width={32}
                 height={32}
-                className="transition-transform group-hover:scale-110"
+                className="transition-transform [@media(hover:hover)]:group-hover:scale-110"
               />
-              <span className="text-slate-300 font-medium group-hover:text-yellow-500 transition-colors text-sm">
+              <span className="text-slate-300 font-medium [@media(hover:hover)]:group-hover:text-yellow-500 transition-colors text-sm">
                 {company.name}
               </span>
             </motion.div>

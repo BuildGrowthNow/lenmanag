@@ -238,7 +238,7 @@ export function FeaturesSolarSystem() {
                               className={`w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 shadow-lg flex items-center justify-center cursor-pointer transition-all ${
                                 hoveredFeature === feature.id
                                   ? "border-yellow-500 shadow-yellow-500/40"
-                                  : "border-white/20 hover:border-yellow-500/60"
+                                  : "border-white/20 [@media(hover:hover)]:hover:border-yellow-500/60"
                               }`}
                               style={{ pointerEvents: "auto" }}
                             >
@@ -300,12 +300,12 @@ export function FeaturesSolarSystem() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05, duration: 0.4 }}
                 viewport={{ once: true }}
-                className="p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/30 transition-all group text-center"
+                className="p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-yellow-500/30 transition-all group text-center"
               >
-                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border border-white/20 flex items-center justify-center group-hover:border-yellow-500/50 transition-colors">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border border-white/20 flex items-center justify-center [@media(hover:hover)]:group-hover:border-yellow-500/50 transition-colors">
                   <Icon className="w-6 h-6 text-yellow-500" />
                 </div>
-                <h3 className="font-bold text-white text-sm mb-1 group-hover:text-yellow-500 transition-colors">
+                <h3 className="font-bold text-white text-sm mb-1 [@media(hover:hover)]:group-hover:text-yellow-500 transition-colors">
                   {feature.title}
                 </h3>
                 <p className="text-xs text-slate-400">

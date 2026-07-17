@@ -43,9 +43,9 @@ export function LogoWall() {
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05, duration: 0.5 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0.3 }}
               {...(supportsHover && { whileHover: { scale: 1.05, y: -5 } })}
-              className="flex flex-col items-center justify-center p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-yellow-500/30 transition-all group"
+              className="flex flex-col items-center justify-center p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-yellow-500/30 transition-all group"
             >
               <div className="text-center">
                 <div className="text-lg font-bold text-white mb-1 group-hover:text-yellow-500 transition-colors">

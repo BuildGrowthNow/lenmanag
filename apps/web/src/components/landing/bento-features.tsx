@@ -117,7 +117,7 @@ export function BentoFeatures() {
                 style={{ perspective: 1000 }}
               >
                 <div
-                  className={`h-full p-8 rounded-3xl bg-white/5 backdrop-blur-sm border border-white/10 hover:border-white/20 transition-all relative overflow-hidden ${
+                  className={`h-full p-8 rounded-3xl bg-white/5 backdrop-blur-sm border border-white/10 [@media(hover:hover)]:hover:border-white/20 transition-all relative overflow-hidden ${
                     isLarge ? "min-h-[300px]" : "min-h-[200px]"
                   }`}
                 >
@@ -129,7 +129,7 @@ export function BentoFeatures() {
                   {/* Content */}
                   <div className="relative z-10 h-full flex flex-col">
                     <div
-                      className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}
+                      className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 shadow-lg [@media(hover:hover)]:group-hover:scale-110 transition-transform`}
                     >
                       <feature.icon className="w-8 h-8 text-white" />
                     </div>
