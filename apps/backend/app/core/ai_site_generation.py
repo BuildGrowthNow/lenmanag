@@ -10,7 +10,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import boto3
 from app.core.compiler_client import CompilerError, get_compiler_client
+from app.core.config import get_settings
 from app.core.llm import get_llm_client
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
@@ -18,6 +20,61 @@ from app.schemas.extraction import ExtractionSnapshot
 logger = logging.getLogger(__name__)
 
 MAX_COMPILATION_RETRIES = 3
+
+
+def _upload_bundle_to_s3(bundle_code: str, css_code: str | None, site_id: str) -> str:
+    """
+    Upload compiled bundle to S3 and return public URL.
+
+    Args:
+        bundle_code: Compiled JavaScript bundle
+        css_code: Optional CSS code
+        site_id: Site identifier for path construction
+
+    Returns:
+        Public HTTPS URL to the bundle
+    """
+    settings = get_settings()
+    s3_client = boto3.client(
+        "s3",
+        region_name=settings.asset_s3_region or "us-east-1",
+    )
+
+    bucket = settings.asset_s3_bucket
+    if not bucket:
+        logger.error("ASSET_S3_BUCKET not configured, cannot upload bundle")
+        raise RuntimeError("S3 bucket not configured for bundle storage")
+
+    # Generate S3 key path: bundles/<site_id>/bundle.js
+    prefix = settings.asset_s3_prefix or "lenmanag/"
+    bundle_key = f"{prefix}bundles/{site_id}/bundle.js"
+
+    # Upload JS bundle
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=bundle_key,
+        Body=bundle_code.encode("utf-8"),
+        ContentType="application/javascript",
+        CacheControl="public, max-age=3600",
+    )
+
+    # Upload CSS if present
+    if css_code:
+        css_key = f"{prefix}bundles/{site_id}/styles.css"
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=css_key,
+            Body=css_code.encode("utf-8"),
+            ContentType="text/css",
+            CacheControl="public, max-age=3600",
+        )
+
+    # Generate public URL
+    region = settings.asset_s3_region or "us-east-1"
+    bundle_url = f"https://{bucket}.s3.{region}.amazonaws.com/{bundle_key}"
+
+    logger.info(f"Uploaded bundle for site {site_id} to {bundle_url}")
+    return bundle_url
 
 
 async def generate_landing_page_code(
@@ -100,13 +157,36 @@ async def generate_landing_page_code(
         )
 
         if compile_result.get("success"):
+            # Upload compiled bundle to S3
+            bundle_code = compile_result.get("bundleCode")
+            css_code = compile_result.get("cssCode")
+
+            if not bundle_code:
+                return {
+                    "success": False,
+                    "sourceCode": source_code,
+                    "compilationStatus": "compilation_failed",
+                    "error": "Compilation succeeded but no bundle code returned",
+                }
+
+            try:
+                bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id)
+            except Exception as upload_error:
+                logger.error(f"Failed to upload bundle for site {site_id}: {upload_error}")
+                return {
+                    "success": False,
+                    "sourceCode": source_code,
+                    "compilationStatus": "upload_failed",
+                    "error": f"Bundle upload failed: {str(upload_error)}",
+                }
+
             return {
                 "success": True,
                 "sourceCode": source_code,
-                "compiledBundleUrl": compile_result.get("bundleUrl"),
+                "compiledBundleUrl": bundle_url,
                 "compilationStatus": "success",
-                "bundleCode": compile_result.get("bundleCode"),
-                "cssCode": compile_result.get("cssCode"),
+                "bundleCode": bundle_code,
+                "cssCode": css_code,
             }
         else:
             return {
