@@ -276,7 +276,9 @@ async def test_approve_brief_succeeds_without_critical_gaps():
     assert brief is not None
 
     # Approve brief should succeed with non-critical gaps
-    approved_brief = await lead_repository.approve_master_brief(lead_id, approved_by="tester")
+    approved_brief = await lead_repository.approve_master_brief(
+        lead_id, approved_by="tester"
+    )
     assert approved_brief is not None
     assert approved_brief.approvalState == "approved"
     assert approved_brief.approvedBy == "tester"

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from app.schemas.extraction import EvidenceType
 
 BriefApprovalState = Literal["draft", "needs_review", "approved"]
-BriefSourceKind = Literal["source_backed", "inferred"]
+BriefSourceKind = Literal["source_backed", "inferred", "extraction"]
 BriefReferenceKind = Literal["page", "asset"]
 
 
