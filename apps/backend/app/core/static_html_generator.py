@@ -248,20 +248,29 @@ Generate high-quality, production-ready code that implements this brief faithful
 def _parse_llm_response(response: str) -> tuple[str, str, str]:
     """Parse HTML, CSS, JS from LLM response."""
 
-    # Extract HTML
-    html_match = re.search(r"```html\s*([\s\S]*?)```", response)
+    # Extract HTML - more robust regex that handles newlines after opening marker
+    html_match = re.search(r"```html\n([\s\S]*?)\n```", response, re.MULTILINE)
+    if not html_match:
+        # Fallback: try without requiring newlines
+        html_match = re.search(r"```html\s*([\s\S]*?)```", response)
     if not html_match:
         raise ValueError("No HTML code block found in LLM response")
     html = html_match.group(1).strip()
 
-    # Extract CSS
-    css_match = re.search(r"```css\s*([\s\S]*?)```", response)
+    # Extract CSS - more robust regex
+    css_match = re.search(r"```css\n([\s\S]*?)\n```", response, re.MULTILINE)
+    if not css_match:
+        # Fallback: try without requiring newlines
+        css_match = re.search(r"```css\s*([\s\S]*?)```", response)
     if not css_match:
         raise ValueError("No CSS code block found in LLM response")
     css = css_match.group(1).strip()
 
-    # Extract JS
-    js_match = re.search(r"```(?:javascript|js)\s*([\s\S]*?)```", response)
+    # Extract JS - more robust regex
+    js_match = re.search(r"```(?:javascript|js)\n([\s\S]*?)\n```", response, re.MULTILINE)
+    if not js_match:
+        # Fallback: try without requiring newlines
+        js_match = re.search(r"```(?:javascript|js)\s*([\s\S]*?)```", response)
     if not js_match:
         logger.warning("No JavaScript code block found, using minimal JS")
         js = "// Minimal script\ndocument.addEventListener('DOMContentLoaded', () => {});"
