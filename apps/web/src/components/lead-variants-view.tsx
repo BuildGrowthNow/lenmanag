@@ -63,9 +63,8 @@ function VariantCard({ site }: { site: GeneratedSite }) {
   const variantType = site.variantType || "nextjs";
   const variantInfo = VARIANT_LABELS[variantType];
   const isHtmlVariant = variantType.startsWith("html_");
-  const previewUrl = isHtmlVariant
-    ? `/api/v1/public/preview/${site.previewSlug}`
-    : `/st/${site.previewSlug}`;
+  // All variants (HTML and Next.js) now use /st/{slug}
+  const previewUrl = `/st/${site.previewSlug}`;
 
   return (
     <Card className="group relative overflow-hidden border-line bg-panel hover:border-white/20 transition-colors">
