@@ -258,7 +258,10 @@ class TestMultiVariantE2E:
             lock_held = False
 
             async def mock_set(
-                _k: str, _v: str, nx: bool, ex: int  # noqa: ARG001
+                _k: str,
+                _v: str,
+                nx: bool,
+                ex: int,  # noqa: ARG001
             ) -> bool:
                 nonlocal lock_held
                 _ = nx, ex  # silence unused

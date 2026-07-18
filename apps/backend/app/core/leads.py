@@ -253,6 +253,7 @@ def _lead_doc_to_detail(
         pipelineStatusDetail=doc.get("pipelineStatusDetail"),
         industry=doc.get("industry"),
         notes=doc.get("notes"),
+        generationTypes=doc.get("generationTypes", ["nextjs"]),
         missingFields=list(doc.get("missingFields", [])),
         version=int(doc.get("version", 1)),
         latestJob=latest_job,
@@ -434,6 +435,7 @@ class LeadRepository:
         )
         incoming["pipelineMode"] = pipeline_mode
         incoming["pipelineStage"] = "new"
+        incoming["generationTypes"] = request.generationTypes
 
         await self._maybe_ensure_indexes()
         database = get_database()
@@ -626,15 +628,38 @@ class LeadRepository:
         """Called after brief is approved — queue site generation."""
         await self._set_pipeline_stage(lead_id, "generating")
         try:
-            from app.core.sites import site_repository
+            lead = await self.get_lead(lead_id)
+            generation_types = lead.generationTypes if lead else ["nextjs"]
+            has_html_variants = any(
+                t in generation_types for t in ["html_v1", "html_v2", "html_v3"]
+            )
 
-            job = await site_repository.queue_generation_job(lead_id)
-            if job is None:
-                await self._set_pipeline_stage(
-                    lead_id,
-                    "needs_attention",
-                    detail="Site generation could not be queued.",
+            if len(generation_types) > 1 or has_html_variants:
+                from app.core.tasks import run_multi_variant_generation_task
+
+                job = await self._create_job(
+                    lead_ids=[lead_id],
+                    job_type="site_generate",
+                    status="queued",
+                    progress=0,
+                    step=f"Queued: generating {len(generation_types)} variants",
+                    metadata={"generationTypes": generation_types},
                 )
+                run_multi_variant_generation_task.delay(  # type: ignore[attr-defined]
+                    lead_id=lead_id,
+                    job_id=job.id,
+                    generation_types=generation_types,
+                )
+            else:
+                from app.core.sites import site_repository
+
+                job = await site_repository.queue_generation_job(lead_id)
+                if job is None:
+                    await self._set_pipeline_stage(
+                        lead_id,
+                        "needs_attention",
+                        detail="Site generation could not be queued.",
+                    )
         except Exception:
             logging.getLogger("lenquant.pipeline").exception(
                 "Auto site generation queue failed for lead %s", lead_id

@@ -154,7 +154,10 @@ class TestGenerationLock:
             lock_acquired_count = 0
 
             async def mock_set(
-                _key: str, _value: str, nx: bool, ex: int  # noqa: ARG001
+                _key: str,
+                _value: str,
+                nx: bool,
+                ex: int,  # noqa: ARG001
             ) -> bool:
                 nonlocal lock_acquired_count
                 _ = nx, ex  # silence unused warnings

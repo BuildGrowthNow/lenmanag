@@ -47,7 +47,9 @@ class GenerationMetrics:
             "lead_id": self.lead_id,
             "variant_type": self.variant_type,
             "started_at": self.started_at.isoformat(),
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_at": self.completed_at.isoformat()
+            if self.completed_at
+            else None,
             "lock_wait_seconds": round(self.lock_wait_seconds, 2),
             "generation_seconds": round(self.generation_seconds, 2),
             "total_seconds": round(self.total_seconds, 2),
@@ -96,7 +98,9 @@ class GenerationMetricsCollector:
             raise
         finally:
             metrics.completed_at = datetime.now(timezone.utc)
-            metrics.generation_seconds = time.monotonic() - start_time - metrics.lock_wait_seconds
+            metrics.generation_seconds = (
+                time.monotonic() - start_time - metrics.lock_wait_seconds
+            )
 
             self._metrics.append(metrics)
 
@@ -196,7 +200,9 @@ def log_lock_acquisition(elapsed_seconds: float) -> None:
     elif elapsed_seconds < 30:
         logger.info(f"Generation lock acquired after {elapsed_seconds:.1f}s")
     else:
-        logger.warning(f"Generation lock acquired after long wait: {elapsed_seconds:.1f}s")
+        logger.warning(
+            f"Generation lock acquired after long wait: {elapsed_seconds:.1f}s"
+        )
 
 
 def log_model_fallback(

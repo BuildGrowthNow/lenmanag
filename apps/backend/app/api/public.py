@@ -51,4 +51,4 @@ async def preview_site_variant(slug: str) -> Response:
 
     settings = get_settings()
     preview_base = settings.preview_base_url.rstrip("/")
-    return RedirectResponse(url=f"{preview_base}/st/{site.previewSlug}")
+    return RedirectResponse(url=f"{preview_base}/{site.previewSlug}")

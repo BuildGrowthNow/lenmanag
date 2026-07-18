@@ -239,8 +239,8 @@ async def _run_multi_variant_generation_async(
         raise ValueError(f"Lead {lead_id} not found")
 
     extraction = await lead_repository.get_extraction(lead_id)
-    if not extraction or extraction.crawlStatus != "completed":
-        raise ValueError(f"Extraction not completed for lead {lead_id}")
+    if not extraction or extraction.version <= 0:
+        raise ValueError(f"Extraction not available for lead {lead_id}")
 
     analysis = await lead_repository.get_analysis(lead_id)
 
@@ -308,9 +308,7 @@ async def _run_multi_variant_generation_async(
                         }
 
                     if not strategy:
-                        logger.warning(
-                            f"Unknown variant type {variant_type}, skipping"
-                        )
+                        logger.warning(f"Unknown variant type {variant_type}, skipping")
                         metrics.success = False
                         metrics.error_message = "Unknown variant type"
                         failed_variants += 1

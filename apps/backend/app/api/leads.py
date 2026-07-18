@@ -42,42 +42,6 @@ async def create_lead(
 ) -> ResponseEnvelope[LeadActionResponse]:
     result = await lead_repository.create_lead(payload, user_id=user_id)
 
-    # Trigger multi-variant generation if multiple generation types requested
-    # or if any HTML variant type is selected
-    has_html_variants = any(
-        t in payload.generationTypes for t in ["html_v1", "html_v2", "html_v3"]
-    )
-    if len(payload.generationTypes) > 1 or has_html_variants:
-        from app.core.tasks import run_multi_variant_generation_task
-
-        # Create job record
-        job = await lead_repository._create_job(
-            lead_ids=[result.lead.id],
-            job_type="site_generate",
-            status="queued",
-            progress=0,
-            step=f"Queued: generating {len(payload.generationTypes)} variants",
-            metadata={"generationTypes": payload.generationTypes},
-        )
-
-        # Trigger Celery task (delay is added by @celery_app.task decorator)
-        run_multi_variant_generation_task.delay(  # type: ignore[attr-defined]
-            lead_id=result.lead.id,
-            job_id=job.id,
-            generation_types=payload.generationTypes,
-        )
-
-        # Update lead stage
-        await lead_repository.update_lead(
-            result.lead.id,
-            LeadPatchRequest(pipelineStage="generating"),
-        )
-
-        logger.info(
-            f"Multi-variant generation triggered for lead {result.lead.id}: "
-            f"{payload.generationTypes}"
-        )
-
     await write_audit_log(
         user_id,
         "lead",

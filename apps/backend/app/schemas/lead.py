@@ -124,6 +124,7 @@ class LeadDetail(BaseModel):
     pipelineStatusDetail: Optional[str] = None
     industry: Optional[str] = None
     notes: Optional[str] = None
+    generationTypes: list[GenerationType] = Field(default=["nextjs"])
     missingFields: list[str] = Field(default_factory=list)
     version: int
     latestJob: Optional[JobSummary] = None

@@ -42,7 +42,8 @@ class DeploymentVerifier:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    f"{self.base_url}/api/v1/health", timeout=aiohttp.ClientTimeout(total=10)
+                    f"{self.base_url}/api/v1/health",
+                    timeout=aiohttp.ClientTimeout(total=10),
                 ) as response:
                     if response.status == 200:
                         self.report("Health endpoint", True, "API is healthy")
@@ -245,9 +246,7 @@ console.log('test');
 
 async def main() -> int:
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Verify multi-variant deployment"
-    )
+    parser = argparse.ArgumentParser(description="Verify multi-variant deployment")
     parser.add_argument(
         "--base-url",
         default="http://localhost:8000",
