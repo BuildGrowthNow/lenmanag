@@ -48,7 +48,7 @@ async def generate_static_html(
     response = await llm.generate_text(
         prompt=prompt,
         temperature=0.7,
-        max_tokens=16384,  # Increased from 8192 to allow full HTML/CSS/JS generation
+        max_tokens=32768,  # Increased to maximum to avoid truncation
     )
 
     # Debug: Log response metadata
@@ -290,7 +290,7 @@ def _parse_llm_response(response: str) -> tuple[str, str, str]:
     else:
         html = html_match.group(1).strip()
 
-    # Extract CSS - same pattern approach
+    # Extract CSS - same pattern approach with truncation handling
     css_match = None
     css_match = re.search(r"```css\s*\n(.*?)\n```", response, re.DOTALL)
     if not css_match:
@@ -300,16 +300,22 @@ def _parse_llm_response(response: str) -> tuple[str, str, str]:
     if not css_match:
         # Pattern 4: Manual extraction if markers exist
         css_start_pos = response.find("```css")
-        css_end_pos = response.find("```", css_start_pos + 6) if css_start_pos >= 0 else -1
-        if css_start_pos >= 0 and css_end_pos >= 0:
-            css = response[css_start_pos + 6:css_end_pos].strip()
-            logger.info(f"[DEBUG] Manual CSS extraction: {len(css)} chars")
+        if css_start_pos >= 0:
+            css_end_pos = response.find("```", css_start_pos + 6)
+            if css_end_pos >= 0:
+                css = response[css_start_pos + 6:css_end_pos].strip()
+                logger.info(f"[DEBUG] Manual CSS extraction: {len(css)} chars")
+            else:
+                # CSS block started but no closing marker (truncated response)
+                # Take everything from CSS start to end of response
+                css = response[css_start_pos + 6:].strip()
+                logger.warning(f"[DEBUG] CSS truncated (no closing marker), extracted {len(css)} chars")
         else:
             raise ValueError("No CSS code block found in LLM response")
     else:
         css = css_match.group(1).strip()
 
-    # Extract JS - same pattern approach
+    # Extract JS - same pattern approach with truncation handling
     js_match = None
     js_match = re.search(r"```(?:javascript|js)\s*\n(.*?)\n```", response, re.DOTALL)
     if not js_match:
@@ -324,10 +330,15 @@ def _parse_llm_response(response: str) -> tuple[str, str, str]:
             js_marker_len = 5 if js_start_pos >= 0 else 0
         else:
             js_marker_len = 13
-        js_end_pos = response.find("```", js_start_pos + js_marker_len) if js_start_pos >= 0 else -1
-        if js_start_pos >= 0 and js_end_pos >= 0:
-            js = response[js_start_pos + js_marker_len:js_end_pos].strip()
-            logger.info(f"[DEBUG] Manual JS extraction: {len(js)} chars")
+        if js_start_pos >= 0:
+            js_end_pos = response.find("```", js_start_pos + js_marker_len)
+            if js_end_pos >= 0:
+                js = response[js_start_pos + js_marker_len:js_end_pos].strip()
+                logger.info(f"[DEBUG] Manual JS extraction: {len(js)} chars")
+            else:
+                # JS block started but no closing marker (truncated)
+                js = response[js_start_pos + js_marker_len:].strip()
+                logger.warning(f"[DEBUG] JS truncated (no closing marker), extracted {len(js)} chars")
         else:
             logger.warning("No JavaScript code block found, using minimal JS")
             js = "// Minimal script\ndocument.addEventListener('DOMContentLoaded', () => {});"
