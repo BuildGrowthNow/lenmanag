@@ -71,9 +71,13 @@ async def generate_static_html(
     )
     if html_start >= 0:
         # Log 100 chars after ```html marker to see what follows
-        logger.info(f"[DEBUG] After ```html marker: {repr(response[html_start:html_start+100])}")
+        logger.info(
+            f"[DEBUG] After ```html marker: {repr(response[html_start : html_start + 100])}"
+        )
     if css_start >= 0:
-        logger.info(f"[DEBUG] After ```css marker: {repr(response[css_start:css_start+100])}")
+        logger.info(
+            f"[DEBUG] After ```css marker: {repr(response[css_start : css_start + 100])}"
+        )
 
     # Parse response
     try:
@@ -123,8 +127,7 @@ async def generate_static_html(
         )
 
     logger.info(
-        f"[DEBUG] Final HTML length: {len(html_final)} "
-        f"(original: {len(html_content)})"
+        f"[DEBUG] Final HTML length: {len(html_final)} (original: {len(html_content)})"
     )
     logger.info(f"Static HTML generated successfully for site {site_id}")
 
@@ -281,9 +284,11 @@ def _parse_llm_response(response: str) -> tuple[str, str, str]:
     if not html_match:
         # Pattern 4: Manual extraction if markers exist
         html_start_pos = response.find("```html")
-        html_end_pos = response.find("```", html_start_pos + 7) if html_start_pos >= 0 else -1
+        html_end_pos = (
+            response.find("```", html_start_pos + 7) if html_start_pos >= 0 else -1
+        )
         if html_start_pos >= 0 and html_end_pos >= 0:
-            html = response[html_start_pos + 7:html_end_pos].strip()
+            html = response[html_start_pos + 7 : html_end_pos].strip()
             logger.info(f"[DEBUG] Manual HTML extraction: {len(html)} chars")
         else:
             raise ValueError("No HTML code block found in LLM response")
@@ -303,13 +308,15 @@ def _parse_llm_response(response: str) -> tuple[str, str, str]:
         if css_start_pos >= 0:
             css_end_pos = response.find("```", css_start_pos + 6)
             if css_end_pos >= 0:
-                css = response[css_start_pos + 6:css_end_pos].strip()
+                css = response[css_start_pos + 6 : css_end_pos].strip()
                 logger.info(f"[DEBUG] Manual CSS extraction: {len(css)} chars")
             else:
                 # CSS block started but no closing marker (truncated response)
                 # Take everything from CSS start to end of response
-                css = response[css_start_pos + 6:].strip()
-                logger.warning(f"[DEBUG] CSS truncated (no closing marker), extracted {len(css)} chars")
+                css = response[css_start_pos + 6 :].strip()
+                logger.warning(
+                    f"[DEBUG] CSS truncated (no closing marker), extracted {len(css)} chars"
+                )
         else:
             raise ValueError("No CSS code block found in LLM response")
     else:
@@ -333,12 +340,14 @@ def _parse_llm_response(response: str) -> tuple[str, str, str]:
         if js_start_pos >= 0:
             js_end_pos = response.find("```", js_start_pos + js_marker_len)
             if js_end_pos >= 0:
-                js = response[js_start_pos + js_marker_len:js_end_pos].strip()
+                js = response[js_start_pos + js_marker_len : js_end_pos].strip()
                 logger.info(f"[DEBUG] Manual JS extraction: {len(js)} chars")
             else:
                 # JS block started but no closing marker (truncated)
-                js = response[js_start_pos + js_marker_len:].strip()
-                logger.warning(f"[DEBUG] JS truncated (no closing marker), extracted {len(js)} chars")
+                js = response[js_start_pos + js_marker_len :].strip()
+                logger.warning(
+                    f"[DEBUG] JS truncated (no closing marker), extracted {len(js)} chars"
+                )
         else:
             logger.warning("No JavaScript code block found, using minimal JS")
             js = "// Minimal script\ndocument.addEventListener('DOMContentLoaded', () => {});"

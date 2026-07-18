@@ -762,7 +762,11 @@ def _brand_tokens(
         secondary_refs = color_reference
         accent_refs = color_reference
 
-    logo_value = logo_cues[0]["label"] if logo_cues else "No logo asset captured"
+    logo_value = (
+        (logo_cues[0]["cachedUri"] or logo_cues[0]["sourceUrl"])
+        if logo_cues
+        else "No logo asset captured"
+    )
     logo_kind = "source_backed" if logo_cues else "inferred"
     logo_refs = (
         [_asset_reference_from_cue(cue) for cue in logo_cues] if logo_cues else refs[:1]
@@ -777,7 +781,9 @@ def _brand_tokens(
         [_asset_reference_from_cue(typography_cues[0])] if typography_cues else refs[:2]
     )
     image_value = (
-        image_cues[0]["label"] if image_cues else "No image direction captured"
+        (image_cues[0]["cachedUri"] or image_cues[0]["sourceUrl"])
+        if image_cues
+        else "No image direction captured"
     )
     image_kind = "source_backed" if image_cues else "inferred"
     image_refs = (
@@ -3904,6 +3910,7 @@ class SiteRepository:
             # Use multi-variant generation task
             if settings.celery_task_always_eager:
                 from app.core.tasks import _run_multi_variant_generation_async
+
                 try:
                     await _run_multi_variant_generation_async(
                         lead_id=site_id,

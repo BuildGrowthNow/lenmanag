@@ -419,6 +419,12 @@ Import from '@/components/ui/*':
 - Mixed weights: bold headlines, light body
 - Letter-spacing: tight for headlines (-0.02em), normal for body
 
+**Spacing & Breathability**:
+- Content should have comfortable breathing room — avoid text glued to card/container edges
+- Minimum 16-24px padding inside cards and containers (use px-4 py-4 md:px-6 md:py-6 or higher)
+- Use whitespace intentionally to create visual hierarchy
+- Sections should have generous vertical spacing (py-12 md:py-16 lg:py-24)
+
 ## OUTPUT REQUIREMENTS
 
 1. Export a single default React component
@@ -428,6 +434,7 @@ Import from '@/components/ui/*':
 5. All content from the brief — NO placeholder text
 6. Implement the signature technique from creative direction
 7. Match the motion level: "{master_brief.motionLevel}"
+8. Responsive images: Always constrain images with max-width: 100%, object-fit: cover, and appropriate containers to prevent layout breaks
 
 ## BROWSER-ONLY CONSTRAINTS
 
@@ -436,6 +443,7 @@ This runs in the browser, NOT Node.js:
 - NO __dirname, __filename, process.env, require(), module.exports
 - NO eval() or new Function()
 - Images: use URLs from brand assets or leave empty — NEVER filesystem paths like ./image.png
+- Cursor: Maintain default browser cursor unless implementing custom cursor (never use cursor: none without replacement)
 
 ## CODE STRUCTURE
 
@@ -595,31 +603,39 @@ def _build_brand_tokens_section(
 
     # Colors
     if master_brief.brandAssets.primaryColor:
-        sections.append(f"**Primary Color**: {master_brief.brandAssets.primaryColor}")
+        sections.append(
+            f"**Primary Color**: {master_brief.brandAssets.primaryColor} — Use this as your palette foundation (can generate complementary shades, but this should be dominant in buttons, links, and key accents)"
+        )
     if master_brief.brandAssets.secondaryColor:
         sections.append(
-            f"**Secondary Color**: {master_brief.brandAssets.secondaryColor}"
+            f"**Secondary Color**: {master_brief.brandAssets.secondaryColor} — Use in accent areas and to complement the primary color"
         )
 
     # Logo
     if master_brief.brandAssets.logoUrl:
-        sections.append(f"**Logo URL**: {master_brief.brandAssets.logoUrl}")
+        sections.append(
+            f"**Logo**: {master_brief.brandAssets.logoUrl} — Use this exact logo in your site header"
+        )
 
     # Typography
     if master_brief.brandAssets.fontFamily:
-        sections.append(f"**Font Family**: {master_brief.brandAssets.fontFamily}")
+        sections.append(
+            f"**Font Family**: {master_brief.brandAssets.fontFamily} — Apply this font throughout the design"
+        )
 
     # Images
     if master_brief.brandAssets.imageUrls:
         image_list = "\n  ".join(
             [f"- {url}" for url in master_brief.brandAssets.imageUrls[:5]]
         )
-        sections.append(f"**Available Images**:\n  {image_list}")
+        sections.append(
+            f"**Available Images** (use responsively with max-width: 100% and object-fit: cover):\n  {image_list}"
+        )
 
     if not sections:
         return "**Brand Assets**: Use default Tailwind colors and styling."
 
-    return "## Brand Assets\n\n" + "\n".join(sections)
+    return "## Brand Assets (USE THESE)\n\n" + "\n".join(sections)
 
 
 def _extract_tsx_code(response: str) -> str:

@@ -43,6 +43,9 @@ from app.schemas.lead import (
     LeadListResponse,
     LeadPatchRequest,
     LeadUpsertRequest,
+    PipelineEvent,
+    PipelineEventStatus,
+    PipelineEventType,
     SourceReference,
 )
 
@@ -229,6 +232,12 @@ def _lead_doc_to_detail(
     latest_job = None
     if jobs:
         latest_job = _job_doc_to_summary(jobs[0])
+
+    # Parse pipeline events, sorted by timestamp descending (newest first)
+    raw_events = doc.get("pipelineEvents", [])
+    pipeline_events = [_pipeline_event_to_model(e) for e in raw_events]
+    pipeline_events.sort(key=lambda e: e.timestamp, reverse=True)
+
     return LeadDetail(
         id=str(doc["id"]),
         user_id=str(doc.get("user_id", "")),
@@ -258,6 +267,7 @@ def _lead_doc_to_detail(
         version=int(doc.get("version", 1)),
         latestJob=latest_job,
         jobs=[_job_doc_to_summary(job) for job in (jobs or [])],
+        pipelineEvents=pipeline_events,
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
         archivedAt=_serialize_datetime(doc.get("archivedAt")),
@@ -305,6 +315,48 @@ def _job_doc_to_summary(doc: dict[str, Any]) -> JobSummary:
     )
 
 
+def _build_pipeline_event(
+    *,
+    event_type: PipelineEventType,
+    status: PipelineEventStatus,
+    message: str,
+    detail: str | None = None,
+    job_id: str | None = None,
+    variant_type: str | None = None,
+    duration_ms: int | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a pipeline event dictionary for storage."""
+    return {
+        "id": uuid4().hex[:12],
+        "eventType": event_type,
+        "status": status,
+        "message": message,
+        "detail": detail,
+        "jobId": job_id,
+        "variantType": variant_type,
+        "durationMs": duration_ms,
+        "metadata": metadata or {},
+        "timestamp": _now(),
+    }
+
+
+def _pipeline_event_to_model(doc: dict[str, Any]) -> PipelineEvent:
+    """Convert a pipeline event dict to a PipelineEvent model."""
+    return PipelineEvent(
+        id=str(doc.get("id", "")),
+        eventType=doc["eventType"],
+        status=doc["status"],
+        message=doc["message"],
+        detail=doc.get("detail"),
+        jobId=doc.get("jobId"),
+        variantType=doc.get("variantType"),
+        durationMs=doc.get("durationMs"),
+        metadata=dict(doc.get("metadata", {})),
+        timestamp=_utc(doc["timestamp"]) or _now(),
+    )
+
+
 def _build_lead_doc(
     *,
     source_type: str,
@@ -318,8 +370,16 @@ def _build_lead_doc(
     user_id: str,
 ) -> dict[str, Any]:
     now = _now()
+    lead_id = uuid4().hex
+    initial_event = _build_pipeline_event(
+        event_type="lead_created",
+        status="success",
+        message="Lead created",
+        detail=f"Source: {source_type}",
+        metadata={"sourceType": source_type, "sourceRef": source_ref},
+    )
     lead = {
-        "id": uuid4().hex,
+        "id": lead_id,
         "user_id": user_id,
         "sourceType": source_type,
         "sourceRef": source_ref,
@@ -348,6 +408,7 @@ def _build_lead_doc(
         "pipelineStage": "new",
         "pipelineMode": "auto",
         "pipelineStatusDetail": None,
+        "pipelineEvents": [initial_event],
         "createdAt": now,
         "updatedAt": now,
         "archivedAt": None,
@@ -391,6 +452,9 @@ def _merge_lead_doc(
 
 
 class LeadRepository:
+    # Maximum number of pipeline events to keep per lead (to prevent unbounded growth)
+    MAX_PIPELINE_EVENTS = 100
+
     def __init__(self) -> None:
         self._memory_lock = asyncio.Lock()
         self._memory: dict[str, dict[str, Any]] = {}
@@ -398,6 +462,56 @@ class LeadRepository:
         self._extractions: dict[str, list[dict[str, Any]]] = {}
         self._briefs: dict[str, list[dict[str, Any]]] = {}
         self._memory_ready = False
+
+    async def log_pipeline_event(
+        self,
+        lead_id: str,
+        *,
+        event_type: PipelineEventType,
+        status: PipelineEventStatus,
+        message: str,
+        detail: str | None = None,
+        job_id: str | None = None,
+        variant_type: str | None = None,
+        duration_ms: int | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Log a pipeline event to a lead's activity history."""
+        event = _build_pipeline_event(
+            event_type=event_type,
+            status=status,
+            message=message,
+            detail=detail,
+            job_id=job_id,
+            variant_type=variant_type,
+            duration_ms=duration_ms,
+            metadata=metadata,
+        )
+
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                doc = self._memory.get(lead_id)
+                if doc is not None:
+                    events = doc.setdefault("pipelineEvents", [])
+                    events.append(event)
+                    # Trim to max events (keep most recent)
+                    if len(events) > self.MAX_PIPELINE_EVENTS:
+                        doc["pipelineEvents"] = events[-self.MAX_PIPELINE_EVENTS :]
+                    doc["updatedAt"] = _now()
+        else:
+            await database["leads"].update_one(
+                {"id": lead_id},
+                {
+                    "$push": {
+                        "pipelineEvents": {
+                            "$each": [event],
+                            "$slice": -self.MAX_PIPELINE_EVENTS,
+                        }
+                    },
+                    "$set": {"updatedAt": _now()},
+                },
+            )
 
     async def _maybe_ensure_indexes(self) -> None:
         database = get_database()
@@ -509,10 +623,33 @@ class LeadRepository:
         """Start extraction automatically after lead creation."""
         try:
             await self._set_pipeline_stage(lead_id, "extracting")
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="extraction_started",
+                status="info",
+                message="Extraction started",
+                detail="Crawling website for content and brand assets",
+            )
             await self.start_extraction(lead_id, refresh=False)
-        except Exception:
+        except Exception as exc:
+            import traceback
+
             logging.getLogger("lenquant.pipeline").exception(
                 "Auto-extraction failed for lead %s", lead_id
+            )
+            # Capture full error details
+            error_type = type(exc).__name__
+            error_msg = str(exc)
+            tb_lines = traceback.format_exc().split("\n")[-5:]  # Last 5 lines
+            tb_summary = "\n".join(tb_lines).strip()
+
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="extraction_failed",
+                status="error",
+                message=f"Extraction failed: {error_type}",
+                detail=f"{error_msg}\n\nTraceback:\n{tb_summary}",
+                metadata={"errorType": error_type, "errorMessage": error_msg},
             )
             await self._set_pipeline_stage(
                 lead_id,
@@ -564,19 +701,43 @@ class LeadRepository:
         mode = await self._get_pipeline_mode(lead_id)
         extraction = await self.get_extraction(lead_id)
         if extraction is None:
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="extraction_failed",
+                status="error",
+                message="Extraction produced no data",
+                detail="No extraction snapshot was created",
+            )
             await self._set_pipeline_stage(
                 lead_id, "needs_attention", detail="Extraction produced no snapshot."
             )
             return
 
         if extraction.crawlStatus == "failed":
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="extraction_failed",
+                status="error",
+                message="Extraction failed",
+                detail=extraction.errors[0] if extraction.errors else "Unknown error",
+            )
             await self._set_pipeline_stage(
                 lead_id, "needs_attention", detail="Extraction failed."
             )
             return
 
         confidence = extraction.confidenceScore or 0
+        pages_crawled = extraction.pagesCrawled or 0
+
         if confidence < 30:
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="extraction_completed",
+                status="warning",
+                message="Extraction completed with low confidence",
+                detail=f"Confidence: {confidence}%, Pages: {pages_crawled}",
+                metadata={"confidence": confidence, "pagesCrawled": pages_crawled},
+            )
             await self._set_pipeline_stage(
                 lead_id,
                 "needs_attention",
@@ -584,21 +745,51 @@ class LeadRepository:
             )
             return
 
+        await self.log_pipeline_event(
+            lead_id,
+            event_type="extraction_completed",
+            status="success",
+            message="Extraction completed",
+            detail=f"Crawled {pages_crawled} pages with {confidence}% confidence",
+            metadata={"confidence": confidence, "pagesCrawled": pages_crawled},
+        )
         await self._set_pipeline_stage(lead_id, "extracted")
 
         if mode == "auto":
             # Auto mode: immediately generate master brief
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="brief_generation_started",
+                status="info",
+                message="Brief generation started",
+                detail="Creating AI-powered master brief from extraction",
+            )
             await self._set_pipeline_stage(lead_id, "briefing")
             try:
                 # Use NEW AI-powered master brief (not old deterministic brief)
                 master_brief = await self.create_master_brief(lead_id)
                 if master_brief is None:
+                    await self.log_pipeline_event(
+                        lead_id,
+                        event_type="pipeline_error",
+                        status="error",
+                        message="Brief generation returned no result",
+                    )
                     await self._set_pipeline_stage(
                         lead_id,
                         "needs_attention",
                         detail="Master brief generation returned no result.",
                     )
                     return
+
+                await self.log_pipeline_event(
+                    lead_id,
+                    event_type="brief_generated",
+                    status="success",
+                    message="Brief generated",
+                    detail=f"Confidence: {master_brief.confidenceScore}%",
+                    metadata={"briefVersion": master_brief.version},
+                )
 
                 # Auto-approve the master brief
                 await self.approve_master_brief(
@@ -613,15 +804,38 @@ class LeadRepository:
                 # Now advance to site generation
                 await self.advance_pipeline_after_brief(lead_id)
 
-            except Exception:
+            except Exception as exc:
+                import traceback
+
                 logging.getLogger("lenquant.pipeline").exception(
                     "Auto master brief generation failed for lead %s", lead_id
+                )
+                # Capture full error details
+                error_type = type(exc).__name__
+                error_msg = str(exc)
+                tb_lines = traceback.format_exc().split("\n")[-5:]
+                tb_summary = "\n".join(tb_lines).strip()
+
+                await self.log_pipeline_event(
+                    lead_id,
+                    event_type="pipeline_error",
+                    status="error",
+                    message=f"Brief generation failed: {error_type}",
+                    detail=f"{error_msg}\n\nTraceback:\n{tb_summary}",
+                    metadata={"errorType": error_type, "errorMessage": error_msg},
                 )
                 await self._set_pipeline_stage(
                     lead_id, "needs_attention", detail="Master brief generation failed."
                 )
         else:
             # Manual mode: pause at extracted — operator approves brief
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="pipeline_paused",
+                status="info",
+                message="Waiting for brief approval",
+                detail="Manual mode: review and approve brief to continue",
+            )
             await self._set_pipeline_stage(lead_id, "brief_ready")
 
     async def advance_pipeline_after_brief(self, lead_id: str) -> None:
@@ -632,6 +846,15 @@ class LeadRepository:
             generation_types = lead.generationTypes if lead else ["nextjs"]
             has_html_variants = any(
                 t in generation_types for t in ["html_v1", "html_v2", "html_v3"]
+            )
+
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="site_generation_started",
+                status="info",
+                message="Site generation started",
+                detail=f"Generating {len(generation_types)} variant(s): {', '.join(generation_types)}",
+                metadata={"variantCount": len(generation_types), "variants": generation_types},
             )
 
             if len(generation_types) > 1 or has_html_variants:
@@ -655,14 +878,36 @@ class LeadRepository:
 
                 job = await site_repository.queue_generation_job(lead_id)
                 if job is None:
+                    await self.log_pipeline_event(
+                        lead_id,
+                        event_type="site_generation_failed",
+                        status="error",
+                        message="Site generation could not be queued",
+                    )
                     await self._set_pipeline_stage(
                         lead_id,
                         "needs_attention",
                         detail="Site generation could not be queued.",
                     )
-        except Exception:
+        except Exception as exc:
+            import traceback
+
             logging.getLogger("lenquant.pipeline").exception(
                 "Auto site generation queue failed for lead %s", lead_id
+            )
+            # Capture full error details
+            error_type = type(exc).__name__
+            error_msg = str(exc)
+            tb_lines = traceback.format_exc().split("\n")[-5:]
+            tb_summary = "\n".join(tb_lines).strip()
+
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="site_generation_failed",
+                status="error",
+                message=f"Site generation failed: {error_type}",
+                detail=f"{error_msg}\n\nTraceback:\n{tb_summary}",
+                metadata={"errorType": error_type, "errorMessage": error_msg},
             )
             await self._set_pipeline_stage(
                 lead_id, "needs_attention", detail="Site generation failed to start."
@@ -672,23 +917,63 @@ class LeadRepository:
         self, lead_id: str, quality_score: int
     ) -> None:
         """Called after site generation completes — QA check and advance."""
+        await self.log_pipeline_event(
+            lead_id,
+            event_type="site_generation_completed",
+            status="success",
+            message="Site generation completed",
+            detail=f"Quality score: {quality_score}/100",
+            metadata={"qualityScore": quality_score},
+        )
+
+        await self.log_pipeline_event(
+            lead_id,
+            event_type="qa_started",
+            status="info",
+            message="QA review started",
+            detail=f"Evaluating site quality (score: {quality_score})",
+        )
         await self._set_pipeline_stage(lead_id, "qa")
         mode = await self._get_pipeline_mode(lead_id)
         if mode == "auto":
             threshold = 75
             if quality_score >= threshold:
+                await self.log_pipeline_event(
+                    lead_id,
+                    event_type="qa_passed",
+                    status="success",
+                    message="QA passed",
+                    detail=f"Score {quality_score}/100 meets threshold of {threshold}",
+                    metadata={"qualityScore": quality_score, "threshold": threshold},
+                )
                 await self._set_pipeline_stage(
                     lead_id,
                     "ready",
                     detail=f"QA passed with score {quality_score}/100.",
                 )
             else:
+                await self.log_pipeline_event(
+                    lead_id,
+                    event_type="qa_failed",
+                    status="warning",
+                    message="QA below threshold",
+                    detail=f"Score {quality_score}/100 is below threshold {threshold}",
+                    metadata={"qualityScore": quality_score, "threshold": threshold},
+                )
                 await self._set_pipeline_stage(
                     lead_id,
                     "needs_attention",
                     detail=f"QA score {quality_score}/100 is below threshold {threshold}. Review or regenerate.",
                 )
-        # Manual mode: stays in QA — operator reviews in Review queue
+        else:
+            # Manual mode: stays in QA — operator reviews in Review queue
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="pipeline_paused",
+                status="info",
+                message="Waiting for QA review",
+                detail="Manual mode: review site quality to continue",
+            )
 
     def _find_duplicate_memory(self, normalized_domain: str) -> dict[str, Any] | None:
         for lead in self._memory.values():
@@ -2087,6 +2372,16 @@ class LeadRepository:
             version=brief.version,
         )
 
+        # Log pipeline event for brief approval
+        await self.log_pipeline_event(
+            lead_id,
+            event_type="brief_approved",
+            status="success",
+            message="Brief approved",
+            detail=f"Approved by {approved_by}" + (f": {notes}" if notes else ""),
+            metadata={"approvedBy": approved_by, "briefVersion": brief.version},
+        )
+
         # Advance pipeline to generating
         await self.advance_pipeline_after_brief(lead_id)
 
@@ -2211,6 +2506,14 @@ class LeadRepository:
                 )
 
             except Exception as exc:  # pragma: no cover - network edge cases
+                import traceback
+
+                # Capture full error details
+                error_type = type(exc).__name__
+                error_msg = str(exc)
+                tb_lines = traceback.format_exc().split("\n")[-6:]
+                tb_summary = "\n".join(tb_lines).strip()
+
                 await self._update_job(
                     job_id,
                     status="failed",
@@ -2220,6 +2523,18 @@ class LeadRepository:
                     lead_ids=[lead_id],
                     error_message=str(exc),
                 )
+
+                # Log detailed error to pipeline events
+                await self.log_pipeline_event(
+                    lead_id,
+                    event_type="extraction_failed",
+                    status="error",
+                    message=f"Crawl failed: {error_type}",
+                    detail=f"{error_msg}\n\nTraceback:\n{tb_summary}",
+                    job_id=job_id,
+                    metadata={"errorType": error_type, "errorMessage": error_msg},
+                )
+
                 await checkpoint.delete_checkpoint()
                 return
 

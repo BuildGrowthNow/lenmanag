@@ -13,6 +13,11 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from app.core.asset_utils import (
+    get_best_asset_url,
+    get_best_asset_urls,
+    log_asset_cache_stats,
+)
 from app.core.llm import get_llm_client
 from app.core.variant_strategy import get_variant_strategy
 from app.schemas.brief import (
@@ -176,7 +181,9 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
 
             logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
             if logos:
-                summary_parts.append(f"Logo: {logos[0].label}")
+                logo_url = get_best_asset_url(logos[0])
+                if logo_url:
+                    summary_parts.append(f"Logo: {logo_url}")
 
         # Use extracted font files (more accurate than generic typography cue)
         if extraction.extractedFonts:
@@ -467,7 +474,7 @@ def _build_master_brief_from_response(
     previous_brief: MasterBrief | None,
 ) -> MasterBrief:
     """Build MasterBrief object from LLM response."""
-    # Extract brand assets
+    # Extract brand assets with validation and telemetry
     brand_assets = BrandAssets()
     if extraction.brandAssetCues:
         colors = [c for c in extraction.brandAssetCues if c.assetType == "color"]
@@ -478,14 +485,17 @@ def _build_master_brief_from_response(
 
         logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
         if logos:
-            brand_assets.logoUrl = logos[0].sourceUrl
+            brand_assets.logoUrl = get_best_asset_url(logos[0])
+            log_asset_cache_stats(logos, "logo", lead_id)
 
         fonts = [c for c in extraction.brandAssetCues if c.assetType == "typography"]
         if fonts:
             brand_assets.fontFamily = fonts[0].value
 
         images = [c for c in extraction.brandAssetCues if c.assetType == "image"]
-        brand_assets.imageUrls = [img.sourceUrl for img in images[:5]]
+        brand_assets.imageUrls = get_best_asset_urls(images, max_count=5)
+        if images:
+            log_asset_cache_stats(images, "image", lead_id)
 
     # Extract content - prefer analyzed data, fall back to keywords
     extracted_content: dict[str, list[str]] = {}

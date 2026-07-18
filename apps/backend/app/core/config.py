@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     # Amazon Bedrock Configuration (used when llm_provider=bedrock)
     bedrock_model_id: str = "us.anthropic.claude-sonnet-4-6"
     bedrock_region: str = "us-east-1"
-    bedrock_max_tokens: int = 8192  # Increased for full page code generation
+    bedrock_max_tokens: int = 32768  # Increased for full page code generation
     bedrock_timeout_seconds: int = (
         600  # 10 minutes for complex code generation (up from 5min)
     )

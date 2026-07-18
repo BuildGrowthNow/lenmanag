@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeadBriefReview } from "@/components/lead-brief-review";
 import { LeadExtractionControls } from "@/components/lead-extraction-controls";
 import { LeadVariantsView } from "@/components/lead-variants-view";
+import { PipelineActivityLog } from "@/components/pipeline-activity-log";
 import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages, getLeadAnalysis } from "@/lib/api/leads";
 import { getSite } from "@/lib/api/sites";
 import { evaluateExtractionHealth } from "@/lib/extraction-health";
@@ -490,6 +491,13 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               )}
             </CardContent>
           </Card>
+
+          {/* Pipeline Activity Log */}
+          <PipelineActivityLog
+            events={lead.pipelineEvents ?? []}
+            defaultExpanded={false}
+            maxCollapsedEvents={5}
+          />
 
           {/* Source refs (collapsed) */}
           {lead.sourceRefs.length > 0 ? (

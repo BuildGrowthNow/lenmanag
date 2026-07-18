@@ -41,6 +41,12 @@ curl -sf http://localhost:8000/api/v1/health   # backend health
 curl -sf http://localhost:3000/                # frontend health
 ```
 
+### MongoDB Collections
+- **`leads`** - Lead/customer information
+- **`generated_sites`** - Generated landing page sites (NOT `sites` collection)
+- **`jobs`** - Background job tracking
+- **`analytics_events`** - Analytics data
+
 ### Production URLs
 - Frontend: `https://sites.lenquant.com`
 - Backend API: `https://sites-api.lenquant.com`

@@ -49,6 +49,49 @@ export type PipelineStage =
 
 export type PipelineMode = "auto" | "manual";
 
+// Pipeline activity event types
+export type PipelineEventType =
+  | "lead_created"
+  | "lead_merged"
+  | "extraction_started"
+  | "extraction_progress"
+  | "extraction_completed"
+  | "extraction_failed"
+  | "analysis_started"
+  | "analysis_completed"
+  | "analysis_failed"
+  | "brief_generation_started"
+  | "brief_generated"
+  | "brief_approved"
+  | "brief_rejected"
+  | "site_generation_started"
+  | "site_generation_progress"
+  | "site_variant_generated"
+  | "site_generation_completed"
+  | "site_generation_failed"
+  | "qa_started"
+  | "qa_passed"
+  | "qa_failed"
+  | "site_published"
+  | "pipeline_error"
+  | "pipeline_paused"
+  | "pipeline_resumed";
+
+export type PipelineEventStatus = "success" | "error" | "info" | "warning";
+
+export type PipelineEvent = {
+  id: string;
+  eventType: PipelineEventType;
+  status: PipelineEventStatus;
+  message: string;
+  detail: string | null;
+  jobId: string | null;
+  variantType: string | null;
+  durationMs: number | null;
+  metadata: Record<string, string | number | boolean | null>;
+  timestamp: string;
+};
+
 // Multi-variant generation types
 export type VariantType = "html_v1" | "html_v2" | "html_v3" | "nextjs";
 export type GenerationType = VariantType;
@@ -1202,6 +1245,7 @@ export type LeadDetail = {
   version: number;
   latestJob: LeadJobSummary | null;
   jobs: LeadJobSummary[];
+  pipelineEvents: PipelineEvent[];
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;

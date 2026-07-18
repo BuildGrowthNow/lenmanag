@@ -275,6 +275,18 @@ async def _run_multi_variant_generation_async(
             step=f"Generating {variant_type} ({i + 1}/{total_variants})",
         )
 
+        # Log pipeline event for variant progress
+        await lead_repository.log_pipeline_event(
+            lead_id,
+            event_type="site_generation_progress",
+            status="info",
+            message=f"Generating {variant_type} variant",
+            detail=f"Variant {i + 1} of {total_variants}",
+            job_id=job_id,
+            variant_type=variant_type_str,
+            metadata={"variantIndex": i + 1, "totalVariants": total_variants},
+        )
+
         # Track this variant's metrics
         async with metrics_collector.track_generation(
             lead_id, variant_type_str
@@ -327,12 +339,33 @@ async def _run_multi_variant_generation_async(
                     metrics.success = True
                     metrics.model_used = "bedrock"  # TODO: Track actual model
 
+                    # Log pipeline event for variant completed
+                    variant_time_ms = int(
+                        (time.monotonic() - lock_start - metrics.lock_wait_seconds) * 1000
+                    )
+                    await lead_repository.log_pipeline_event(
+                        lead_id,
+                        event_type="site_variant_generated",
+                        status="success",
+                        message=f"{variant_type} variant generated",
+                        detail=f"Quality score: {site.qualityScore}%",
+                        job_id=job_id,
+                        variant_type=variant_type_str,
+                        duration_ms=variant_time_ms,
+                        metadata={
+                            "qualityScore": site.qualityScore,
+                            "previewSlug": site.previewSlug,
+                        },
+                    )
+
                     logger.info(
                         f"Variant {variant_type} completed ({i + 1}/{total_variants}): "
                         f"{site.previewUrl}"
                     )
 
             except Exception as e:
+                import traceback
+
                 logger.error(
                     f"Variant {variant_type} failed for lead {lead_id}: {e}",
                     exc_info=True,
@@ -340,10 +373,29 @@ async def _run_multi_variant_generation_async(
                 metrics.success = False
                 metrics.error_message = str(e)
                 failed_variants += 1
+
+                # Capture full error details
+                error_type = type(e).__name__
+                error_msg = str(e)
+                tb_lines = traceback.format_exc().split("\n")[-6:]
+                tb_summary = "\n".join(tb_lines).strip()
+
+                # Log pipeline event for variant failure with full traceback
+                await lead_repository.log_pipeline_event(
+                    lead_id,
+                    event_type="site_generation_failed",
+                    status="error",
+                    message=f"{variant_type} variant failed: {error_type}",
+                    detail=f"{error_msg}\n\nTraceback:\n{tb_summary}",
+                    job_id=job_id,
+                    variant_type=variant_type_str,
+                    metadata={"errorType": error_type, "errorMessage": error_msg},
+                )
                 # Continue with next variant instead of failing entire job
 
     # Log metrics summary
     total_time = time.monotonic() - generation_start_time
+    total_time_ms = int(total_time * 1000)
     metrics_collector.log_summary()
     log_generation_complete(
         lead_id,
@@ -360,6 +412,35 @@ async def _run_multi_variant_generation_async(
         step=f"Generated {len(generated_sites)}/{total_variants} variants",
         finished=True,
     )
+
+    # Log final pipeline event
+    if generated_sites:
+        avg_quality = sum(s.qualityScore for s in generated_sites) // len(generated_sites)
+        await lead_repository.log_pipeline_event(
+            lead_id,
+            event_type="site_generation_completed",
+            status="success",
+            message=f"Generated {len(generated_sites)} variant(s)",
+            detail=f"Average quality: {avg_quality}%, {failed_variants} failed",
+            job_id=job_id,
+            duration_ms=total_time_ms,
+            metadata={
+                "successCount": len(generated_sites),
+                "failedCount": failed_variants,
+                "averageQuality": avg_quality,
+            },
+        )
+    else:
+        await lead_repository.log_pipeline_event(
+            lead_id,
+            event_type="site_generation_failed",
+            status="error",
+            message="All variants failed to generate",
+            detail=f"Attempted {total_variants} variant(s)",
+            job_id=job_id,
+            duration_ms=total_time_ms,
+            metadata={"failedCount": failed_variants},
+        )
 
     # Update lead pipeline stage (only if at least one succeeded)
     if generated_sites:

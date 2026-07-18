@@ -19,6 +19,37 @@ JobType = Literal[
     "analysis_refresh",
 ]
 
+# Pipeline event types for activity tracking
+PipelineEventType = Literal[
+    "lead_created",
+    "lead_merged",
+    "extraction_started",
+    "extraction_progress",
+    "extraction_completed",
+    "extraction_failed",
+    "analysis_started",
+    "analysis_completed",
+    "analysis_failed",
+    "brief_generation_started",
+    "brief_generated",
+    "brief_approved",
+    "brief_rejected",
+    "site_generation_started",
+    "site_generation_progress",
+    "site_variant_generated",
+    "site_generation_completed",
+    "site_generation_failed",
+    "qa_started",
+    "qa_passed",
+    "qa_failed",
+    "site_published",
+    "pipeline_error",
+    "pipeline_paused",
+    "pipeline_resumed",
+]
+
+PipelineEventStatus = Literal["success", "error", "info", "warning"]
+
 # Pipeline stage reflects where a lead sits in the automation flow
 PipelineStage = Literal[
     "new",
@@ -35,6 +66,21 @@ PipelineStage = Literal[
 ]
 
 PipelineMode = Literal["auto", "manual"]
+
+
+class PipelineEvent(BaseModel):
+    """A single event in the pipeline activity log."""
+
+    id: str
+    eventType: PipelineEventType
+    status: PipelineEventStatus
+    message: str
+    detail: Optional[str] = None
+    jobId: Optional[str] = None
+    variantType: Optional[str] = None
+    durationMs: Optional[int] = None
+    metadata: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    timestamp: datetime
 
 
 class SourceReference(BaseModel):
@@ -129,6 +175,7 @@ class LeadDetail(BaseModel):
     version: int
     latestJob: Optional[JobSummary] = None
     jobs: list[JobSummary] = Field(default_factory=list)
+    pipelineEvents: list[PipelineEvent] = Field(default_factory=list)
     createdAt: datetime
     updatedAt: datetime
     archivedAt: Optional[datetime] = None
