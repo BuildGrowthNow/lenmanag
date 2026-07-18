@@ -48,7 +48,7 @@ async def generate_static_html(
     response = await llm.generate_text(
         prompt=prompt,
         temperature=0.7,
-        max_tokens=8192,
+        max_tokens=16384,  # Increased from 8192 to allow full HTML/CSS/JS generation
     )
 
     # Debug: Log response metadata
