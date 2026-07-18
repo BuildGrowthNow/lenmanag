@@ -61,13 +61,19 @@ async def generate_static_html(
     html_start = response.find("```html")
     html_end = response.find("```", html_start + 7) if html_start >= 0 else -1
     css_start = response.find("```css")
+    css_end = response.find("```", css_start + 6) if css_start >= 0 else -1
+    js_start = response.find("```javascript")
+    if js_start < 0:
+        js_start = response.find("```js")
     logger.info(
-        f"[DEBUG] Code block positions: html_start={html_start}, "
-        f"html_end={html_end}, css_start={css_start}"
+        f"[DEBUG] Code block positions: html_start={html_start}, html_end={html_end}, "
+        f"css_start={css_start}, css_end={css_end}, js_start={js_start}"
     )
     if html_start >= 0:
         # Log 100 chars after ```html marker to see what follows
         logger.info(f"[DEBUG] After ```html marker: {repr(response[html_start:html_start+100])}")
+    if css_start >= 0:
+        logger.info(f"[DEBUG] After ```css marker: {repr(response[css_start:css_start+100])}")
 
     # Parse response
     try:
@@ -273,8 +279,16 @@ def _parse_llm_response(response: str) -> tuple[str, str, str]:
         # Pattern 3: No whitespace requirement, greedy
         html_match = re.search(r"```html(.*?)```", response, re.DOTALL)
     if not html_match:
-        raise ValueError("No HTML code block found in LLM response")
-    html = html_match.group(1).strip()
+        # Pattern 4: Manual extraction if markers exist
+        html_start_pos = response.find("```html")
+        html_end_pos = response.find("```", html_start_pos + 7) if html_start_pos >= 0 else -1
+        if html_start_pos >= 0 and html_end_pos >= 0:
+            html = response[html_start_pos + 7:html_end_pos].strip()
+            logger.info(f"[DEBUG] Manual HTML extraction: {len(html)} chars")
+        else:
+            raise ValueError("No HTML code block found in LLM response")
+    else:
+        html = html_match.group(1).strip()
 
     # Extract CSS - same pattern approach
     css_match = None
@@ -284,8 +298,16 @@ def _parse_llm_response(response: str) -> tuple[str, str, str]:
     if not css_match:
         css_match = re.search(r"```css(.*?)```", response, re.DOTALL)
     if not css_match:
-        raise ValueError("No CSS code block found in LLM response")
-    css = css_match.group(1).strip()
+        # Pattern 4: Manual extraction if markers exist
+        css_start_pos = response.find("```css")
+        css_end_pos = response.find("```", css_start_pos + 6) if css_start_pos >= 0 else -1
+        if css_start_pos >= 0 and css_end_pos >= 0:
+            css = response[css_start_pos + 6:css_end_pos].strip()
+            logger.info(f"[DEBUG] Manual CSS extraction: {len(css)} chars")
+        else:
+            raise ValueError("No CSS code block found in LLM response")
+    else:
+        css = css_match.group(1).strip()
 
     # Extract JS - same pattern approach
     js_match = None
@@ -295,8 +317,20 @@ def _parse_llm_response(response: str) -> tuple[str, str, str]:
     if not js_match:
         js_match = re.search(r"```(?:javascript|js)(.*?)```", response, re.DOTALL)
     if not js_match:
-        logger.warning("No JavaScript code block found, using minimal JS")
-        js = "// Minimal script\ndocument.addEventListener('DOMContentLoaded', () => {});"
+        # Pattern 4: Manual extraction if markers exist
+        js_start_pos = response.find("```javascript")
+        if js_start_pos < 0:
+            js_start_pos = response.find("```js")
+            js_marker_len = 5 if js_start_pos >= 0 else 0
+        else:
+            js_marker_len = 13
+        js_end_pos = response.find("```", js_start_pos + js_marker_len) if js_start_pos >= 0 else -1
+        if js_start_pos >= 0 and js_end_pos >= 0:
+            js = response[js_start_pos + js_marker_len:js_end_pos].strip()
+            logger.info(f"[DEBUG] Manual JS extraction: {len(js)} chars")
+        else:
+            logger.warning("No JavaScript code block found, using minimal JS")
+            js = "// Minimal script\ndocument.addEventListener('DOMContentLoaded', () => {});"
     else:
         js = js_match.group(1).strip()
 
