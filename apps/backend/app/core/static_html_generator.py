@@ -51,11 +51,30 @@ async def generate_static_html(
         max_tokens=8192,
     )
 
+    # Debug: Log response metadata
+    logger.info(
+        f"[DEBUG] LLM response received for {variant_type}: "
+        f"length={len(response)}, first_200_chars={response[:200]}"
+    )
+
     # Parse response
-    html_content, css_content, js_content = _parse_llm_response(response)
+    try:
+        html_content, css_content, js_content = _parse_llm_response(response)
+        logger.info(
+            f"[DEBUG] Parsed successfully: "
+            f"html_len={len(html_content)}, css_len={len(css_content)}, js_len={len(js_content)}"
+        )
+    except ValueError as e:
+        logger.error(f"[DEBUG] Parsing failed: {e}")
+        logger.error(f"[DEBUG] Full LLM response: {response[:1000]}")
+        raise
 
     # Upload CSS and JS to S3
     settings = get_settings()
+    logger.info(
+        f"[DEBUG] S3 config: bucket={settings.asset_s3_bucket}, "
+        f"prefix={settings.asset_s3_prefix}, region={settings.asset_s3_region}"
+    )
     css_url = _upload_to_s3(
         content=css_content,
         filename=f"{site_id}/styles.css",
@@ -70,6 +89,7 @@ async def generate_static_html(
         bucket=settings.asset_s3_bucket,
         prefix=settings.asset_s3_prefix,
     )
+    logger.info(f"[DEBUG] S3 upload results: css_url={css_url}, js_url={js_url}")
 
     # Inject CSS/JS URLs into HTML
     html_final = html_content
@@ -82,6 +102,10 @@ async def generate_static_html(
             "</body>", f'<script src="{js_url}"></script>\n</body>'
         )
 
+    logger.info(
+        f"[DEBUG] Final HTML length: {len(html_final)} "
+        f"(original: {len(html_content)})"
+    )
     logger.info(f"Static HTML generated successfully for site {site_id}")
 
     return {
