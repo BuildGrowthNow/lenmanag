@@ -57,6 +57,18 @@ async def generate_static_html(
         f"length={len(response)}, first_200_chars={response[:200]}"
     )
 
+    # Debug: Check for code block markers
+    html_start = response.find("```html")
+    html_end = response.find("```", html_start + 7) if html_start >= 0 else -1
+    css_start = response.find("```css")
+    logger.info(
+        f"[DEBUG] Code block positions: html_start={html_start}, "
+        f"html_end={html_end}, css_start={css_start}"
+    )
+    if html_start >= 0:
+        # Log 100 chars after ```html marker to see what follows
+        logger.info(f"[DEBUG] After ```html marker: {repr(response[html_start:html_start+100])}")
+
     # Parse response
     try:
         html_content, css_content, js_content = _parse_llm_response(response)
@@ -66,7 +78,9 @@ async def generate_static_html(
         )
     except ValueError as e:
         logger.error(f"[DEBUG] Parsing failed: {e}")
-        logger.error(f"[DEBUG] Full LLM response: {response[:1000]}")
+        logger.error(f"[DEBUG] Response starts with: {repr(response[:150])}")
+        if html_start >= 0 and html_end >= 0:
+            logger.error(f"[DEBUG] HTML block length would be: {html_end - html_start}")
         raise
 
     # Upload CSS and JS to S3
@@ -248,29 +262,38 @@ Generate high-quality, production-ready code that implements this brief faithful
 def _parse_llm_response(response: str) -> tuple[str, str, str]:
     """Parse HTML, CSS, JS from LLM response."""
 
-    # Extract HTML - more robust regex that handles newlines after opening marker
-    html_match = re.search(r"```html\n([\s\S]*?)\n```", response, re.MULTILINE)
+    # Extract HTML - try multiple patterns with increasing leniency
+    html_match = None
+    # Pattern 1: Standard with explicit newline
+    html_match = re.search(r"```html\s*\n(.*?)\n```", response, re.DOTALL)
     if not html_match:
-        # Fallback: try without requiring newlines
-        html_match = re.search(r"```html\s*([\s\S]*?)```", response)
+        # Pattern 2: Any whitespace after marker
+        html_match = re.search(r"```html\s+(.*?)```", response, re.DOTALL)
+    if not html_match:
+        # Pattern 3: No whitespace requirement, greedy
+        html_match = re.search(r"```html(.*?)```", response, re.DOTALL)
     if not html_match:
         raise ValueError("No HTML code block found in LLM response")
     html = html_match.group(1).strip()
 
-    # Extract CSS - more robust regex
-    css_match = re.search(r"```css\n([\s\S]*?)\n```", response, re.MULTILINE)
+    # Extract CSS - same pattern approach
+    css_match = None
+    css_match = re.search(r"```css\s*\n(.*?)\n```", response, re.DOTALL)
     if not css_match:
-        # Fallback: try without requiring newlines
-        css_match = re.search(r"```css\s*([\s\S]*?)```", response)
+        css_match = re.search(r"```css\s+(.*?)```", response, re.DOTALL)
+    if not css_match:
+        css_match = re.search(r"```css(.*?)```", response, re.DOTALL)
     if not css_match:
         raise ValueError("No CSS code block found in LLM response")
     css = css_match.group(1).strip()
 
-    # Extract JS - more robust regex
-    js_match = re.search(r"```(?:javascript|js)\n([\s\S]*?)\n```", response, re.MULTILINE)
+    # Extract JS - same pattern approach
+    js_match = None
+    js_match = re.search(r"```(?:javascript|js)\s*\n(.*?)\n```", response, re.DOTALL)
     if not js_match:
-        # Fallback: try without requiring newlines
-        js_match = re.search(r"```(?:javascript|js)\s*([\s\S]*?)```", response)
+        js_match = re.search(r"```(?:javascript|js)\s+(.*?)```", response, re.DOTALL)
+    if not js_match:
+        js_match = re.search(r"```(?:javascript|js)(.*?)```", response, re.DOTALL)
     if not js_match:
         logger.warning("No JavaScript code block found, using minimal JS")
         js = "// Minimal script\ndocument.addEventListener('DOMContentLoaded', () => {});"
