@@ -289,19 +289,31 @@ class BedrockClient:
         if "```json" in response:
             start = response.find("```json") + 7
             end = response.find("```", start)
-            if end > start:
-                response = response[start:end].strip()
+            response = (
+                response[start:end].strip() if end > start else response[start:].strip()
+            )
         elif "```" in response:
             start = response.find("```") + 3
             end = response.find("```", start)
-            if end > start:
-                response = response[start:end].strip()
+            response = (
+                response[start:end].strip() if end > start else response[start:].strip()
+            )
 
         try:
             return json.loads(response)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from response: {response[:500]}")
-            raise ValueError(f"Invalid JSON in LLM response: {e}")
+        except json.JSONDecodeError:
+            pass
+
+        first_brace = response.find("{")
+        last_brace = response.rfind("}")
+        if first_brace != -1 and last_brace > first_brace:
+            try:
+                return json.loads(response[first_brace : last_brace + 1])
+            except json.JSONDecodeError:
+                pass
+
+        logger.error(f"Failed to parse JSON from response: {response[:500]}")
+        raise ValueError("Invalid JSON in LLM response")
 
 
 _bedrock_client: Optional[BedrockClient] = None

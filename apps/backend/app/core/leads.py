@@ -1244,6 +1244,8 @@ class LeadRepository:
             updated["pipelineMode"] = patch.pipelineMode
         if patch.pipelineStage is not None:
             updated["pipelineStage"] = patch.pipelineStage
+        if patch.generationTypes is not None:
+            updated["generationTypes"] = patch.generationTypes
         updated["missingFields"] = _missing_fields(updated)
         if updated["status"] != "archived":
             updated["status"] = (
@@ -1785,7 +1787,10 @@ class LeadRepository:
             return None
 
         extraction = await self.get_extraction(lead_id)
-        if extraction is None or extraction.crawlStatus != "completed":
+        if extraction is None or extraction.crawlStatus not in (
+            "completed",
+            "partial",
+        ):
             raise ValueError("extraction_not_completed")
 
         # Prevent duplicate analysis jobs
@@ -1858,7 +1863,10 @@ class LeadRepository:
         )
 
         extraction = await self.get_extraction(lead_id)
-        if extraction is None or extraction.crawlStatus != "completed":
+        if extraction is None or extraction.crawlStatus not in (
+            "completed",
+            "partial",
+        ):
             await self._update_job(
                 job_id,
                 status="failed",

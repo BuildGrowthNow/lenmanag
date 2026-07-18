@@ -141,7 +141,6 @@ class LeadUpsertRequest(BaseModel):
     notes: Optional[str] = None
     pipelineMode: PipelineMode = "auto"
 
-    # NEW: Generation types selection
     generationTypes: list[GenerationType] = Field(
         default=["nextjs"],
         description="Types of sites to generate. Can select 1-4 options.",
@@ -158,6 +157,7 @@ class LeadPatchRequest(BaseModel):
     status: Optional[LeadStatus] = None
     pipelineMode: Optional[PipelineMode] = None
     pipelineStage: Optional[PipelineStage] = None
+    generationTypes: Optional[list[GenerationType]] = None
 
 
 class ImportRowResult(BaseModel):

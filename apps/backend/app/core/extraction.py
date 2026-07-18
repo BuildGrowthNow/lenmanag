@@ -2459,10 +2459,13 @@ def crawl_website(
         "toneClues": tone_clues,
     }
 
+    non_critical_gaps = {"sitemap_unavailable", "llm_enriched", "brand_assets_missing"}
+    critical_gaps = [g for g in gaps if g not in non_critical_gaps]
+
     crawl_status: str
     if pages_crawled == 0:
         crawl_status = "failed"
-    elif gaps:
+    elif critical_gaps:
         crawl_status = "partial"
     else:
         crawl_status = "completed"
