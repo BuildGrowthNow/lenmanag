@@ -854,7 +854,10 @@ class LeadRepository:
                 status="info",
                 message="Site generation started",
                 detail=f"Generating {len(generation_types)} variant(s): {', '.join(generation_types)}",
-                metadata={"variantCount": len(generation_types), "variants": generation_types},
+                metadata={
+                    "variantCount": len(generation_types),
+                    "variants": generation_types,
+                },
             )
 
             if len(generation_types) > 1 or has_html_variants:

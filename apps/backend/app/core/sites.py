@@ -2055,11 +2055,30 @@ def _comparison_entries(
     return entries
 
 
+def _migrate_evidence_source_kind(doc: dict[str, Any]) -> None:
+    """Migrate legacy 'extraction' sourceKind values to 'source_backed'."""
+
+    def fix_evidence(obj: Any) -> None:
+        """Recursively fix sourceKind in all evidence fields."""
+        if isinstance(obj, dict):
+            if "sourceKind" in obj and obj["sourceKind"] == "extraction":
+                obj["sourceKind"] = "source_backed"
+            for value in obj.values():
+                fix_evidence(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                fix_evidence(item)
+
+    fix_evidence(doc)
+
+
 def _site_doc_to_current(doc: dict[str, Any]) -> GeneratedSite:
+    _migrate_evidence_source_kind(doc)
     return GeneratedSite.model_validate(doc)
 
 
 def _site_version_doc_to_model(doc: dict[str, Any]) -> GeneratedSiteVersion:
+    _migrate_evidence_source_kind(doc)
     return GeneratedSiteVersion.model_validate(doc)
 
 

@@ -341,7 +341,8 @@ async def _run_multi_variant_generation_async(
 
                     # Log pipeline event for variant completed
                     variant_time_ms = int(
-                        (time.monotonic() - lock_start - metrics.lock_wait_seconds) * 1000
+                        (time.monotonic() - lock_start - metrics.lock_wait_seconds)
+                        * 1000
                     )
                     await lead_repository.log_pipeline_event(
                         lead_id,
@@ -415,7 +416,9 @@ async def _run_multi_variant_generation_async(
 
     # Log final pipeline event
     if generated_sites:
-        avg_quality = sum(s.qualityScore for s in generated_sites) // len(generated_sites)
+        avg_quality = sum(s.qualityScore for s in generated_sites) // len(
+            generated_sites
+        )
         await lead_repository.log_pipeline_event(
             lead_id,
             event_type="site_generation_completed",
