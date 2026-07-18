@@ -840,6 +840,7 @@ export type SiteHandoffRecord = {
 export type SiteGeneratePayload = {
   force?: boolean;
   refinementPromptId?: string | null;
+  variantTypes?: VariantType[];
 };
 
 export type SiteReviewPayload = {

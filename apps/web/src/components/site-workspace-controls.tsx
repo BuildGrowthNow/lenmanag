@@ -4,11 +4,12 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { createSiteOverride, generateSite, republishSite } from "@/lib/api/sites";
-import type { GeneratedSite } from "@/lib/types";
+import type { GeneratedSite, VariantType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type SiteWorkspaceControlsProps = {
   siteId: string;
@@ -18,6 +19,13 @@ type SiteWorkspaceControlsProps = {
 };
 
 const overrideScopes = ["copy", "layout", "brand", "cta", "motion", "style"] as const;
+
+const VARIANT_OPTIONS: { value: VariantType; label: string; description: string }[] = [
+  { value: "html_v1", label: "HTML V1", description: "Professional Standard" },
+  { value: "html_v2", label: "HTML V2", description: "Bold Startup" },
+  { value: "html_v3", label: "HTML V3", description: "Creative Alternative" },
+  { value: "nextjs", label: "Next.js", description: "React Interactive" },
+];
 
 function getNestedValue(obj: any, path: string): any {
   const keys = path.split(".");
@@ -41,15 +49,25 @@ export function SiteWorkspaceControls({ siteId, site, hasApprovedBrief, hasExtra
   const [value, setValue] = useState("");
   const [reason, setReason] = useState("");
   const [previousValue, setPreviousValue] = useState("");
+  const [selectedVariants, setSelectedVariants] = useState<VariantType[]>(["html_v1", "html_v2", "html_v3", "nextjs"]);
 
   // Get current value from site for the selected path
   const currentSiteValue = site ? getNestedValue(site, path) : null;
+
+  function toggleVariant(variant: VariantType) {
+    setSelectedVariants((prev) =>
+      prev.includes(variant) ? prev.filter((v) => v !== variant) : [...prev, variant]
+    );
+  }
 
   async function handleGenerate() {
     setBusy("generate");
     setMessage(null);
     try {
-      const response = await generateSite(siteId);
+      const response = await generateSite(siteId, {
+        force: true,
+        variantTypes: selectedVariants.length > 0 ? selectedVariants : undefined,
+      });
       setMessage(`Generation job ${response.job.id.slice(0, 8)} queued: ${response.job.step}.`);
       router.refresh();
     } catch (error) {
@@ -99,9 +117,43 @@ export function SiteWorkspaceControls({ siteId, site, hasApprovedBrief, hasExtra
 
   return (
     <div className="space-y-4">
+      {/* Variant Type Selector */}
+      <div className="space-y-3 rounded-2xl border border-line bg-panel-2 p-4">
+        <div>
+          <div className="text-xs uppercase tracking-[0.18em] text-muted">Select Variants to Generate</div>
+          <div className="mt-1 text-xs text-muted">Choose which site variants to create. You can generate HTML-only sites, React sites, or a mix.</div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {VARIANT_OPTIONS.map((option) => (
+            <label
+              key={option.value}
+              className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-panel p-3 transition-colors hover:bg-panel/80"
+            >
+              <Checkbox
+                checked={selectedVariants.includes(option.value)}
+                onCheckedChange={() => toggleVariant(option.value)}
+                className="mt-0.5"
+              />
+              <div className="flex-1 space-y-1">
+                <div className="text-sm font-medium text-text">{option.label}</div>
+                <div className="text-xs text-muted">{option.description}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+        {selectedVariants.length === 0 && (
+          <div className="text-xs text-amber-500">Select at least one variant type to generate.</div>
+        )}
+      </div>
+
+      {/* Action Buttons */}
       <div className="flex flex-wrap gap-3">
-        <Button type="button" onClick={() => void handleGenerate()} disabled={!hasApprovedBrief || !hasExtraction || busy !== null}>
-          {busy === "generate" ? "Generating..." : site ? "Regenerate preview" : "Generate preview"}
+        <Button
+          type="button"
+          onClick={() => void handleGenerate()}
+          disabled={!hasApprovedBrief || !hasExtraction || selectedVariants.length === 0 || busy !== null}
+        >
+          {busy === "generate" ? "Generating..." : site ? `Regenerate ${selectedVariants.length} variant${selectedVariants.length !== 1 ? "s" : ""}` : `Generate ${selectedVariants.length} variant${selectedVariants.length !== 1 ? "s" : ""}`}
         </Button>
         <Button type="button" variant="secondary" onClick={() => void handleRepublish()} disabled={!site || busy !== null}>
           {busy === "republish" ? "Republishing..." : "Republish preview"}

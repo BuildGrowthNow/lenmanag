@@ -3897,6 +3897,34 @@ class SiteRepository:
         self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None
     ) -> None:
         settings = get_settings()
+
+        # Check if multi-variant generation is requested
+        variant_types = request.variantTypes if request else None
+        if variant_types:
+            # Use multi-variant generation task
+            if settings.celery_task_always_eager:
+                from app.core.tasks import _run_multi_variant_generation_async
+                try:
+                    await _run_multi_variant_generation_async(
+                        lead_id=site_id,
+                        job_id=job_id,
+                        generation_types=list(variant_types),
+                    )
+                except Exception:  # pragma: no cover - eager path logging
+                    logging.getLogger("lenquant.jobs").exception(
+                        "Inline multi-variant generation:%s:%s failed", site_id, job_id
+                    )
+                    raise
+                return
+
+            from app.core.tasks import run_multi_variant_generation_task
+
+            run_multi_variant_generation_task.delay(  # type: ignore[attr-defined]
+                lead_id=site_id, job_id=job_id, generation_types=list(variant_types)
+            )
+            return
+
+        # Default single-site generation
         if settings.celery_task_always_eager:
             try:
                 await self.run_generation_job(

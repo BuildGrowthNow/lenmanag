@@ -484,6 +484,7 @@ class SiteExportRequest(BaseModel):
 class SiteGenerateRequest(BaseModel):
     force: bool = False
     refinementPromptId: Optional[str] = None
+    variantTypes: Optional[list[VariantType]] = None
 
 
 class SiteOverrideCreateRequest(BaseModel):
