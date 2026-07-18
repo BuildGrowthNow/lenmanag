@@ -35,7 +35,17 @@ export default async function PreviewPage({ params }: PageProps) {
     notFound();
   }
 
-  // Check if this is a compiled bundle or legacy JSON structure
+  // Check for static HTML variant (html_v1, html_v2, html_v3)
+  const isStaticHtml = !!site.staticHtml;
+
+  if (isStaticHtml) {
+    // Render static HTML directly (no React runtime)
+    return (
+      <div dangerouslySetInnerHTML={{ __html: site.staticHtml }} />
+    );
+  }
+
+  // Check if this is a compiled Next.js bundle
   const isCompiledBundle = !!site.compiledBundleUrl;
 
   if (!isCompiledBundle) {
