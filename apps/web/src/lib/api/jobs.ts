@@ -6,7 +6,19 @@ export async function getJob(jobId: string): Promise<JobResponse | null> {
 }
 
 export async function getQueueHealth(): Promise<JobQueueHealthResponse> {
-  return request<JobQueueHealthResponse>("/api/jobs/health");
+  return safeRequest<JobQueueHealthResponse>("/api/jobs/health", {
+    totalJobs: 0,
+    queuedJobs: 0,
+    runningJobs: 0,
+    failedJobs: 0,
+    completedJobs: 0,
+    stalledJobs: 0,
+    backlogJobs: 0,
+    byType: {},
+    stalledItems: [],
+    failedItems: [],
+    updatedAt: new Date(0).toISOString(),
+  });
 }
 
 export async function retryJob(jobId: string, payload: JobRetryPayload = {}): Promise<JobResponse> {
