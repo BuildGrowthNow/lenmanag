@@ -214,6 +214,21 @@ Only emails in the allowlist or domains in the allowlist can authenticate. All u
 
 ### AI Agent Test Credentials
 
+**Two service accounts exist for Claude AI Agents and automated testing:**
+
+#### ops-agent (created 2026-07-20)
+
+| Field | Value |
+|-------|-------|
+| **Email** | `ops-agent@lenquant.internal` |
+| **Password** | `LQ$opsAgent2026!Internal#Only` |
+| **User ID** | `6a5e6f1750e1773f8fc48d33` |
+| **Endpoint** | `POST /api/v1/users/login` |
+| **Verified** | Yes |
+| **Token Type** | JWT Bearer |
+
+#### ai-agent (original)
+
 **For Claude AI Agents and automated testing**, a dedicated user account exists in MongoDB:
 
 | Field | Value |

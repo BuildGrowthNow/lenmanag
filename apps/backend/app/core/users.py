@@ -15,6 +15,12 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _verification_token_expiry() -> datetime:
     settings = get_settings()
     return _now() + timedelta(hours=settings.verification_token_expiry_hours)
@@ -89,7 +95,7 @@ class UserRepository:
             return None
 
         expires_at = user.get("verification_token_expires_at")
-        if expires_at and expires_at < _now():
+        if expires_at and _as_utc(expires_at) < _now():
             return None
 
         await self.collection.update_one(
@@ -149,7 +155,7 @@ class UserRepository:
             return None
 
         expires_at = user.get("password_reset_token_expires_at")
-        if expires_at and expires_at < _now():
+        if expires_at and _as_utc(expires_at) < _now():
             return None
 
         hashed_password = bcrypt.hashpw(
