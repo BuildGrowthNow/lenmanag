@@ -1,26 +1,20 @@
 import logging
 
+import resend  # type: ignore[import-untyped]
+
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-def _get_resend_client():  # type: ignore[no-untyped-def]
-    from resend import Resend  # type: ignore[import-untyped]
-
-    if not settings.resend_api_key:
-        logger.warning("RESEND_API_KEY not configured, skipping email send")
-        return None
-    return Resend(api_key=settings.resend_api_key)
-
-
 async def send_verification_email(email: str, verification_token: str) -> bool:
     try:
-        resend = _get_resend_client()
-        if not resend:
+        if not settings.resend_api_key:
+            logger.warning("RESEND_API_KEY not configured, skipping email send")
             return False
 
+        resend.api_key = settings.resend_api_key  # type: ignore[attr-defined]
         frontend_url = settings.frontend_url.rstrip("/")
         verification_url = f"{frontend_url}/verify-email?token={verification_token}"
 
@@ -56,8 +50,8 @@ async def send_verification_email(email: str, verification_token: str) -> bool:
             "html": html_content,
         }
 
-        result = resend.emails.send(params)
-        logger.info(f"Verification email sent to {email}, id: {result.get('id')}")
+        result = resend.Emails.send(params)  # type: ignore[attr-defined]
+        logger.info(f"Verification email sent to {email}, id: {result.id}")
         return True
 
     except Exception as e:
@@ -67,10 +61,11 @@ async def send_verification_email(email: str, verification_token: str) -> bool:
 
 async def send_password_reset_email(email: str, reset_token: str) -> bool:
     try:
-        resend = _get_resend_client()
-        if not resend:
+        if not settings.resend_api_key:
+            logger.warning("RESEND_API_KEY not configured, skipping email send")
             return False
 
+        resend.api_key = settings.resend_api_key  # type: ignore[attr-defined]
         frontend_url = settings.frontend_url.rstrip("/")
         reset_url = f"{frontend_url}/reset-password?token={reset_token}"
 
@@ -110,8 +105,8 @@ async def send_password_reset_email(email: str, reset_token: str) -> bool:
             "html": html_content,
         }
 
-        result = resend.emails.send(params)
-        logger.info(f"Password reset email sent to {email}, id: {result.get('id')}")
+        result = resend.Emails.send(params)  # type: ignore[attr-defined]
+        logger.info(f"Password reset email sent to {email}, id: {result.id}")
         return True
 
     except Exception as e:
