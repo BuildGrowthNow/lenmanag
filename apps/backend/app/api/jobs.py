@@ -18,18 +18,19 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 @router.get("/health", response_model=ResponseEnvelope[JobQueueHealthResponse])
 async def queue_health(
-    _user_id: CurrentUserId, http_request: Request
+    user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[JobQueueHealthResponse]:
     return success_response(
-        await lead_repository.get_queue_health(), meta=response_meta(http_request)
+        await lead_repository.get_queue_health(user_id=user_id),
+        meta=response_meta(http_request),
     )
 
 
 @router.get("/{job_id}", response_model=ResponseEnvelope[JobResponse])
 async def get_job(
-    job_id: str, _user_id: CurrentUserId, http_request: Request
+    job_id: str, user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[JobResponse]:
-    job = await lead_repository.get_job(job_id)
+    job = await lead_repository.get_job(job_id, user_id=user_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
     job_doc = await lead_repository.get_job_doc(job_id)
@@ -46,10 +47,13 @@ async def get_job(
 @router.post("/{job_id}/retry", response_model=ResponseEnvelope[JobResponse])
 async def retry_job(
     job_id: str,
-    _user_id: CurrentUserId,
+    user_id: CurrentUserId,
     http_request: Request,
     payload: JobRetryRequest | None = None,
 ) -> ResponseEnvelope[JobResponse]:
+    owned = await lead_repository.get_job(job_id, user_id=user_id)
+    if owned is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
     retry = await lead_repository.retry_job(job_id, request=payload)
     if retry is None:
         raise HTTPException(status_code=404, detail="Job not found.")

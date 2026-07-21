@@ -144,7 +144,7 @@ class MessageRepository:
         return [dict(doc) for doc in docs]
 
     async def create_draft(
-        self, lead_id: str, request: MessageDraftCreateRequest
+        self, lead_id: str, request: MessageDraftCreateRequest, user_id: str = ""
     ) -> MessageDraft | None:
         await self._maybe_ensure_indexes()
         lead = await lead_repository.get_lead(lead_id)
@@ -188,6 +188,7 @@ class MessageRepository:
         now = _now()
         draft = MessageDraft(
             id=uuid4().hex,
+            user_id=user_id,
             leadId=lead_id,
             briefId=brief.id,
             siteId=site.id if site else None,

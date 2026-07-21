@@ -33,7 +33,7 @@ async def create_message_draft(
     http_request: Request,
     user_id: CurrentUserId,
 ) -> ResponseEnvelope[MessageDraft]:
-    draft = await message_repository.create_draft(lead_id, payload)
+    draft = await message_repository.create_draft(lead_id, payload, user_id=user_id)
     if draft is None:
         raise HTTPException(
             status_code=409, detail="Approve the brief before creating a message draft."

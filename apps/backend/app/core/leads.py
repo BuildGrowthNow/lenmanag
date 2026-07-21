@@ -588,7 +588,11 @@ class LeadRepository:
             return response
 
         existing = await database["leads"].find_one(
-            {"normalizedDomain": normalized_domain, "status": {"$ne": "archived"}}
+            {
+                "normalizedDomain": normalized_domain,
+                "status": {"$ne": "archived"},
+                "user_id": user_id,
+            }
         )
         if existing:
             merged = _merge_lead_doc(existing, incoming)
@@ -989,7 +993,12 @@ class LeadRepository:
         return None
 
     async def import_csv(
-        self, *, file_name: str | None, csv_bytes: bytes, user_id: str, pipeline_mode: str = "auto"
+        self,
+        *,
+        file_name: str | None,
+        csv_bytes: bytes,
+        user_id: str,
+        pipeline_mode: str = "auto",
     ) -> LeadImportResponse:
         await self._maybe_ensure_indexes()
 
@@ -1054,7 +1063,10 @@ class LeadRepository:
         for index, row in enumerate(rows, start=1):
             try:
                 lead, created, merged, message = await self._import_row(
-                    row, source_ref=f"{file_name or 'csv'}:row:{index}", user_id=user_id, pipeline_mode=pipeline_mode
+                    row,
+                    source_ref=f"{file_name or 'csv'}:row:{index}",
+                    user_id=user_id,
+                    pipeline_mode=pipeline_mode,
                 )
                 if lead:
                     lead_ids.append(lead["id"])
@@ -1132,7 +1144,12 @@ class LeadRepository:
         return response
 
     async def _import_row(
-        self, row: dict[str, str], *, source_ref: str | None, user_id: str, pipeline_mode: str = "auto"
+        self,
+        row: dict[str, str],
+        *,
+        source_ref: str | None,
+        user_id: str,
+        pipeline_mode: str = "auto",
     ) -> tuple[dict[str, Any] | None, bool, bool, str]:
         company_name = self._read_column(row, ["companyName", "company", "name"])
         website_value = self._read_column(
@@ -1173,7 +1190,11 @@ class LeadRepository:
             return response
 
         existing = await database["leads"].find_one(
-            {"normalizedDomain": normalized_domain, "status": {"$ne": "archived"}}
+            {
+                "normalizedDomain": normalized_domain,
+                "status": {"$ne": "archived"},
+                "user_id": user_id,
+            }
         )
         if existing:
             merged = _merge_lead_doc(existing, incoming)
@@ -1462,6 +1483,20 @@ class LeadRepository:
                 jobs = [latest_job] + jobs
         return _lead_doc_to_detail(doc, jobs)
 
+    async def get_lead_ids_for_user(self, user_id: str) -> list[str]:
+        await self._maybe_ensure_indexes()
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                return [
+                    doc["id"]
+                    for doc in self._memory.values()
+                    if doc.get("user_id") == user_id
+                ]
+        cursor = database["leads"].find({"user_id": user_id}, {"id": 1})
+        docs = await cursor.to_list(length=None)
+        return [str(doc["id"]) for doc in docs if doc.get("id")]
+
     def _jobs_for_lead_memory(self, lead_id: str) -> list[dict[str, Any]]:
         jobs = [job for job in self._jobs.values() if lead_id in job.get("leadIds", [])]
         jobs.sort(key=lambda item: item.get("updatedAt", _now()), reverse=True)
@@ -1715,7 +1750,9 @@ class LeadRepository:
                     },
                 )
 
-    async def get_job(self, job_id: str) -> JobSummary | None:
+    async def get_job(
+        self, job_id: str, user_id: str | None = None
+    ) -> JobSummary | None:
         await self._maybe_ensure_indexes()
         database = get_database()
         if database is None:
@@ -1723,7 +1760,20 @@ class LeadRepository:
                 job = self._jobs.get(job_id)
                 return _job_doc_to_summary(job) if job else None
         doc = await database["jobs"].find_one({"id": job_id})
-        return _job_doc_to_summary(doc) if doc else None
+        if doc is None:
+            return None
+        if user_id:
+            lead_ids = list(doc.get("leadIds", []))
+            if lead_id := doc.get("leadId"):
+                if lead_id not in lead_ids:
+                    lead_ids.append(lead_id)
+            if lead_ids:
+                owned_count = await database["leads"].count_documents(
+                    {"id": {"$in": lead_ids}, "user_id": user_id}
+                )
+                if owned_count == 0:
+                    return None
+        return _job_doc_to_summary(doc)
 
     async def get_job_doc(self, job_id: str) -> dict[str, Any] | None:
         database = get_database()
@@ -1792,14 +1842,23 @@ class LeadRepository:
         )
         return await self.get_job(job.id)
 
-    async def get_queue_health(self) -> JobQueueHealthResponse:
+    async def get_queue_health(
+        self, user_id: str | None = None
+    ) -> JobQueueHealthResponse:
         await self._maybe_ensure_indexes()
         database = get_database()
         if database is None:
             async with self._memory_lock:
                 docs = list(self._jobs.values())
         else:
-            cursor = database["jobs"].find({}).sort("updatedAt", -1).limit(250)
+            if user_id:
+                lead_ids = await self.get_lead_ids_for_user(user_id)
+                query: dict[str, Any] = (
+                    {"leadId": {"$in": lead_ids}} if lead_ids else {"leadId": None}
+                )
+            else:
+                query = {}
+            cursor = database["jobs"].find(query).sort("updatedAt", -1).limit(250)
             docs = await cursor.to_list(length=250)
 
         total = len(docs)
@@ -2013,21 +2072,28 @@ class LeadRepository:
             updatedAt=now,
         )
 
-    async def get_extraction(self, lead_id: str) -> ExtractionSnapshot | None:
+    async def get_extraction(
+        self, lead_id: str, user_id: str | None = None
+    ) -> ExtractionSnapshot | None:
         await self._maybe_ensure_indexes()
         doc = await self._latest_extraction_doc(lead_id)
         if doc is None:
-            lead = await self.get_lead(lead_id)
+            lead = await self.get_lead(lead_id, user_id=user_id)
             if lead is None:
                 return None
             return self._empty_extraction_snapshot(lead)
+        lead = await self.get_lead(lead_id, user_id=user_id)
+        if lead is None:
+            return None
         return self._extraction_doc_to_snapshot(doc)
 
-    async def list_pages(self, lead_id: str) -> PageInventoryResponse | None:
+    async def list_pages(
+        self, lead_id: str, user_id: str | None = None
+    ) -> PageInventoryResponse | None:
         await self._maybe_ensure_indexes()
         doc = await self._latest_extraction_doc(lead_id)
         if doc is None:
-            lead = await self.get_lead(lead_id)
+            lead = await self.get_lead(lead_id, user_id=user_id)
             if lead is None:
                 return None
             return PageInventoryResponse(
@@ -2043,6 +2109,9 @@ class LeadRepository:
                 errors=[],
                 updatedAt=lead.updatedAt,
             )
+        lead = await self.get_lead(lead_id, user_id=user_id)
+        if lead is None:
+            return None
         return PageInventoryResponse(
             leadId=str(doc["leadId"]),
             extractionId=str(doc["id"]),
@@ -2059,8 +2128,13 @@ class LeadRepository:
 
     # Analysis Methods
 
-    async def get_analysis(self, lead_id: str) -> ExtractionAnalysisResponse | None:
+    async def get_analysis(
+        self, lead_id: str, user_id: str | None = None
+    ) -> ExtractionAnalysisResponse | None:
         """Get the latest analysis for a lead's extraction."""
+        lead = await self.get_lead(lead_id, user_id=user_id)
+        if lead is None:
+            return None
         doc = await self._latest_extraction_doc(lead_id)
         if doc is None:
             return None
@@ -2076,11 +2150,11 @@ class LeadRepository:
         )
 
     async def start_analysis_refresh(
-        self, lead_id: str
+        self, lead_id: str, user_id: str | None = None
     ) -> ExtractionJobResponse | None:
         """Re-run LLM analysis on existing extraction without re-crawling."""
         await self._maybe_ensure_indexes()
-        lead = await self.get_lead(lead_id)
+        lead = await self.get_lead(lead_id, user_id=user_id)
         if lead is None:
             return None
 
@@ -2247,12 +2321,14 @@ class LeadRepository:
             return None
         return MasterBrief.model_validate(doc)
 
-    async def create_master_brief(self, lead_id: str) -> MasterBrief | None:
+    async def create_master_brief(
+        self, lead_id: str, user_id: str | None = None
+    ) -> MasterBrief | None:
         """Generate a new AI master brief from extraction data."""
         from app.core.master_brief import generate_master_brief
 
         await self._maybe_ensure_indexes()
-        lead = await self.get_lead(lead_id)
+        lead = await self.get_lead(lead_id, user_id=user_id)
         if lead is None:
             return None
 
@@ -2287,13 +2363,13 @@ class LeadRepository:
         return master_brief
 
     async def refine_master_brief(
-        self, lead_id: str, feedback: str
+        self, lead_id: str, feedback: str, user_id: str | None = None
     ) -> MasterBrief | None:
         """Refine master brief with user feedback."""
         from app.core.master_brief import generate_master_brief
 
         await self._maybe_ensure_indexes()
-        lead = await self.get_lead(lead_id)
+        lead = await self.get_lead(lead_id, user_id=user_id)
         if lead is None:
             return None
 
@@ -2334,10 +2410,17 @@ class LeadRepository:
         return master_brief
 
     async def approve_master_brief(
-        self, lead_id: str, approved_by: str, notes: str | None = None
+        self,
+        lead_id: str,
+        approved_by: str,
+        notes: str | None = None,
+        user_id: str | None = None,
     ) -> MasterBrief | None:
         """Approve the master brief to trigger site generation."""
         await self._maybe_ensure_indexes()
+        lead = await self.get_lead(lead_id, user_id=user_id)
+        if lead is None:
+            raise ValueError("no_existing_brief")
         brief = await self.get_master_brief(lead_id)
         if brief is None:
             raise ValueError("no_existing_brief")
@@ -2401,10 +2484,10 @@ class LeadRepository:
         return MasterBrief.model_validate(doc)
 
     async def start_extraction(
-        self, lead_id: str, *, refresh: bool = False
+        self, lead_id: str, *, refresh: bool = False, user_id: str | None = None
     ) -> ExtractionJobResponse | None:
         await self._maybe_ensure_indexes()
-        lead = await self.get_lead(lead_id)
+        lead = await self.get_lead(lead_id, user_id=user_id)
         if lead is None:
             return None
 

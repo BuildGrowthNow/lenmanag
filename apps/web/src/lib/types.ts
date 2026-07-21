@@ -652,6 +652,7 @@ export type SiteVariant = {
 export type GeneratedSite = {
   id: string;
   leadId: string;
+  userId: string;
   generationJobId: string | null;
   briefId: string;
   briefVersion: number;

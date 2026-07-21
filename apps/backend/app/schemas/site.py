@@ -353,6 +353,7 @@ class GeneratedSiteVersion(BaseModel):
 class GeneratedSite(BaseModel):
     id: str
     leadId: str
+    userId: str = ""
     generationJobId: Optional[str] = None
     briefId: str
     briefVersion: int

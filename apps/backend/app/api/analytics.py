@@ -27,10 +27,11 @@ async def ingest_event(
 
 @router.get("/dashboard", response_model=ResponseEnvelope[AnalyticsDashboardResponse])
 async def dashboard(
-    request: Request, _user_id: CurrentUserId
+    request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[AnalyticsDashboardResponse]:
     return success_response(
-        await analytics_repository.get_dashboard(), meta=response_meta(request)
+        await analytics_repository.get_dashboard(user_id=user_id),
+        meta=response_meta(request),
     )
 
 

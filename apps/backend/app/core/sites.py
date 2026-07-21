@@ -2328,11 +2328,13 @@ class SiteRepository:
             items=[ThemeVariant.model_validate(theme) for theme in THEME_LIBRARY]
         )
 
-    async def get_diversity_report(self, limit: int = 100) -> dict[str, Any]:
+    async def get_diversity_report(
+        self, limit: int = 100, user_id: str | None = None
+    ) -> dict[str, Any]:
         """
         Returns batch-level diversity metrics for the last N sites.
         """
-        sites = await self._list_sites(limit=limit, offset=0)
+        sites = await self._list_sites(limit=limit, offset=0, user_id=user_id)
 
         # Compute theme distribution
         theme_counts = Counter(site.themeKey for site in sites)
@@ -2655,23 +2657,28 @@ class SiteRepository:
 
         return [RefinementPromptRecord.model_validate(item) for item in history]
 
-    async def get_site(self, site_id: str) -> GeneratedSite | None:
+    async def get_site(
+        self, site_id: str, user_id: str | None = None
+    ) -> GeneratedSite | None:
         await self._maybe_ensure_indexes()
         database = get_database()
+        query: dict[str, Any] = {"id": site_id}
+        if user_id:
+            query["userId"] = user_id
         if database is None:
             async with self._memory_lock:
                 doc = self._sites.get(site_id)
                 if doc:
+                    if user_id and doc.get("userId") != user_id:
+                        return None
                     site = _site_doc_to_current(doc)
-                    # Populate override diffs
                     diffs = self.get_override_diff(site_id)
                     site.overrideDiffs = diffs
                     return site
                 return None
-        doc = await database["generated_sites"].find_one({"id": site_id})
+        doc = await database["generated_sites"].find_one(query)
         if doc:
             site = _site_doc_to_current(doc)
-            # Populate override diffs
             diffs = self.get_override_diff(site_id)
             site.overrideDiffs = diffs
             return site
@@ -2691,20 +2698,26 @@ class SiteRepository:
             doc = await database["generated_sites"].find_one({"id": slug})
         return _site_doc_to_current(doc) if doc else None
 
-    async def list_sites_by_lead(self, lead_id: str) -> list[GeneratedSite]:
+    async def list_sites_by_lead(
+        self, lead_id: str, user_id: str | None = None
+    ) -> list[GeneratedSite]:
         """Get all site variants for a lead."""
         await self._maybe_ensure_indexes()
         database = get_database()
+        query: dict[str, Any] = {"leadId": lead_id}
+        if user_id:
+            query["userId"] = user_id
         if database is None:
             async with self._memory_lock:
                 sites = [
                     _site_doc_to_current(doc)
                     for doc in self._sites.values()
                     if doc.get("leadId") == lead_id
+                    and (not user_id or doc.get("userId") == user_id)
                 ]
                 return sorted(sites, key=lambda s: s.variantPosition)
 
-        cursor = database["generated_sites"].find({"leadId": lead_id})
+        cursor = database["generated_sites"].find(query)
         docs = await cursor.to_list(length=100)
         sites = [_site_doc_to_current(doc) for doc in docs]
         return sorted(sites, key=lambda s: s.variantPosition)
@@ -2818,6 +2831,9 @@ class SiteRepository:
                 html_result=html_result,
                 extraction=extraction,
             )
+
+        # Stamp the owning user before saving
+        site.userId = user_id
 
         # Save site to database
         if database is not None:
@@ -3088,12 +3104,12 @@ class SiteRepository:
         )
 
     async def list_review_queue(
-        self, *, limit: int = 25, offset: int = 0
+        self, *, limit: int = 25, offset: int = 0, user_id: str | None = None
     ) -> SiteReviewQueueResponse:
         await self._maybe_ensure_indexes()
-        sites = await self._list_sites(limit=limit, offset=offset)
+        sites = await self._list_sites(limit=limit, offset=offset, user_id=user_id)
         items = [_queue_item_from_site(site) for site in sites]
-        total = await self._count_sites()
+        total = await self._count_sites(user_id=user_id)
 
         theme_counts = Counter(item.themeKey for item in items)
         palette_counts = Counter(item.paletteMode for item in items)
@@ -4378,22 +4394,31 @@ class SiteRepository:
         }
 
     async def list_sites(
-        self, *, limit: int = 25, offset: int = 0
+        self, *, limit: int = 25, offset: int = 0, user_id: str | None = None
     ) -> list[GeneratedSite]:
-        return await self._list_sites(limit=limit, offset=offset)
+        return await self._list_sites(limit=limit, offset=offset, user_id=user_id)
 
-    async def _list_sites(self, *, limit: int, offset: int) -> list[GeneratedSite]:
+    async def _list_sites(
+        self, *, limit: int, offset: int, user_id: str | None = None
+    ) -> list[GeneratedSite]:
         database = get_database()
+        query: dict[str, Any] = {}
+        if user_id:
+            query["userId"] = user_id
         if database is None:
             async with self._memory_lock:
-                docs = list(self._sites.values())
+                docs = [
+                    doc
+                    for doc in self._sites.values()
+                    if not user_id or doc.get("userId") == user_id
+                ]
                 docs.sort(key=lambda item: item.get("updatedAt", _now()), reverse=True)
                 return [
                     _site_doc_to_current(doc) for doc in docs[offset : offset + limit]
                 ]
         cursor = (
             database["generated_sites"]
-            .find({})
+            .find(query)
             .sort("updatedAt", -1)
             .skip(offset)
             .limit(limit)
@@ -4401,12 +4426,21 @@ class SiteRepository:
         docs = await cursor.to_list(length=limit)
         return [_site_doc_to_current(doc) for doc in docs]
 
-    async def _count_sites(self) -> int:
+    async def _count_sites(self, user_id: str | None = None) -> int:
         database = get_database()
+        query: dict[str, Any] = {}
+        if user_id:
+            query["userId"] = user_id
         if database is None:
             async with self._memory_lock:
+                if user_id:
+                    return sum(
+                        1
+                        for doc in self._sites.values()
+                        if doc.get("userId") == user_id
+                    )
                 return len(self._sites)
-        return await database["generated_sites"].count_documents({})
+        return await database["generated_sites"].count_documents(query)
 
     async def _site_overrides(self, site_id: str) -> list[dict[str, Any]]:
         database = get_database()

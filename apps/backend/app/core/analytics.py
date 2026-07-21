@@ -116,11 +116,24 @@ class AnalyticsRepository:
             return
         await database["analytics_events"].delete_many({"createdAt": {"$lt": cutoff}})
 
-    async def _events(self) -> list[dict[str, Any]]:
+    async def _events(self, user_id: str | None = None) -> list[dict[str, Any]]:
         database = get_database()
+        query: dict[str, Any] = {}
+        if user_id:
+            from app.core.leads import lead_repository
+
+            lead_ids = await lead_repository.get_lead_ids_for_user(user_id)
+            if not lead_ids:
+                return []
+            query["leadId"] = {"$in": lead_ids}
         if database is None:
+            if user_id:
+                lead_ids_set = set(query.get("leadId", {}).get("$in", []))
+                return [
+                    e for e in self._memory if str(e.get("leadId", "")) in lead_ids_set
+                ]
             return list(self._memory)
-        cursor = database["analytics_events"].find({}).sort("createdAt", -1)
+        cursor = database["analytics_events"].find(query).sort("createdAt", -1)
         docs = await cursor.to_list(length=None)
         return [dict(doc) for doc in docs]
 
@@ -160,8 +173,10 @@ class AnalyticsRepository:
             if value
         ]
 
-    async def get_dashboard(self) -> AnalyticsDashboardResponse:
-        events = await self._events()
+    async def get_dashboard(
+        self, user_id: str | None = None
+    ) -> AnalyticsDashboardResponse:
+        events = await self._events(user_id=user_id)
         total_events = len(events)
         total_page_views = sum(
             1 for event in events if event.get("eventType") == "page_view"
@@ -243,14 +258,16 @@ class AnalyticsRepository:
         )
         return AnalyticsDashboardResponse(
             summary=summary,
-            siteMetrics=await self._site_metrics(),
-            leadMetrics=await self._lead_metrics(),
-            variantMetrics=await self._variant_metrics(),
-            messageMetrics=await self._message_metrics(),
+            siteMetrics=await self._site_metrics(user_id=user_id),
+            leadMetrics=await self._lead_metrics(user_id=user_id),
+            variantMetrics=await self._variant_metrics(user_id=user_id),
+            messageMetrics=await self._message_metrics(user_id=user_id),
         )
 
-    async def _site_metrics(self) -> list[AnalyticsSiteMetrics]:
-        events = await self._events()
+    async def _site_metrics(
+        self, user_id: str | None = None
+    ) -> list[AnalyticsSiteMetrics]:
+        events = await self._events(user_id=user_id)
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for event in events:
             site_id = event.get("siteId")
@@ -353,8 +370,10 @@ class AnalyticsRepository:
             )
         return results
 
-    async def _lead_metrics(self) -> list[AnalyticsLeadMetrics]:
-        events = await self._events()
+    async def _lead_metrics(
+        self, user_id: str | None = None
+    ) -> list[AnalyticsLeadMetrics]:
+        events = await self._events(user_id=user_id)
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for event in events:
             lead_id = event.get("leadId")
@@ -443,8 +462,10 @@ class AnalyticsRepository:
             )
         return results
 
-    async def _variant_metrics(self) -> list[AnalyticsVariantMetrics]:
-        events = await self._events()
+    async def _variant_metrics(
+        self, user_id: str | None = None
+    ) -> list[AnalyticsVariantMetrics]:
+        events = await self._events(user_id=user_id)
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for event in events:
             variant_key = event.get("variantKey")
@@ -509,8 +530,10 @@ class AnalyticsRepository:
             )
         return results
 
-    async def _message_metrics(self) -> list[AnalyticsMessageMetrics]:
-        events = await self._events()
+    async def _message_metrics(
+        self, user_id: str | None = None
+    ) -> list[AnalyticsMessageMetrics]:
+        events = await self._events(user_id=user_id)
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for event in events:
             message_key = self._message_key(event)

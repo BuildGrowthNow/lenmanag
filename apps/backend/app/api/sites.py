@@ -61,14 +61,16 @@ async def list_themes(
 @router.get("", response_model=ResponseEnvelope[list[GeneratedSite]])
 async def list_sites(
     request: Request,
-    _user_id: CurrentUserId,
+    user_id: CurrentUserId,
     limit: int = 25,
     offset: int = 0,
 ) -> ResponseEnvelope[list[GeneratedSite]]:
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
         success_response(
-            await site_repository.list_sites(limit=limit, offset=offset),
+            await site_repository.list_sites(
+                limit=limit, offset=offset, user_id=user_id
+            ),
             meta=response_meta(request),
         ),
     )
@@ -77,12 +79,14 @@ async def list_sites(
 @router.get("/review-queue", response_model=ResponseEnvelope[SiteReviewQueueResponse])
 async def review_queue(
     request: Request,
-    _user_id: CurrentUserId,
+    user_id: CurrentUserId,
     limit: int = 25,
     offset: int = 0,
 ) -> ResponseEnvelope[SiteReviewQueueResponse]:
     return success_response(
-        await site_repository.list_review_queue(limit=limit, offset=offset),
+        await site_repository.list_review_queue(
+            limit=limit, offset=offset, user_id=user_id
+        ),
         meta=response_meta(request),
     )
 
@@ -90,11 +94,11 @@ async def review_queue(
 @router.get("/diversity-report", response_model=ResponseEnvelope[dict[str, Any]])
 async def diversity_report(
     request: Request,
-    _user_id: CurrentUserId,
+    user_id: CurrentUserId,
     limit: int = 100,
 ) -> ResponseEnvelope[dict[str, Any]]:
     return success_response(
-        await site_repository.get_diversity_report(limit=limit),
+        await site_repository.get_diversity_report(limit=limit, user_id=user_id),
         meta=response_meta(request),
     )
 
@@ -103,10 +107,10 @@ async def diversity_report(
 async def list_variants_for_lead(
     lead_id: str,
     request: Request,
-    _user_id: CurrentUserId,
+    user_id: CurrentUserId,
 ) -> ResponseEnvelope[list[GeneratedSite]]:
     """Get all site variants for a lead."""
-    sites = await site_repository.list_sites_by_lead(lead_id)
+    sites = await site_repository.list_sites_by_lead(lead_id, user_id=user_id)
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
         success_response(sites, meta=response_meta(request)),
@@ -115,9 +119,9 @@ async def list_variants_for_lead(
 
 @router.get("/{site_id}", response_model=ResponseEnvelope[GeneratedSite | None])
 async def get_site(
-    site_id: str, request: Request, _user_id: CurrentUserId
+    site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[GeneratedSite | None]:
-    site = await site_repository.get_site(site_id)
+    site = await site_repository.get_site(site_id, user_id=user_id)
     return success_response(site, meta=response_meta(request))
 
 
@@ -252,7 +256,7 @@ async def regenerate_site_with_prompt(
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_message)
 
-    site = await site_repository.get_site(site_id)
+    site = await site_repository.get_site(site_id, user_id=user_id)
     if site is None:
         raise HTTPException(status_code=404, detail="Site not found.")
 
