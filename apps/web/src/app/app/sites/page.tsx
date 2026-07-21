@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink, RefreshCw, Search } from "lucide-react";
+import { ExternalLink, MoreHorizontal, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/state/empty-state";
@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { getSites } from "@/lib/api/sites";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { deleteSite, getSites } from "@/lib/api/sites";
 import type { GeneratedSite, SiteReadinessStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -88,6 +89,7 @@ export default function SitesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [q, setQ] = useState("");
   const [refreshSeed, setRefreshSeed] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,6 +107,18 @@ export default function SitesPage() {
   useEffect(() => {
     void load();
   }, [load, refreshSeed]);
+
+  async function handleDelete(siteId: string) {
+    setDeletingId(siteId);
+    try {
+      await deleteSite(siteId);
+      setSites((prev) => prev.filter((s) => s.id !== siteId));
+    } catch {
+      // silently restore — the card stays, user can retry
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const counts: Counts = {
     all: sites.length,
@@ -245,10 +259,12 @@ export default function SitesPage() {
             const variantSuffix = site.variantLabel || site.variantType || null;
             const displayTitle = companyName + (variantSuffix ? ` · ${variantSuffix}` : "");
 
+            const isDeleting = deletingId === site.id;
+
             return (
-              <Card key={site.id} className="flex flex-col overflow-hidden">
-                {screenshotUrl ? (
-                  <div className="relative h-28 w-full border-b border-line">
+              <Card key={site.id} className={cn("flex flex-col overflow-hidden transition-opacity", isDeleting && "opacity-50 pointer-events-none")}>
+                <div className="relative h-28 w-full border-b border-line">
+                  {screenshotUrl ? (
                     <Image
                       src={screenshotUrl}
                       alt={`Preview of ${companyName}`}
@@ -256,14 +272,35 @@ export default function SitesPage() {
                       className="object-cover object-top"
                       unoptimized
                     />
+                  ) : (
+                    <Link href={previewPath} target="_blank" className="block h-full">
+                      <div className="flex h-full w-full items-center justify-center bg-panel-2 transition hover:bg-panel-1">
+                        <ExternalLink className="h-4 w-4 text-muted" />
+                      </div>
+                    </Link>
+                  )}
+                  {/* 3-dot menu */}
+                  <div className="absolute right-2 top-2">
+                    <Popover>
+                      <PopoverTrigger
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/50 text-white/80 backdrop-blur-sm transition hover:bg-black/70"
+                        aria-label="Site options"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </PopoverTrigger>
+                      <PopoverContent className="w-40 p-1" side="bottom" align="end">
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(site.id)}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-rose-300 transition hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                ) : (
-                  <Link href={previewPath} target="_blank" className="block">
-                    <div className="flex h-28 items-center justify-center border-b border-line bg-panel-2 transition hover:bg-panel-1">
-                      <ExternalLink className="h-4 w-4 text-muted" />
-                    </div>
-                  </Link>
-                )}
+                </div>
                 <CardContent className="flex flex-1 flex-col gap-3 p-4">
                   <div>
                     <div className="font-semibold text-text">{displayTitle}</div>

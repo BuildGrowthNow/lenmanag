@@ -2686,6 +2686,23 @@ class SiteRepository:
             return site
         return None
 
+    async def delete_site(self, site_id: str, user_id: str | None = None) -> bool:
+        await self._maybe_ensure_indexes()
+        database = get_database()
+        query: dict[str, Any] = {"id": site_id}
+        if user_id:
+            query["userId"] = user_id
+        if database is None:
+            async with self._memory_lock:
+                if site_id in self._sites:
+                    if user_id and self._sites[site_id].get("userId") != user_id:
+                        return False
+                    del self._sites[site_id]
+                    return True
+                return False
+        result = await database["generated_sites"].delete_one(query)
+        return result.deleted_count > 0
+
     async def get_site_by_slug(self, slug: str) -> GeneratedSite | None:
         await self._maybe_ensure_indexes()
         database = get_database()

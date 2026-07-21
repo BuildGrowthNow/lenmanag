@@ -41,6 +41,10 @@ export async function getSite(id: string): Promise<GeneratedSite | null> {
   return safeRequest<GeneratedSite | null>(`/api/sites/${id}`, null);
 }
 
+export async function deleteSite(id: string): Promise<void> {
+  await request<{ deleted: boolean }>(`/api/sites/${id}`, { method: "DELETE" });
+}
+
 export async function getSiteReviewQueue(params: { limit?: number; offset?: number } = {}): Promise<SiteReviewQueueResponse> {
   const searchParams = new URLSearchParams();
   if (typeof params.limit === "number") {

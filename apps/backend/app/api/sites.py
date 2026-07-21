@@ -125,6 +125,17 @@ async def get_site(
     return success_response(site, meta=response_meta(request))
 
 
+@router.delete("/{site_id}", response_model=ResponseEnvelope[dict[str, bool]])
+async def delete_site(
+    site_id: str, request: Request, user_id: CurrentUserId
+) -> ResponseEnvelope[dict[str, bool]]:
+    deleted = await site_repository.delete_site(site_id, user_id=user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Site not found.")
+    await write_audit_log(user_id, "site", site_id, "site_delete", {"siteId": site_id})
+    return success_response({"deleted": True}, meta=response_meta(request))
+
+
 @router.get(
     "/{site_id}/prompts",
     response_model=ResponseEnvelope[list[RefinementPromptRecord]],
