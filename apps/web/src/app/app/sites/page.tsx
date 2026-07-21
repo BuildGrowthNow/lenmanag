@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -240,17 +241,32 @@ export default function SitesPage() {
             const score = qualityScoreDisplay(site);
             const hasScreenshotQA = site.screenshotRefs && site.screenshotRefs.length > 0;
 
+            const screenshotUrl = site.screenshotRefs?.[0]?.url ?? null;
+            const variantSuffix = site.variantLabel || site.variantType || null;
+            const displayTitle = companyName + (variantSuffix ? ` · ${variantSuffix}` : "");
+
             return (
               <Card key={site.id} className="flex flex-col overflow-hidden">
-                {/* Thumbnail placeholder */}
-                <div className="flex h-28 items-center justify-center border-b border-line bg-panel-2">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted">
-                    Preview thumbnail
-                  </span>
-                </div>
+                {screenshotUrl ? (
+                  <div className="relative h-28 w-full border-b border-line">
+                    <Image
+                      src={screenshotUrl}
+                      alt={`Preview of ${companyName}`}
+                      fill
+                      className="object-cover object-top"
+                      unoptimized
+                    />
+                  </div>
+                ) : (
+                  <Link href={previewPath} target="_blank" className="block">
+                    <div className="flex h-28 items-center justify-center border-b border-line bg-panel-2 transition hover:bg-panel-1">
+                      <ExternalLink className="h-4 w-4 text-muted" />
+                    </div>
+                  </Link>
+                )}
                 <CardContent className="flex flex-1 flex-col gap-3 p-4">
                   <div>
-                    <div className="font-semibold text-text">{companyName}</div>
+                    <div className="font-semibold text-text">{displayTitle}</div>
                     {domain ? <div className="mt-0.5 text-xs text-muted">{domain}</div> : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
