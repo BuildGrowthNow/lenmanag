@@ -814,6 +814,21 @@ export type SiteReviewQueueItem = {
   missingRequirements: string[];
   reviewRubric: SiteQualityCheck[];
   screenshotCount: number;
+  screenshotRefs: SiteScreenshotMetadata[];
+  sourceAttribution: {
+    leadId: string;
+    sourceType: string | null;
+    sourceRef: string | null;
+    companyName: string | null;
+    websiteUrl: string | null;
+    normalizedDomain: string | null;
+    extractionId: string | null;
+    extractionVersion: number | null;
+    briefId: string | null;
+    briefVersion: number | null;
+    themeKey: string | null;
+    paletteMode: PaletteMode | null;
+  } | null;
   updatedAt: string;
 };
 

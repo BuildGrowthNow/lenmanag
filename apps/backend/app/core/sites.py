@@ -2242,6 +2242,8 @@ def _queue_item_from_site(site: GeneratedSite) -> SiteReviewQueueItem:
         missingRequirements=list(site.missingRequirements),
         reviewRubric=list(site.reviewRubric),
         screenshotCount=len(site.screenshotRefs),
+        screenshotRefs=list(site.screenshotRefs),
+        sourceAttribution=site.sourceAttribution,
         updatedAt=site.updatedAt,
     )
 

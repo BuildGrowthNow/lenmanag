@@ -200,6 +200,8 @@ class SiteReviewQueueItem(BaseModel):
     missingRequirements: list[str] = Field(default_factory=list)
     reviewRubric: list[SiteQualityCheck] = Field(default_factory=list)
     screenshotCount: int = 0
+    screenshotRefs: list[SiteScreenshotMetadata] = Field(default_factory=list)
+    sourceAttribution: Optional[SiteSourceAttribution] = None
     updatedAt: datetime
 
 
