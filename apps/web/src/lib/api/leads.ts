@@ -16,6 +16,7 @@ import type {
 type LeadListQuery = {
   q?: string;
   status?: string;
+  stage?: string;
   limit?: number;
   offset?: number;
 };
@@ -24,6 +25,7 @@ function buildQuery(query: LeadListQuery = {}) {
   const params = new URLSearchParams();
   if (query.q) params.set("q", query.q);
   if (query.status) params.set("status", query.status);
+  if (query.stage) params.set("stage", query.stage);
   if (typeof query.limit === "number") params.set("limit", String(query.limit));
   if (typeof query.offset === "number") params.set("offset", String(query.offset));
   const suffix = params.toString();
@@ -100,9 +102,10 @@ export async function archiveLead(id: string): Promise<LeadDetail> {
   return request(`/api/leads/${id}`, { method: "DELETE" });
 }
 
-export async function importLeads(file: File): Promise<LeadImportResponse> {
+export async function importLeads(file: File, mode?: string): Promise<LeadImportResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  if (mode) formData.append("mode", mode);
   return request("/api/leads/import", { method: "POST", body: formData });
 }
 

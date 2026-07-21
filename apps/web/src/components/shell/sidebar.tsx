@@ -119,9 +119,6 @@ export function Sidebar() {
           defaultOpen={false}
         />
       </nav>
-      <div className="mt-auto rounded-2xl border border-line bg-shell-radial p-4 text-xs leading-5 text-muted">
-        Source of truth lives in lead, brief, generated spec, overrides, and export metadata. Rendered HTML stays derivative.
-      </div>
     </aside>
   );
 }

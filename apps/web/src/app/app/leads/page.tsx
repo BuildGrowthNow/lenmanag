@@ -336,7 +336,7 @@ function ImportModal({ open, onClose, onImported }: ImportModalProps) {
     setSaving(true);
     setError(null);
     try {
-      const res = await importLeads(file);
+      const res = await importLeads(file, mode);
       setResult(res);
       onImported();
     } catch (err) {
@@ -514,10 +514,9 @@ export default function LeadsPage() {
       setError(null);
       try {
         const offset = (page - 1) * PAGE_SIZE;
-        // Map stageFilter to status for backend — pipeline stage filtering happens client-side
-        // for now; backend status filter still works for archived/needs_review
         const result = await listLeads({
           q: q || undefined,
+          stage: stageFilter !== "all" ? stageFilter : undefined,
           limit: PAGE_SIZE,
           offset,
         });
@@ -537,7 +536,7 @@ export default function LeadsPage() {
     }
     void load();
     return () => { active = false; };
-  }, [page, q, refreshSeed, syncUrl]);
+  }, [page, q, stageFilter, refreshSeed, syncUrl]);
 
   function refresh() {
     setRefreshSeed((s) => s + 1);
@@ -567,16 +566,12 @@ export default function LeadsPage() {
     }
   }
 
-  const allItems = data.items;
-  const items =
-    stageFilter === "all"
-      ? allItems
-      : allItems.filter((l) => l.pipelineStage === stageFilter);
+  const items = data.items;
 
   const summary = data.pipelineSummary;
   const totalPages = Math.max(1, Math.ceil(data.pagination.total / PAGE_SIZE));
   const startItem = data.pagination.total === 0 ? 0 : data.pagination.offset + 1;
-  const endItem = Math.min(data.pagination.offset + allItems.length, data.pagination.total);
+  const endItem = Math.min(data.pagination.offset + items.length, data.pagination.total);
 
   const summaryChips: Array<{ key: StageFilter; label: string; count: number; color: string }> = [
     { key: "extracting", label: "Processing", count: summary?.processing ?? 0, color: "blue" },
@@ -660,7 +655,7 @@ export default function LeadsPage() {
             >
               All
             </Button>
-            {(["needs_attention", "ready", "published"] as StageFilter[]).map((s) => (
+            {(["extracting", "needs_attention", "brief_ready", "qa", "ready", "published"] as StageFilter[]).map((s) => (
               <Button
                 key={s}
                 type="button"

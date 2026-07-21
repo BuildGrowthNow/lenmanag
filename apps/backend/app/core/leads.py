@@ -368,6 +368,7 @@ def _build_lead_doc(
     industry: str | None,
     notes: str | None,
     user_id: str,
+    pipeline_mode: str = "auto",
 ) -> dict[str, Any]:
     now = _now()
     lead_id = uuid4().hex
@@ -406,7 +407,7 @@ def _build_lead_doc(
         "latestExtractionId": None,
         "jobIds": [],
         "pipelineStage": "new",
-        "pipelineMode": "auto",
+        "pipelineMode": pipeline_mode,
         "pipelineStatusDetail": None,
         "pipelineEvents": [initial_event],
         "createdAt": now,
@@ -988,7 +989,7 @@ class LeadRepository:
         return None
 
     async def import_csv(
-        self, *, file_name: str | None, csv_bytes: bytes, user_id: str
+        self, *, file_name: str | None, csv_bytes: bytes, user_id: str, pipeline_mode: str = "auto"
     ) -> LeadImportResponse:
         await self._maybe_ensure_indexes()
 
@@ -1053,7 +1054,7 @@ class LeadRepository:
         for index, row in enumerate(rows, start=1):
             try:
                 lead, created, merged, message = await self._import_row(
-                    row, source_ref=f"{file_name or 'csv'}:row:{index}", user_id=user_id
+                    row, source_ref=f"{file_name or 'csv'}:row:{index}", user_id=user_id, pipeline_mode=pipeline_mode
                 )
                 if lead:
                     lead_ids.append(lead["id"])
@@ -1131,7 +1132,7 @@ class LeadRepository:
         return response
 
     async def _import_row(
-        self, row: dict[str, str], *, source_ref: str | None, user_id: str
+        self, row: dict[str, str], *, source_ref: str | None, user_id: str, pipeline_mode: str = "auto"
     ) -> tuple[dict[str, Any] | None, bool, bool, str]:
         company_name = self._read_column(row, ["companyName", "company", "name"])
         website_value = self._read_column(
@@ -1154,6 +1155,7 @@ class LeadRepository:
             industry=industry.strip() if industry else None,
             notes=notes.strip() if notes else None,
             user_id=user_id,
+            pipeline_mode=pipeline_mode,
         )
 
         database = get_database()
@@ -1249,6 +1251,7 @@ class LeadRepository:
         self,
         q: str | None = None,
         status: str | None = None,
+        stage: str | None = None,
         limit: int = 25,
         offset: int = 0,
         user_id: str | None = None,
@@ -1281,6 +1284,10 @@ class LeadRepository:
             query["user_id"] = user_id
         if status:
             query["status"] = status
+        else:
+            query["status"] = {"$ne": "archived"}
+        if stage:
+            query["pipelineStage"] = stage
         if q:
             pattern = {"$regex": re.escape(q), "$options": "i"}
             query["$or"] = [
@@ -1298,7 +1305,7 @@ class LeadRepository:
         docs = await cursor.to_list(length=limit)
         total = await database["leads"].count_documents(query)
         items = [await self._lead_list_item_for_doc(doc, database) for doc in docs]
-        summary = await self._compute_pipeline_summary_db(database)
+        summary = await self._compute_pipeline_summary_db(database, user_id=user_id)
         return LeadListResponse(
             items=items,
             pagination={"total": total, "limit": limit, "offset": offset},
@@ -1360,7 +1367,7 @@ class LeadRepository:
                 counts["published"] += 1
         return PipelineSummary(**counts)
 
-    async def _compute_pipeline_summary_db(self, database):  # type: ignore[return]
+    async def _compute_pipeline_summary_db(self, database, user_id: str | None = None):  # type: ignore[return]
         from app.schemas.lead import PipelineSummary
 
         pipeline_stages = [
@@ -1384,11 +1391,14 @@ class LeadRepository:
             "published": 0,
         }
         try:
+            match_filter: dict[str, Any] = {"status": {"$ne": "archived"}}
+            if user_id:
+                match_filter["user_id"] = user_id
             agg = (
                 await database["leads"]
                 .aggregate(
                     [
-                        {"$match": {"status": {"$ne": "archived"}}},
+                        {"$match": match_filter},
                         {"$group": {"_id": "$pipelineStage", "count": {"$sum": 1}}},
                     ]
                 )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from app.core.audit import write_audit_log
 from app.core.auth_dependencies import CurrentUserId
@@ -57,11 +57,13 @@ async def import_leads(
     user_id: CurrentUserId,
     http_request: Request,
     file: UploadFile = File(...),
+    mode: str | None = Form(None),
 ) -> ResponseEnvelope[LeadImportResponse]:
     raw = await file.read()
+    pipeline_mode = mode if mode in {"auto", "manual"} else "auto"
     try:
         result = await lead_repository.import_csv(
-            file_name=file.filename, csv_bytes=raw, user_id=user_id
+            file_name=file.filename, csv_bytes=raw, user_id=user_id, pipeline_mode=pipeline_mode
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -81,12 +83,13 @@ async def list_leads(
     http_request: Request,
     q: str | None = None,
     status: str | None = None,
+    stage: str | None = None,
     limit: int = 25,
     offset: int = 0,
 ) -> ResponseEnvelope[LeadListResponse]:
     try:
         result = await lead_repository.list_leads(
-            q=q, status=status, limit=limit, offset=offset, user_id=user_id
+            q=q, status=status, stage=stage, limit=limit, offset=offset, user_id=user_id
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
