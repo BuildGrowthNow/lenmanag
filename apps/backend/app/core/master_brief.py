@@ -94,7 +94,7 @@ async def generate_master_brief(
     response = await llm.generate_text(
         prompt=prompt,
         temperature=0.7,
-        max_tokens=8192,
+        max_tokens=16384,
     )
 
     # Parse structured response
