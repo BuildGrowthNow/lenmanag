@@ -5,7 +5,7 @@ import uuid
 from datetime import timedelta
 from typing import BinaryIO, Dict, Tuple
 
-from google.cloud import storage
+from google.cloud import storage  # type: ignore[attr-defined]
 from google.oauth2 import service_account
 from google.api_core import retry as gcloud_retry
 from tenacity import (

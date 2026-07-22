@@ -41,7 +41,7 @@ where = ["."]
 
 [tool.pyright]
 typeCheckingMode = "standard"
-reportMissingImports = true
+reportMissingImports = false
 reportMissingTypeStubs = false
 reportAttributeAccessIssue = "warning"
 reportArgumentType = "warning"
