@@ -6,39 +6,44 @@ import { useState } from "react";
 
 const FAQS = [
   {
-    question: "How can you deliver a website in just 3 days?",
+    question: "How can you deliver a landing page in just 3 days?",
     answer:
-      "Our proprietary platform combines AI-powered design with expert human oversight. We've streamlined our process to eliminate unnecessary meetings and delays while maintaining premium quality. Most traditional agencies spend weeks on revisions—we get it right the first time.",
+      "We've built a focused, hands-on process that cuts out unnecessary back-and-forth while keeping the quality high. Our team works closely on every project from start to finish. Most agencies spend weeks on revisions — we get it right the first time.",
   },
   {
-    question: "What if I need changes after delivery?",
+    question: "What does the $1,000 include exactly?",
     answer:
-      "Your package includes 7 days of free minor revisions after delivery. This covers text changes, image swaps, and small adjustments. For ongoing support beyond that, we offer a Maintenance Service ($500/month) that includes 3 updates per month plus a monthly strategy call.",
+      "Everything you need to launch: a complete custom landing page built for your brand, mobile-optimised, fast-loading, SEO-ready, and with a contact form set up. You own all the code and assets outright. The full scope is confirmed on our call before any payment.",
+  },
+  {
+    question: "What if I need more than one page?",
+    answer:
+      "No problem. We handle multi-page projects too. The $1,000 covers your core landing page — if you need additional pages or specific features, we scope that together on the call and agree on a price before we start.",
   },
   {
     question: "Do I own the website after purchase?",
     answer:
-      "Absolutely! You receive full ownership of all design files, code, and assets. Hosting is not included in the base package—you can add our Hosting Service ($200/month) for fast, reliable hosting with SSL and automatic backups, or deploy it to your own provider.",
+      "Yes, fully. You receive complete ownership of all design files, code, and assets. Hosting is separate — we can discuss options on the call, or you can deploy to your own provider.",
+  },
+  {
+    question: "What happens after delivery?",
+    answer:
+      "Your package includes 7 days of post-launch support. Anything beyond that — ongoing updates, hosting, maintenance — we can cover in your agreement. We'll go through all of this on the call.",
   },
   {
     question: "What happens if I'm not satisfied?",
     answer:
-      "We stand behind our work with a 100% satisfaction guarantee. If we don't deliver what we promised, you get a full refund within the first 7 days. No questions asked.",
+      "We stand behind our work with a 100% satisfaction guarantee. If we don't deliver what we agreed, you get a full refund within the first 7 days. No questions asked.",
   },
   {
-    question: "What are the add-ons and how does pricing work?",
+    question: "How does the process work after the call?",
     answer:
-      "The base package is $1,000 for a professional landing page delivered in 3 days. You can add extra pages ($50 each, up to 50), advanced features like API integrations or custom functionality ($300), monthly maintenance ($500/month), or hosting ($200/month). Pick only what you need—the configurator updates your total in real time.",
+      "We get on a free 30-minute call, align on your goals, scope, and any extras. Once we agree, you'll receive a summary and payment link. Work starts as soon as payment is confirmed, and you'll have your site live within 3 days.",
   },
   {
-    question: "Can you handle e-commerce or complex features?",
+    question: "What do I need to prepare for the call?",
     answer:
-      "Yes! Our Advanced Features add-on covers custom integrations, payment systems, booking tools, and more. For anything beyond that, contact us directly and we'll scope it out for your specific needs.",
-  },
-  {
-    question: "What do I need to provide to get started?",
-    answer:
-      "Just fill out our form with your business details, brand preferences, and project goals. If you have logos, images, or specific content, that's helpful—but not required. We can source professional assets if needed.",
+      "Just a rough idea of your business, who your customers are, and what you want the site to do. If you have a logo or brand colours, great — but not required. We'll guide you through everything.",
   },
 ];
 

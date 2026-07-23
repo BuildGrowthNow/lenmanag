@@ -91,7 +91,7 @@ export function AnimatedHeroHeadline() {
         transition={{ duration: 0.6, delay: 0.4 }}
         className="text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto"
       >
-        Premium, custom-crafted websites built by design experts.
+        Premium, custom-crafted websites built by our team of experts.
         <br className="hidden md:block" />
         <span className="text-yellow-500 font-semibold">
           &nbsp;No compromises. No delays. Just masterfully executed results.

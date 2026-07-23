@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Manrope } from "next/font/google";
 
 import "./globals.css";
+import { CursorGlow } from "@/components/cursor-glow";
 
 const heading = Space_Grotesk({
   subsets: ["latin"],
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${heading.variable} ${body.variable}`} suppressHydrationWarning>
       <body style={{ fontFamily: "var(--font-body)" }} suppressHydrationWarning>
+        <CursorGlow />
         {children}
       </body>
     </html>

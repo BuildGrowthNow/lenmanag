@@ -11,19 +11,20 @@ interface StatProps {
   suffix: string;
   label: string;
   delay?: number;
+  fixed?: boolean;
 }
 
-function AnimatedStat({ icon: Icon, value, suffix, label, delay = 0 }: StatProps) {
+function AnimatedStat({ icon: Icon, value, suffix, label, delay = 0, fixed = false }: StatProps) {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
   const supportsHover = useSupportsHover();
 
   useEffect(() => {
-    if (!isInView) return;
+    if (!isInView || fixed) return;
 
-    const duration = 2000; // 2 seconds
-    const steps = 20; // Reduced from 60 for better performance
+    const duration = 2000;
+    const steps = 20;
     const increment = value / steps;
     const stepDuration = duration / steps;
 
@@ -39,7 +40,9 @@ function AnimatedStat({ icon: Icon, value, suffix, label, delay = 0 }: StatProps
     }, stepDuration);
 
     return () => clearInterval(timer);
-  }, [isInView, value]);
+  }, [isInView, value, fixed]);
+
+  const display = fixed ? value : count;
 
   return (
     <motion.div
@@ -56,7 +59,7 @@ function AnimatedStat({ icon: Icon, value, suffix, label, delay = 0 }: StatProps
         </div>
       </div>
       <div className="text-2xl md:text-4xl font-bold text-white mb-1 tabular-nums">
-        {count}
+        {display}
         {suffix}
       </div>
       <div className="text-xs md:text-sm text-slate-400">{label}</div>
@@ -68,8 +71,8 @@ export function AnimatedStats() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
       <AnimatedStat icon={Clock} value={3} suffix=" Days" label="Delivery Time" delay={0} />
-      <AnimatedStat icon={Users} value={500} suffix="+" label="Happy Clients" delay={0.1} />
-      <AnimatedStat icon={Star} value={5} suffix=".0" label="Average Rating" delay={0.2} />
+      <AnimatedStat icon={Users} value={100} suffix="+" label="Happy Clients" delay={0.1} />
+      <AnimatedStat icon={Star} value={4.9} suffix="" label="Average Rating" delay={0.2} fixed />
       <AnimatedStat icon={TrendingUp} value={98} suffix="%" label="Satisfaction" delay={0.3} />
     </div>
   );
