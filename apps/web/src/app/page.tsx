@@ -30,6 +30,7 @@ import { FAQSection } from "@/components/landing/faq-section";
 import { PricingConfigurator } from "@/components/landing/pricing-configurator";
 import { RiskReversalBadge } from "@/components/landing/risk-reversal-badge";
 import { Footer } from "@/components/landing/footer";
+import { ScrollProgressBar } from "@/components/landing/scroll-progress-bar";
 
 export default function SitesLandingPage() {
   const [showSuccess, setShowSuccess] = useState(false);
@@ -111,6 +112,9 @@ export default function SitesLandingPage() {
           }),
         }}
       />
+
+      {/* Scroll Progress Bar */}
+      <ScrollProgressBar />
 
       {/* Conversion Features */}
       <RiskReversalBadge />
