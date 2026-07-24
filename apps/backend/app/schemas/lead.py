@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -79,7 +79,7 @@ class PipelineEvent(BaseModel):
     jobId: Optional[str] = None
     variantType: Optional[str] = None
     durationMs: Optional[int] = None
-    metadata: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime
 
 
