@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +9,8 @@ import { PageFrame } from "@/components/shell/page-frame";
 import { getAnalyticsDashboard } from "@/lib/api/dashboard";
 import { listLeads } from "@/lib/api/leads";
 import { getQueueHealth } from "@/lib/api/jobs";
+import { useAuth } from "@/lib/auth-context";
+import type { AnalyticsDashboardResponse, LeadListResponse, JobQueueHealthResponse } from "@/lib/types";
 
 function fmt(n: number): string {
   return n.toLocaleString();
@@ -29,12 +34,74 @@ const PIPELINE_STAGES = [
   { key: "published", label: "Published" },
 ] as const;
 
-export default async function DashboardPage() {
-  const [dashboard, leadsResponse, health] = await Promise.all([
-    getAnalyticsDashboard(),
-    listLeads({ limit: 50 }),
-    getQueueHealth(),
-  ]);
+const EMPTY_HEALTH: JobQueueHealthResponse = {
+  totalJobs: 0,
+  queuedJobs: 0,
+  runningJobs: 0,
+  failedJobs: 0,
+  completedJobs: 0,
+  stalledJobs: 0,
+  backlogJobs: 0,
+  byType: {},
+  stalledItems: [],
+  failedItems: [],
+  updatedAt: new Date(0).toISOString(),
+};
+
+const EMPTY_LEADS: LeadListResponse = {
+  items: [],
+  pagination: { total: 0, limit: 50, offset: 0 },
+  pipelineSummary: null,
+};
+
+const EMPTY_DASHBOARD: AnalyticsDashboardResponse = {
+  summary: {
+    totalEvents: 0,
+    totalPageViews: 0,
+    totalCTAClicks: 0,
+    totalOutboundClicks: 0,
+    totalCalendlyClicks: 0,
+    totalSectionExposures: 0,
+    totalFormInteractions: 0,
+    uniqueSessions: 0,
+    totalSites: 0,
+    totalLeads: 0,
+    eventsByType: {},
+    topPages: [],
+    topSources: [],
+    referrers: [],
+    messageAttribution: [],
+    recentErrors: [],
+    updatedAt: new Date(0).toISOString(),
+  },
+  siteMetrics: [],
+  leadMetrics: [],
+  variantMetrics: [],
+  messageMetrics: [],
+};
+
+export default function DashboardPage() {
+  const { user, loading: authLoading } = useAuth();
+  const [dashboard, setDashboard] = useState<AnalyticsDashboardResponse>(EMPTY_DASHBOARD);
+  const [leadsResponse, setLeadsResponse] = useState<LeadListResponse>(EMPTY_LEADS);
+  const [health, setHealth] = useState<JobQueueHealthResponse>(EMPTY_HEALTH);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    setDataLoading(true);
+    void Promise.all([
+      getAnalyticsDashboard(),
+      listLeads({ limit: 50 }),
+      getQueueHealth(),
+    ]).then(([d, l, h]) => {
+      setDashboard(d);
+      setLeadsResponse(l);
+      setHealth(h);
+      setDataLoading(false);
+    });
+  }, [authLoading, user]);
 
   const { summary } = dashboard;
   const pipeline = leadsResponse.pipelineSummary;
@@ -45,13 +112,20 @@ export default async function DashboardPage() {
     (l) => l.pipelineStage === "qa" && l.pipelineStatusDetail?.includes("blocked")
   );
 
-  // Recent activity: derive from leads sorted by updatedAt
   const recentLeads = [...leadsResponse.items]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 10);
 
   const hasAttentionItems =
     needsAttention.length > 0 || blockedSites.length > 0 || health.failedJobs > 0;
+
+  if (authLoading || dataLoading) {
+    return (
+      <PageFrame eyebrow="Dashboard" title="Dashboard" description="What needs attention right now.">
+        <div className="text-sm text-muted">Loading…</div>
+      </PageFrame>
+    );
+  }
 
   return (
     <PageFrame
