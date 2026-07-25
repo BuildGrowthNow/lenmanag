@@ -15,26 +15,22 @@ INDUSTRY_DESIGN_PROMPTS: dict[str, dict[str, Any]] = {
         "visual_brief_prompt": """You are a premium web designer creating a portfolio site for a creative agency.
 
 DESIGN DIRECTION:
-- Bold, experimental, portfolio-first approach
+- Bold, experimental
 - Large typography (80-150px headlines) as a design element
-- Dark theme with vibrant accent colors (cyan, magenta, lime)
+- Dark or light theme with vibrant accent colors 
 - Interactive elements and scroll-triggered reveals
-- Focus on showcasing work dramatically
 
 REFERENCE STYLE:
-Think: Awwwards winners like Active Theory, Bruno Simon
 - Full-screen immersive experiences
 - Case study deep-dives with rich media
 - Experimental layouts (asymmetric grids, overlapping elements)
 - Motion as a core design language
 
 HERO APPROACH:
-- Full-screen video or animated canvas background
-- Minimal text overlay (just company name + powerful tagline)
 - Immediate visual impact over explanation
 
 SECTIONS TO EMPHASIZE:
-- Portfolio grid (filterable, large thumbnails)
+- Portfolio/services grid 
 - Case study showcases (dedicated pages/modals)
 - Awards/press mentions
 - Team profiles with personality
@@ -59,7 +55,7 @@ WHAT TO AVOID:
 
 DESIGN DIRECTION:
 - Clean, functional, data-driven aesthetic
-- Light theme with bold primary color (blue, purple, green)
+- Light theme with bold primary color
 - Clear visual hierarchy and grid-based layouts
 - Product screenshots as hero elements
 - Trust signals and social proof prominently displayed
@@ -77,18 +73,11 @@ HERO APPROACH:
 - Gradient background (subtle, not overwhelming)
 - Primary CTA prominent
 
-SECTIONS TO EMPHASIZE:
-- Feature comparison table
-- Pricing tiers (3 columns, middle highlighted)
-- Integration logos (show ecosystem)
-- Live metrics/testimonials with real data
 
 TONE:
 Professional, efficient, "get more done with less effort"
 
 WHAT TO AVOID:
-- Overly creative/experimental layouts
-- Dark themes (unless explicitly requested)
 - Lengthy copy blocks
 - Abstract concepts without concrete benefits""",
         "content_rewrite_instructions": """Rewrite for CLARITY and VALUE:
@@ -103,23 +92,15 @@ WHAT TO AVOID:
 
 DESIGN DIRECTION:
 - Authoritative, editorial, trust-focused
-- Light theme with navy, charcoal, or muted blue
 - Strong typography (serif display + sans body)
 - Professional photography (real people, not stock)
 - Case results and credentials front and center
 
 REFERENCE STYLE:
 Think: Premium law firms, investment firms
-- Editorial layouts (split 50/50, large headlines)
 - Content-rich (case studies, insights)
 - Professional without being boring
 - Trust signals everywhere (certifications, results, tenure)
-
-HERO APPROACH:
-- Split editorial layout (60/40)
-- Large serif headline with authority
-- Professional image on one side
-- Immediate credibility signals
 
 SECTIONS TO EMPHASIZE:
 - Practice areas/services (detailed)
@@ -131,9 +112,6 @@ TONE:
 Authoritative, experienced, "we've seen it all and won"
 
 WHAT TO AVOID:
-- Playful language or casual tone
-- Bright colors or experimental layouts
-- Abstract imagery
 - Over-animation or motion""",
         "content_rewrite_instructions": """Rewrite for AUTHORITY and PRECISION:
 - Use industry-specific terminology correctly
@@ -147,7 +125,6 @@ WHAT TO AVOID:
 
 DESIGN DIRECTION:
 - Visual-first, immersive, product photography dominant
-- Monochrome (black/white) + one brand accent color
 - Minimalist typography (Helvetica, Futura)
 - Large product images (full-bleed sections)
 - Editorial lookbook aesthetic
@@ -158,11 +135,6 @@ Think: Awwwards e-commerce like Gucci, Nike concepts
 - Grid layouts with hover zoom
 - Minimal text overlay on images
 - Instagram-like visual feed
-
-HERO APPROACH:
-- Full-bleed product video or carousel
-- Minimal text (just brand + "Shop Now")
-- Let products speak for themselves
 
 SECTIONS TO EMPHASIZE:
 - Lookbook grid (2-3 column, varying heights)
@@ -190,7 +162,6 @@ WHAT TO AVOID:
 
 DESIGN DIRECTION:
 - Professional, strategic, results-focused
-- Light theme with professional color (blue, teal, slate)
 - Data visualization and metrics prominent
 - Case study driven
 - Clear value proposition
@@ -278,7 +249,6 @@ WHAT TO AVOID:
 
 DESIGN DIRECTION:
 - Warm, trustworthy, human-centered
-- Light theme with soft colors (green, teal, warm neutrals)
 - Approachable photography (real people, not stock)
 - Clear information hierarchy
 - Accessibility is paramount

@@ -324,12 +324,14 @@ Subtle motion. Trust signals. Refined color usage.
 
 ## YOUR CREATIVE TOOLKIT
 
-You have access to powerful libraries. USE THEM CREATIVELY:
+You have access to powerful libraries. YOU CAN USE THEM OR SOME OF THEM CREATIVELY, OR NOT AT ALL. The choice is yours, but the final product must be visually stunning and interactive.:
 
 ### Animation & Motion
 - **framer-motion**: motion.div, useScroll, useTransform, useInView, AnimatePresence, variants, stagger
   - Parallax: `useTransform(scrollYProgress, [0, 1], [0, -200])`
-  - Scroll-triggered reveals: `initial={{{{ opacity: 0, y: 50 }}}} whileInView={{{{ opacity: 1, y: 0 }}}}`
+  - Scroll-triggered reveals: `initial={{{{ opacity: 0, y: 50 }}}} whileInView={{{{ opacity: 1, y: 0 }}}} viewport={{{{ once: true, amount: 0.1 }}}} transition={{{{ duration: 0.6 }}}}`
+  - **CRITICAL**: ALWAYS include `viewport={{{{ once: true, amount: 0.1 }}}}` on every `whileInView` element — without it, elements that start in the viewport will stay at opacity:0 forever
+  - Elements visible on page load (hero, above-fold content): use `animate` instead of `whileInView` — `animate={{{{ opacity: 1, y: 0 }}}}` with `initial={{{{ opacity: 0, y: 20 }}}}`
   - Stagger children: `transition={{{{ staggerChildren: 0.1 }}}}`
   - Magnetic effect: track mouse position, apply transform toward cursor
 
@@ -389,7 +391,7 @@ Import from '@/components/ui/*':
 
 {brand_section}
 
-## DESIGN PATTERNS TO CONSIDER
+## DESIGN PATTERNS TO CONSIDER OR BE CREATIVE: Combining patterns in a unique way
 
 **Hero Patterns**:
 - Split-screen: video/3D left, text right (or reversed)
@@ -435,6 +437,7 @@ Import from '@/components/ui/*':
 6. Implement the signature technique from creative direction
 7. Match the motion level: "{master_brief.motionLevel}"
 8. Responsive images: Always constrain images with max-width: 100%, object-fit: cover, and appropriate containers to prevent layout breaks
+9. **ANIMATION VISIBILITY RULE**: Every `motion.*` element with `initial={{{{ opacity: 0 }}}}` MUST become visible. Use `animate` (not `whileInView`) for above-fold/hero elements. Use `whileInView` with `viewport={{{{ once: true, amount: 0.1 }}}}` for below-fold elements. NEVER leave an element at opacity:0 permanently.
 
 ## BROWSER-ONLY CONSTRAINTS
 
@@ -445,45 +448,19 @@ This runs in the browser, NOT Node.js:
 - Images: use URLs from brand assets or leave empty — NEVER filesystem paths like ./image.png
 - Cursor: Maintain default browser cursor unless implementing custom cursor (never use cursor: none without replacement)
 
-## CODE STRUCTURE
+## CODE REQUIREMENTS
 
-```tsx
-'use client';
-
-import React, {{ useState, useEffect, useRef, useMemo }} from 'react';
-import {{ motion, useScroll, useTransform, useInView, AnimatePresence }} from 'framer-motion';
-// Import GSAP if using complex scroll animations
-// import gsap from 'gsap';
-// import {{ ScrollTrigger }} from 'gsap/ScrollTrigger';
-// Import Lenis for smooth scroll
-// import Lenis from 'lenis';
-// Import shadcn components as needed
-import {{ Button }} from '@/components/ui/button';
-import {{ Card, CardContent }} from '@/components/ui/card';
-// Import Lucide icons as needed
-import {{ ArrowRight, Menu, X }} from 'lucide-react';
-
-export default function LandingPage() {{
-  // Scroll progress for parallax effects
-  const {{ scrollYProgress }} = useScroll();
-
-  // Refs for scroll-triggered animations
-  const heroRef = useRef(null);
-  const isHeroInView = useInView(heroRef, {{ once: true }});
-
-  return (
-    <div className="min-h-screen bg-background text-foreground">
-      {{/* Your creative, unique implementation */}}
-    </div>
-  );
-}}
-```
+- Start with `'use client';`
+- Export a single default function component
+- Import only what you actually use
+- Available imports: `react`, `framer-motion`, `gsap`, `gsap/ScrollTrigger`, `lenis`, `@/components/ui/*`, `lucide-react`, `embla-carousel-react`, `@react-three/fiber`, `@react-three/drei`
 
 ## OUTPUT
 
 Return ONLY the complete TSX code. No markdown code fences, no explanations.
-Start with imports and end with the closing brace of the component.
-Make it worthy of Awwwards.
+Start with `'use client';` and end with the closing brace of the component.
+
+**UNIQUENESS REQUIREMENT**: This output must be visually unlike any other landing page generated from this brief. If this prompt were run 10 times, this result should look completely different from the other 9. Surprise yourself — commit fully to the creative direction, don't hedge toward a safe layout.
 """
 
     return prompt

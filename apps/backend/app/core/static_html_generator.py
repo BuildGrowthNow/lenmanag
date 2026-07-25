@@ -210,6 +210,7 @@ REQUIREMENTS:
 
 3. CSS Requirements:
    - Use CSS custom properties for colors/spacing
+   - try to avoid opacity:0 if the elements dont have a clear animation or a reason to be hidden
    - Responsive design (mobile-first with media queries)
    - Smooth animations matching motion level
    - Follow the creative direction's color mood and typography
@@ -220,7 +221,7 @@ REQUIREMENTS:
    - Vanilla JS only (no jQuery, no React, no frameworks)
    - Smooth scroll behavior for anchor links
    - Mobile menu toggle
-   - Simple scroll-triggered fade-in animations
+   - Scroll-triggered fade-in animations using IntersectionObserver — elements MUST use `observer.observe()` and transition from opacity:0 to opacity:1 when they enter the viewport. Always initialize the IntersectionObserver with `{ threshold: 0.1 }` so elements trigger early. Elements above the fold (hero) must start at opacity:1, NOT opacity:0.
    - Form validation if contact form present
 
 5. Design Quality:
