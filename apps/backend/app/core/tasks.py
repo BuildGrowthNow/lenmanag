@@ -528,7 +528,7 @@ async def _run_multi_variant_generation_async(
     # Failures here must never block or fail the generation job.
     for site in generated_sites:
         try:
-            run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)
+            run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
         except Exception as exc:
             logger.warning(
                 "Could not queue screenshot task for site %s: %s", site.id, exc
