@@ -121,6 +121,32 @@ async def get_site(
     return success_response(site, meta=response_meta(request))
 
 
+@router.get("/{site_id}/latest-job", response_model=ResponseEnvelope[JobResponse | None])
+async def get_site_latest_job(
+    site_id: str, request: Request, user_id: CurrentUserId
+) -> ResponseEnvelope[JobResponse | None]:
+    """Get the latest refinement or generation job for a site."""
+    from app.core.mongo import get_database
+
+    database = get_database()
+    if database is None:
+        return success_response(None, meta=response_meta(request))
+
+    # Find the most recent refine or generate job for this site
+    job_doc = await database["jobs"].find_one(
+        {
+            "metadata.siteId": site_id,
+            "jobType": {"$in": ["site_refine", "site_generate", "site_republish"]},
+        },
+        sort=[("createdAt", -1)],
+    )
+
+    if job_doc is None:
+        return success_response(None, meta=response_meta(request))
+
+    return success_response(await _job_response(job_doc), meta=response_meta(request))
+
+
 @router.delete("/{site_id}", response_model=ResponseEnvelope[dict[str, bool]])
 async def delete_site(
     site_id: str, request: Request, user_id: CurrentUserId

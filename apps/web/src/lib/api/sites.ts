@@ -200,6 +200,10 @@ export async function getPromptHistory(siteId: string): Promise<RefinementPrompt
   return request<RefinementPromptRecord[]>(`/api/sites/${siteId}/prompts`);
 }
 
+export async function getSiteLatestJob(siteId: string): Promise<JobResponse | null> {
+  return safeRequest<JobResponse | null>(`/api/sites/${siteId}/latest-job`, null);
+}
+
 /**
  * Check if lead has variants ready for client sharing.
  * Returns true if at least one successfully compiled site with screenshot exists.
