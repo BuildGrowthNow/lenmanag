@@ -42,6 +42,8 @@ def _run(coro):
 @celery_app.task(
     name="lenquant.jobs.run_extraction",
     bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=600,  # 10 minutes max
@@ -89,6 +91,8 @@ def run_extraction_job_task(self, lead_id: str, job_id: str, refresh: bool) -> N
 @celery_app.task(
     name="lenquant.jobs.run_site_generation",
     bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=900,  # 15 minutes max
@@ -142,6 +146,8 @@ def run_site_generation_job_task(
 @celery_app.task(
     name="lenquant.jobs.run_site_republish",
     bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
@@ -164,6 +170,8 @@ def run_site_republish_task(self, site_id: str, job_id: str) -> None:
 @celery_app.task(
     name="lenquant.jobs.run_analysis_refresh",
     bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
@@ -265,6 +273,8 @@ def run_screenshot_task(self, site_id: str, preview_url: str) -> None:
 @celery_app.task(
     name="lenquant.jobs.run_multi_variant_generation",
     bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=1800,  # 30 minutes max
@@ -573,6 +583,8 @@ async def _run_multi_variant_generation_async(
 @celery_app.task(
     name="lenquant.jobs.run_site_refinement",
     bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=600,
