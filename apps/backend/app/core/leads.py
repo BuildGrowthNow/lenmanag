@@ -591,7 +591,6 @@ class LeadRepository:
             {
                 "normalizedDomain": normalized_domain,
                 "status": {"$ne": "archived"},
-                "user_id": user_id,
             }
         )
         if existing:
@@ -1193,7 +1192,6 @@ class LeadRepository:
             {
                 "normalizedDomain": normalized_domain,
                 "status": {"$ne": "archived"},
-                "user_id": user_id,
             }
         )
         if existing:

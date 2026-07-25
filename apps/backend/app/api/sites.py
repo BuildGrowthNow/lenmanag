@@ -68,9 +68,7 @@ async def list_sites(
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
         success_response(
-            await site_repository.list_sites(
-                limit=limit, offset=offset, user_id=user_id
-            ),
+            await site_repository.list_sites(limit=limit, offset=offset),
             meta=response_meta(request),
         ),
     )
@@ -84,9 +82,7 @@ async def review_queue(
     offset: int = 0,
 ) -> ResponseEnvelope[SiteReviewQueueResponse]:
     return success_response(
-        await site_repository.list_review_queue(
-            limit=limit, offset=offset, user_id=user_id
-        ),
+        await site_repository.list_review_queue(limit=limit, offset=offset),
         meta=response_meta(request),
     )
 
@@ -98,7 +94,7 @@ async def diversity_report(
     limit: int = 100,
 ) -> ResponseEnvelope[dict[str, Any]]:
     return success_response(
-        await site_repository.get_diversity_report(limit=limit, user_id=user_id),
+        await site_repository.get_diversity_report(limit=limit),
         meta=response_meta(request),
     )
 
@@ -110,7 +106,7 @@ async def list_variants_for_lead(
     user_id: CurrentUserId,
 ) -> ResponseEnvelope[list[GeneratedSite]]:
     """Get all site variants for a lead."""
-    sites = await site_repository.list_sites_by_lead(lead_id, user_id=user_id)
+    sites = await site_repository.list_sites_by_lead(lead_id)
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
         success_response(sites, meta=response_meta(request)),
@@ -121,7 +117,7 @@ async def list_variants_for_lead(
 async def get_site(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[GeneratedSite | None]:
-    site = await site_repository.get_site(site_id, user_id=user_id)
+    site = await site_repository.get_site(site_id)
     return success_response(site, meta=response_meta(request))
 
 
@@ -129,7 +125,7 @@ async def get_site(
 async def delete_site(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[dict[str, bool]]:
-    deleted = await site_repository.delete_site(site_id, user_id=user_id)
+    deleted = await site_repository.delete_site(site_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(user_id, "site", site_id, "site_delete", {"siteId": site_id})
@@ -267,7 +263,7 @@ async def regenerate_site_with_prompt(
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_message)
 
-    site = await site_repository.get_site(site_id, user_id=user_id)
+    site = await site_repository.get_site(site_id)
     if site is None:
         raise HTTPException(status_code=404, detail="Site not found.")
 
