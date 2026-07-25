@@ -7,7 +7,7 @@ import { ExternalLink, RefreshCw, CheckCircle2, Clock, AlertTriangle, XCircle } 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getVariantsForLead } from "@/lib/api/sites";
+import { getVariantsForLead, recaptureScreenshot } from "@/lib/api/sites";
 import type { GeneratedSite, SiteReadinessStatus, SiteQaStatus, VariantType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -60,13 +60,37 @@ function QaBadge({ status }: { status: SiteQaStatus }) {
   return <Badge className={c.className}>{c.label}</Badge>;
 }
 
-function VariantCard({ site }: { site: GeneratedSite }) {
+function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () => void }) {
   const variantType = site.variantType || "nextjs";
   const variantInfo = VARIANT_LABELS[variantType];
   const isHtmlVariant = variantType.startsWith("html_");
   // All variants (HTML and Next.js) now use /st/{slug}
   const previewUrl = `/st/${site.previewSlug}`;
   const screenshotUrl = site.screenshotRefs?.[0]?.url ?? null;
+  const [refreshing, setRefreshing] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0 && refreshing) {
+      setRefreshing(false);
+      onRefresh();
+    }
+  }, [countdown, refreshing, onRefresh]);
+
+  async function handleRefreshScreenshot() {
+    try {
+      setRefreshing(true);
+      setCountdown(20);
+      await recaptureScreenshot(site.id);
+    } catch (error) {
+      console.error("Failed to refresh screenshot:", error);
+      setRefreshing(false);
+      setCountdown(0);
+    }
+  }
 
   return (
     <Card className="group relative overflow-hidden border-line bg-panel hover:border-white/20 transition-colors">
@@ -123,19 +147,32 @@ function VariantCard({ site }: { site: GeneratedSite }) {
           </div>
         )}
 
-        <div className="flex items-center gap-2 pt-2 border-t border-line">
+        <div className="flex flex-col gap-2 pt-2 border-t border-line">
           <a
             href={previewUrl}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-              "flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+              "inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
               "border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20"
             )}
           >
             <ExternalLink className="h-4 w-4" />
             Preview
           </a>
+          <button
+            onClick={() => void handleRefreshScreenshot()}
+            disabled={refreshing}
+            className={cn(
+              "inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+              refreshing
+                ? "border border-blue-500/40 bg-blue-500/10 text-blue-300 cursor-wait"
+                : "border border-white/15 bg-white/5 text-muted hover:bg-white/10 hover:text-text"
+            )}
+          >
+            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            {refreshing ? `Refreshing... ${countdown}s` : "Refresh Screenshot"}
+          </button>
         </div>
       </CardContent>
     </Card>
@@ -243,7 +280,7 @@ export function LeadVariantsView({ leadId }: VariantsViewProps) {
       <CardContent>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {variants.map((variant) => (
-            <VariantCard key={variant.id} site={variant} />
+            <VariantCard key={variant.id} site={variant} onRefresh={refreshVariants} />
           ))}
         </div>
       </CardContent>

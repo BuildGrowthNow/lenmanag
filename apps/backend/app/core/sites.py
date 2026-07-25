@@ -3911,14 +3911,20 @@ class SiteRepository:
 
         database = get_database()
         if database is not None:
+            # Check for existing refinement job for THIS specific site (not all sites for this lead)
             existing_job = await database["jobs"].find_one(
                 {
-                    "leadId": lead_id,
+                    "metadata.siteId": site_id,
                     "jobType": {"$in": ["site_refine"]},
                     "status": {"$in": ["queued", "running"]},
                 }
             )
             if existing_job is not None:
+                logger.info(
+                    "Refinement already in progress for site %s (job %s)",
+                    site_id,
+                    existing_job["id"],
+                )
                 return _job_doc_to_summary(existing_job)
 
         next_version = int(current.version) + 1
