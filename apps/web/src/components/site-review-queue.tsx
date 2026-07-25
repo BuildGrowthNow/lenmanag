@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink, SkipForward } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { approveSiteReview, patchSiteReview, refineSite, submitRefinementPrompt } from "@/lib/api/sites";
+import { getJob } from "@/lib/api/jobs";
 import type { SiteReviewQueueItem, SiteReviewQueueResponse } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,10 +33,15 @@ type ReviewCardProps = {
   onSkipped: () => void;
 };
 
+type JobStatus = "queued" | "running" | "completed" | "failed";
+
 function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardProps) {
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
+  const [jobStep, setJobStep] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const VARIANT_LABELS: Record<string, string> = {
     html_v1: "HTML v1",
@@ -57,15 +63,49 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
     ...item.reviewRubric.filter((r) => r.status !== "pass").map((r) => r.notes || r.label),
   ].filter(Boolean);
 
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearTimeout(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => stopPolling, [stopPolling]);
+
+  const pollJob = useCallback(
+    (jobId: string, onDone: () => void) => {
+      const tick = async () => {
+        const result = await getJob(jobId);
+        if (!result) return;
+        const status = result.job.status as JobStatus;
+        setJobStatus(status);
+        setJobStep(result.job.step ?? null);
+        if (status === "completed") {
+          stopPolling();
+          setBusy(false);
+          onDone();
+        } else if (status === "failed") {
+          stopPolling();
+          setBusy(false);
+          setError(result.job.errorMessage ?? "Job failed");
+        } else {
+          pollRef.current = setTimeout(tick, 3000);
+        }
+      };
+      pollRef.current = setTimeout(tick, 2000);
+    },
+    [stopPolling]
+  );
+
   async function handleApprove() {
     setBusy(true);
-    setMessage(null);
+    setError(null);
     try {
       await patchSiteReview(item.siteId, { outcome: "pass", notes: null, blockedReason: null });
       await approveSiteReview(item.siteId);
       onApproved();
     } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : "Approval failed.", ok: false });
+      setError(err instanceof Error ? err.message : "Approval failed.");
       setBusy(false);
     }
   }
@@ -73,29 +113,60 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
   async function handleRefine() {
     if (!prompt.trim()) return;
     setBusy(true);
-    setMessage(null);
+    setError(null);
+    setJobStatus("queued");
+    setJobStep("Queued");
     try {
-      await refineSite(item.siteId, prompt.trim());
-      setMessage({ text: "Refinement queued — site will update shortly.", ok: true });
-      onRegenerated();
+      const result = await refineSite(item.siteId, prompt.trim());
+      setPrompt("");
+      if (result.status === "completed") {
+        setBusy(false);
+        setJobStatus("completed");
+        onRegenerated();
+      } else {
+        pollJob(result.jobId, onRegenerated);
+      }
     } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : "Failed to queue refinement.", ok: false });
+      setError(err instanceof Error ? err.message : "Failed to queue refinement.");
       setBusy(false);
+      setJobStatus(null);
     }
   }
 
   async function handleRegenerate() {
     setBusy(true);
-    setMessage(null);
+    setError(null);
+    setJobStatus("queued");
+    setJobStep("Queued");
     try {
-      await submitRefinementPrompt(item.siteId, prompt.trim() || "Regenerate with fresh creative direction.", true);
-      setMessage({ text: "Full regeneration queued.", ok: true });
-      onRegenerated();
+      const result = await submitRefinementPrompt(
+        item.siteId,
+        prompt.trim() || "Regenerate with fresh creative direction.",
+        true,
+      );
+      setPrompt("");
+      if (result.status === "completed") {
+        setBusy(false);
+        setJobStatus("completed");
+        onRegenerated();
+      } else {
+        pollJob(result.jobId, onRegenerated);
+      }
     } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : "Failed to queue regeneration.", ok: false });
+      setError(err instanceof Error ? err.message : "Failed to queue regeneration.");
       setBusy(false);
+      setJobStatus(null);
     }
   }
+
+  const statusLabel =
+    jobStatus === "queued"
+      ? "Queued…"
+      : jobStatus === "running"
+      ? jobStep ?? "Refining…"
+      : jobStatus === "completed"
+      ? "Done — updating queue…"
+      : null;
 
   return (
     <Card className="overflow-hidden">
@@ -143,7 +214,7 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
                 </Link>
               </Button>
               <Button variant="ghost" size="sm">
-                <Link href={`/app/sites/${item.siteId}`}>Open spec</Link>
+                <Link href={`/app/leads/${item.leadId}`}>Open spec</Link>
               </Button>
               <Button variant="ghost" size="sm" onClick={onSkipped} disabled={busy}>
                 <SkipForward className="h-3.5 w-3.5" />
@@ -176,16 +247,15 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
               disabled={busy}
               className="resize-none text-sm"
             />
-            {message ? (
-              <div
-                className={cn(
-                  "rounded-xl border px-3 py-2 text-sm",
-                  message.ok
-                    ? "border-emerald-500/30 text-emerald-300"
-                    : "border-rose-500/30 text-rose-300"
-                )}
-              >
-                {message.text}
+            {statusLabel ? (
+              <div className="flex items-center gap-2 text-sm text-sky-300">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+                {statusLabel}
+              </div>
+            ) : null}
+            {error ? (
+              <div className="rounded-xl border border-rose-500/30 px-3 py-2 text-sm text-rose-300">
+                {error}
               </div>
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
@@ -195,7 +265,7 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
                 className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
                 variant="ghost"
               >
-                {busy ? "Working…" : "Approve →"}
+                {busy && jobStatus === null ? "Working…" : "Approve →"}
               </Button>
               <Button
                 onClick={handleRefine}
@@ -203,7 +273,7 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
                 variant="ghost"
                 className="border-sky-500/40 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
               >
-                {busy ? "Queuing…" : "Refine →"}
+                {busy && jobStatus !== null ? "Refining…" : "Refine →"}
               </Button>
               <Button
                 onClick={handleRegenerate}
