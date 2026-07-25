@@ -404,6 +404,60 @@ export default function PublicPreviewPage({ params }: { params: Promise<{ slug: 
     void sendAnalyticsEvent({ ...base, eventType: "page_view", eventName: "Preview page view" });
   }, [site, pagePath]);
 
+  useEffect(() => {
+    if (!site) return;
+    const sections = document.querySelectorAll<HTMLElement>("[id^='section-']");
+    if (!sections.length) return;
+    const observed = new Set<string>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const sectionId = (entry.target as HTMLElement).id;
+          if (observed.has(sectionId)) return;
+          observed.add(sectionId);
+          const sessionId = sessionRef.current ?? ensurePreviewSessionId();
+          if (!sessionId) return;
+          void sendAnalyticsEvent({
+            siteId: site.id,
+            leadId: site.leadId,
+            sessionId,
+            eventType: "section_exposure",
+            eventName: `Section viewed: ${sectionId}`,
+            pagePath,
+            metadata: { sectionId },
+          });
+        });
+      },
+      { threshold: 0.3 }
+    );
+    sections.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [site, pagePath]);
+
+  useEffect(() => {
+    if (!site) return;
+    function handleClick(e: MouseEvent) {
+      const anchor = (e.target as Element).closest("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") ?? "";
+      if (!href.startsWith("http") && !href.startsWith("//")) return;
+      const sessionId = sessionRef.current ?? ensurePreviewSessionId();
+      if (!sessionId) return;
+      void sendAnalyticsEvent({
+        siteId: site.id,
+        leadId: site.leadId,
+        sessionId,
+        eventType: "outbound_link_click",
+        eventName: "Outbound link clicked",
+        pagePath,
+        metadata: { href },
+      });
+    }
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [site, pagePath]);
+
   function trackCta(eventType: AnalyticsEventType, label: string, href: string) {
     if (!site) return;
     const sessionId = sessionRef.current ?? ensurePreviewSessionId();

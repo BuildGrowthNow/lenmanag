@@ -19,15 +19,21 @@ function pct(a: number, b: number) {
 
 type Props = {
   dashboard: AnalyticsDashboardResponse;
+  leadNames?: Record<string, string>;
 };
 
-export function AnalyticsDashboard({ dashboard }: Props) {
-  const { summary, siteMetrics, leadMetrics, messageMetrics } = dashboard;
+export function AnalyticsDashboard({ dashboard, leadNames = {} }: Props) {
+  const { summary, siteMetrics, leadMetrics, variantMetrics, messageMetrics } = dashboard;
   const [selectedSite, setSelectedSite] = useState<AnalyticsSiteMetrics | null>(
     siteMetrics[0] ?? null
   );
 
   const topSites = [...siteMetrics].sort((a, b) => b.pageViews - a.pageViews).slice(0, 10);
+
+  function leadLabel(leadId: string | null | undefined): string {
+    if (!leadId) return "—";
+    return leadNames[leadId] ?? leadId.slice(0, 12);
+  }
 
   return (
     <div className="space-y-6">
@@ -61,7 +67,7 @@ export function AnalyticsDashboard({ dashboard }: Props) {
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-line text-xs uppercase tracking-[0.18em] text-muted">
-                    <th className="px-4 py-2.5">Site</th>
+                    <th className="px-4 py-2.5">Company</th>
                     <th className="px-4 py-2.5 text-right">Visits</th>
                     <th className="px-4 py-2.5 text-right">CTA</th>
                     <th className="px-4 py-2.5 text-right">Rate</th>
@@ -77,8 +83,8 @@ export function AnalyticsDashboard({ dashboard }: Props) {
                         selectedSite?.siteId === row.siteId && "bg-panel"
                       )}
                     >
-                      <td className="px-4 py-3 font-mono text-xs text-muted">
-                        {row.siteId.slice(0, 12)}…
+                      <td className="px-4 py-3 text-sm">
+                        {leadLabel(row.leadId)}
                       </td>
                       <td className="px-4 py-3 text-right">{fmt(row.pageViews)}</td>
                       <td className="px-4 py-3 text-right">{fmt(row.ctaClicks)}</td>
@@ -101,7 +107,7 @@ export function AnalyticsDashboard({ dashboard }: Props) {
             <CardTitle>Site detail</CardTitle>
             <CardDescription>
               {selectedSite
-                ? `Showing metrics for ${selectedSite.siteId.slice(0, 12)}…`
+                ? `Showing metrics for ${leadLabel(selectedSite.leadId)}`
                 : "Select a site from the table to see detail."}
             </CardDescription>
           </CardHeader>
@@ -199,9 +205,9 @@ export function AnalyticsDashboard({ dashboard }: Props) {
                         <td className="px-4 py-3">
                           <Link
                             href={`/app/leads/${row.leadId}`}
-                            className="font-mono text-xs text-muted underline-offset-2 hover:text-text hover:underline"
+                            className="text-sm underline-offset-2 hover:text-text hover:underline"
                           >
-                            {row.leadId.slice(0, 12)}…
+                            {leadLabel(row.leadId)}
                           </Link>
                         </td>
                         <td className="px-4 py-3 text-right">{fmt(row.visits)}</td>
@@ -222,6 +228,47 @@ export function AnalyticsDashboard({ dashboard }: Props) {
           </Card>
         </div>
       </details>
+
+      {/* Variant metrics */}
+      {variantMetrics.length > 0 && (
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-2xl border border-line bg-panel px-5 py-3 text-sm font-medium text-text hover:bg-panel-2">
+            <span className="mr-auto">Theme variant performance</span>
+            <span className="text-xs text-muted group-open:hidden">{variantMetrics.length} variants →</span>
+            <span className="hidden text-xs text-muted group-open:inline">Collapse ▲</span>
+          </summary>
+          <div className="mt-3">
+            <Card>
+              <CardContent className="overflow-x-auto p-0">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-xs uppercase tracking-[0.18em] text-muted">
+                      <th className="px-4 py-2.5">Variant</th>
+                      <th className="px-4 py-2.5">Theme</th>
+                      <th className="px-4 py-2.5">Lead</th>
+                      <th className="px-4 py-2.5 text-right">Views</th>
+                      <th className="px-4 py-2.5 text-right">CTA</th>
+                      <th className="px-4 py-2.5 text-right">Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {variantMetrics.map((row) => (
+                      <tr key={row.variantKey} className="border-t border-line/50">
+                        <td className="px-4 py-3 font-mono text-xs text-muted">{row.variantKey}</td>
+                        <td className="px-4 py-3 text-xs text-muted">{row.themeKey ?? "—"}</td>
+                        <td className="px-4 py-3 text-sm">{leadLabel(row.leadId)}</td>
+                        <td className="px-4 py-3 text-right">{fmt(row.pageViews)}</td>
+                        <td className="px-4 py-3 text-right">{fmt(row.ctaClicks)}</td>
+                        <td className="px-4 py-3 text-right text-muted">{pct(row.ctaClicks, row.pageViews)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </div>
+        </details>
+      )}
 
       {/* Message channel attribution */}
       {messageMetrics.length > 0 && (

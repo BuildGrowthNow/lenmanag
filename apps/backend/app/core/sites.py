@@ -3844,6 +3844,18 @@ class SiteRepository:
                 finished=True,
                 lead_ids=[site_id],
             )
+            from app.core.analytics import analytics_repository
+
+            await analytics_repository.record_admin_event(
+                event_type="site_generated",
+                event_name="Site generated",
+                site_id=persisted_site.id,
+                lead_id=site_id,
+                metadata={
+                    "version": persisted_site.version,
+                    "qualityScore": persisted_site.qualityScore,
+                },
+            )
             return persisted_site
 
     async def queue_refinement_job(
@@ -4088,6 +4100,15 @@ class SiteRepository:
             status="completed",
             finished=True,
             lead_ids=[site_id],
+        )
+        from app.core.analytics import analytics_repository
+
+        await analytics_repository.record_admin_event(
+            event_type="generation_regenerated",
+            event_name="Site refined",
+            site_id=persisted_site.id,
+            lead_id=site_id,
+            metadata={"version": persisted_site.version, "promptId": prompt_id},
         )
         return persisted_site
 
@@ -4552,6 +4573,15 @@ class SiteRepository:
             step="Republish complete",
             finished=True,
             lead_ids=[site_id],
+        )
+        from app.core.analytics import analytics_repository
+
+        await analytics_repository.record_admin_event(
+            event_type="site_republished",
+            event_name="Site republished",
+            site_id=site_id,
+            lead_id=site_id,
+            metadata={"bundleUrl": bundle_url},
         )
 
     async def queue_republish_job(self, site_id: str) -> JobSummary | None:

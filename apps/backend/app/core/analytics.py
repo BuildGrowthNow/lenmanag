@@ -258,16 +258,19 @@ class AnalyticsRepository:
         )
         return AnalyticsDashboardResponse(
             summary=summary,
-            siteMetrics=await self._site_metrics(user_id=user_id),
-            leadMetrics=await self._lead_metrics(user_id=user_id),
-            variantMetrics=await self._variant_metrics(user_id=user_id),
-            messageMetrics=await self._message_metrics(user_id=user_id),
+            siteMetrics=await self._site_metrics(events=events),
+            leadMetrics=await self._lead_metrics(events=events),
+            variantMetrics=await self._variant_metrics(events=events),
+            messageMetrics=await self._message_metrics(events=events),
         )
 
     async def _site_metrics(
-        self, user_id: str | None = None
+        self,
+        user_id: str | None = None,
+        events: list[dict[str, Any]] | None = None,
     ) -> list[AnalyticsSiteMetrics]:
-        events = await self._events(user_id=user_id)
+        if events is None:
+            events = await self._events(user_id=user_id)
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for event in events:
             site_id = event.get("siteId")
@@ -371,9 +374,12 @@ class AnalyticsRepository:
         return results
 
     async def _lead_metrics(
-        self, user_id: str | None = None
+        self,
+        user_id: str | None = None,
+        events: list[dict[str, Any]] | None = None,
     ) -> list[AnalyticsLeadMetrics]:
-        events = await self._events(user_id=user_id)
+        if events is None:
+            events = await self._events(user_id=user_id)
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for event in events:
             lead_id = event.get("leadId")
@@ -463,9 +469,12 @@ class AnalyticsRepository:
         return results
 
     async def _variant_metrics(
-        self, user_id: str | None = None
+        self,
+        user_id: str | None = None,
+        events: list[dict[str, Any]] | None = None,
     ) -> list[AnalyticsVariantMetrics]:
-        events = await self._events(user_id=user_id)
+        if events is None:
+            events = await self._events(user_id=user_id)
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for event in events:
             variant_key = event.get("variantKey")
@@ -531,16 +540,19 @@ class AnalyticsRepository:
         return results
 
     async def _message_metrics(
-        self, user_id: str | None = None
+        self,
+        user_id: str | None = None,
+        events: list[dict[str, Any]] | None = None,
     ) -> list[AnalyticsMessageMetrics]:
-        events = await self._events(user_id=user_id)
+        if events is None:
+            events = await self._events(user_id=user_id)
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for event in events:
             message_key = self._message_key(event)
             if message_key:
                 grouped[message_key].append(event)
         results: list[AnalyticsMessageMetrics] = []
-        for _key, message_events in grouped.items():
+        for message_events in grouped.values():
             latest = message_events[0]
             channel = str(latest.get("messageChannel") or "unknown")
             results.append(
