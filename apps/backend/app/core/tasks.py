@@ -77,7 +77,7 @@ def run_extraction_job_task(self, lead_id: str, job_id: str, refresh: bool) -> N
                 lead_repository._update_job(
                     job_id=job_id,
                     status="failed",
-                    error_message=f"Extraction failed: {str(exc)}. Retry {self.request.retries}/{self.max_retries}",
+                    error_message=f"Extraction failed: {str(exc).splitlines()[0]}. Retry {self.request.retries}/{self.max_retries}",
                     finished=self.request.retries >= self.max_retries,
                 )
             )
@@ -268,7 +268,7 @@ def run_multi_variant_generation_task(
                 lead_repository._update_job(
                     job_id=job_id,
                     status="failed",
-                    error_message=f"Generation failed: {str(exc)}",
+                    error_message=f"Generation failed: {str(exc).splitlines()[0]}",
                     finished=self.request.retries >= self.max_retries,
                 )
             )

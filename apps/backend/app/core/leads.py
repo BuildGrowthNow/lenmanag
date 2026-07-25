@@ -2331,7 +2331,7 @@ class LeadRepository:
                 step="Analysis failed",
                 finished=True,
                 lead_ids=[lead_id],
-                error_message=str(exc),
+                error_message=str(exc).splitlines()[0],
             )
             return
 
@@ -2679,7 +2679,7 @@ class LeadRepository:
                     step="Extraction worker failed",
                     finished=True,
                     lead_ids=[lead_id],
-                    error_message=str(exc),
+                    error_message=str(exc).splitlines()[0],
                 )
 
                 # Log detailed error to pipeline events
