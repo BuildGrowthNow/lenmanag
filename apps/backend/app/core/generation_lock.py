@@ -108,10 +108,13 @@ async def generation_lock(
     finally:
         # Release lock if we acquired it
         if lock_acquired:
-            # Atomic check-and-delete: only delete if we still own the lock
-            current_value = await redis_client.get(GENERATION_LOCK_KEY)
-            if current_value == lock_id:
-                await redis_client.delete(GENERATION_LOCK_KEY)
+            # Atomically check-and-delete via Lua so the GET→DEL is not a race
+            release_script = (
+                "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                "return redis.call('del', KEYS[1]) "
+                "else return 0 end"
+            )
+            await redis_client.eval(release_script, 1, GENERATION_LOCK_KEY, lock_id)  # type: ignore[arg-type]
             logger.info("Generation lock released")
 
         await redis_client.aclose()

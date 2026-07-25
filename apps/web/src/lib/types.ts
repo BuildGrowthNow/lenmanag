@@ -944,6 +944,7 @@ export type JobQueueHealthResponse = {
   byType: Record<string, number>;
   stalledItems: JobQueueHealthItem[];
   failedItems: JobQueueHealthItem[];
+  queuedItems: JobQueueHealthItem[];
   updatedAt: string;
 };
 

@@ -221,6 +221,42 @@ export function QueueHealthPanel({ health: initialHealth }: QueueHealthPanelProp
         </div>
       )}
 
+      {/* Queued jobs — ordered by creation time (position 1 = next to run) */}
+      {health.queuedItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Queue ({health.queuedItems.length})</CardTitle>
+            <CardDescription>Jobs waiting to run, in order. Position 1 runs next.</CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto p-0">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-line text-xs uppercase tracking-[0.18em] text-muted">
+                  <th className="px-4 py-2.5">#</th>
+                  <th className="px-4 py-2.5">Type</th>
+                  <th className="px-4 py-2.5">Step</th>
+                  <th className="px-4 py-2.5">Lead IDs</th>
+                  <th className="px-4 py-2.5">Queued</th>
+                </tr>
+              </thead>
+              <tbody>
+                {health.queuedItems.map((job, i) => (
+                  <tr key={job.id} className="border-t border-line/50">
+                    <td className="px-4 py-3 font-semibold text-text">{i + 1}</td>
+                    <td className="px-4 py-3 text-text">{job.jobType}</td>
+                    <td className="px-4 py-3 text-muted">{job.step || "Waiting"}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted">
+                      {job.leadIds.map((id) => id.slice(0, 8)).join(", ") || "n/a"}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted">{relativeTime(job.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Failed jobs */}
       <JobList
         title="Failed jobs"

@@ -17,6 +17,7 @@ export async function getQueueHealth(): Promise<JobQueueHealthResponse> {
     byType: {},
     stalledItems: [],
     failedItems: [],
+    queuedItems: [],
     updatedAt: new Date(0).toISOString(),
   });
 }

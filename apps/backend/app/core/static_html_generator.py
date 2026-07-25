@@ -157,6 +157,14 @@ def _build_static_html_prompt(
 
     # Get company name
     company_name = extraction.summary.companyName or "Company"
+    # Kept outside the f-string so pyright doesn't misparse the JS object literal syntax
+    _intersection_observer_instruction = (
+        "Scroll-triggered fade-in animations using IntersectionObserver"
+        " — elements MUST use `observer.observe()` and transition from opacity:0 to opacity:1"
+        " when they enter the viewport."
+        " Always initialize the IntersectionObserver with `{threshold: 0.1 }` so elements trigger early."
+        " Elements above the fold (hero) must start at opacity:1, NOT opacity:0."
+    )
 
     return f"""Generate a complete, production-ready static HTML landing page.
 
@@ -221,7 +229,7 @@ REQUIREMENTS:
    - Vanilla JS only (no jQuery, no React, no frameworks)
    - Smooth scroll behavior for anchor links
    - Mobile menu toggle
-   - Scroll-triggered fade-in animations using IntersectionObserver — elements MUST use `observer.observe()` and transition from opacity:0 to opacity:1 when they enter the viewport. Always initialize the IntersectionObserver with `{threshold: 0.1 }` so elements trigger early. Elements above the fold (hero) must start at opacity:1, NOT opacity:0.
+   - {_intersection_observer_instruction}
    - Form validation if contact form present
 
 5. Design Quality:

@@ -1717,6 +1717,8 @@ class LeadRepository:
                     return
                 if status is not None:
                     job["status"] = status
+                    if status == "running" and job.get("startedAt") is None:
+                        job["startedAt"] = now
                 if progress is not None:
                     job["progress"] = progress
                 if step is not None:
@@ -1755,6 +1757,12 @@ class LeadRepository:
         if finished:
             update["finishedAt"] = now
         await database["jobs"].update_one({"id": job_id}, {"$set": update})
+        if status == "running":
+            # Only stamp startedAt the first time; don't overwrite if already set
+            await database["jobs"].update_one(
+                {"id": job_id, "startedAt": None},
+                {"$set": {"startedAt": now}},
+            )
         if lead_ids is not None:
             await database["jobs"].update_one(
                 {"id": job_id},
@@ -1851,19 +1859,44 @@ class LeadRepository:
                 retry_doc["status"] = "queued"
                 retry_doc["progress"] = 0
                 retry_doc["step"] = "Queued for retry"
-                return _job_doc_to_summary(retry_doc)
-        await database["jobs"].update_one(
-            {"id": job.id},
-            {
-                "$set": {
-                    "retryOfJobId": source["id"],
-                    "retryCount": retry_count,
-                    "status": "queued",
-                    "progress": 0,
-                    "step": "Queued for retry",
-                }
-            },
-        )
+        else:
+            await database["jobs"].update_one(
+                {"id": job.id},
+                {
+                    "$set": {
+                        "retryOfJobId": source["id"],
+                        "retryCount": retry_count,
+                        "status": "queued",
+                        "progress": 0,
+                        "step": "Queued for retry",
+                    }
+                },
+            )
+
+        # Actually dispatch the job to Celery so it runs (not just written to Mongo)
+        job_type = source.get("jobType", "")
+        if job_type in ("site_crawl", "site_refresh"):
+            lead_id = lead_ids[0] if lead_ids else None
+            if lead_id:
+                await self._dispatch_extraction_job(
+                    job_id=job.id,
+                    lead_id=lead_id,
+                    refresh=(job_type == "site_refresh"),
+                )
+        elif job_type in ("site_generate", "site_republish"):
+            lead_id = lead_ids[0] if lead_ids else None
+            if lead_id:
+                from app.core.sites import (
+                    site_repository,
+                )  # avoid circular at module level
+
+                await site_repository._dispatch_generation_job(  # type: ignore[attr-defined]
+                    site_id=lead_id, job_id=job.id, request=None
+                )
+
+        if database is None:
+            async with self._memory_lock:
+                return _job_doc_to_summary(self._jobs[job.id])
         return await self.get_job(job.id)
 
     async def get_queue_health(
@@ -1899,6 +1932,10 @@ class LeadRepository:
 
         stalled_docs = [doc for doc in docs if _stalled(doc)]
         failed_docs = [doc for doc in docs if doc.get("status") == "failed"]
+        queued_docs = sorted(
+            [doc for doc in docs if doc.get("status") == "queued"],
+            key=lambda d: _utc(d.get("createdAt")) or _now(),
+        )
         by_type: dict[str, int] = {}
         for doc in docs:
             by_type[doc.get("jobType", "unknown")] = (
@@ -1934,6 +1971,7 @@ class LeadRepository:
             byType=by_type,
             stalledItems=[_health_item(doc) for doc in stalled_docs[:25]],
             failedItems=[_health_item(doc) for doc in failed_docs[:25]],
+            queuedItems=[_health_item(doc) for doc in queued_docs[:50]],
             updatedAt=_now().isoformat(),
         )
 

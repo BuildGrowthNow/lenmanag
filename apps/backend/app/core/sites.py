@@ -17,7 +17,7 @@ from app.core.analytics import analytics_repository
 from app.core.color_system import generate_color_system
 from app.core.config import get_settings
 from app.core.industry_detection import get_industry_design_config
-from app.core.leads import lead_repository
+from app.core.leads import _job_doc_to_summary, lead_repository  # type: ignore[attr-defined]
 from app.core.mongo import get_database
 from app.core.screenshot_comparator import ScreenshotComparator
 from app.schemas.brief import (
@@ -3483,6 +3483,24 @@ class SiteRepository:
         extraction = await lead_repository.get_extraction(site_id)
         if extraction is None or extraction.version <= 0:
             raise ValueError("extraction_required")
+
+        # Prevent duplicate generation jobs (same guard as start_extraction)
+        database = get_database()
+        if database is not None:
+            existing_gen_job = await database["jobs"].find_one(
+                {
+                    "leadId": site_id,
+                    "jobType": {"$in": ["site_generate", "site_republish"]},
+                    "status": {"$in": ["queued", "running"]},
+                }
+            )
+            if existing_gen_job is not None:
+                logger.info(
+                    "Generation already in progress for site %s (job %s)",
+                    site_id,
+                    existing_gen_job["id"],
+                )
+                return _job_doc_to_summary(existing_gen_job)
 
         current = await self.get_site(site_id)
         next_version = int(current.version if current else 0) + 1

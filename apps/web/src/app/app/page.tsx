@@ -45,6 +45,7 @@ const EMPTY_HEALTH: JobQueueHealthResponse = {
   byType: {},
   stalledItems: [],
   failedItems: [],
+  queuedItems: [],
   updatedAt: new Date(0).toISOString(),
 };
 

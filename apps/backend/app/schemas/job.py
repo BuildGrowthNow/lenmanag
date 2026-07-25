@@ -35,4 +35,5 @@ class JobQueueHealthResponse(BaseModel):
     byType: dict[str, int] = Field(default_factory=dict)
     stalledItems: list[JobQueueHealthItem] = Field(default_factory=list)
     failedItems: list[JobQueueHealthItem] = Field(default_factory=list)
+    queuedItems: list[JobQueueHealthItem] = Field(default_factory=list)
     updatedAt: str
