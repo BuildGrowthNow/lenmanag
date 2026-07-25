@@ -170,36 +170,26 @@ export async function syncExportEdits(id: string, exportId: string, edits: Array
 export async function refineSite(
   siteId: string,
   prompt: string,
-): Promise<{ siteId: string; promptId: string; status: string }> {
+): Promise<{ siteId: string; jobId: string; status: string }> {
   const job = await request<JobResponse>(`/api/sites/${siteId}/refine`, {
     method: "POST",
     body: { refinementPrompt: prompt },
   });
 
-  const requestMeta = (job.metadata?.request || {}) as { refinementPromptId?: string };
-  const promptId = requestMeta.refinementPromptId || "";
-
-  return { siteId, promptId, status: job.job.status };
+  return { siteId, jobId: job.job.id, status: job.job.status };
 }
 
 export async function submitRefinementPrompt(
   siteId: string,
   prompt: string,
   force = false
-): Promise<{ siteId: string; promptId: string; status: string }> {
+): Promise<{ siteId: string; jobId: string; status: string }> {
   const job = await request<JobResponse>(`/api/sites/${siteId}/regenerate`, {
     method: "POST",
     body: { refinementPrompt: prompt, force }
   });
 
-  const requestMeta = (job.metadata?.request || {}) as { refinementPromptId?: string };
-  const promptId = requestMeta.refinementPromptId || "";
-
-  return {
-    siteId,
-    promptId,
-    status: job.job.status
-  };
+  return { siteId, jobId: job.job.id, status: job.job.status };
 }
 
 export async function getPromptHistory(siteId: string): Promise<RefinementPromptRecord[]> {

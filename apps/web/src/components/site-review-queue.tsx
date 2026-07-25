@@ -81,7 +81,6 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
     setMessage(null);
     try {
       await submitRefinementPrompt(item.siteId, prompt.trim() || "Regenerate with fresh creative direction.", true);
-      await patchSiteReview(item.siteId, { outcome: "fail", notes: null, blockedReason: "Queued for regeneration" });
       setMessage({ text: "Full regeneration queued.", ok: true });
       onRegenerated();
     } catch (err) {

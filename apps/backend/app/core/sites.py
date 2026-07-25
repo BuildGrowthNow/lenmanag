@@ -2561,8 +2561,13 @@ class SiteRepository:
             )
 
             force_flag = bool(getattr(request, "force", False)) if request else False
+            # Carry forward any human-supplied refinement prompt so auto-iteration
+            # doesn't discard operator instructions from the triggering request.
+            carried_prompt_id = (
+                getattr(request, "refinementPromptId", None) if request else None
+            )
             auto_request = SiteGenerateRequest(
-                force=force_flag, refinementPromptId=None
+                force=force_flag, refinementPromptId=carried_prompt_id
             )
 
             await self.queue_generation_job(site_id, request=auto_request)
@@ -4221,6 +4226,32 @@ class SiteRepository:
             palette_mode=palette_mode,
         )
 
+        missing_reqs = list(master_brief.missingRequirements or [])
+        computed_quality_score = _quality_score(
+            brief=master_brief,
+            extraction=extraction,
+            brand_tokens=brand_tokens,
+            site_sections=[],
+            missing_requirements=missing_reqs,
+        )
+        settings_for_readiness = get_settings()
+        readiness_threshold = int(
+            settings_for_readiness.visual_redesign_quality_threshold or 90
+        )
+        review_floor = max(70, readiness_threshold - 15)
+        if computed_quality_score >= readiness_threshold and not missing_reqs:
+            computed_readiness: SiteReadinessStatus = "ready_to_publish"
+            computed_qa: SiteQaStatus = "pass"
+        elif computed_quality_score >= review_floor and len(missing_reqs) <= 2:
+            computed_readiness = "ready_for_review"
+            computed_qa = "warn"
+        elif computed_quality_score >= 55:
+            computed_readiness = "needs_review"
+            computed_qa = "warn"
+        else:
+            computed_readiness = "blocked"
+            computed_qa = "fail"
+
         site_doc: dict[str, Any] = {
             "id": site_id,
             "leadId": site_id,
@@ -4238,15 +4269,9 @@ class SiteRepository:
             "heroVariant": hero_variant,
             "sectionStack": [],
             "ctaStrategy": cta_strategy,
-            "qualityScore": _quality_score(
-                brief=master_brief,
-                extraction=extraction,
-                brand_tokens=brand_tokens,
-                site_sections=[],
-                missing_requirements=list(master_brief.missingRequirements or []),
-            ),
-            "readinessStatus": "needs_review",
-            "qaStatus": "warn",
+            "qualityScore": computed_quality_score,
+            "readinessStatus": computed_readiness,
+            "qaStatus": computed_qa,
             "reviewRubric": [],
             "comparisonEntries": [],
             "sourceTraceability": [],
@@ -4264,8 +4289,8 @@ class SiteRepository:
             "overrides": [],
             "overrideDiffs": [],
             "refinementPromptId": refinement_prompt_id,
-            "promptHistory": [],
-            "isManuallyRefined": False,
+            "promptHistory": list(current.promptHistory or []) if current else [],
+            "isManuallyRefined": refinement_prompt_id is not None,
             "improvementRecommendations": None,
             "sourceCode": result.get("sourceCode"),
             "compiledBundleUrl": result.get("compiledBundleUrl"),

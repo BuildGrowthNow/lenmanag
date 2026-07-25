@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { refineSite, submitRefinementPrompt } from "@/lib/api/sites";
+import { getJob } from "@/lib/api/jobs";
+
+type JobStatus = "queued" | "running" | "completed" | "failed";
 
 export function RefinementPromptInput({ siteId }: { siteId: string }) {
   const router = useRouter();
@@ -10,6 +13,43 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState<"refine" | "regenerate">("refine");
+  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
+  const [jobStep, setJobStep] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearTimeout(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const pollJob = useCallback(
+    (jobId: string) => {
+      const tick = async () => {
+        const result = await getJob(jobId);
+        if (!result) return;
+        const status = result.job.status as JobStatus;
+        setJobStatus(status);
+        setJobStep(result.job.step ?? null);
+        if (status === "completed") {
+          stopPolling();
+          setIsLoading(false);
+          router.refresh();
+        } else if (status === "failed") {
+          stopPolling();
+          setIsLoading(false);
+          setError(result.job.errorMessage ?? "Job failed");
+        } else {
+          pollRef.current = setTimeout(tick, 3000);
+        }
+      };
+      pollRef.current = setTimeout(tick, 2000);
+    },
+    [router, stopPolling]
+  );
+
+  useEffect(() => stopPolling, [stopPolling]);
 
   async function handleSubmit() {
     const value = prompt.trim();
@@ -23,20 +63,37 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
     }
     setIsLoading(true);
     setError(null);
+    setJobStatus("queued");
+    setJobStep("Queued");
     try {
-      if (mode === "refine") {
-        await refineSite(siteId, value);
-      } else {
-        await submitRefinementPrompt(siteId, value, true);
-      }
+      const result =
+        mode === "refine"
+          ? await refineSite(siteId, value)
+          : await submitRefinementPrompt(siteId, value, true);
       setPrompt("");
-      router.refresh();
+      if (result.status === "completed") {
+        setJobStatus("completed");
+        setIsLoading(false);
+        router.refresh();
+      } else {
+        pollJob(result.jobId);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit");
-    } finally {
       setIsLoading(false);
+      setJobStatus(null);
+      setJobStep(null);
     }
   }
+
+  const statusLabel =
+    jobStatus === "queued"
+      ? "Queued…"
+      : jobStatus === "running"
+      ? jobStep ?? "Running…"
+      : jobStatus === "completed"
+      ? "Done — refreshing…"
+      : null;
 
   return (
     <div className="rounded-2xl border border-line bg-panel-2 p-6">
@@ -67,11 +124,17 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
       />
       <div className="mt-2 flex items-center justify-between text-xs text-muted">
         <span>{prompt.length}/500</span>
-        {mode === "regenerate" && (
+        {mode === "regenerate" && !isLoading && (
           <span className="text-amber-400/80">Starts from scratch — existing design will be replaced</span>
         )}
         {error ? <span className="text-rose-500">{error}</span> : null}
       </div>
+      {statusLabel ? (
+        <div className="mt-3 flex items-center gap-2 text-sm text-sky-300">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+          {statusLabel}
+        </div>
+      ) : null}
       <button
         type="button"
         onClick={() => void handleSubmit()}
