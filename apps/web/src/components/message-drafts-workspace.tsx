@@ -14,9 +14,7 @@ import {
   bulkGenerateMessageDrafts,
   copyMessageDraft,
   createMessageDraft,
-  getCtaVariants,
   getPreviewContext,
-  getTonePresets,
   listMessageDrafts,
   markMessageDraftReady,
   markMessageSent,
@@ -32,6 +30,19 @@ import type {
   MessageDraft,
   TonePreset,
 } from "@/lib/types";
+
+const TONE_PRESETS: TonePreset[] = [
+  { id: "professional", name: "Professional", description: "Formal and business-focused tone", example: "I hope this message finds you well. I would like to discuss…" },
+  { id: "casual", name: "Casual", description: "Relaxed and conversational tone", example: "Hey! Just wanted to reach out about…" },
+  { id: "urgent", name: "Urgent", description: "Time-sensitive and action-oriented tone", example: "Quick update - time is of the essence for…" },
+  { id: "friendly", name: "Friendly", description: "Warm and approachable tone", example: "Hi there! I'm excited to share with you…" },
+];
+
+const CTA_VARIANTS: CtaVariant[] = [
+  { id: "primary", name: "Primary CTA", description: "Main call-to-action for the message", label: "Review the preview", position: "bottom" },
+  { id: "secondary", name: "Secondary CTA", description: "Alternative call-to-action", label: "See source notes", position: "bottom" },
+  { id: "tertiary", name: "Tertiary CTA", description: "Additional call-to-action option", label: "Learn more", position: "inline" },
+];
 import { cn } from "@/lib/utils";
 
 type MessageLeadSummary = {
@@ -94,12 +105,11 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [dirtyDraftIds, setDirtyDraftIds] = useState<Set<string>>(new Set());
 
   const [draftState, setDraftState] = useState<Record<string, MessageDraft[]>>(
     () => Object.fromEntries(leadSummaries.map((e) => [e.lead.id, e.drafts]))
   );
-  const [tonePresets, setTonePresets] = useState<TonePreset[]>([]);
-  const [ctaVariants, setCtaVariants] = useState<CtaVariant[]>([]);
   const [previewContexts, setPreviewContexts] = useState<Record<string, unknown>>({});
 
   const allDrafts = useMemo(() => Object.values(draftState).flat(), [draftState]);
@@ -125,11 +135,6 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
     return drafts.find((d) => d.deliveryChannel === activeChannel || d.channel === activeChannel) ?? drafts[0] ?? null;
   }, [draftState, selectedLeadId, activeChannel]);
 
-  useEffect(() => {
-    getTonePresets().then(setTonePresets).catch(console.error);
-    getCtaVariants().then(setCtaVariants).catch(console.error);
-  }, []);
-
   const activeDraftId = activeDraft?.id;
   useEffect(() => {
     if (!activeDraftId) return;
@@ -146,6 +151,11 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
   async function refreshDrafts(leadId: string) {
     const payload = await listMessageDrafts(leadId);
     setDraftState((prev) => ({ ...prev, [leadId]: payload.items }));
+    setDirtyDraftIds((prev) => {
+      const next = new Set(prev);
+      payload.items.forEach((d) => next.delete(d.id));
+      return next;
+    });
     router.refresh();
   }
 
@@ -200,8 +210,9 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not mark ready.";
       showNotice("err", msg);
-      if (msg.includes("Cannot mark as ready")) {
-        setValidationErrors(msg.split(": ").slice(1).join(": ").split(", "));
+      const match = msg.match(/Cannot mark as ready: (.+)/);
+      if (match) {
+        setValidationErrors(match[1].split(", "));
       }
     } finally {
       setPendingId(null);
@@ -272,6 +283,7 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
         d.id === activeDraft.id ? { ...d, ...patch } : d
       ),
     }));
+    setDirtyDraftIds((prev) => new Set(prev).add(activeDraft.id));
   }
 
   const previewCtx = activeDraft ? (previewContexts[activeDraft.id] as Record<string, unknown> | undefined) : undefined;
@@ -474,8 +486,13 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
 
             {/* Workspace body */}
             <div className="flex-1 overflow-y-auto px-6 py-4">
-              {/* Brief not approved */}
-              {selectedEntry.brief?.approvalState !== "approved" && !activeDraft ? (
+              {/* Brief not ready */}
+              {selectedEntry.brief === null && !activeDraft ? (
+                <EmptyState
+                  title="No brief found"
+                  description="The brief could not be loaded. Check the lead detail page to create or approve one."
+                />
+              ) : selectedEntry.brief?.approvalState !== "approved" && !activeDraft ? (
                 <EmptyState
                   title="Brief not approved yet"
                   description="Approve the brief before creating outreach drafts for this lead."
@@ -522,6 +539,9 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                       <span className="text-xs text-muted">
                         v{activeDraft.version} · {relativeTime(activeDraft.updatedAt)}
                       </span>
+                      {dirtyDraftIds.has(activeDraft.id) && (
+                        <span className="text-xs text-amber-400">Unsaved changes</span>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       {CHANNELS.map((ch) => {
@@ -561,7 +581,7 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                         onChange={(e) => patchActiveDraft({ tonePreset: e.target.value || null })}
                       >
                         <option value="">None</option>
-                        {tonePresets.map((p) => (
+                        {TONE_PRESETS.map((p) => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </Select>
@@ -579,7 +599,7 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                         onChange={(e) => patchActiveDraft({ ctaVariant: e.target.value || null })}
                       >
                         <option value="">None</option>
-                        {ctaVariants.map((v) => (
+                        {CTA_VARIANTS.map((v) => (
                           <option key={v.id} value={v.id}>{v.name}</option>
                         ))}
                       </Select>

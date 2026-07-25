@@ -117,7 +117,10 @@ async def mark_message_ready(
     draft_id: str, user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[MessageDraft]:
     before = await message_repository.get_copy(draft_id)
-    draft = await message_repository.mark_ready(draft_id)
+    try:
+        draft = await message_repository.mark_ready(draft_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if draft is None:
         raise HTTPException(status_code=404, detail="Message draft not found.")
     await write_audit_log(
@@ -183,7 +186,10 @@ async def mark_message_sent(
     draft_id: str, user_id: CurrentUserId, http_request: Request
 ) -> ResponseEnvelope[MessageDraft]:
     before = await message_repository.get_copy(draft_id)
-    draft = await message_repository.mark_sent(draft_id)
+    try:
+        draft = await message_repository.mark_sent(draft_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if draft is None:
         raise HTTPException(status_code=404, detail="Message draft not found.")
     await write_audit_log(

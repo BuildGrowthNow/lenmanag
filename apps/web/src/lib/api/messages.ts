@@ -1,6 +1,5 @@
 import { request, safeRequest } from "@/lib/api/client";
 import type {
-  CtaVariant,
   MessageCopyResponse,
   MessageDraft,
   MessageDraftBulkGeneratePayload,
@@ -8,7 +7,6 @@ import type {
   MessageDraftListResponse,
   MessageDraftPatchPayload,
   PreviewContextResponse,
-  TonePreset
 } from "@/lib/types";
 
 export async function listMessageDrafts(leadId: string): Promise<MessageDraftListResponse> {
@@ -32,13 +30,6 @@ export async function copyMessageDraft(draftId: string, channel?: string): Promi
   return request(`/api/messages/${draftId}/copy${query}`);
 }
 
-export async function getTonePresets(): Promise<TonePreset[]> {
-  return request("/api/messages/tone-presets");
-}
-
-export async function getCtaVariants(): Promise<CtaVariant[]> {
-  return request("/api/messages/cta-variants");
-}
 
 export async function markMessageSent(draftId: string): Promise<MessageDraft> {
   return request(`/api/messages/${draftId}/mark-sent`, { method: "POST" });

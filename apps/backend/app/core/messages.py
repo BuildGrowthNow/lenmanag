@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -264,7 +265,8 @@ Write the message now. Be specific, not generic. Reference their actual business
         brief = await lead_repository.get_master_brief(lead_id)
         if lead is None or brief is None or brief.approvalState != "approved":
             return None
-        site = await site_repository.get_site(lead_id)
+        sites = await site_repository.list_sites_by_lead(lead_id)
+        site = sites[0] if sites else None
 
         channel = (
             request.channel
@@ -377,7 +379,7 @@ Write the message now. Be specific, not generic. Reference their actual business
     async def bulk_generate_drafts(
         self, lead_id: str, user_id: str = "", force: bool = False
     ) -> list[MessageDraft]:
-        """Generate one draft per channel (email, linkedin, whatsapp) in sequence."""
+        """Generate one draft per channel (email, linkedin, whatsapp) concurrently."""
         await self._maybe_ensure_indexes()
         lead = await lead_repository.get_lead(lead_id)
         brief = await lead_repository.get_master_brief(lead_id)
@@ -395,17 +397,17 @@ Write the message now. Be specific, not generic. Reference their actual business
         if not channels_to_generate:
             return [MessageDraft.model_validate(doc) for doc in existing]
 
-        created: list[MessageDraft] = []
-        for channel in channels_to_generate:
-            draft = await self.create_draft(
-                lead_id,
-                MessageDraftCreateRequest(channel=channel),
-                user_id=user_id,
-            )
-            if draft is not None:
-                created.append(draft)
-
-        return created
+        results = await asyncio.gather(
+            *[
+                self.create_draft(
+                    lead_id,
+                    MessageDraftCreateRequest(channel=channel),
+                    user_id=user_id,
+                )
+                for channel in channels_to_generate
+            ]
+        )
+        return [d for d in results if d is not None]
 
     async def list_drafts(self, lead_id: str) -> MessageDraftListResponse:
         docs = await self._message_docs(lead_id)
@@ -517,7 +519,7 @@ Write the message now. Be specific, not generic. Reference their actual business
             return None
         draft = MessageDraft.model_validate(doc)
         if draft.status != "ready":
-            raise ValueError("Can only mark sent messages as ready")
+            raise ValueError("Can only mark ready messages as sent")
         draft = await self.update_draft(
             draft_id, MessageDraftPatchRequest(status="sent")
         )
@@ -573,7 +575,8 @@ Write the message now. Be specific, not generic. Reference their actual business
             return None
         draft = MessageDraft.model_validate(doc)
         brief = await lead_repository.get_master_brief(draft.leadId)
-        site = await site_repository.get_site(draft.leadId)
+        sites = await site_repository.list_sites_by_lead(draft.leadId)
+        site = sites[0] if sites else None
         return {
             "draftId": draft.id,
             "leadId": draft.leadId,
