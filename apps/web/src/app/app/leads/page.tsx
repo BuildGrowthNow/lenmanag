@@ -142,7 +142,7 @@ const GENERATION_TYPE_OPTIONS: { key: GenerationType; label: string; description
 ];
 
 function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
-  const [form, setForm] = useState({ companyName: "", websiteUrl: "", notes: "" });
+  const [form, setForm] = useState({ companyName: "", contactName: "", websiteUrl: "", notes: "" });
   const [mode, setMode] = useState<PipelineMode>("auto");
   const [generationTypes, setGenerationTypes] = useState<GenerationType[]>(["nextjs"]);
   const [saving, setSaving] = useState(false);
@@ -150,7 +150,7 @@ function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
 
   useEffect(() => {
     if (open) {
-      setForm({ companyName: "", websiteUrl: "", notes: "" });
+      setForm({ companyName: "", contactName: "", websiteUrl: "", notes: "" });
       setMode("auto");
       setGenerationTypes(["nextjs"]);
       setError(null);
@@ -173,6 +173,7 @@ function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
     try {
       await createLead({
         companyName: form.companyName.trim() || null,
+        contactName: form.contactName.trim() || null,
         websiteUrl: form.websiteUrl.trim(),
         notes: form.notes.trim() || null,
         pipelineMode: mode,
@@ -209,6 +210,14 @@ function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
               value={form.companyName}
               onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
               placeholder="Optional — extracted automatically if blank"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs uppercase tracking-[0.2em] text-muted">Contact name</label>
+            <Input
+              value={form.contactName}
+              onChange={(e) => setForm((f) => ({ ...f, contactName: e.target.value }))}
+              placeholder="Optional — shown on the redesign preview page"
             />
           </div>
           <div className="space-y-1.5">

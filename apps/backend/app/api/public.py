@@ -6,10 +6,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.core.config import get_settings
+from app.core.leads import lead_repository
+from app.core.mongo import get_database
 from app.core.sites import site_repository
 from app.core.versioning import response_meta
 from app.schemas.response import ResponseEnvelope, success_response
-from app.schemas.site import GeneratedSite
+from app.schemas.site import GeneratedSite, RedesignPageData, RedesignVariant
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -52,3 +54,74 @@ async def preview_site_variant(slug: str) -> Response:
     settings = get_settings()
     preview_base = settings.preview_base_url.rstrip("/")
     return RedirectResponse(url=f"{preview_base}/{site.previewSlug}")
+
+
+@router.get("/redesign/{slug}", response_model=ResponseEnvelope[RedesignPageData])
+async def get_redesign_page(
+    slug: str, request: Request
+) -> ResponseEnvelope[RedesignPageData]:
+    """
+    Public client-facing endpoint: returns data for the /redesign/{slug} page.
+    Looks up the lead by redesignSlug and returns all variants that have
+    been successfully compiled and have at least one screenshot.
+    """
+    database = get_database()
+    if database is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+    lead_doc = await database["leads"].find_one({"redesignSlug": slug})
+    if lead_doc is None:
+        raise HTTPException(status_code=404, detail="Redesign page not found")
+
+    lead_id: str = str(lead_doc["id"])
+
+    # Fetch all sites for this lead
+    sites = await site_repository.list_sites_by_lead(lead_id)
+
+    # Filter to only successfully compiled sites that have screenshots
+    eligible = [
+        s
+        for s in sites
+        if s.compilationStatus == "success" and len(s.screenshotRefs) > 0
+    ]
+
+    if not eligible:
+        raise HTTPException(status_code=404, detail="Redesign page not found")
+
+    # Sort by variantPosition
+    eligible.sort(key=lambda s: s.variantPosition)
+
+    # Build variant list
+    variants: list[RedesignVariant] = []
+    for site in eligible:
+        screenshot_url = site.screenshotRefs[0].url
+        variants.append(
+            RedesignVariant(
+                siteId=site.id,
+                previewUrl=site.previewUrl,
+                screenshotUrl=screenshot_url,
+                variantPosition=site.variantPosition,
+            )
+        )
+
+    # Try to get logo from master brief
+    logo_url: str | None = None
+    try:
+        master_brief = await lead_repository.get_master_brief(lead_id)
+        if master_brief is not None and master_brief.brandAssets.logoUrl:
+            logo_url = master_brief.brandAssets.logoUrl
+    except Exception:
+        pass  # Best effort — logo is optional
+
+    data = RedesignPageData(
+        leadId=lead_id,
+        companyName=lead_doc.get("companyName"),
+        contactName=lead_doc.get("contactName"),
+        logoUrl=logo_url,
+        variants=variants,
+    )
+
+    return cast(
+        ResponseEnvelope[RedesignPageData],
+        success_response(data, meta=response_meta(request)),
+    )

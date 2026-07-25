@@ -252,6 +252,7 @@ def _lead_doc_to_detail(
             for item in doc.get("sourceRefs", [])
         ],
         companyName=doc.get("companyName"),
+        contactName=doc.get("contactName"),
         websiteUrl=doc["websiteUrl"],
         normalizedWebsiteUrl=doc["normalizedWebsiteUrl"],
         normalizedDomain=doc["normalizedDomain"],
@@ -268,6 +269,7 @@ def _lead_doc_to_detail(
         latestJob=latest_job,
         jobs=[_job_doc_to_summary(job) for job in (jobs or [])],
         pipelineEvents=pipeline_events,
+        redesignSlug=doc.get("redesignSlug"),
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
         archivedAt=_serialize_datetime(doc.get("archivedAt")),
@@ -282,6 +284,7 @@ def _lead_doc_to_list_item(
         user_id=str(doc.get("user_id", "")),
         sourceType=doc["sourceType"],
         companyName=doc.get("companyName"),
+        contactName=doc.get("contactName"),
         websiteUrl=doc["websiteUrl"],
         normalizedDomain=doc["normalizedDomain"],
         status=doc["status"],
@@ -293,6 +296,7 @@ def _lead_doc_to_list_item(
         missingFields=list(doc.get("missingFields", [])),
         version=int(doc.get("version", 1)),
         latestJob=_job_doc_to_summary(latest_job) if latest_job else None,
+        redesignSlug=doc.get("redesignSlug"),
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
     )
@@ -357,11 +361,28 @@ def _pipeline_event_to_model(doc: dict[str, Any]) -> PipelineEvent:
     )
 
 
+def _generate_redesign_slug(company_name: str | None) -> str:
+    """Generate a short unique slug for the public redesign page."""
+    suffix = uuid4().hex[:4]
+    if not company_name:
+        return f"site-{uuid4().hex[:6]}"
+    # Lowercase, keep only alphanumeric chars and hyphens, replace spaces with hyphens
+    slug = company_name.lower()
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
+    slug = re.sub(r"\s+", "-", slug.strip())
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    slug = slug[:8].rstrip("-")
+    if not slug:
+        return f"site-{uuid4().hex[:6]}"
+    return f"{slug}-{suffix}"
+
+
 def _build_lead_doc(
     *,
     source_type: str,
     source_ref: str | None,
     company_name: str | None,
+    contact_name: str | None = None,
     website_url: str,
     normalized_url: str,
     normalized_domain: str,
@@ -392,6 +413,7 @@ def _build_lead_doc(
             }
         ],
         "companyName": company_name,
+        "contactName": contact_name,
         "websiteUrl": website_url,
         "normalizedWebsiteUrl": normalized_url,
         "normalizedDomain": normalized_domain,
@@ -410,6 +432,7 @@ def _build_lead_doc(
         "pipelineMode": pipeline_mode,
         "pipelineStatusDetail": None,
         "pipelineEvents": [initial_event],
+        "redesignSlug": _generate_redesign_slug(company_name),
         "createdAt": now,
         "updatedAt": now,
         "archivedAt": None,
@@ -541,6 +564,7 @@ class LeadRepository:
             source_type="manual",
             source_ref=None,
             company_name=request.companyName.strip() if request.companyName else None,
+            contact_name=request.contactName.strip() if request.contactName else None,
             website_url=normalized_url,
             normalized_url=normalized_url,
             normalized_domain=normalized_domain,
@@ -1556,6 +1580,8 @@ class LeadRepository:
         updated = dict(doc)
         if patch.companyName is not None:
             updated["companyName"] = patch.companyName.strip() or None
+        if patch.contactName is not None:
+            updated["contactName"] = patch.contactName.strip() or None
         if patch.websiteUrl is not None:
             normalized_url, normalized_domain = _normalize_input_url(patch.websiteUrl)
             updated["websiteUrl"] = normalized_url

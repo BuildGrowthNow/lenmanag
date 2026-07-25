@@ -1227,6 +1227,7 @@ export type LeadListItem = {
   id: string;
   sourceType: LeadSourceType;
   companyName: string | null;
+  contactName: string | null;
   websiteUrl: string;
   normalizedDomain: string;
   status: LeadStatus;
@@ -1238,6 +1239,7 @@ export type LeadListItem = {
   missingFields: string[];
   version: number;
   latestJob: LeadJobSummary | null;
+  redesignSlug: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1252,6 +1254,7 @@ export type LeadDetail = {
     importedAt: string;
   }>;
   companyName: string | null;
+  contactName: string | null;
   websiteUrl: string;
   normalizedWebsiteUrl: string;
   normalizedDomain: string;
@@ -1267,6 +1270,7 @@ export type LeadDetail = {
   latestJob: LeadJobSummary | null;
   jobs: LeadJobSummary[];
   pipelineEvents: PipelineEvent[];
+  redesignSlug: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -1274,6 +1278,7 @@ export type LeadDetail = {
 
 export type LeadUpsertPayload = {
   companyName?: string | null;
+  contactName?: string | null;
   websiteUrl: string;
   industry?: string | null;
   notes?: string | null;

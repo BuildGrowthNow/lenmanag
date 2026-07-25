@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 from app.core.celery_app import celery_app
 from app.core.leads import lead_repository
@@ -164,6 +165,72 @@ def purge_expired_assets_task() -> dict:
         "purged_bytes": result.purged_bytes,
         "errors": result.errors,
     }
+
+
+@celery_app.task(
+    name="lenquant.jobs.run_screenshot",
+    bind=True,
+    max_retries=2,
+    retry_backoff=True,
+    retry_backoff_max=120,
+)
+def run_screenshot_task(self, site_id: str, preview_url: str) -> None:
+    """Capture a viewport screenshot for a generated site and persist it to MongoDB."""
+
+    async def _async_runner() -> None:
+        from app.core.config import get_settings
+        from app.core.mongo import get_database
+        from app.core.site_screenshot import capture_site_screenshot
+
+        preview_base_url = get_settings().preview_base_url
+
+        # capture_site_screenshot is synchronous (uses Playwright sync API),
+        # so we run it in a thread-pool executor to avoid blocking the event loop.
+        loop = asyncio.get_event_loop()
+        metadata = await loop.run_in_executor(
+            None,
+            capture_site_screenshot,
+            site_id,
+            preview_url,
+            preview_base_url,
+        )
+        if metadata is None:
+            logger.warning(
+                "run_screenshot_task: capture returned None for site %s", site_id
+            )
+            return
+
+        database = get_database()
+        if database is None:
+            logger.warning(
+                "run_screenshot_task: no database available — cannot persist screenshot for site %s",
+                site_id,
+            )
+            return
+
+        await database["generated_sites"].update_one(
+            {"id": site_id},
+            {
+                "$set": {
+                    "screenshotRefs": [metadata.model_dump()],
+                    "updatedAt": datetime.now(timezone.utc),
+                }
+            },
+        )
+        logger.info(
+            "run_screenshot_task: screenshot captured and saved for site %s", site_id
+        )
+
+    try:
+        _run(_async_runner())
+    except Exception as exc:
+        logger.error(
+            "run_screenshot_task: failed for site %s: %s",
+            site_id,
+            exc,
+            exc_info=True,
+        )
+        raise
 
 
 @celery_app.task(
@@ -456,6 +523,16 @@ async def _run_multi_variant_generation_async(
             lead_id,
             LeadPatchRequest(pipelineStage="needs_attention"),
         )
+
+    # Best-effort: queue a screenshot task for each successfully generated site.
+    # Failures here must never block or fail the generation job.
+    for site in generated_sites:
+        try:
+            run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)
+        except Exception as exc:
+            logger.warning(
+                "Could not queue screenshot task for site %s: %s", site.id, exc
+            )
 
     logger.info(
         f"Multi-variant generation completed for lead {lead_id}: "

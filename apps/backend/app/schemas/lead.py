@@ -138,6 +138,7 @@ class LeadListItem(BaseModel):
     user_id: str
     sourceType: LeadSourceType
     companyName: Optional[str] = None
+    contactName: Optional[str] = None
     websiteUrl: str
     normalizedDomain: str
     status: LeadStatus
@@ -149,6 +150,7 @@ class LeadListItem(BaseModel):
     missingFields: list[str] = Field(default_factory=list)
     version: int
     latestJob: Optional[JobSummary] = None
+    redesignSlug: Optional[str] = None
     createdAt: datetime
     updatedAt: datetime
 
@@ -160,6 +162,7 @@ class LeadDetail(BaseModel):
     sourceRef: Optional[str] = None
     sourceRefs: list[SourceReference] = Field(default_factory=list)
     companyName: Optional[str] = None
+    contactName: Optional[str] = None
     websiteUrl: str
     normalizedWebsiteUrl: str
     normalizedDomain: str
@@ -176,6 +179,7 @@ class LeadDetail(BaseModel):
     latestJob: Optional[JobSummary] = None
     jobs: list[JobSummary] = Field(default_factory=list)
     pipelineEvents: list[PipelineEvent] = Field(default_factory=list)
+    redesignSlug: Optional[str] = None
     createdAt: datetime
     updatedAt: datetime
     archivedAt: Optional[datetime] = None
@@ -183,6 +187,7 @@ class LeadDetail(BaseModel):
 
 class LeadUpsertRequest(BaseModel):
     companyName: Optional[str] = None
+    contactName: Optional[str] = None
     websiteUrl: str
     industry: Optional[str] = None
     notes: Optional[str] = None
@@ -198,6 +203,7 @@ class LeadUpsertRequest(BaseModel):
 
 class LeadPatchRequest(BaseModel):
     companyName: Optional[str] = None
+    contactName: Optional[str] = None
     websiteUrl: Optional[str] = None
     industry: Optional[str] = None
     notes: Optional[str] = None

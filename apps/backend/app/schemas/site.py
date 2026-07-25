@@ -497,3 +497,18 @@ class SiteOverrideCreateRequest(BaseModel):
     previousValue: Optional[str] = None
     reason: Optional[str] = None
     sourceType: OverrideSourceType = "manual"
+
+
+class RedesignVariant(BaseModel):
+    siteId: str
+    previewUrl: str
+    screenshotUrl: str
+    variantPosition: int
+
+
+class RedesignPageData(BaseModel):
+    leadId: str
+    companyName: Optional[str] = None
+    contactName: Optional[str] = None
+    logoUrl: Optional[str] = None
+    variants: list[RedesignVariant] = Field(default_factory=list)
