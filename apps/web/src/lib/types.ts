@@ -1154,6 +1154,7 @@ export type MessageDraft = {
   ctaSecondaryHref: string | null;
   calendlyUrl: string | null;
   previewUrl: string | null;
+  compareUrl: string | null;
   exportUrl: string | null;
   status: MessageDraftStatus;
   version: number;
@@ -1184,6 +1185,10 @@ export type MessageCopyResponse = {
 
 export type MessageDraftCreatePayload = {
   channel?: string;
+};
+
+export type MessageDraftBulkGeneratePayload = {
+  force?: boolean;
 };
 
 export type MessageDraftPatchPayload = {
@@ -1339,7 +1344,7 @@ export type MasterBrief = {
   ctaStrategy: string;
   aiReasoning: string;
   confidenceScore: number;
-  approvalState: "pending" | "approved" | "rejected";
+  approvalState: BriefApprovalState;
   approvedBy: string | null;
   approvedAt: string | null;
   reviewNotes: string | null;

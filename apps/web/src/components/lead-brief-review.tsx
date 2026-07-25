@@ -26,7 +26,7 @@ function confidenceBadgeClass(confidence: number) {
 
 function approvalBadgeClass(state: string) {
   if (state === "approved") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-100";
-  if (state === "pending") return "border-amber-500/40 bg-amber-500/10 text-amber-100";
+  if (state === "needs_review") return "border-amber-500/40 bg-amber-500/10 text-amber-100";
   return "border-sky-500/40 bg-sky-500/10 text-sky-100";
 }
 

@@ -15,6 +15,7 @@ from app.schemas.message import (
     CtaVariant,
     MessageCopyResponse,
     MessageDraft,
+    MessageDraftBulkGenerateRequest,
     MessageDraftCreateRequest,
     MessageDraftListResponse,
     MessageDraftPatchRequest,
@@ -46,6 +47,33 @@ async def create_message_draft(
         after=draft.model_dump(),
     )
     return success_response(draft, meta=response_meta(http_request))
+
+
+@router.post(
+    "/leads/{lead_id}/messages/generate",
+    response_model=ResponseEnvelope[MessageDraftListResponse],
+)
+async def bulk_generate_message_drafts(
+    lead_id: str,
+    payload: MessageDraftBulkGenerateRequest,
+    http_request: Request,
+    user_id: CurrentUserId,
+) -> ResponseEnvelope[MessageDraftListResponse]:
+    drafts = await message_repository.bulk_generate_drafts(
+        lead_id, user_id=user_id, force=payload.force
+    )
+    if not drafts and not payload.force:
+        existing = await message_repository.list_drafts(lead_id)
+        return success_response(existing, meta=response_meta(http_request))
+    result = await message_repository.list_drafts(lead_id)
+    await write_audit_log(
+        user_id,
+        "message",
+        lead_id,
+        "message_drafts_bulk_generated",
+        after={"count": len(drafts), "channels": [d.channel for d in drafts]},
+    )
+    return success_response(result, meta=response_meta(http_request))
 
 
 @router.get(

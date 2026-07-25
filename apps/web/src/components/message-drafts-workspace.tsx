@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import {
+  bulkGenerateMessageDrafts,
   copyMessageDraft,
   createMessageDraft,
   getCtaVariants,
@@ -249,6 +250,20 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
     }
   }
 
+  async function handleBulkGenerate(leadId: string) {
+    setPendingId(leadId + "_bulk");
+    setNotice(null);
+    try {
+      await bulkGenerateMessageDrafts(leadId, { force: false });
+      await refreshDrafts(leadId);
+      showNotice("ok", "AI drafted email, LinkedIn, and WhatsApp messages.");
+    } catch (e) {
+      showNotice("err", e instanceof Error ? e.message : "Could not generate drafts.");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   function patchActiveDraft(patch: Partial<MessageDraft>) {
     if (!activeDraft || !selectedLeadId) return;
     setDraftState((prev) => ({
@@ -387,6 +402,14 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                   <div className="mt-0.5 text-sm text-muted">{selectedEntry.lead.normalizedDomain}</div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <a
+                    href={`/compare/${selectedEntry.lead.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-xs font-medium text-yellow-300 transition-colors hover:bg-yellow-500/20"
+                  >
+                    Compare all ↗
+                  </a>
                   {selectedEntry.site?.previewUrl && (
                     <a
                       href={selectedEntry.site.previewUrl}
@@ -459,21 +482,30 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                 />
               ) : !activeDraft ? (
                 /* No draft for this channel */
-                <div className="rounded-2xl border border-dashed border-line bg-panel/60 p-6">
-                  <div className="text-sm font-medium text-text">No {activeChannel} draft yet</div>
-                  <div className="mt-1 text-xs text-muted">
-                    Create a draft derived from the approved brief and generated preview.
+                <div className="rounded-2xl border border-dashed border-line bg-panel/60 p-6 space-y-5">
+                  <div>
+                    <div className="text-sm font-medium text-text">No {activeChannel} draft yet</div>
+                    <div className="mt-1 text-xs text-muted">
+                      Use AI to draft all 3 channels at once, or create a single draft manually.
+                    </div>
                   </div>
-                  <div className="mt-4 flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      disabled={pendingId === selectedEntry.lead.id + "_bulk"}
+                      onClick={() => void handleBulkGenerate(selectedEntry.lead.id)}
+                    >
+                      {pendingId === selectedEntry.lead.id + "_bulk" ? "Generating…" : "Generate all 3 with AI"}
+                    </Button>
                     {CHANNELS.map((ch) => (
                       <Button
                         key={ch}
                         type="button"
-                        variant={ch === activeChannel ? "default" : "secondary"}
+                        variant="secondary"
                         disabled={pendingId === selectedEntry.lead.id + ch}
                         onClick={() => void handleCreateDraft(selectedEntry.lead.id, ch)}
                       >
-                        {ch === activeChannel ? `Create ${ch} draft` : ch}
+                        {ch}
                       </Button>
                     ))}
                   </div>
@@ -592,7 +624,7 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                         placeholder="Message body…"
                       />
                       {/* Insert link helper */}
-                      <div className="mt-1 flex items-center gap-2">
+                      <div className="mt-1 flex items-center gap-2 flex-wrap">
                         <span className="text-[11px] text-muted">Insert:</span>
                         {activeDraft.calendlyUrl && (
                           <button
@@ -608,6 +640,14 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                             onClick={() => patchActiveDraft({ body: `${activeDraft.body}\n\n${activeDraft.previewUrl}` })}
                           >
                             Preview link
+                          </button>
+                        )}
+                        {activeDraft.compareUrl && (
+                          <button
+                            className="text-[11px] text-yellow-400/80 underline-offset-2 hover:text-yellow-300 hover:underline"
+                            onClick={() => patchActiveDraft({ body: `${activeDraft.body}\n\n${activeDraft.compareUrl}` })}
+                          >
+                            All variants link
                           </button>
                         )}
                         {activeDraft.exportUrl && (
@@ -630,6 +670,14 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                         <div className="text-sm text-text">{previewCtx.briefSummary}</div>
                       )}
                       <div className="flex flex-wrap gap-2">
+                        <a
+                          href={`/compare/${selectedEntry.lead.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-xs font-medium text-yellow-300 transition-colors hover:bg-yellow-500/20"
+                        >
+                          All variants ↗
+                        </a>
                         {typeof previewCtx.sitePreviewUrl === "string" && previewCtx.sitePreviewUrl && (
                           <a
                             href={previewCtx.sitePreviewUrl}

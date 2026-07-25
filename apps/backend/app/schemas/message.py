@@ -32,13 +32,14 @@ class MessageDraft(BaseModel):
     ctaSecondaryHref: Optional[str] = None
     calendlyUrl: Optional[str] = None
     previewUrl: Optional[str] = None
+    compareUrl: Optional[str] = None
     exportUrl: Optional[str] = None
     status: MessageStatus = "draft"
     version: int
     createdAt: datetime
     updatedAt: datetime
 
-    @field_validator("calendlyUrl")
+    @field_validator("calendlyUrl")  # type: ignore[misc]
     @classmethod
     def validate_calendly_url(cls, v: Optional[str]) -> Optional[str]:
         if v is None or v == "":
@@ -58,6 +59,17 @@ class MessageDraftCreateRequest(BaseModel):
     channel: str = "email"
 
 
+class MessageDraftBulkGenerateRequest(BaseModel):
+    force: bool = False
+
+
+class GeneratedMessageVariant(BaseModel):
+    channel: DeliveryChannel
+    subject: str
+    body: str
+    angle: str
+
+
 class MessageDraftPatchRequest(BaseModel):
     subject: Optional[str] = None
     body: Optional[str] = None
@@ -71,7 +83,7 @@ class MessageDraftPatchRequest(BaseModel):
     calendlyUrl: Optional[str] = None
     status: Optional[MessageStatus] = None
 
-    @field_validator("calendlyUrl")
+    @field_validator("calendlyUrl")  # type: ignore[misc]
     @classmethod
     def validate_calendly_url(cls, v: Optional[str]) -> Optional[str]:
         if v is None or v == "":

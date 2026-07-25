@@ -614,6 +614,12 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary">
+            <Link href={`/compare/${lead.id}`} target="_blank" className="flex items-center gap-1.5">
+              Compare all
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+          <Button variant="secondary">
             <Link href={previewUrl} target="_blank" className="flex items-center gap-1.5">
               Preview site
               <ExternalLink className="h-3.5 w-3.5" />

@@ -3,6 +3,7 @@ import type {
   CtaVariant,
   MessageCopyResponse,
   MessageDraft,
+  MessageDraftBulkGeneratePayload,
   MessageDraftCreatePayload,
   MessageDraftListResponse,
   MessageDraftPatchPayload,
@@ -49,4 +50,11 @@ export async function resetMessageToDraft(draftId: string): Promise<MessageDraft
 
 export async function getPreviewContext(draftId: string): Promise<PreviewContextResponse> {
   return request(`/api/messages/${draftId}/preview-context`);
+}
+
+export async function bulkGenerateMessageDrafts(
+  leadId: string,
+  payload: MessageDraftBulkGeneratePayload = {}
+): Promise<MessageDraftListResponse> {
+  return request(`/api/leads/${leadId}/messages/generate`, { method: "POST", body: payload });
 }

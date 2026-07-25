@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -10,6 +11,7 @@ from app.core.mongo import get_database
 from app.core.sites import site_repository
 from app.schemas.message import (
     CtaVariant,
+    GeneratedMessageVariant,
     MessageCopyResponse,
     MessageDraft,
     MessageDraftCreateRequest,
@@ -17,6 +19,8 @@ from app.schemas.message import (
     MessageDraftPatchRequest,
     TonePreset,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _now() -> datetime:
@@ -143,6 +147,115 @@ class MessageRepository:
         docs = await cursor.to_list(length=100)
         return [dict(doc) for doc in docs]
 
+    async def _ai_generate_variant(
+        self,
+        channel: str,
+        company_name: str,
+        preview_url: str,
+        compare_url: str,
+        value_proposition: str,
+        conversion_action: str,
+        primary_audience: str,
+        tone_and_voice: str,
+        pain_points: list[str],
+        section_headlines: list[str],
+        cta_label: str,
+    ) -> GeneratedMessageVariant:
+        """Generate a single channel-specific outbound message using the LLM."""
+        from app.core.llm import get_llm_client
+
+        channel_instructions = {
+            "email": (
+                "Write a cold outbound email. Include a subject line (prefix it with 'Subject: ')."
+                " Keep the body under 120 words. Personalize the opening with a specific observation"
+                " about their business. Mention one concrete pain point. Include the preview link"
+                " naturally near the end. Avoid salesy language — sound like a thoughtful peer."
+                " Sign off with a soft call-to-action asking for a quick reaction, not a meeting."
+            ),
+            "linkedin": (
+                "Write a LinkedIn connection note. Max 300 characters total."
+                " Sound human, not pitchy. Reference something specific about what they do."
+                " End with a single question or light hook. No links — just the connection message."
+            ),
+            "whatsapp": (
+                "Write a short WhatsApp follow-up (assume you've already connected)."
+                " Under 80 words. Casual and direct. Reference the preview link."
+                " Single paragraph. End with an open question or next step prompt."
+            ),
+        }
+        instruction = channel_instructions.get(channel, channel_instructions["email"])
+
+        pain_points_str = (
+            "\n".join(f"- {p}" for p in pain_points[:3])
+            if pain_points
+            else "Not specified"
+        )
+        headlines_str = (
+            ", ".join(f'"{h}"' for h in section_headlines[:4])
+            if section_headlines
+            else "Not specified"
+        )
+
+        prompt = f"""You are writing outbound sales messages for a B2B agency that builds custom landing page previews for prospective clients.
+
+COMPANY: {company_name}
+VALUE PROPOSITION: {value_proposition}
+TARGET AUDIENCE: {primary_audience}
+CONVERSION GOAL: {conversion_action}
+TONE & VOICE: {tone_and_voice}
+PAIN POINTS ADDRESSED: {pain_points_str}
+PAGE SECTION HEADLINES: {headlines_str}
+PREVIEW LINK: {preview_url}
+COMPARE ALL VARIANTS LINK: {compare_url}
+PRIMARY CTA: {cta_label}
+
+CHANNEL: {channel.upper()}
+INSTRUCTION: {instruction}
+
+Return ONLY a valid JSON object with these fields:
+{{
+  "subject": "email subject line (empty string for non-email channels)",
+  "body": "the message body",
+  "angle": "one sentence describing the persuasion angle used"
+}}
+
+Write the message now. Be specific, not generic. Reference their actual business context."""
+
+        llm = get_llm_client()
+        try:
+            raw = await llm.generate_text(prompt, temperature=0.7, max_tokens=600)
+            parsed = llm.extract_json_from_response(raw)
+            subject = str(parsed.get("subject", "")).strip()
+            if subject.lower().startswith("subject:"):
+                subject = subject[8:].strip()
+            return GeneratedMessageVariant(
+                channel=channel
+                if channel in ("email", "linkedin", "whatsapp", "generic")
+                else "email",  # type: ignore[arg-type]
+                subject=subject,
+                body=str(parsed.get("body", "")).strip(),
+                angle=str(parsed.get("angle", conversion_action)).strip(),
+            )
+        except Exception as exc:
+            logger.warning(
+                "AI message generation failed for channel %s: %s", channel, exc
+            )
+            fallback_body = (
+                f"Hi {company_name},\n\n"
+                f"I built a custom landing page preview for your business.\n\n"
+                f"It focuses on: {conversion_action}\n\n"
+                f"Take a look: {preview_url}\n\n"
+                f"Would love your reaction."
+            )
+            return GeneratedMessageVariant(
+                channel=channel
+                if channel in ("email", "linkedin", "whatsapp", "generic")
+                else "email",  # type: ignore[arg-type]
+                subject=f"{company_name} — custom preview",
+                body=fallback_body,
+                angle=conversion_action,
+            )
+
     async def create_draft(
         self, lead_id: str, request: MessageDraftCreateRequest, user_id: str = ""
     ) -> MessageDraft | None:
@@ -152,11 +265,14 @@ class MessageRepository:
         if lead is None or brief is None or brief.approvalState != "approved":
             return None
         site = await site_repository.get_site(lead_id)
-        tone = brief.toneAndVoice or "clear"
-        angle = (
-            brief.conversionAction
-            or "Keep the outreach tied to the approved preview story."
+
+        channel = (
+            request.channel
+            if request.channel in ("whatsapp", "linkedin", "email", "generic")
+            else "email"
         )
+        delivery_channel: Any = channel
+
         cta_primary = site.ctaStrategy.primary if site else None
         cta_secondary = site.ctaStrategy.secondary if site else None
         calendly_url = (
@@ -170,21 +286,46 @@ class MessageRepository:
             and "calendly" in cta_secondary.href.lower()
         ):
             calendly_url = cta_secondary.href
-        subject = f"{lead.companyName or 'Your site'} preview and next step"
-        body = "\n".join(
-            [
-                f"Hi {lead.companyName or 'there'},",
-                "",
-                f"I reviewed the approved preview for {lead.companyName or lead.websiteUrl}.",
-                f"The story centers on: {angle}",
-                f"Preview: {site.previewUrl if site else f'/st/{lead_id}'}",
-                f"Primary CTA: {cta_primary.label if cta_primary else 'Review the preview'} -> {cta_primary.href if cta_primary else '#contact'}",
-                f"Secondary CTA: {cta_secondary.label if cta_secondary else 'See source notes'} -> {cta_secondary.href if cta_secondary else '#source-notes'}",
-                f"Calendly: {calendly_url or 'not captured in source data'}",
-                "",
-                "Would you like to review it and decide on a next step?",
-            ]
+
+        preview_url = site.previewUrl if site else f"/st/{lead_id}"
+        company_name = lead.companyName or lead.websiteUrl or "your company"
+
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        app_base = (settings.preview_base_url or "https://sites.lenquant.com").rstrip(
+            "/"
         )
+        compare_url = f"{app_base}/compare/{lead_id}"
+
+        pain_points: list[str] = []
+        if brief.extractedContent:
+            pain_points = list(brief.extractedContent.get("pain_points", []))[:3]
+        if not pain_points and brief.primaryAudience:
+            pain_points = [f"Challenges faced by {brief.primaryAudience}"]
+
+        section_headlines = [s.headline for s in (brief.sections or []) if s.headline]
+
+        cta_label = (
+            cta_primary.label
+            if cta_primary
+            else brief.conversionAction or "Review the preview"
+        )
+
+        variant = await self._ai_generate_variant(
+            channel=channel,
+            company_name=company_name,
+            preview_url=preview_url,
+            compare_url=compare_url,
+            value_proposition=brief.valueProposition,
+            conversion_action=brief.conversionAction,
+            primary_audience=brief.primaryAudience,
+            tone_and_voice=brief.toneAndVoice,
+            pain_points=pain_points,
+            section_headlines=section_headlines,
+            cta_label=cta_label,
+        )
+
         now = _now()
         draft = MessageDraft(
             id=uuid4().hex,
@@ -192,26 +333,25 @@ class MessageRepository:
             leadId=lead_id,
             briefId=brief.id,
             siteId=site.id if site else None,
-            channel=request.channel,
-            deliveryChannel=request.channel
-            if request.channel in ("whatsapp", "linkedin", "email", "generic")
-            else "email",  # type: ignore[arg-type]
-            subject=subject,
-            body=body,
-            tone=tone,
+            channel=channel,
+            deliveryChannel=delivery_channel,
+            subject=variant.subject,
+            body=variant.body,
+            tone=brief.toneAndVoice or "clear",
             tonePreset=None,
             customTone=None,
-            angle=angle,
+            angle=variant.angle,
             ctaVariant=None,
             ctaPosition=None,
             ctaPrimaryLabel=cta_primary.label if cta_primary else "Review the preview",
-            ctaPrimaryHref=cta_primary.href if cta_primary else "#contact",
+            ctaPrimaryHref=cta_primary.href if cta_primary else preview_url,
             ctaSecondaryLabel=cta_secondary.label
             if cta_secondary
             else "See source notes",
             ctaSecondaryHref=cta_secondary.href if cta_secondary else "#source-notes",
             calendlyUrl=calendly_url,
-            previewUrl=site.previewUrl if site else None,
+            previewUrl=preview_url,
+            compareUrl=compare_url,
             exportUrl=site.exportMetadata.exportPath
             if site and site.exportMetadata
             else None,
@@ -233,6 +373,39 @@ class MessageRepository:
             metadata={"channel": draft.channel},
         )
         return draft
+
+    async def bulk_generate_drafts(
+        self, lead_id: str, user_id: str = "", force: bool = False
+    ) -> list[MessageDraft]:
+        """Generate one draft per channel (email, linkedin, whatsapp) in sequence."""
+        await self._maybe_ensure_indexes()
+        lead = await lead_repository.get_lead(lead_id)
+        brief = await lead_repository.get_master_brief(lead_id)
+        if lead is None or brief is None or brief.approvalState != "approved":
+            return []
+
+        existing = await self._message_docs(lead_id)
+        existing_channels = {doc.get("channel") for doc in existing}
+
+        channels_to_generate = ["email", "linkedin", "whatsapp"]
+        if not force:
+            channels_to_generate = [
+                c for c in channels_to_generate if c not in existing_channels
+            ]
+        if not channels_to_generate:
+            return [MessageDraft.model_validate(doc) for doc in existing]
+
+        created: list[MessageDraft] = []
+        for channel in channels_to_generate:
+            draft = await self.create_draft(
+                lead_id,
+                MessageDraftCreateRequest(channel=channel),
+                user_id=user_id,
+            )
+            if draft is not None:
+                created.append(draft)
+
+        return created
 
     async def list_drafts(self, lead_id: str) -> MessageDraftListResponse:
         docs = await self._message_docs(lead_id)

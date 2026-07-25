@@ -221,7 +221,7 @@ REQUIREMENTS:
    - Vanilla JS only (no jQuery, no React, no frameworks)
    - Smooth scroll behavior for anchor links
    - Mobile menu toggle
-   - Scroll-triggered fade-in animations using IntersectionObserver — elements MUST use `observer.observe()` and transition from opacity:0 to opacity:1 when they enter the viewport. Always initialize the IntersectionObserver with `{ threshold: 0.1 }` so elements trigger early. Elements above the fold (hero) must start at opacity:1, NOT opacity:0.
+   - Scroll-triggered fade-in animations using IntersectionObserver — elements MUST use `observer.observe()` and transition from opacity:0 to opacity:1 when they enter the viewport. Always initialize the IntersectionObserver with `{threshold: 0.1 }` so elements trigger early. Elements above the fold (hero) must start at opacity:1, NOT opacity:0.
    - Form validation if contact form present
 
 5. Design Quality:
