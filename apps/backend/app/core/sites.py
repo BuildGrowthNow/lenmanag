@@ -3004,8 +3004,8 @@ class SiteRepository:
             previewUrl=f"{preview_base}/{slug}",
             overrideCount=0,
             sourceCode=code_result.get("sourceCode"),
-            compiledBundleUrl=code_result.get("bundleUrl"),
-            compilationStatus="success" if code_result.get("sourceCode") else "pending",
+            compiledBundleUrl=code_result.get("compiledBundleUrl"),
+            compilationStatus=code_result.get("compilationStatus", "pending"),
             createdAt=_now(),
             updatedAt=_now(),
         )
