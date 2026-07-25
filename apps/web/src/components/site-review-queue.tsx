@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ExternalLink, SkipForward } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { approveSiteReview, patchSiteReview, submitRefinementPrompt } from "@/lib/api/sites";
 import type { SiteReviewQueueItem, SiteReviewQueueResponse } from "@/lib/types";
@@ -68,6 +68,7 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
     setMessage(null);
     try {
       await submitRefinementPrompt(item.siteId, prompt.trim());
+      await patchSiteReview(item.siteId, { outcome: "fail", notes: null, blockedReason: "Queued for regeneration" });
       setMessage({ text: "Queued for regeneration.", ok: true });
       onRegenerated();
     } catch (err) {
@@ -212,17 +213,22 @@ export function SiteReviewQueue({ queue }: SiteReviewQueueProps) {
     setSkipped((prev) => new Set(prev).add(siteId));
   }
 
-  const { automationSummary } = queue;
+  const liveSummary = useMemo(() => ({
+    ready: items.filter((i) => i.readinessStatus === "ready_to_publish").length,
+    needsReview: items.filter((i) => i.readinessStatus === "needs_review").length,
+    blocked: items.filter((i) => i.readinessStatus === "blocked").length,
+    regenerationBacklog: items.filter((i) => i.reviewState === "blocked").length,
+  }), [items]);
 
   return (
     <div className="space-y-6">
       {/* Summary strip */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Ready for automation", value: automationSummary.ready, color: "emerald" },
-          { label: "Needs review", value: automationSummary.needsReview, color: "amber" },
-          { label: "Blocked", value: automationSummary.blocked, color: "rose" },
-          { label: "Regeneration backlog", value: automationSummary.regenerationBacklog, color: "sky" },
+          { label: "Ready for automation", value: liveSummary.ready, color: "emerald" },
+          { label: "Needs review", value: liveSummary.needsReview, color: "amber" },
+          { label: "Blocked", value: liveSummary.blocked, color: "rose" },
+          { label: "Regeneration backlog", value: liveSummary.regenerationBacklog, color: "sky" },
         ].map((card) => (
           <div
             key={card.label}

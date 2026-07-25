@@ -1973,6 +1973,30 @@ def _quality_score(
     return max(0, min(100, score))
 
 
+def _default_brand_tokens_dict() -> dict[str, Any]:
+    """Return a minimal brand tokens dict for use when no extraction-derived tokens are available."""
+    inferred = {
+        "sourceKind": "inferred",
+        "inferenceLabel": "Default",
+        "confidence": 0,
+        "references": [],
+    }
+    return {
+        "paletteMode": "zinc",
+        "primaryColor": {"value": "#3b82f6", "evidence": inferred},
+        "secondaryColor": {"value": "#64748b", "evidence": inferred},
+        "accentColor": {"value": "#f59e0b", "evidence": inferred},
+        "backgroundColor": {"value": "#ffffff", "evidence": inferred},
+        "textColor": {"value": "#1a1a2e", "evidence": inferred},
+        "borderColor": {"value": "#e2e8f0", "evidence": inferred},
+        "typography": {"value": "system-ui, sans-serif", "evidence": inferred},
+        "imageStyle": {"value": "clean", "evidence": inferred},
+        "visualTone": {"value": "modern", "evidence": inferred},
+        "motionIntensity": {"value": "subtle", "evidence": inferred},
+        "layoutDensity": {"value": "balanced", "evidence": inferred},
+    }
+
+
 def _readiness_status(
     brief: SiteBrief, quality_score: int, missing_requirements: list[str]
 ) -> tuple[SiteReadinessStatus, SiteQaStatus]:
@@ -2674,14 +2698,14 @@ class SiteRepository:
                     if user_id and doc.get("userId") != user_id:
                         return None
                     site = _site_doc_to_current(doc)
-                    diffs = self.get_override_diff(site_id)
+                    diffs = await self.get_override_diff(site_id)
                     site.overrideDiffs = diffs
                     return site
                 return None
         doc = await database["generated_sites"].find_one(query)
         if doc:
             site = _site_doc_to_current(doc)
-            diffs = self.get_override_diff(site_id)
+            diffs = await self.get_override_diff(site_id)
             site.overrideDiffs = diffs
             return site
         return None
@@ -2935,7 +2959,13 @@ class SiteRepository:
             heroVariant=self._default_hero_variant(),
             sectionStack=[],
             ctaStrategy=self._default_cta_strategy(),
-            qualityScore=75,
+            qualityScore=_quality_score(
+                brief=master_brief,
+                extraction=extraction,
+                brand_tokens=_default_brand_tokens_dict(),
+                site_sections=[],
+                missing_requirements=list(master_brief.missingRequirements or []),
+            ),
             readinessStatus="ready_for_review",
             qaStatus="warn",
             previewSlug=slug,
@@ -2985,7 +3015,13 @@ class SiteRepository:
             heroVariant=self._default_hero_variant(),
             sectionStack=[],
             ctaStrategy=self._default_cta_strategy(),
-            qualityScore=70,
+            qualityScore=_quality_score(
+                brief=master_brief,
+                extraction=extraction,
+                brand_tokens=_default_brand_tokens_dict(),
+                site_sections=[],
+                missing_requirements=list(master_brief.missingRequirements or []),
+            ),
             readinessStatus="ready_for_review",
             qaStatus="warn",
             previewSlug=slug,
@@ -3317,8 +3353,11 @@ class SiteRepository:
                         and _review_state_from(site, review)
                         or doc.get("browserReviewState", "not_reviewed")
                     )
+                    doc["readinessStatus"] = "published"
+                    doc["publishedAt"] = now
                     doc["updatedAt"] = now
-                return SiteHandoffRecord.model_validate(record)
+            await lead_repository._set_pipeline_stage(site_id, "published")  # noqa: SLF001
+            return SiteHandoffRecord.model_validate(record)
         await database["site_handoffs"].replace_one(
             {"siteId": site_id}, record, upsert=True
         )
@@ -3328,10 +3367,18 @@ class SiteRepository:
                 "$set": {
                     "handoffRecordId": record["id"],
                     "publishApprovalState": record["publishApprovalState"],
+                    "browserReviewState": (
+                        _review_state_from(site, review)
+                        if record.get("reviewRecordId")
+                        else site.browserReviewState or "not_reviewed"
+                    ),
+                    "readinessStatus": "published",
+                    "publishedAt": now,
                     "updatedAt": now,
                 }
             },
         )
+        await lead_repository._set_pipeline_stage(site_id, "published")  # noqa: SLF001
         return SiteHandoffRecord.model_validate(record)
 
     async def retry_generation(self, site_id: str) -> JobSummary | None:
@@ -3404,7 +3451,7 @@ class SiteRepository:
         )
         return record
 
-    def get_override_diff(self, site_id: str) -> list[dict[str, Any]]:
+    async def get_override_diff(self, site_id: str) -> list[dict[str, Any]]:
         """
         Returns computed diffs for all active overrides on a site.
 
@@ -3417,7 +3464,11 @@ class SiteRepository:
         """
         site = self._sites.get(site_id)
         if not site:
-            return []
+            database = get_database()
+            if database is not None:
+                site = await database["generated_sites"].find_one({"id": site_id})
+            if not site:
+                return []
 
         diffs: list[dict[str, Any]] = []
         overrides = site.get("overrides", [])
@@ -3659,6 +3710,29 @@ class SiteRepository:
         if use_ai_generation and master_brief is not None:
             from app.core.ai_site_generation import generate_with_retry
 
+            # Resolve refinement prompt text if a prompt ID was supplied
+            refinement_prompt_id = request.refinementPromptId if request else None
+            refinement_prompt_text: str | None = None
+            if refinement_prompt_id:
+                database = get_database()
+                if database is not None:
+                    site_doc_for_prompt = await database["generated_sites"].find_one(
+                        {"id": site_id}
+                    )
+                    if site_doc_for_prompt:
+                        for entry in site_doc_for_prompt.get("promptHistory") or []:
+                            if entry.get("id") == refinement_prompt_id:
+                                refinement_prompt_text = entry.get("promptText")
+                                break
+                else:
+                    async with self._memory_lock:
+                        site_doc_for_prompt = self._sites.get(site_id)
+                    if site_doc_for_prompt:
+                        for entry in site_doc_for_prompt.get("promptHistory") or []:
+                            if entry.get("id") == refinement_prompt_id:
+                                refinement_prompt_text = entry.get("promptText")
+                                break
+
             await lead_repository._update_job(  # noqa: SLF001
                 job_id,
                 progress=40,
@@ -3670,18 +3744,29 @@ class SiteRepository:
                 extraction=extraction,
                 site_id=site_id,
                 max_retries=3,
+                refinement_prompt=refinement_prompt_text,
             )
 
             if not result.get("success"):
+                error_msg = result.get("error", "Unknown error")
                 await lead_repository._update_job(  # noqa: SLF001
                     job_id,
                     status="failed",
                     progress=100,
                     step="Code generation failed",
-                    error_message=result.get("error", "Unknown error"),
+                    error_message=error_msg,
                     finished=True,
                     lead_ids=[site_id],
                 )
+                if refinement_prompt_id:
+                    await self.update_prompt_result(
+                        site_id=site_id,
+                        prompt_id=refinement_prompt_id,
+                        version_id="",
+                        quality_score=0,
+                        status="failed",
+                        failure_reason=error_msg,
+                    )
                 return None
 
             # Persist generated site record to database
@@ -3697,6 +3782,7 @@ class SiteRepository:
                 result=result,
                 version=next_version,
                 current=current,
+                refinement_prompt_id=refinement_prompt_id,
             )
 
             # Verify site was persisted successfully
@@ -3736,6 +3822,15 @@ class SiteRepository:
                 persisted_site.qualityScore,
             )
 
+            if refinement_prompt_id:
+                await self.update_prompt_result(
+                    site_id=site_id,
+                    prompt_id=refinement_prompt_id,
+                    version_id=str(persisted_site.version),
+                    quality_score=persisted_site.qualityScore or 0,
+                    status="completed",
+                )
+
             await lead_repository._update_job(  # noqa: SLF001
                 job_id,
                 progress=100,
@@ -3757,6 +3852,7 @@ class SiteRepository:
         result: dict[str, Any],
         version: int,
         current: GeneratedSite | None,
+        refinement_prompt_id: str | None = None,
     ) -> None:
         """Persist generated site record after successful AI code generation."""
         now = _now()
@@ -3897,7 +3993,13 @@ class SiteRepository:
             "heroVariant": hero_variant,
             "sectionStack": [],
             "ctaStrategy": cta_strategy,
-            "qualityScore": 70,
+            "qualityScore": _quality_score(
+                brief=master_brief,
+                extraction=extraction,
+                brand_tokens=brand_tokens,
+                site_sections=[],
+                missing_requirements=list(master_brief.missingRequirements or []),
+            ),
             "readinessStatus": "needs_review",
             "qaStatus": "warn",
             "reviewRubric": [],
@@ -3916,7 +4018,7 @@ class SiteRepository:
             "overrideCount": 0,
             "overrides": [],
             "overrideDiffs": [],
-            "refinementPromptId": None,
+            "refinementPromptId": refinement_prompt_id,
             "promptHistory": [],
             "isManuallyRefined": False,
             "improvementRecommendations": None,
@@ -3927,6 +4029,23 @@ class SiteRepository:
             "createdAt": current.createdAt if current else now,
             "updatedAt": now,
         }
+
+        # Apply any active structured overrides to the site doc before persisting
+        active_overrides = await self._site_overrides(site_id)
+        if active_overrides:
+            site_doc["heroVariant"] = self._apply_hero_overrides(
+                site_doc["heroVariant"], active_overrides
+            )
+            site_doc["ctaStrategy"] = self._apply_cta_overrides(
+                site_doc["ctaStrategy"], active_overrides
+            )
+            site_doc["brandTokens"] = self._apply_brand_overrides(
+                site_doc["brandTokens"], active_overrides
+            )
+            site_doc["sectionStack"] = self._apply_overrides(
+                site_doc["sectionStack"], active_overrides
+            )
+            site_doc["overrideCount"] = len(active_overrides)
 
         database = get_database()
         if database is None:
@@ -4026,8 +4145,182 @@ class SiteRepository:
             site_id=site_id, job_id=job_id, request_payload=payload
         )
 
-    async def republish_site(self, site_id: str) -> GeneratedSite | None:
-        return await self.generate_site(site_id)
+    async def run_republish_job(self, *, site_id: str, job_id: str) -> None:
+        """Recompile existing sourceCode and re-upload to S3 without calling the LLM."""
+        from app.core.ai_site_generation import _upload_bundle_to_s3
+        from app.core.compiler_client import CompilerError, get_compiler_client
+
+        site = await self.get_site(site_id)
+        if site is None:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Site not found",
+                error_message="Site not found",
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return
+
+        source_code = site.sourceCode
+        if not source_code:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="No source code to recompile",
+                error_message="Site has no sourceCode to recompile",
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return
+
+        await lead_repository._update_job(  # noqa: SLF001
+            job_id,
+            status="running",
+            progress=30,
+            step="Recompiling existing source code",
+            lead_ids=[site_id],
+        )
+
+        compiler = get_compiler_client()
+        try:
+            compile_result = await compiler.compile_tsx(
+                source_code=source_code,
+                component_name=f"LandingPage_{site_id}",
+                site_id=site_id,
+            )
+        except CompilerError as exc:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Compilation error",
+                error_message=str(exc),
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return
+
+        if not compile_result.get("success"):
+            error_msg = compile_result.get("error", "Compilation failed")
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Compilation failed",
+                error_message=error_msg,
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return
+
+        bundle_code = compile_result.get("bundleCode")
+        css_code = compile_result.get("cssCode")
+        if not bundle_code:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="No bundle produced",
+                error_message="Compilation succeeded but returned no bundle",
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return
+
+        await lead_repository._update_job(  # noqa: SLF001
+            job_id,
+            status="running",
+            progress=70,
+            step="Uploading bundle to S3",
+            lead_ids=[site_id],
+        )
+
+        try:
+            bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id)
+        except Exception as exc:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="S3 upload failed",
+                error_message=str(exc),
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return
+
+        now = _now()
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                doc = self._sites.get(site_id)
+                if doc is not None:
+                    doc["compiledBundleUrl"] = bundle_url
+                    doc["compilationStatus"] = "success"
+                    doc["compilationError"] = None
+                    doc["updatedAt"] = now
+        else:
+            await database["generated_sites"].update_one(
+                {"id": site_id},
+                {
+                    "$set": {
+                        "compiledBundleUrl": bundle_url,
+                        "compilationStatus": "success",
+                        "compilationError": None,
+                        "updatedAt": now,
+                    }
+                },
+            )
+
+        await lead_repository._update_job(  # noqa: SLF001
+            job_id,
+            status="completed",
+            progress=100,
+            step="Republish complete",
+            finished=True,
+            lead_ids=[site_id],
+        )
+
+    async def queue_republish_job(self, site_id: str) -> JobSummary | None:
+        """Queue a lightweight republish job that recompiles without LLM generation."""
+        await self._maybe_ensure_indexes()
+        site = await self.get_site(site_id)
+        if site is None:
+            return None
+
+        database = get_database()
+        if database is not None:
+            existing = await database["jobs"].find_one(
+                {
+                    "leadId": site_id,
+                    "jobType": {"$in": ["site_republish"]},
+                    "status": {"$in": ["queued", "running"]},
+                }
+            )
+            if existing is not None:
+                return _job_doc_to_summary(existing)
+
+        job = await lead_repository.create_job(
+            lead_ids=[site_id],
+            job_type="site_republish",
+            status="queued",
+            progress=0,
+            step="Queued for republish",
+            metadata={"siteId": site_id, "leadId": site_id},
+        )
+
+        settings = get_settings()
+        if settings.celery_task_always_eager:
+            await self.run_republish_job(site_id=site_id, job_id=job.id)
+            return job
+
+        from app.core.tasks import run_site_republish_task
+
+        run_site_republish_task.delay(site_id=site_id, job_id=job.id)  # type: ignore[attr-defined]
+        return job
 
     async def add_export_metadata(
         self, site_id: str, export_metadata: SiteExportMetadata

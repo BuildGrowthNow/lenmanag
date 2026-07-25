@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { submitRefinementPrompt } from "@/lib/api/sites";
 
 export function RefinementPromptInput({ siteId }: { siteId: string }) {
+  const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -23,6 +25,7 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
     try {
       await submitRefinementPrompt(siteId, value);
       setPrompt("");
+      router.refresh();
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);

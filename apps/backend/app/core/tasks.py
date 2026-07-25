@@ -133,6 +133,28 @@ def run_site_generation_job_task(
 
 
 @celery_app.task(
+    name="lenquant.jobs.run_site_republish",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=2,
+)
+def run_site_republish_task(self, site_id: str, job_id: str) -> None:
+    """Recompile and re-upload existing site without regenerating via LLM."""
+    try:
+        _run(site_repository.run_republish_job(site_id=site_id, job_id=job_id))
+    except Exception:
+        logging.error(
+            f"Site republish failed for site {site_id}, job {job_id}. "
+            f"Retry {self.request.retries}/{self.max_retries}",
+            exc_info=True,
+        )
+        raise
+
+
+@celery_app.task(
     name="lenquant.jobs.run_analysis_refresh",
     bind=True,
     autoretry_for=(Exception,),

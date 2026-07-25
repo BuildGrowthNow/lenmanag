@@ -310,6 +310,16 @@ async def regenerate_site_with_prompt(
     if job is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
 
+    await site_repository.upsert_review(
+        site_id,
+        SiteReviewPatchRequest(
+            outcome="fail",
+            blockedReason="Queued for regeneration",
+            notes=None,
+        ),
+        actor=user_id,
+    )
+
     await write_audit_log(
         user_id,
         "site",
@@ -367,22 +377,9 @@ async def generate_site(
 async def republish_site(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[JobResponse]:
-    try:
-        job = await site_repository.queue_generation_job(site_id)
-    except ValueError as exc:
-        if str(exc) == "brief_not_approved":
-            raise HTTPException(
-                status_code=409,
-                detail="Approve the master brief before republishing a preview.",
-            ) from exc
-        if str(exc) == "extraction_required":
-            raise HTTPException(
-                status_code=409,
-                detail="Create a site extraction before republishing a preview.",
-            ) from exc
-        raise
+    job = await site_repository.queue_republish_job(site_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="Lead not found.")
+        raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(
         user_id,
         "site",
