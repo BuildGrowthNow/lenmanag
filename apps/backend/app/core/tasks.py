@@ -156,8 +156,17 @@ def run_site_generation_job_task(
 )
 def run_site_republish_task(self, site_id: str, job_id: str) -> None:
     """Recompile and re-upload existing site without regenerating via LLM."""
+    async def runner() -> None:
+        await site_repository.run_republish_job(site_id=site_id, job_id=job_id)
+        site = await site_repository.get_site(site_id)
+        if site and site.previewUrl:
+            try:
+                run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
+            except Exception as exc:
+                logging.warning("Could not queue screenshot task for site %s: %s", site.id, exc)
+
     try:
-        _run(site_repository.run_republish_job(site_id=site_id, job_id=job_id))
+        _run(runner())
     except Exception:
         logging.error(
             f"Site republish failed for site {site_id}, job {job_id}. "
