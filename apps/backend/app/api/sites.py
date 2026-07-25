@@ -246,6 +246,69 @@ async def get_handoff(
 
 
 @router.post(
+    "/{site_id}/refine",
+    response_model=ResponseEnvelope[JobResponse],
+    status_code=202,
+)
+async def refine_site_with_prompt(
+    site_id: str,
+    payload: dict[str, Any],
+    request: Request,
+    user_id: CurrentUserId,
+) -> ResponseEnvelope[JobResponse]:
+    refinement_prompt = (payload.get("refinementPrompt") or "").strip()
+
+    is_valid, error_message = validate_operator_prompt(refinement_prompt)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_message)
+
+    site = await site_repository.get_site(site_id)
+    if site is None:
+        raise HTTPException(status_code=404, detail="Site not found.")
+
+    if not site.sourceCode:
+        raise HTTPException(
+            status_code=409,
+            detail="Site has no generated source code to refine. Generate the site first.",
+        )
+
+    operator_id = (payload.get("operatorId") or user_id or "").strip()
+    if not operator_id:
+        raise HTTPException(status_code=400, detail="operatorId is required.")
+
+    try:
+        job = await site_repository.queue_refinement_job(
+            site_id=site_id,
+            prompt_text=refinement_prompt,
+            operator_id=operator_id,
+        )
+    except ValueError as exc:
+        if str(exc) == "brief_not_approved":
+            raise HTTPException(
+                status_code=409,
+                detail="Approve the master brief before refining.",
+            ) from exc
+        if str(exc) == "no_source_code":
+            raise HTTPException(
+                status_code=409,
+                detail="Site has no generated source code to refine. Generate the site first.",
+            ) from exc
+        raise
+
+    if job is None:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+
+    await write_audit_log(
+        user_id,
+        "site",
+        site_id,
+        "site_refine",
+        after={"jobId": job.id, "step": job.step},
+    )
+    return success_response(await _job_response(job), meta=response_meta(request))
+
+
+@router.post(
     "/{site_id}/regenerate",
     response_model=ResponseEnvelope[JobResponse],
     status_code=202,

@@ -561,3 +561,31 @@ async def _run_multi_variant_generation_async(
         f"{len(generated_sites)} sites generated, {failed_variants} failed, "
         f"total_time={total_time:.1f}s"
     )
+
+
+@celery_app.task(
+    name="lenquant.jobs.run_site_refinement",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=2,
+)
+def run_site_refinement_job_task(
+    self, site_id: str, job_id: str, prompt_id: str
+) -> None:
+    """Apply targeted operator refinement to existing site source code."""
+    try:
+        _run(
+            site_repository.run_refinement_job(
+                site_id=site_id, job_id=job_id, prompt_id=prompt_id
+            )
+        )
+    except Exception:
+        logging.error(
+            f"Site refinement failed for site {site_id}, job {job_id}. "
+            f"Retry {self.request.retries}/{self.max_retries}",
+            exc_info=True,
+        )
+        raise

@@ -87,6 +87,7 @@ async def generate_landing_page_code(
     extraction: ExtractionSnapshot,
     site_id: str,
     retry_context: dict[str, Any] | None = None,
+    refinement_prompt: str | None = None,
 ) -> dict[str, Any]:
     """
     Generate complete TSX landing page code from master brief.
@@ -115,6 +116,7 @@ async def generate_landing_page_code(
         prompt = _build_generation_prompt(
             master_brief=master_brief,
             extraction=extraction,
+            refinement_prompt=refinement_prompt,
         )
 
     # Generate code
@@ -217,6 +219,7 @@ def _build_generation_prompt(
     *,
     master_brief: MasterBrief,
     extraction: ExtractionSnapshot,
+    refinement_prompt: str | None = None,
 ) -> str:
     """Build the main generation prompt — leads with inspiration, not restrictions."""
     # Extract brand tokens
@@ -461,6 +464,16 @@ Return ONLY the complete TSX code. No markdown code fences, no explanations.
 Start with `'use client';` and end with the closing brace of the component.
 
 **UNIQUENESS REQUIREMENT**: This output must be visually unlike any other landing page generated from this brief. If this prompt were run 10 times, this result should look completely different from the other 9. Surprise yourself — commit fully to the creative direction, don't hedge toward a safe layout.
+"""
+
+    if refinement_prompt:
+        prompt += f"""
+
+## Operator Refinement Instructions
+
+The operator reviewed the previous version and provided this feedback. You MUST incorporate these changes — they take priority over any default creative direction:
+
+{refinement_prompt}
 """
 
     return prompt
@@ -801,12 +814,189 @@ def _validate_tsx_source(source_code: str) -> list[str]:
     return errors
 
 
+def _build_refinement_prompt(
+    *, current_source_code: str, refinement_prompt: str
+) -> str:
+    """Build a prompt for targeted in-place edits to existing generated code."""
+    return f"""You are editing an existing React landing page component. Apply the requested changes precisely and return the complete modified code.
+
+## Existing Code
+```tsx
+{current_source_code}
+```
+
+## Operator Instructions (apply these changes ONLY)
+{refinement_prompt}
+
+## Rules
+- Apply ONLY the requested changes — do not redesign, restructure, or alter anything not mentioned
+- Preserve all animations, interactions, layout, and creative elements that are not being changed
+- Keep the same imports, component structure, and TypeScript types
+- Do NOT add, remove, or reorder sections unless explicitly asked
+- Return ONLY the complete modified TSX code — no markdown fences, no explanations
+- Start with `'use client';` and end with the closing brace of the component
+"""
+
+
+async def refine_landing_page_code(
+    *,
+    site_id: str,
+    current_source_code: str,
+    refinement_prompt: str,
+) -> dict[str, Any]:
+    """Apply targeted operator edits to existing generated code without full regeneration."""
+    llm = get_llm_client()
+    compiler = get_compiler_client()
+
+    prompt = _build_refinement_prompt(
+        current_source_code=current_source_code,
+        refinement_prompt=refinement_prompt,
+    )
+
+    logger.info(f"Refining TSX code for site {site_id}")
+    response = await llm.generate_text(
+        prompt=prompt,
+        temperature=0.3,
+        max_tokens=32768,
+    )
+
+    source_code = _extract_tsx_code(response)
+
+    validation_errors = _validate_tsx_source(source_code)
+    if validation_errors:
+        logger.warning(
+            f"TSX validation errors on refinement attempt: {validation_errors}"
+        )
+        return {
+            "success": False,
+            "sourceCode": source_code,
+            "compilationStatus": "validation_failed",
+            "validationErrors": validation_errors,
+            "error": f"Code validation failed: {', '.join(validation_errors[:3])}",
+        }
+
+    logger.info(f"Compiling refined TSX code for site {site_id}")
+    try:
+        compile_result = await compiler.compile_tsx(
+            source_code=source_code,
+            component_name=f"LandingPage_{site_id}",
+            site_id=site_id,
+        )
+
+        if compile_result.get("success"):
+            bundle_code = compile_result.get("bundleCode")
+            css_code = compile_result.get("cssCode")
+
+            if not bundle_code:
+                return {
+                    "success": False,
+                    "sourceCode": source_code,
+                    "compilationStatus": "compilation_failed",
+                    "error": "Compilation succeeded but no bundle code returned",
+                }
+
+            try:
+                bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id)
+            except Exception as upload_error:
+                logger.error(
+                    f"Failed to upload refined bundle for site {site_id}: {upload_error}"
+                )
+                return {
+                    "success": False,
+                    "sourceCode": source_code,
+                    "compilationStatus": "upload_failed",
+                    "error": f"Bundle upload failed: {str(upload_error)}",
+                }
+
+            return {
+                "success": True,
+                "sourceCode": source_code,
+                "compiledBundleUrl": bundle_url,
+                "compilationStatus": "success",
+                "bundleCode": bundle_code,
+                "cssCode": css_code,
+            }
+        else:
+            return {
+                "success": False,
+                "sourceCode": source_code,
+                "compilationStatus": "compilation_failed",
+                "validationErrors": compile_result.get("validationErrors", []),
+                "error": compile_result.get("error", "Unknown compilation error"),
+            }
+
+    except CompilerError as e:
+        logger.error(f"Compilation error during refinement for site {site_id}: {e}")
+        return {
+            "success": False,
+            "sourceCode": source_code,
+            "compilationStatus": "compiler_error",
+            "error": str(e),
+        }
+
+
+async def refine_with_retry(
+    *,
+    site_id: str,
+    current_source_code: str,
+    refinement_prompt: str,
+    max_retries: int = MAX_COMPILATION_RETRIES,
+) -> dict[str, Any]:
+    """Refine landing page code with retry on compilation failure."""
+    result: dict[str, Any] = {
+        "success": False,
+        "compilationStatus": "not_attempted",
+        "error": "No attempts made",
+    }
+
+    for attempt in range(max_retries):
+        logger.info(
+            f"Refinement attempt {attempt + 1}/{max_retries} for site {site_id}"
+        )
+
+        result = await refine_landing_page_code(
+            site_id=site_id,
+            current_source_code=current_source_code,
+            refinement_prompt=refinement_prompt,
+        )
+
+        if result["success"]:
+            logger.info(f"Successfully refined site {site_id} on attempt {attempt + 1}")
+            return result
+
+        compilation_status = result.get("compilationStatus", "unknown")
+        error_message = result.get("error", "Unknown error")
+        logger.warning(
+            f"Refinement attempt {attempt + 1} failed for site {site_id}: "
+            f"status={compilation_status}, error={error_message[:200]}"
+        )
+
+        if compilation_status not in (
+            "compilation_failed",
+            "compiler_error",
+            "validation_failed",
+        ):
+            break
+
+        # On compilation failure, retry with the corrected source using the same refinement intent
+        current_source_code = result.get("sourceCode", current_source_code)
+
+    logger.error(f"All {max_retries} refinement attempts failed for site {site_id}")
+    return {
+        "success": False,
+        "compilationStatus": "retries_exhausted",
+        "error": f"Failed after {max_retries} attempts: {result.get('error', 'Unknown')}",
+        "finalAttemptResult": result,
+    }
+
+
 async def generate_with_retry(
     *,
     master_brief: MasterBrief,
     extraction: ExtractionSnapshot,
     site_id: str,
     max_retries: int = MAX_COMPILATION_RETRIES,
+    refinement_prompt: str | None = None,
 ) -> dict[str, Any]:
     """
     Generate landing page code with automatic retry on compilation failure.
@@ -835,6 +1025,7 @@ async def generate_with_retry(
             extraction=extraction,
             site_id=site_id,
             retry_context=retry_context,
+            refinement_prompt=refinement_prompt,
         )
 
         if result["success"]:

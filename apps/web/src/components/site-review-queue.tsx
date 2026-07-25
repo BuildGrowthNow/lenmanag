@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ExternalLink, SkipForward } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { approveSiteReview, patchSiteReview, submitRefinementPrompt } from "@/lib/api/sites";
+import { approveSiteReview, patchSiteReview, refineSite, submitRefinementPrompt } from "@/lib/api/sites";
 import type { SiteReviewQueueItem, SiteReviewQueueResponse } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,14 +62,27 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
     }
   }
 
-  async function handleRegenerate() {
+  async function handleRefine() {
     if (!prompt.trim()) return;
     setBusy(true);
     setMessage(null);
     try {
-      await submitRefinementPrompt(item.siteId, prompt.trim());
+      await refineSite(item.siteId, prompt.trim());
+      setMessage({ text: "Refinement queued — site will update shortly.", ok: true });
+      onRegenerated();
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : "Failed to queue refinement.", ok: false });
+      setBusy(false);
+    }
+  }
+
+  async function handleRegenerate() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await submitRefinementPrompt(item.siteId, prompt.trim() || "Regenerate with fresh creative direction.", true);
       await patchSiteReview(item.siteId, { outcome: "fail", notes: null, blockedReason: "Queued for regeneration" });
-      setMessage({ text: "Queued for regeneration.", ok: true });
+      setMessage({ text: "Full regeneration queued.", ok: true });
       onRegenerated();
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : "Failed to queue regeneration.", ok: false });
@@ -150,7 +163,7 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
           <div className="space-y-3">
             <Textarea
               rows={3}
-              placeholder="Instructions for regeneration (leave blank to just approve)…"
+              placeholder='Describe targeted changes to refine — e.g. "change the hero font to serif, make the CTA button larger"'
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               disabled={busy}
@@ -168,7 +181,7 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
                 {message.text}
               </div>
             ) : null}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 onClick={handleApprove}
                 disabled={busy}
@@ -178,12 +191,21 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
                 {busy ? "Working…" : "Approve →"}
               </Button>
               <Button
-                onClick={handleRegenerate}
+                onClick={handleRefine}
                 disabled={busy || !prompt.trim()}
                 variant="ghost"
-                className="border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
+                className="border-sky-500/40 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
               >
-                {busy ? "Queuing…" : "Reject & regenerate"}
+                {busy ? "Queuing…" : "Refine →"}
+              </Button>
+              <Button
+                onClick={handleRegenerate}
+                disabled={busy}
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted hover:text-text"
+              >
+                Full regeneration
               </Button>
             </div>
           </div>

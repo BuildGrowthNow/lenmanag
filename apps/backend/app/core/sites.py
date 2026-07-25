@@ -3841,6 +3841,251 @@ class SiteRepository:
             )
             return persisted_site
 
+    async def queue_refinement_job(
+        self,
+        site_id: str,
+        prompt_text: str,
+        operator_id: str,
+    ) -> JobSummary | None:
+        """Queue a targeted refinement job that edits existing source code in-place."""
+        await self._maybe_ensure_indexes()
+        lead = await lead_repository.get_lead(site_id)
+        if lead is None:
+            return None
+
+        master_brief = await lead_repository.get_master_brief(site_id)
+        if master_brief is None or master_brief.approvalState != "approved":
+            raise ValueError("brief_not_approved")
+
+        current = await self.get_site(site_id)
+        if current is None or not current.sourceCode:
+            raise ValueError("no_source_code")
+
+        database = get_database()
+        if database is not None:
+            existing_job = await database["jobs"].find_one(
+                {
+                    "leadId": site_id,
+                    "jobType": {"$in": ["site_refine"]},
+                    "status": {"$in": ["queued", "running"]},
+                }
+            )
+            if existing_job is not None:
+                return _job_doc_to_summary(existing_job)
+
+        next_version = int(current.version) + 1
+        prompt_id = await self.submit_refinement_prompt(
+            site_id=site_id,
+            prompt_text=prompt_text,
+            operator_id=operator_id,
+        )
+        if prompt_id is None:
+            return None
+
+        job = await lead_repository.create_job(
+            lead_ids=[site_id],
+            job_type="site_refine",
+            status="queued",
+            progress=0,
+            step="Queued for refinement",
+            metadata={
+                "siteId": site_id,
+                "leadId": site_id,
+                "briefId": master_brief.id,
+                "briefVersion": master_brief.version,
+                "nextVersion": next_version,
+                "promptId": prompt_id,
+                "request": {"refinementPromptId": prompt_id},
+            },
+        )
+
+        settings = get_settings()
+        if settings.celery_task_always_eager:
+            try:
+                await self.run_refinement_job(
+                    site_id=site_id,
+                    job_id=job.id,
+                    prompt_id=prompt_id,
+                )
+            except Exception:
+                logging.getLogger("lenquant.jobs").exception(
+                    "Inline refinement job:%s:%s failed", site_id, job.id
+                )
+                raise
+        else:
+            from app.core.tasks import run_site_refinement_job_task
+
+            run_site_refinement_job_task.delay(  # type: ignore[attr-defined]
+                site_id=site_id, job_id=job.id, prompt_id=prompt_id
+            )
+
+        return job
+
+    async def run_refinement_job(
+        self, *, site_id: str, job_id: str, prompt_id: str
+    ) -> GeneratedSite | None:
+        """Apply targeted operator refinement to existing source code."""
+        await self._maybe_ensure_indexes()
+        from app.core.ai_site_generation import refine_with_retry
+
+        lead = await lead_repository.get_lead(site_id)
+        if lead is None:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Lead missing for refinement",
+                error_message="Lead not found",
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return None
+
+        current = await self.get_site(site_id)
+        if current is None or not current.sourceCode:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="No source code to refine",
+                error_message="Site has no generated source code",
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return None
+
+        # Resolve prompt text
+        prompt_text: str | None = None
+        database = get_database()
+        if database is not None:
+            site_doc = await database["generated_sites"].find_one({"id": site_id})
+            if site_doc:
+                for entry in site_doc.get("promptHistory") or []:
+                    if entry.get("id") == prompt_id:
+                        prompt_text = entry.get("promptText")
+                        break
+        else:
+            async with self._memory_lock:
+                site_doc = self._sites.get(site_id)
+            if site_doc:
+                for entry in site_doc.get("promptHistory") or []:
+                    if entry.get("id") == prompt_id:
+                        prompt_text = entry.get("promptText")
+                        break
+
+        if not prompt_text:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Prompt not found",
+                error_message=f"Refinement prompt {prompt_id} not found",
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return None
+
+        await lead_repository._update_job(  # noqa: SLF001
+            job_id,
+            status="running",
+            progress=30,
+            step="Applying refinement to site code",
+            lead_ids=[site_id],
+            metadata={
+                "siteId": site_id,
+                "leadId": site_id,
+                "promptId": prompt_id,
+                "nextVersion": current.version + 1,
+            },
+        )
+
+        result = await refine_with_retry(
+            site_id=site_id,
+            current_source_code=current.sourceCode,
+            refinement_prompt=prompt_text,
+        )
+
+        if not result.get("success"):
+            error_msg = result.get("error", "Unknown error")
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Refinement failed",
+                error_message=error_msg,
+                finished=True,
+                lead_ids=[site_id],
+            )
+            await self.update_prompt_result(
+                site_id=site_id,
+                prompt_id=prompt_id,
+                version_id="",
+                quality_score=0,
+                status="failed",
+                failure_reason=error_msg,
+            )
+            return None
+
+        master_brief = await lead_repository.get_master_brief(site_id)
+        extraction = await lead_repository.get_extraction(site_id)
+        if master_brief is None or extraction is None:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Brief or extraction missing after refinement",
+                error_message="Cannot persist refined site without brief/extraction",
+                finished=True,
+                lead_ids=[site_id],
+            )
+            return None
+
+        next_version = current.version + 1
+        await self._persist_ai_generated_site(
+            site_id=site_id,
+            job_id=job_id,
+            lead=lead,
+            master_brief=master_brief,
+            extraction=extraction,
+            result=result,
+            version=next_version,
+            current=current,
+            refinement_prompt_id=prompt_id,
+        )
+
+        persisted_site = await self.get_site(site_id)
+        if persisted_site is None:
+            error_msg = f"Site {site_id} not found after refinement persistence"
+            logger.error(error_msg)
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Site persistence verification failed",
+                error_message=error_msg,
+                finished=True,
+                lead_ids=[site_id],
+            )
+            raise RuntimeError(error_msg)
+
+        await self.update_prompt_result(
+            site_id=site_id,
+            prompt_id=prompt_id,
+            version_id=str(persisted_site.version),
+            quality_score=persisted_site.qualityScore or 0,
+            status="completed",
+        )
+
+        await lead_repository._update_job(  # noqa: SLF001
+            job_id,
+            progress=100,
+            step="Refinement complete",
+            status="completed",
+            finished=True,
+            lead_ids=[site_id],
+        )
+        return persisted_site
+
     async def _persist_ai_generated_site(
         self,
         *,

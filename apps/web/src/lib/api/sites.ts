@@ -167,6 +167,21 @@ export async function syncExportEdits(id: string, exportId: string, edits: Array
   return request<SiteOverrideRecord[]>(`/api/sites/${id}/export/${exportId}/sync`, { method: "POST", body: edits });
 }
 
+export async function refineSite(
+  siteId: string,
+  prompt: string,
+): Promise<{ siteId: string; promptId: string; status: string }> {
+  const job = await request<JobResponse>(`/api/sites/${siteId}/refine`, {
+    method: "POST",
+    body: { refinementPrompt: prompt },
+  });
+
+  const requestMeta = (job.metadata?.request || {}) as { refinementPromptId?: string };
+  const promptId = requestMeta.refinementPromptId || "";
+
+  return { siteId, promptId, status: job.job.status };
+}
+
 export async function submitRefinementPrompt(
   siteId: string,
   prompt: string,
