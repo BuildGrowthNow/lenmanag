@@ -3195,6 +3195,7 @@ class SiteRepository:
     ) -> SiteReviewQueueResponse:
         await self._maybe_ensure_indexes()
         sites = await self._list_sites(limit=limit, offset=offset, user_id=user_id)
+        sites = await self._backfill_source_attribution(sites)
         items = [_queue_item_from_site(site) for site in sites]
         total = await self._count_sites(user_id=user_id)
 
@@ -5053,10 +5054,42 @@ class SiteRepository:
             "updatedAt": _now(),
         }
 
+    async def _backfill_source_attribution(
+        self, sites: list[GeneratedSite]
+    ) -> list[GeneratedSite]:
+        """For sites with no sourceAttribution, fetch lead names in one batch query."""
+        missing = [s for s in sites if not s.sourceAttribution or not s.sourceAttribution.companyName]
+        if not missing:
+            return sites
+        lead_ids = list({s.leadId for s in missing})
+        database = get_database()
+        lead_names: dict[str, str] = {}
+        if database is not None:
+            cursor = database["leads"].find({"id": {"$in": lead_ids}})
+            lead_docs = await cursor.to_list(length=len(lead_ids))
+            for doc in lead_docs:
+                lead_id = doc.get("id", "")
+                name = doc.get("companyName") or doc.get("normalizedDomain") or ""
+                if lead_id and name:
+                    lead_names[lead_id] = name
+        for site in missing:
+            name = lead_names.get(site.leadId)
+            if name:
+                if site.sourceAttribution is None:
+                    site.sourceAttribution = SiteSourceAttribution(
+                        leadId=site.leadId, companyName=name
+                    )
+                else:
+                    site.sourceAttribution = site.sourceAttribution.model_copy(
+                        update={"companyName": name}
+                    )
+        return sites
+
     async def list_sites(
         self, *, limit: int = 25, offset: int = 0, user_id: str | None = None
     ) -> list[GeneratedSite]:
-        return await self._list_sites(limit=limit, offset=offset, user_id=user_id)
+        sites = await self._list_sites(limit=limit, offset=offset, user_id=user_id)
+        return await self._backfill_source_attribution(sites)
 
     async def _list_sites(
         self, *, limit: int, offset: int, user_id: str | None = None
