@@ -15,6 +15,8 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
   const [mode, setMode] = useState<"refine" | "regenerate">("refine");
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [jobStep, setJobStep] = useState<string | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -49,6 +51,24 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
     [router, stopPolling]
   );
 
+  // Check for existing active job on mount
+  useEffect(() => {
+    if (initialCheckDone) return;
+
+    async function checkActiveJob() {
+      try {
+        // Get the site's latest job (we need an API endpoint for this)
+        // For now, we'll just mark as checked
+        setInitialCheckDone(true);
+      } catch (err) {
+        console.error("Failed to check active job:", err);
+        setInitialCheckDone(true);
+      }
+    }
+
+    void checkActiveJob();
+  }, [initialCheckDone]);
+
   useEffect(() => stopPolling, [stopPolling]);
 
   async function handleSubmit() {
@@ -71,6 +91,7 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
           ? await refineSite(siteId, value)
           : await submitRefinementPrompt(siteId, value, true);
       setPrompt("");
+      setCurrentJobId(result.jobId);
       if (result.status === "completed") {
         setJobStatus("completed");
         setIsLoading(false);
@@ -95,6 +116,8 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
       ? "Done — refreshing…"
       : null;
 
+  const isJobRunning = jobStatus === "queued" || jobStatus === "running";
+
   return (
     <div className="rounded-2xl border border-line bg-panel-2 p-6">
       <div className="mb-4 flex items-center justify-between">
@@ -118,13 +141,13 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
             : 'E.g. "Make this feel more premium and modern while keeping the core product story intact."'
         }
         maxLength={500}
-        disabled={isLoading}
-        className="w-full resize-none rounded-lg border border-line bg-panel px-4 py-3 text-text placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent"
+        disabled={isLoading || isJobRunning}
+        className="w-full resize-none rounded-lg border border-line bg-panel px-4 py-3 text-text placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
         rows={4}
       />
       <div className="mt-2 flex items-center justify-between text-xs text-muted">
         <span>{prompt.length}/500</span>
-        {mode === "regenerate" && !isLoading && (
+        {mode === "regenerate" && !isLoading && !isJobRunning && (
           <span className="text-amber-400/80">Starts from scratch — existing design will be replaced</span>
         )}
         {error ? <span className="text-rose-500">{error}</span> : null}
@@ -138,15 +161,20 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
       <button
         type="button"
         onClick={() => void handleSubmit()}
-        disabled={isLoading || !prompt.trim()}
-        className="mt-4 rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        disabled={isLoading || isJobRunning || !prompt.trim()}
+        className="mt-4 rounded-lg bg-accent px-6 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isLoading
+        {isLoading || isJobRunning
           ? "Processing…"
           : mode === "refine"
           ? "Apply refinement"
           : "Regenerate site"}
       </button>
+      {isJobRunning && currentJobId && (
+        <p className="mt-2 text-xs text-muted">
+          Job is running. You can leave this page and come back - the job will continue in the background.
+        </p>
+      )}
     </div>
   );
 }

@@ -3969,9 +3969,35 @@ class SiteRepository:
         else:
             from app.core.tasks import run_site_refinement_job_task
 
-            run_site_refinement_job_task.delay(  # type: ignore[attr-defined]
-                site_id=site_id, job_id=job.id, prompt_id=prompt_id
-            )
+            try:
+                task_result = run_site_refinement_job_task.delay(  # type: ignore[attr-defined]
+                    site_id=site_id, job_id=job.id, prompt_id=prompt_id
+                )
+                logger.info(
+                    "Queued refinement task %s for site %s job %s",
+                    task_result.id,
+                    site_id,
+                    job.id,
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to queue refinement task for site %s job %s: %s",
+                    site_id,
+                    job.id,
+                    exc,
+                    exc_info=True,
+                )
+                # Update job to failed status
+                await lead_repository._update_job(  # noqa: SLF001
+                    job.id,
+                    status="failed",
+                    progress=0,
+                    step="Failed to queue refinement task",
+                    error_message=f"Task queueing failed: {exc}",
+                    finished=True,
+                    lead_ids=[lead_id],
+                )
+                raise
 
         return job
 
