@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { createSiteOverride, generateSite, republishSite } from "@/lib/api/sites";
+import { createSiteOverride, generateSite, republishSite, recaptureScreenshot } from "@/lib/api/sites";
 import type { GeneratedSite, VariantType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,7 +42,7 @@ function getNestedValue(obj: any, path: string): any {
 
 export function SiteWorkspaceControls({ siteId, site, hasApprovedBrief, hasExtraction }: SiteWorkspaceControlsProps) {
   const router = useRouter();
-  const [busy, setBusy] = useState<"generate" | "republish" | "override" | null>(null);
+  const [busy, setBusy] = useState<"generate" | "republish" | "override" | "screenshot" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [scope, setScope] = useState<(typeof overrideScopes)[number]>("copy");
   const [path, setPath] = useState("hero.headline");
@@ -86,6 +86,22 @@ export function SiteWorkspaceControls({ siteId, site, hasApprovedBrief, hasExtra
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not republish the preview.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleRecaptureScreenshot() {
+    setBusy("screenshot");
+    setMessage(null);
+    try {
+      const response = await recaptureScreenshot(siteId);
+      setMessage(`Screenshot recapture queued. Refresh the page in ~10 seconds to see the new screenshot.`);
+      setTimeout(() => {
+        router.refresh();
+      }, 10000);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not queue screenshot recapture.");
     } finally {
       setBusy(null);
     }
@@ -157,6 +173,9 @@ export function SiteWorkspaceControls({ siteId, site, hasApprovedBrief, hasExtra
         </Button>
         <Button type="button" variant="secondary" onClick={() => void handleRepublish()} disabled={!site || busy !== null}>
           {busy === "republish" ? "Republishing..." : "Republish preview"}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => void handleRecaptureScreenshot()} disabled={!site || busy !== null}>
+          {busy === "screenshot" ? "Capturing..." : "Refresh Screenshot"}
         </Button>
       </div>
       <form onSubmit={(event) => void handleOverride(event)} className="space-y-3 rounded-2xl border border-line bg-panel-2 p-4">

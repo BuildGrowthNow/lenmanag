@@ -454,6 +454,48 @@ async def republish_site(
 
 
 @router.post(
+    "/{site_id}/screenshot",
+    response_model=ResponseEnvelope[dict[str, str]],
+    status_code=202,
+)
+async def recapture_screenshot(
+    site_id: str, request: Request, user_id: CurrentUserId
+) -> ResponseEnvelope[dict[str, str]]:
+    """Manually trigger screenshot recapture for a site."""
+    from app.core.tasks import run_screenshot_task
+
+    site = await site_repository.get_site(site_id)
+    if site is None:
+        raise HTTPException(status_code=404, detail="Site not found.")
+
+    if not site.previewUrl:
+        raise HTTPException(
+            status_code=400, detail="Site has no preview URL to capture."
+        )
+
+    # Queue screenshot capture task
+    try:
+        run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to queue screenshot task: {exc}"
+        ) from exc
+
+    await write_audit_log(
+        user_id,
+        "site",
+        site_id,
+        "site_screenshot_recapture",
+        after={"siteId": site_id, "previewUrl": site.previewUrl},
+    )
+
+    return success_response(
+        {"status": "queued", "siteId": site_id, "message": "Screenshot recapture queued"},
+        meta=response_meta(request),
+    )
+
+
+@router.post(
     "/{site_id}/overrides", response_model=ResponseEnvelope[SiteOverrideRecord]
 )
 async def add_override(

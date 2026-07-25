@@ -118,6 +118,10 @@ export async function republishSite(id: string): Promise<JobResponse> {
   return request(`/api/sites/${id}/republish`, { method: "POST" });
 }
 
+export async function recaptureScreenshot(id: string): Promise<{ status: string; siteId: string; message: string }> {
+  return request(`/api/sites/${id}/screenshot`, { method: "POST" });
+}
+
 export async function createSiteOverride(id: string, payload: SiteOverrideCreatePayload): Promise<SiteOverrideRecord> {
   return request(`/api/sites/${id}/overrides`, { method: "POST", body: payload });
 }
