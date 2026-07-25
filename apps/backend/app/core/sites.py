@@ -2257,6 +2257,7 @@ def _queue_item_from_site(site: GeneratedSite) -> SiteReviewQueueItem:
         previewSlug=site.previewSlug,
         previewUrl=site.previewUrl,
         themeKey=site.themeKey,
+        variantType=site.variantType,
         paletteMode=site.paletteMode,
         qualityScore=site.qualityScore,
         readinessStatus=site.readinessStatus,
@@ -2699,18 +2700,35 @@ class SiteRepository:
         if database is None:
             async with self._memory_lock:
                 doc = self._sites.get(site_id)
+                if not doc:
+                    # Fallback: treat site_id as a leadId and return lowest-position variant
+                    candidates = [
+                        d for d in self._sites.values()
+                        if d.get("leadId") == site_id
+                        and (not user_id or d.get("userId") == user_id)
+                    ]
+                    if candidates:
+                        doc = min(candidates, key=lambda d: d.get("variantPosition", 99))
                 if doc:
                     if user_id and doc.get("userId") != user_id:
                         return None
                     site = _site_doc_to_current(doc)
-                    diffs = await self.get_override_diff(site_id)
+                    diffs = await self.get_override_diff(site.id)
                     site.overrideDiffs = diffs
                     return site
                 return None
         doc = await database["generated_sites"].find_one(query)
+        if not doc:
+            # Fallback: treat site_id as a leadId and return lowest-position variant
+            lead_query: dict[str, Any] = {"leadId": site_id}
+            if user_id:
+                lead_query["userId"] = user_id
+            cursor = database["generated_sites"].find(lead_query).sort("variantPosition", 1).limit(1)
+            docs = await cursor.to_list(length=1)
+            doc = docs[0] if docs else None
         if doc:
             site = _site_doc_to_current(doc)
-            diffs = await self.get_override_diff(site_id)
+            diffs = await self.get_override_diff(site.id)
             site.overrideDiffs = diffs
             return site
         return None
@@ -2880,8 +2898,17 @@ class SiteRepository:
                 extraction=extraction,
             )
 
-        # Stamp the owning user before saving
+        # Stamp the owning user and source attribution before saving
         site.userId = user_id
+        site.sourceAttribution = SiteSourceAttribution.model_validate(
+            _site_source_attribution(
+                lead=await lead_repository.get_lead(lead_id),
+                brief=master_brief,
+                extraction=extraction,
+                theme={"themeKey": site.themeKey},
+                palette_mode=site.paletteMode,
+            )
+        )
 
         # Save site to database
         if database is not None:
@@ -3866,23 +3893,26 @@ class SiteRepository:
     ) -> JobSummary | None:
         """Queue a targeted refinement job that edits existing source code in-place."""
         await self._maybe_ensure_indexes()
-        lead = await lead_repository.get_lead(site_id)
-        if lead is None:
-            return None
-
-        master_brief = await lead_repository.get_master_brief(site_id)
-        if master_brief is None or master_brief.approvalState != "approved":
-            raise ValueError("brief_not_approved")
 
         current = await self.get_site(site_id)
         if current is None or not current.sourceCode:
             raise ValueError("no_source_code")
 
+        # For multi-variant sites site_id is the variant UUID, leadId is the lead UUID.
+        lead_id = current.leadId or site_id
+        lead = await lead_repository.get_lead(lead_id)
+        if lead is None:
+            return None
+
+        master_brief = await lead_repository.get_master_brief(lead_id)
+        if master_brief is None or master_brief.approvalState != "approved":
+            raise ValueError("brief_not_approved")
+
         database = get_database()
         if database is not None:
             existing_job = await database["jobs"].find_one(
                 {
-                    "leadId": site_id,
+                    "leadId": lead_id,
                     "jobType": {"$in": ["site_refine"]},
                     "status": {"$in": ["queued", "running"]},
                 }
@@ -3900,14 +3930,14 @@ class SiteRepository:
             return None
 
         job = await lead_repository.create_job(
-            lead_ids=[site_id],
+            lead_ids=[lead_id],
             job_type="site_refine",
             status="queued",
             progress=0,
             step="Queued for refinement",
             metadata={
                 "siteId": site_id,
-                "leadId": site_id,
+                "leadId": lead_id,
                 "briefId": master_brief.id,
                 "briefVersion": master_brief.version,
                 "nextVersion": next_version,

@@ -127,6 +127,8 @@ def get_variant_strategies(
                 Generate a distinctive, creative alternative design:
                 - Colorful, multi-hue palette (3-4 brand colors working together)
                 - Playful, organic shapes and rounded elements
+                - make sure that the animations and script of the animations work well
+                - dont change the cursor design, keep it default   
                 - Friendly, approachable tone with warm colors
                 - Balanced energy: not corporate, not hyper-bold, but creative and memorable
                 - Smooth, delightful animations (bounces, elastic easing)

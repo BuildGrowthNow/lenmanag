@@ -819,18 +819,13 @@ class LeadRepository:
                     metadata={"briefVersion": master_brief.version},
                 )
 
-                # Auto-approve the master brief
+                # Auto-approve the master brief.
+                # approve_master_brief already calls advance_pipeline_after_brief internally.
                 await self.approve_master_brief(
                     lead_id=lead_id,
                     approved_by="auto",
                     notes="Auto-approved in pipeline",
                 )
-
-                # WAIT for brief to be saved before advancing
-                # (create_master_brief is already async and blocks until complete)
-
-                # Now advance to site generation
-                await self.advance_pipeline_after_brief(lead_id)
 
             except Exception as exc:
                 import traceback

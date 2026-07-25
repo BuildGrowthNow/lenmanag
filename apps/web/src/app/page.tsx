@@ -31,6 +31,7 @@ import { PricingConfigurator } from "@/components/landing/pricing-configurator";
 import { RiskReversalBadge } from "@/components/landing/risk-reversal-badge";
 import { Footer } from "@/components/landing/footer";
 import { ScrollProgressBar } from "@/components/landing/scroll-progress-bar";
+import { CursorGlow } from "@/components/cursor-glow";
 
 export default function SitesLandingPage() {
   const [showSuccess, setShowSuccess] = useState(false);
@@ -84,6 +85,7 @@ export default function SitesLandingPage() {
 
   return (
     <>
+      <CursorGlow />
       {/* Structured Data for SEO */}
       <script
         type="application/ld+json"

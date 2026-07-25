@@ -117,6 +117,13 @@ def run_site_generation_job_task(
         await site_repository._maybe_queue_auto_iteration(
             site_id=site_id, job_id=job_id, request=request
         )
+        # Best-effort: queue screenshot capture after generation completes.
+        site = await site_repository.get_site(site_id)
+        if site and site.previewUrl:
+            try:
+                run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
+            except Exception as exc:
+                logging.warning("Could not queue screenshot task for site %s: %s", site.id, exc)
 
     try:
         _run(runner())
@@ -576,12 +583,19 @@ def run_site_refinement_job_task(
     self, site_id: str, job_id: str, prompt_id: str
 ) -> None:
     """Apply targeted operator refinement to existing site source code."""
-    try:
-        _run(
-            site_repository.run_refinement_job(
-                site_id=site_id, job_id=job_id, prompt_id=prompt_id
-            )
+    async def runner() -> None:
+        await site_repository.run_refinement_job(
+            site_id=site_id, job_id=job_id, prompt_id=prompt_id
         )
+        site = await site_repository.get_site(site_id)
+        if site and site.previewUrl:
+            try:
+                run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
+            except Exception as exc:
+                logging.warning("Could not queue screenshot task for site %s: %s", site.id, exc)
+
+    try:
+        _run(runner())
     except Exception:
         logging.error(
             f"Site refinement failed for site {site_id}, job {job_id}. "

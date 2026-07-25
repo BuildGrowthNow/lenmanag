@@ -191,6 +191,7 @@ class SiteReviewQueueItem(BaseModel):
     previewSlug: str
     previewUrl: str
     themeKey: str
+    variantType: Optional[str] = None
     paletteMode: PaletteMode
     qualityScore: int
     readinessStatus: SiteReadinessStatus

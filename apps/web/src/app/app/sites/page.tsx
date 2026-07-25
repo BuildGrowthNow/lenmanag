@@ -53,6 +53,13 @@ const READINESS_LABELS: Record<SiteReadinessStatus, string> = {
   published: "Published",
 };
 
+const VARIANT_TYPE_LABELS: Record<string, string> = {
+  html_v1: "HTML v1",
+  html_v2: "HTML v2",
+  html_v3: "HTML v3",
+  nextjs: "Next.js",
+};
+
 type FilterChipProps = {
   label: string;
   count: number;
@@ -310,8 +317,10 @@ export default function SitesPage() {
                     <Badge className={readinessBadgeClass(site.readinessStatus)}>
                       {READINESS_LABELS[site.readinessStatus]}
                     </Badge>
-                    {site.themeName ? (
-                      <Badge className="border-white/10 bg-white/5 text-text">{site.themeName}</Badge>
+                    {site.variantType ? (
+                      <Badge className="border-white/10 bg-white/5 text-text">
+                        {VARIANT_TYPE_LABELS[site.variantType] ?? site.variantType}
+                      </Badge>
                     ) : null}
                     {site.paletteMode ? (
                       <Badge className="border-white/10 bg-white/5 text-text">{site.paletteMode}</Badge>

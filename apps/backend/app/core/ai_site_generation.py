@@ -283,6 +283,8 @@ def _build_generation_prompt(
 Mixed font sizes (huge headlines, small captions). Image/text juxtaposition. Generous whitespace.
 - Use text-8xl or larger for key headlines
 - Mix serif and sans-serif for contrast
+- Remember to give proper space btw contents/arts and use paddings approprietaly
+- Use pictures provided or from unsplash
 - Consider pull quotes, drop caps, full-bleed images
 - Sections should feel like turning pages""",
             "immersive": """
@@ -293,7 +295,7 @@ Ambient backgrounds (gradients, particles, video). Story-driven scroll progressi
 - Sections should flow like a film, not a document
 - Sound/motion cues (even if just visual representations)""",
             "interactive": """
-**INTERACTIVE MODE**: Make everything respond. Cursor effects. Hover transformations.
+**INTERACTIVE MODE**: Make everything respond. Cursor effects - if you find necessary). Hover transformations.
 Click feedback. Scroll-triggered reveals everywhere. Gamified elements.
 - Every card should have a hover state with transform
 - Consider magnetic buttons, cursor trails
@@ -360,6 +362,9 @@ Import from '@/components/ui/*':
 - **Data Display**: Avatar, Badge, Calendar, Table, HoverCard, Tooltip, Popover, Command
 - **Navigation**: Breadcrumb, Pagination
 
+### Images & Videos
+- **Use pictures provided or from unsplash**
+
 ### Icons
 - **lucide-react**: 1000+ icons — Menu, X, ArrowRight, ArrowUpRight, Check, Star, Phone, Mail, MapPin, Play, Pause, ChevronDown, ExternalLink, etc.
 
@@ -394,7 +399,7 @@ Import from '@/components/ui/*':
 
 {brand_section}
 
-## DESIGN PATTERNS TO CONSIDER OR BE CREATIVE: Combining patterns in a unique way
+## DESIGN PATTERNS/EXAMPLES TO CONSIDER OR BE CREATIVE: Combining patterns in a unique way
 
 **Hero Patterns**:
 - Split-screen: video/3D left, text right (or reversed)
@@ -426,7 +431,7 @@ Import from '@/components/ui/*':
 
 **Spacing & Breathability**:
 - Content should have comfortable breathing room — avoid text glued to card/container edges
-- Minimum 16-24px padding inside cards and containers (use px-4 py-4 md:px-6 md:py-6 or higher)
+- Minimum 16px padding inside cards and containers (use px-2 py-2 md:px-2 md:py-2 or higher)
 - Use whitespace intentionally to create visual hierarchy
 - Sections should have generous vertical spacing (py-12 md:py-16 lg:py-24)
 

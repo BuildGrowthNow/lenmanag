@@ -21,10 +21,10 @@ type SiteWorkspaceControlsProps = {
 const overrideScopes = ["copy", "layout", "brand", "cta", "motion", "style"] as const;
 
 const VARIANT_OPTIONS: { value: VariantType; label: string; description: string }[] = [
-  { value: "html_v1", label: "HTML V1", description: "Professional Standard" },
-  { value: "html_v2", label: "HTML V2", description: "Bold Startup" },
-  { value: "html_v3", label: "HTML V3", description: "Creative Alternative" },
-  { value: "nextjs", label: "Next.js", description: "React Interactive" },
+  { value: "html_v1", label: "HTML V1", description: "Professional" },
+  { value: "html_v2", label: "HTML V2", description: "Bold" },
+  { value: "html_v3", label: "HTML V3", description: "Creative" },
+  { value: "nextjs", label: "Next.js", description: "Nextjs" },
 ];
 
 function getNestedValue(obj: any, path: string): any {

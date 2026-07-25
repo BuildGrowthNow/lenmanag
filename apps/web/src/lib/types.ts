@@ -805,6 +805,7 @@ export type SiteReviewQueueItem = {
   previewSlug: string;
   previewUrl: string;
   themeKey: string;
+  variantType: VariantType | null;
   paletteMode: PaletteMode;
   qualityScore: number;
   readinessStatus: SiteReadinessStatus;

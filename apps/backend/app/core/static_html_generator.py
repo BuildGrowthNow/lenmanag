@@ -158,12 +158,14 @@ def _build_static_html_prompt(
     # Get company name
     company_name = extraction.summary.companyName or "Company"
     # Kept outside the f-string so pyright doesn't misparse the JS object literal syntax
-    _intersection_observer_instruction = (
-        "Scroll-triggered fade-in animations using IntersectionObserver"
-        " — elements MUST use `observer.observe()` and transition from opacity:0 to opacity:1"
-        " when they enter the viewport."
-        " Always initialize the IntersectionObserver with `{threshold: 0.1 }` so elements trigger early."
-        " Elements above the fold (hero) must start at opacity:1, NOT opacity:0."
+    _animation_notes = (
+        "Scroll-triggered animations using IntersectionObserver — important rules:\n"
+        "   - NEVER set opacity:0 in CSS directly. Only hide elements by adding a class via JS "
+        "(e.g. add 'js-loaded' to <html> first, then use '.js-loaded .animate-on-scroll { opacity:0 }') "
+        "so content is always fully visible if JS fails or is slow.\n"
+        "   - Hero/above-the-fold elements must never be hidden — always visible on load.\n"
+        "   - Number counters must animate to their final value; always set the final number as a "
+        "fallback in case the animation does not trigger."
     )
 
     return f"""Generate a complete, production-ready static HTML landing page.
@@ -218,7 +220,6 @@ REQUIREMENTS:
 
 3. CSS Requirements:
    - Use CSS custom properties for colors/spacing
-   - try to avoid opacity:0 if the elements dont have a clear animation or a reason to be hidden
    - Responsive design (mobile-first with media queries)
    - Smooth animations matching motion level
    - Follow the creative direction's color mood and typography
@@ -229,7 +230,7 @@ REQUIREMENTS:
    - Vanilla JS only (no jQuery, no React, no frameworks)
    - Smooth scroll behavior for anchor links
    - Mobile menu toggle
-   - {_intersection_observer_instruction}
+   - {_animation_notes}
    - Form validation if contact form present
 
 5. Design Quality:

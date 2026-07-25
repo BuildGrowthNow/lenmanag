@@ -16,10 +16,10 @@ type VariantsViewProps = {
 };
 
 const VARIANT_LABELS: Record<VariantType, { name: string; description: string }> = {
-  html_v1: { name: "Professional Standard", description: "Clean corporate design with subtle gradients" },
-  html_v2: { name: "Bold Startup", description: "Vibrant colors and dynamic layouts" },
-  html_v3: { name: "Creative Alternative", description: "Unique artistic direction" },
-  nextjs: { name: "Next.js Site", description: "Full React-based component site" },
+  html_v1: { name: "Professional", description: "Clean corporate design with subtle gradients" },
+  html_v2: { name: "Bold", description: "Vibrant colors and dynamic layouts" },
+  html_v3: { name: "Creative", description: "Unique artistic direction" },
+  nextjs: { name: "Next.js", description: "Full React-based component site" },
 };
 
 function StatusIcon({ status }: { status: SiteReadinessStatus }) {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, Plus, Upload, RefreshCw } from "lucide-react";
+import { Archive, Plus, Upload, RefreshCw, Lock } from "lucide-react";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -138,13 +138,12 @@ const GENERATION_TYPE_OPTIONS: { key: GenerationType; label: string; description
   { key: "html_v1", label: "HTML V1 - Professional", description: "Clean, corporate design with subtle gradients" },
   { key: "html_v2", label: "HTML V2 - Bold", description: "Bold startup aesthetic with vibrant colors" },
   { key: "html_v3", label: "HTML V3 - Creative", description: "Creative direction with unique layouts" },
-  { key: "nextjs", label: "Next.js Site", description: "Full React-based site with components" },
 ];
 
 function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
   const [form, setForm] = useState({ companyName: "", contactName: "", websiteUrl: "", notes: "" });
   const [mode, setMode] = useState<PipelineMode>("auto");
-  const [generationTypes, setGenerationTypes] = useState<GenerationType[]>(["nextjs"]);
+  const [generationTypes, setGenerationTypes] = useState<GenerationType[]>(["html_v1", "html_v2", "html_v3"]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -152,7 +151,7 @@ function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
     if (open) {
       setForm({ companyName: "", contactName: "", websiteUrl: "", notes: "" });
       setMode("auto");
-      setGenerationTypes(["nextjs"]);
+      setGenerationTypes(["html_v1", "html_v2", "html_v3"]);
       setError(null);
     }
   }, [open]);
@@ -177,7 +176,7 @@ function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
         websiteUrl: form.websiteUrl.trim(),
         notes: form.notes.trim() || null,
         pipelineMode: mode,
-        generationTypes: generationTypes.length > 0 ? generationTypes : ["nextjs"],
+        generationTypes: generationTypes.length > 0 ? generationTypes : ["html_v1", "html_v2", "html_v3"],
       });
       onCreated();
       onClose();
@@ -278,6 +277,14 @@ function AddLeadModal({ open, onClose, onCreated }: AddLeadModalProps) {
                   <div className="mt-0.5 text-xs opacity-70 pl-6">{opt.description}</div>
                 </button>
               ))}
+              {/* Next.js — temporarily disabled */}
+              <div className="rounded-xl border border-line px-3 py-2 text-left text-sm opacity-50 cursor-not-allowed select-none">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-muted shrink-0" />
+                  <span className="font-medium text-muted">Next.js Site</span>
+                </div>
+                <div className="mt-0.5 text-xs text-muted pl-5">Temporarily disabled</div>
+              </div>
             </div>
             {generationTypes.length === 0 && (
               <p className="text-xs text-amber-400">Select at least one variant type</p>

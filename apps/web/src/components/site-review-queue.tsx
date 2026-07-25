@@ -37,10 +37,18 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
+  const VARIANT_LABELS: Record<string, string> = {
+    html_v1: "HTML v1",
+    html_v2: "HTML v2",
+    html_v3: "HTML v3",
+    nextjs: "Next.js",
+  };
   const companyName =
     item.sourceAttribution?.companyName ||
     item.sourceAttribution?.normalizedDomain ||
     item.leadId.slice(0, 8);
+  const variantLabel = item.variantType ? (VARIANT_LABELS[item.variantType] ?? item.variantType) : null;
+  const displayTitle = companyName + (variantLabel ? ` · ${variantLabel}` : "");
   const domain = item.sourceAttribution?.normalizedDomain ?? "";
   const screenshotUrl = item.screenshotRefs?.[0]?.url ?? null;
 
@@ -118,10 +126,10 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
           {/* Header */}
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="font-semibold text-text">{companyName}</div>
+              <div className="font-semibold text-text">{displayTitle}</div>
               {domain ? <div className="mt-0.5 text-xs text-muted">{domain}</div> : null}
               <div className="mt-1 text-xs text-muted">
-                v{item.version} · {item.themeKey} · {item.paletteMode} · {item.qualityScore}/100
+                v{item.version} · {item.paletteMode} · {item.qualityScore}/100
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
