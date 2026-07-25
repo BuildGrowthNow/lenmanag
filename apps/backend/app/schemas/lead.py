@@ -16,6 +16,7 @@ JobType = Literal[
     "site_refresh",
     "site_generate",
     "site_republish",
+    "site_refine",
     "analysis_refresh",
 ]
 
