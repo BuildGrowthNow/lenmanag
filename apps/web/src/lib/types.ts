@@ -664,6 +664,8 @@ export type GeneratedSite = {
   staticHtml?: string;
   staticCssUrl?: string;
   staticJsUrl?: string;
+  compiledBundleUrl?: string;
+  compilationStatus?: string;
   themeId: string;
   themeKey: string;
   themeName: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, XCircle, ExternalLink, Copy, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -14,7 +14,7 @@ import { LeadExtractionControls } from "@/components/lead-extraction-controls";
 import { LeadVariantsView } from "@/components/lead-variants-view";
 import { PipelineActivityLog } from "@/components/pipeline-activity-log";
 import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages, getLeadAnalysis } from "@/lib/api/leads";
-import { getSite } from "@/lib/api/sites";
+import { getSite, hasVariantsReadyForSharing } from "@/lib/api/sites";
 import { evaluateExtractionHealth } from "@/lib/extraction-health";
 import type { LeadDetail, ExtractionSnapshot, MasterBrief, GeneratedSite, PipelineStage, ExtractionAnalysisResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -330,6 +330,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [brief, setBrief] = useState<MasterBrief | null>(null);
   const [site, setSite] = useState<GeneratedSite | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showClientLinks, setShowClientLinks] = useState(false);
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
   // Load params
   useEffect(() => {
@@ -349,13 +351,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
 
     async function loadData() {
       try {
-        const [leadData, extractionData, pagesData, briefData, siteData, analysisData] = await Promise.all([
+        const [leadData, extractionData, pagesData, briefData, siteData, analysisData, variantsReady] = await Promise.all([
           getLead(id),
           getLeadExtraction(id),
           getLeadPages(id),
           getLeadMasterBrief(id),
           getSite(id),
           getLeadAnalysis(id),
+          hasVariantsReadyForSharing(id),
         ]);
 
         if (!mounted) return;
@@ -366,6 +369,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         setBrief(briefData);
         setSite(siteData);
         setAnalysis(analysisData);
+        setShowClientLinks(variantsReady);
         setLoading(false);
       } catch (error) {
         console.error("Failed to load lead data:", error);
@@ -433,6 +437,20 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const brandCues = extraction?.brandAssetCues ?? [];
   const gapItems = extraction?.gapItems ?? [];
 
+  const appUrl = typeof window !== "undefined" ? window.location.origin : "https://sites.lenquant.com";
+  const redesignUrl = lead.redesignSlug ? `${appUrl}/redesign/${lead.redesignSlug}` : null;
+  const compareUrl = `${appUrl}/compare/${lead.id}`;
+
+  const handleCopyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(url);
+      setTimeout(() => setCopiedLink(null), 2000);
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+    }
+  };
+
   return (
     <PageFrame
       eyebrow="Lead detail"
@@ -455,6 +473,68 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             {lead.pipelineMode === "auto" ? "Auto" : "Manual"}
           </Badge>
         </div>
+
+        {/* Client sharing buttons */}
+        {showClientLinks && (
+          <div className="flex items-center gap-2">
+            {redesignUrl && (
+              <>
+                <a
+                  href={redesignUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    buttonVariants({ variant: "secondary", size: "sm" }),
+                    "flex items-center gap-1.5"
+                  )}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View Gallery
+                </a>
+                <button
+                  onClick={() => void handleCopyLink(redesignUrl)}
+                  className={cn(
+                    buttonVariants({ variant: "ghost", size: "sm" }),
+                    "flex items-center gap-1.5"
+                  )}
+                  title="Copy gallery link"
+                >
+                  {copiedLink === redesignUrl ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </>
+            )}
+            <a
+              href={compareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                buttonVariants({ variant: "secondary", size: "sm" }),
+                "flex items-center gap-1.5"
+              )}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Compare Variants
+            </a>
+            <button
+              onClick={() => void handleCopyLink(compareUrl)}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "flex items-center gap-1.5"
+              )}
+              title="Copy compare link"
+            >
+              {copiedLink === compareUrl ? (
+                <Check className="h-3.5 w-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Two-column layout */}

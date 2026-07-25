@@ -195,3 +195,32 @@ export async function submitRefinementPrompt(
 export async function getPromptHistory(siteId: string): Promise<RefinementPromptRecord[]> {
   return request<RefinementPromptRecord[]>(`/api/sites/${siteId}/prompts`);
 }
+
+/**
+ * Check if lead has variants ready for client sharing.
+ * Returns true if at least one successfully compiled site with screenshot exists.
+ */
+export async function hasVariantsReadyForSharing(leadId: string): Promise<boolean> {
+  const variants = await getVariantsForLead(leadId);
+  return variants.some(
+    (v) =>
+      v.compilationStatus === "success" &&
+      v.readinessStatus !== "blocked" &&
+      (v.compiledBundleUrl || v.staticHtml) &&
+      (v.screenshotRefs?.length ?? 0) > 0
+  );
+}
+
+/**
+ * Get the count of successfully compiled variants for a lead.
+ */
+export async function getReadyVariantCount(leadId: string): Promise<number> {
+  const variants = await getVariantsForLead(leadId);
+  return variants.filter(
+    (v) =>
+      v.compilationStatus === "success" &&
+      v.readinessStatus !== "blocked" &&
+      (v.compiledBundleUrl || v.staticHtml) &&
+      (v.screenshotRefs?.length ?? 0) > 0
+  ).length;
+}

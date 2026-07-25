@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { PageFrame } from "@/components/shell/page-frame";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExtractionReviewClient } from "@/components/extraction-review-client";
 import { getLead, getLeadExtraction, getLeadPages } from "@/lib/api/leads";
-import type { ExtractionStatus } from "@/lib/types";
+import type { ExtractionStatus, LeadDetail, ExtractionSnapshot, PageInventoryResponse } from "@/lib/types";
 
 function extractionStatusLabel(status: ExtractionStatus) {
   if (status === "idle") return "Not started";
@@ -40,15 +43,62 @@ function extractionBadgeClass(status: ExtractionStatus) {
   return "border-emerald-500/40 bg-emerald-500/10 text-emerald-100";
 }
 
-export default async function ExtractionReviewPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const leadId = id;
+export default function ExtractionReviewPage({ params }: { params: Promise<{ id: string }> }) {
+  const [leadId, setLeadId] = useState<string | null>(null);
+  const [lead, setLead] = useState<LeadDetail | null>(null);
+  const [extraction, setExtraction] = useState<ExtractionSnapshot | null>(null);
+  const [pagesResponse, setPagesResponse] = useState<PageInventoryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const [lead, extraction, pagesResponse] = await Promise.all([
-    getLead(leadId),
-    getLeadExtraction(leadId),
-    getLeadPages(leadId),
-  ]);
+  useEffect(() => {
+    let mounted = true;
+    async function loadParams() {
+      const p = await params;
+      if (mounted) setLeadId(p.id);
+    }
+    void loadParams();
+    return () => { mounted = false; };
+  }, [params]);
+
+  useEffect(() => {
+    if (!leadId) return;
+    let mounted = true;
+
+    async function loadData() {
+      try {
+        const [leadData, extractionData, pagesData] = await Promise.all([
+          getLead(leadId),
+          getLeadExtraction(leadId),
+          getLeadPages(leadId),
+        ]);
+
+        if (!mounted) return;
+
+        setLead(leadData);
+        setExtraction(extractionData);
+        setPagesResponse(pagesData);
+        setLoading(false);
+      } catch (error) {
+        console.error("Failed to load extraction data:", error);
+        setLoading(false);
+      }
+    }
+
+    void loadData();
+    return () => { mounted = false; };
+  }, [leadId]);
+
+  if (loading) {
+    return (
+      <PageFrame
+        eyebrow="Extraction review"
+        title="Loading..."
+        description="Fetching extraction data..."
+      >
+        <div className="text-sm text-muted">Loading extraction details...</div>
+      </PageFrame>
+    );
+  }
 
   if (!lead) {
     return (
