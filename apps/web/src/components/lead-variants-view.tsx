@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { ExternalLink, RefreshCw, CheckCircle2, Clock, AlertTriangle, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -65,9 +66,26 @@ function VariantCard({ site }: { site: GeneratedSite }) {
   const isHtmlVariant = variantType.startsWith("html_");
   // All variants (HTML and Next.js) now use /st/{slug}
   const previewUrl = `/st/${site.previewSlug}`;
+  const screenshotUrl = site.screenshotRefs?.[0]?.url ?? null;
 
   return (
     <Card className="group relative overflow-hidden border-line bg-panel hover:border-white/20 transition-colors">
+      {/* Thumbnail */}
+      <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="block relative h-36 w-full overflow-hidden bg-panel-2">
+        {screenshotUrl ? (
+          <Image
+            src={screenshotUrl}
+            alt={`Preview of ${site.variantLabel || variantInfo.name}`}
+            fill
+            className="object-cover object-top transition-transform duration-300 group-hover:scale-105"
+            unoptimized
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted">
+            <ExternalLink className="h-5 w-5" />
+          </div>
+        )}
+      </a>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
