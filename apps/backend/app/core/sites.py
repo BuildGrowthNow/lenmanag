@@ -3976,19 +3976,6 @@ class SiteRepository:
         await self._maybe_ensure_indexes()
         from app.core.ai_site_generation import refine_with_retry
 
-        lead = await lead_repository.get_lead(site_id)
-        if lead is None:
-            await lead_repository._update_job(  # noqa: SLF001
-                job_id,
-                status="failed",
-                progress=100,
-                step="Lead missing for refinement",
-                error_message="Lead not found",
-                finished=True,
-                lead_ids=[site_id],
-            )
-            return None
-
         current = await self.get_site(site_id)
         if current is None or not current.sourceCode:
             await lead_repository._update_job(  # noqa: SLF001
@@ -3999,6 +3986,21 @@ class SiteRepository:
                 error_message="Site has no generated source code",
                 finished=True,
                 lead_ids=[site_id],
+            )
+            return None
+
+        # Resolve the lead using leadId from the site (site_id may be a variant UUID)
+        lead_id = current.leadId or site_id
+        lead = await lead_repository.get_lead(lead_id)
+        if lead is None:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Lead missing for refinement",
+                error_message="Lead not found",
+                finished=True,
+                lead_ids=[lead_id],
             )
             return None
 
@@ -4029,7 +4031,7 @@ class SiteRepository:
                 step="Prompt not found",
                 error_message=f"Refinement prompt {prompt_id} not found",
                 finished=True,
-                lead_ids=[site_id],
+                lead_ids=[lead_id],
             )
             return None
 
@@ -4038,10 +4040,10 @@ class SiteRepository:
             status="running",
             progress=30,
             step="Applying refinement to site code",
-            lead_ids=[site_id],
+            lead_ids=[lead_id],
             metadata={
                 "siteId": site_id,
-                "leadId": site_id,
+                "leadId": lead_id,
                 "promptId": prompt_id,
                 "nextVersion": current.version + 1,
             },
@@ -4062,7 +4064,7 @@ class SiteRepository:
                 step="Refinement failed",
                 error_message=error_msg,
                 finished=True,
-                lead_ids=[site_id],
+                lead_ids=[lead_id],
             )
             await self.update_prompt_result(
                 site_id=site_id,
@@ -4074,8 +4076,8 @@ class SiteRepository:
             )
             return None
 
-        master_brief = await lead_repository.get_master_brief(site_id)
-        extraction = await lead_repository.get_extraction(site_id)
+        master_brief = await lead_repository.get_master_brief(lead_id)
+        extraction = await lead_repository.get_extraction(lead_id)
         if master_brief is None or extraction is None:
             await lead_repository._update_job(  # noqa: SLF001
                 job_id,
@@ -4084,7 +4086,7 @@ class SiteRepository:
                 step="Brief or extraction missing after refinement",
                 error_message="Cannot persist refined site without brief/extraction",
                 finished=True,
-                lead_ids=[site_id],
+                lead_ids=[lead_id],
             )
             return None
 
@@ -4112,7 +4114,7 @@ class SiteRepository:
                 step="Site persistence verification failed",
                 error_message=error_msg,
                 finished=True,
-                lead_ids=[site_id],
+                lead_ids=[lead_id],
             )
             raise RuntimeError(error_msg)
 
@@ -4130,7 +4132,7 @@ class SiteRepository:
             step="Refinement complete",
             status="completed",
             finished=True,
-            lead_ids=[site_id],
+            lead_ids=[lead_id],
         )
         from app.core.analytics import analytics_repository
 
@@ -4138,7 +4140,7 @@ class SiteRepository:
             event_type="generation_regenerated",
             event_name="Site refined",
             site_id=persisted_site.id,
-            lead_id=site_id,
+            lead_id=lead_id,
             metadata={"version": persisted_site.version, "promptId": prompt_id},
         )
         return persisted_site

@@ -328,14 +328,15 @@ export default function SitesPage() {
                   </div>
                   <div className="text-sm">
                     <span className="text-xs uppercase tracking-[0.18em] text-muted">Score </span>
-                    <span className={score.colorClass}>{score.text}</span>
-                    {!hasScreenshotQA && site.readinessStatus !== "blocked" ? (
-                      <span className="ml-1 text-xs text-muted">(QA pending)</span>
-                    ) : null}
+                    {hasScreenshotQA ? (
+                      <span className={score.colorClass}>{score.text}</span>
+                    ) : (
+                      <span className="text-muted">QA pending</span>
+                    )}
                   </div>
                   <div className="mt-auto flex gap-2 pt-2">
                     <Button variant="secondary" className="flex-1">
-                      <Link href={`/app/sites/${site.leadId}`}>Open spec</Link>
+                      <Link href={`/app/leads/${site.leadId}`}>Open spec</Link>
                     </Button>
                     <Button className="flex-1">
                       <Link href={previewPath} target="_blank" className="flex items-center gap-1.5">
