@@ -249,7 +249,7 @@ export default function SitesPage() {
             const companyName =
               site.sourceAttribution?.companyName ||
               site.sourceAttribution?.normalizedDomain ||
-              site.id.slice(0, 8);
+              site.leadId.slice(0, 8);
             const domain = site.sourceAttribution?.normalizedDomain ?? "";
             const previewPath = site.previewUrl || `/st/${site.previewSlug}`;
             const score = qualityScoreDisplay(site);
@@ -326,7 +326,7 @@ export default function SitesPage() {
                   </div>
                   <div className="mt-auto flex gap-2 pt-2">
                     <Button variant="secondary" className="flex-1">
-                      <Link href={`/app/sites/${site.id}`}>Open spec</Link>
+                      <Link href={`/app/sites/${site.leadId}`}>Open spec</Link>
                     </Button>
                     <Button className="flex-1">
                       <Link href={previewPath} target="_blank" className="flex items-center gap-1.5">
