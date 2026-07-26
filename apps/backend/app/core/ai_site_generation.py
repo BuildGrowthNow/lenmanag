@@ -651,6 +651,21 @@ def _extract_tsx_code(response: str) -> str:
     return code.strip()
 
 
+def _extract_html_code(response: str) -> str:
+    """Extract HTML code from LLM response, removing markdown formatting."""
+    code = response.strip()
+
+    # Remove ```html or ```HTML markers
+    if code.startswith("```"):
+        lines = code.split("\n")
+        lines = lines[1:]  # Remove opening fence
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]  # Remove closing fence
+        code = "\n".join(lines)
+
+    return code.strip()
+
+
 async def _retry_generation_with_validation_feedback(
     *,
     llm: Any,
@@ -848,36 +863,51 @@ async def refine_landing_page_code(
     site_id: str,
     current_source_code: str,
     refinement_prompt: str,
+    variant_type: str = "nextjs",
 ) -> dict[str, Any]:
     """Apply targeted operator edits to existing generated code without full regeneration."""
     llm = get_llm_client()
     compiler = get_compiler_client()
+
+    is_html_variant = variant_type.startswith("html_")
 
     prompt = _build_refinement_prompt(
         current_source_code=current_source_code,
         refinement_prompt=refinement_prompt,
     )
 
-    logger.info(f"Refining TSX code for site {site_id}")
+    logger.info(f"Refining {variant_type} code for site {site_id}")
     response = await llm.generate_text(
         prompt=prompt,
         temperature=0.3,
         max_tokens=32768,
     )
 
-    source_code = _extract_tsx_code(response)
+    source_code = _extract_tsx_code(response) if not is_html_variant else _extract_html_code(response)
 
-    validation_errors = _validate_tsx_source(source_code)
-    if validation_errors:
-        logger.warning(
-            f"TSX validation errors on refinement attempt: {validation_errors}"
-        )
+    # Only validate TSX for Next.js sites, skip for HTML variants
+    if not is_html_variant:
+        validation_errors = _validate_tsx_source(source_code)
+        if validation_errors:
+            logger.warning(
+                f"TSX validation errors on refinement attempt: {validation_errors}"
+            )
+            return {
+                "success": False,
+                "sourceCode": source_code,
+                "compilationStatus": "validation_failed",
+                "validationErrors": validation_errors,
+                "error": f"Code validation failed: {', '.join(validation_errors[:3])}",
+            }
+
+    # For HTML variants, skip compilation and return immediately
+    if is_html_variant:
+        logger.info(f"HTML variant {variant_type} refined successfully for site {site_id}")
         return {
-            "success": False,
+            "success": True,
             "sourceCode": source_code,
-            "compilationStatus": "validation_failed",
-            "validationErrors": validation_errors,
-            "error": f"Code validation failed: {', '.join(validation_errors[:3])}",
+            "compilationStatus": "success",
+            "staticHtml": source_code,
         }
 
     logger.info(f"Compiling refined TSX code for site {site_id}")
@@ -945,6 +975,7 @@ async def refine_with_retry(
     site_id: str,
     current_source_code: str,
     refinement_prompt: str,
+    variant_type: str = "nextjs",
     max_retries: int = MAX_COMPILATION_RETRIES,
 ) -> dict[str, Any]:
     """Refine landing page code with retry on compilation failure."""
@@ -963,6 +994,7 @@ async def refine_with_retry(
             site_id=site_id,
             current_source_code=current_source_code,
             refinement_prompt=refinement_prompt,
+            variant_type=variant_type,
         )
 
         if result["success"]:

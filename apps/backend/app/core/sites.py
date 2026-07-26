@@ -4085,6 +4085,7 @@ class SiteRepository:
             site_id=site_id,
             current_source_code=current.sourceCode,
             refinement_prompt=prompt_text,
+            variant_type=current.variantType or "nextjs",
         )
 
         if not result.get("success"):
