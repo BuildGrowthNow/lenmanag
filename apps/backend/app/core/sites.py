@@ -324,9 +324,6 @@ def validate_operator_prompt(prompt: str) -> tuple[bool, str]:
     if len(prompt) < 10:
         return False, "Prompt must be at least 10 characters"
 
-    if len(prompt) > 500:
-        return False, "Prompt must be less than 500 characters"
-
     return True, ""
 
 

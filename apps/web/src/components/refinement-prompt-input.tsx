@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { refineSite, submitRefinementPrompt, getSiteLatestJob } from "@/lib/api/sites";
-import { getJob } from "@/lib/api/jobs";
 import { CheckCircle2, Clock, XCircle, Loader2 } from "lucide-react";
 
 type JobStatus = "queued" | "running" | "completed" | "failed";
@@ -16,7 +15,6 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
   const [mode, setMode] = useState<"refine" | "regenerate">("refine");
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [jobStep, setJobStep] = useState<string | null>(null);
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -28,10 +26,13 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
   }, []);
 
   const pollJob = useCallback(
-    (jobId: string) => {
+    (_jobId: string) => {
       const tick = async () => {
-        const result = await getJob(jobId);
-        if (!result) return;
+        const result = await getSiteLatestJob(siteId);
+        if (!result) {
+          pollRef.current = setTimeout(tick, 3000);
+          return;
+        }
         const status = result.job.status as JobStatus;
         setJobStatus(status);
         setJobStep(result.job.step ?? null);
@@ -51,7 +52,7 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
       };
       pollRef.current = setTimeout(tick, 2000);
     },
-    [router, stopPolling]
+    [siteId, router, stopPolling]
   );
 
   // Check for existing active job on mount
@@ -62,7 +63,6 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
       try {
         const latestJob = await getSiteLatestJob(siteId);
         if (latestJob && (latestJob.job.status === "queued" || latestJob.job.status === "running")) {
-          setCurrentJobId(latestJob.job.id);
           setJobStatus(latestJob.job.status as JobStatus);
           setJobStep(latestJob.job.step ?? null);
           setIsLoading(true);
@@ -86,10 +86,6 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
       setError("Prompt cannot be empty");
       return;
     }
-    if (value.length > 500) {
-      setError("Prompt must be less than 500 characters");
-      return;
-    }
     setIsLoading(true);
     setError(null);
     setJobStatus("queued");
@@ -100,7 +96,6 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
           ? await refineSite(siteId, value)
           : await submitRefinementPrompt(siteId, value, true);
       setPrompt("");
-      setCurrentJobId(result.jobId);
       if (result.status === "completed") {
         setJobStatus("completed");
         setIsLoading(false);
@@ -181,13 +176,12 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
             ? 'E.g. "Change the hero font to serif, make the CTA button larger, adjust spacing in the features section."'
             : 'E.g. "Make this feel more premium and modern while keeping the core product story intact."'
         }
-        maxLength={500}
         disabled={isLoading}
         className="w-full resize-none rounded-lg border border-line bg-panel px-4 py-3 text-text placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed"
         rows={4}
       />
       <div className="mt-2 flex items-center justify-between text-xs text-muted">
-        <span>{prompt.length}/500</span>
+        <span>{prompt.length} chars</span>
         {mode === "regenerate" && !isLoading && (
           <span className="text-amber-400/80">Starts from scratch — existing design will be replaced</span>
         )}
