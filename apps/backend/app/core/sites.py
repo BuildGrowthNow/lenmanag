@@ -4340,7 +4340,7 @@ class SiteRepository:
 
         site_doc: dict[str, Any] = {
             "id": site_id,
-            "leadId": site_id,
+            "leadId": lead.id,
             "generationJobId": job_id,
             "briefId": master_brief.id,
             "briefVersion": master_brief.version,

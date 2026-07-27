@@ -35,8 +35,11 @@ export default async function PreviewPage({ params }: PageProps) {
     notFound();
   }
 
-  // Resolve the HTML content — prefer staticHtml, fall back to sourceCode for refined sites
-  const htmlContent = site.staticHtml || (site.sourceCode?.trimStart().startsWith('<') ? site.sourceCode : null);
+  // Resolve the HTML content — prefer staticHtml, fall back to sourceCode for refined sites.
+  // Refined sites may have a stray 'use client'; directive prepended to the HTML — strip it.
+  const rawSource: string = site.staticHtml || site.sourceCode || '';
+  const strippedSource = rawSource.replace(/^['"]use client['"];\s*/s, '').trimStart();
+  const htmlContent = strippedSource.startsWith('<') ? strippedSource : null;
 
   if (htmlContent) {
     return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
