@@ -4373,7 +4373,10 @@ class SiteRepository:
             "overrides": [],
             "overrideDiffs": [],
             "refinementPromptId": refinement_prompt_id,
-            "promptHistory": list(current.promptHistory or []) if current else [],
+            "promptHistory": [
+                (r.model_dump() if hasattr(r, "model_dump") else r)
+                for r in (current.promptHistory or [])
+            ] if current else [],
             "isManuallyRefined": refinement_prompt_id is not None,
             "improvementRecommendations": None,
             "sourceCode": result.get("sourceCode"),
