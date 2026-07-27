@@ -23,7 +23,7 @@ const CUSTOMERS = [
     name: "Sarah",
     title: "Coffee Shop Owner",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop&crop=face",
-    text: "Honestly, I was skeptical about the 3-day timeline. But they delivered exactly what I needed and my online orders have been crazy since launch.",
+    text: "didnt believe the 3 days thing. they delivered in 2. online orders went crazy",
     rating: 5,
   },
   {
@@ -31,7 +31,7 @@ const CUSTOMERS = [
     name: "Marcus",
     title: "Personal Trainer",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&crop=face",
-    text: "I was losing clients to gyms with better websites. This changed everything. Now people book sessions right from my site.",
+    text: "I was losing clients to gyms with better websites. This changed everything. People book sessions right from my site now and I didn't have to do anything after the call.",
     rating: 5,
   },
   {
@@ -39,7 +39,7 @@ const CUSTOMERS = [
     name: "Emma",
     title: "Interior Designer",
     avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80&h=80&fit=crop&crop=face",
-    text: "The portfolio section is gorgeous. My clients are so impressed before we even meet. Definitely helped me land bigger projects.",
+    text: "landing bigger projects fr",
     rating: 5,
   },
   {
@@ -47,7 +47,7 @@ const CUSTOMERS = [
     name: "James",
     title: "Real Estate Agent",
     avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=80&h=80&fit=crop&crop=face",
-    text: "Not gonna lie, I'm not tech savvy but the site works perfectly. My listings look amazing and I'm getting more showings.",
+    text: "not tech savvy at all but the site just works. listings look amazing and showings are up",
     rating: 4,
   },
   {
@@ -55,7 +55,7 @@ const CUSTOMERS = [
     name: "Lisa",
     title: "Yoga Instructor",
     avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=80&h=80&fit=crop&crop=face",
-    text: "Best investment for my business. Classes are booked solid and people keep mentioning how professional the website looks.",
+    text: "Classes booked solid every week. Best money I spent on my business no cap",
     rating: 5,
   },
   {
@@ -63,7 +63,7 @@ const CUSTOMERS = [
     name: "David",
     title: "Contractor",
     avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&h=80&fit=crop&crop=face",
-    text: "Needed a site fast. They delivered. No complaints. My phone's ringing more now. That's all that matters.",
+    text: "needed it fast. got it fast. phone hasnt stopped ringing",
     rating: 4,
   },
   {
@@ -71,7 +71,7 @@ const CUSTOMERS = [
     name: "Rachel",
     title: "Wedding Planner",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop&crop=face",
-    text: "Clients love booking through the site. It makes me look so much more professional. I've doubled my business in 3 months.",
+    text: "Doubled my bookings in 3 months. I keep saying it to everyone who asks how I did it.",
     rating: 5,
   },
   {
@@ -79,7 +79,7 @@ const CUSTOMERS = [
     name: "Michael",
     title: "Consultant",
     avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=80&h=80&fit=crop&crop=face",
-    text: "The speed of delivery was insane. Quality is top-notch. I'm already recommending them to everyone I know.",
+    text: "speed was insane. quality too. already sent 3 people their way",
     rating: 5,
   },
   {
@@ -87,7 +87,7 @@ const CUSTOMERS = [
     name: "Jessica",
     title: "Freelance Writer",
     avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=80&h=80&fit=crop&crop=face",
-    text: "Honestly thought it would be generic but it's totally personalized to my brand. Love it. My rates went up.",
+    text: "thought it would be generic. it wasnt. totally my brand. raised my rates right after",
     rating: 5,
   },
   {
@@ -95,7 +95,7 @@ const CUSTOMERS = [
     name: "Alex",
     title: "Photography Studio",
     avatar: "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=80&h=80&fit=crop&crop=face",
-    text: "Portfolio looks incredible. Getting inquiries from bigger clients now. Best money spent.",
+    text: "Portfolio hits different now. Bigger clients, better projects. Worth every dollar.",
     rating: 5,
   },
   {
@@ -103,7 +103,7 @@ const CUSTOMERS = [
     name: "Sophie",
     title: "Chef / Catering",
     avatar: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=80&h=80&fit=crop&crop=face",
-    text: "People can actually see my food now with great photos. Bookings went through the roof. Super happy.",
+    text: "bookings through the roof. people see the food and just buy. simple",
     rating: 5,
   },
   {
@@ -111,7 +111,7 @@ const CUSTOMERS = [
     name: "Tom",
     title: "Business Coach",
     avatar: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=80&h=80&fit=crop&crop=face",
-    text: "The testimonials section on my site converts like crazy. This was exactly what I needed.",
+    text: "Exactly what I needed. No fluff, no back and forth. They just got it.",
     rating: 4,
   },
   {
@@ -119,7 +119,7 @@ const CUSTOMERS = [
     name: "Olivia",
     title: "Bakery Owner",
     avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=80&h=80&fit=crop&crop=face",
-    text: "My customers can order online now. Sales jumped 40% in the first month. Totally worth every penny.",
+    text: "sales up 40% first month. customers order online now. totally worth it",
     rating: 5,
   },
   {
@@ -127,7 +127,7 @@ const CUSTOMERS = [
     name: "Daniel",
     title: "Lawyer",
     avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=80&h=80&fit=crop&crop=face",
-    text: "Professional look that builds trust with potential clients. I get compliments on my site constantly.",
+    text: "Clients trust me before we even speak. The site does that. I get compliments on it constantly.",
     rating: 5,
   },
   {
@@ -135,7 +135,7 @@ const CUSTOMERS = [
     name: "Nina",
     title: "Florist",
     avatar: "https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?w=80&h=80&fit=crop&crop=face",
-    text: "My arrangements look stunning on the site. Wedding inquiries tripled since the new site went live.",
+    text: "wedding inquiries tripled. not kidding",
     rating: 5,
   },
   {
@@ -143,7 +143,7 @@ const CUSTOMERS = [
     name: "Carlos",
     title: "Auto Mechanic",
     avatar: "https://images.unsplash.com/photo-1504257432389-52343af06ae3?w=80&h=80&fit=crop&crop=face",
-    text: "Finally have a site my customers can find me on. Appointments are way up. Simple and effective.",
+    text: "customers can find me now. appointments way up. does what it needs to do",
     rating: 4,
   },
   {
@@ -151,7 +151,7 @@ const CUSTOMERS = [
     name: "Amanda",
     title: "Dentist",
     avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80&h=80&fit=crop&crop=face",
-    text: "Patients love being able to book online. The design is clean and trustworthy. Exactly what a medical practice needs.",
+    text: "Patients book online, show up prepared, trust the practice before walking in. Exactly what we needed.",
     rating: 5,
   },
   {
@@ -159,7 +159,7 @@ const CUSTOMERS = [
     name: "Ryan",
     title: "Music Teacher",
     avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=80&h=80&fit=crop&crop=face",
-    text: "Parents find me through Google now. Lesson bookings have never been higher. Great ROI.",
+    text: "parents find me on google now. lesson bookings never been higher",
     rating: 5,
   },
   {
@@ -167,7 +167,7 @@ const CUSTOMERS = [
     name: "Maria",
     title: "Spa Owner",
     avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=80&h=80&fit=crop&crop=face",
-    text: "The relaxing design perfectly matches my brand. Clients say it makes them want to visit even before they arrive.",
+    text: "clients say the site makes them want to come in before they even book. thats the vibe we wanted",
     rating: 5,
   },
   {
@@ -175,7 +175,7 @@ const CUSTOMERS = [
     name: "Tyler",
     title: "Landscaper",
     avatar: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=80&h=80&fit=crop&crop=face",
-    text: "Before and after gallery on the site sells itself. Getting projects I never would have before.",
+    text: "gallery sells itself. getting projects I never wouldve gotten before",
     rating: 5,
   },
   {
@@ -183,7 +183,7 @@ const CUSTOMERS = [
     name: "Priya",
     title: "Accountant",
     avatar: "https://images.unsplash.com/photo-1607746882042-944635dfe10e?w=80&h=80&fit=crop&crop=face",
-    text: "Tax season was so smooth with online scheduling. My clients love the convenience.",
+    text: "Tax season ran so smooth this year. Online scheduling changed everything for my practice.",
     rating: 5,
   },
   {
@@ -191,7 +191,7 @@ const CUSTOMERS = [
     name: "Jake",
     title: "Barber",
     avatar: "https://images.unsplash.com/photo-1531891437562-4301cf35b7e4?w=80&h=80&fit=crop&crop=face",
-    text: "Walk-ins were fine, but now I'm booked solid every week. The site did that. Simple.",
+    text: "booked solid every week now. the site did that",
     rating: 4,
   },
   {
@@ -199,7 +199,7 @@ const CUSTOMERS = [
     name: "Hannah",
     title: "Pet Groomer",
     avatar: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=80&h=80&fit=crop&crop=face",
-    text: "Pet parents trust me more with a professional site. Bookings are up 60%. Couldn't be happier.",
+    text: "up 60% on bookings. pet parents trust me more with a proper site. couldnt be happier fr",
     rating: 5,
   },
   {
@@ -207,7 +207,7 @@ const CUSTOMERS = [
     name: "Brandon",
     title: "Electrician",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&crop=face",
-    text: "My competitor had a website and I didn't. Now mine looks way better. Getting all the calls.",
+    text: "my competitor had a site and I didnt. now mine looks way better. getting all the calls",
     rating: 5,
   },
 ];
