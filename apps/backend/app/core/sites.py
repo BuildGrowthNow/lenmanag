@@ -7,7 +7,7 @@ import logging
 import re
 import zipfile
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any, cast
 from uuid import uuid4
@@ -3911,11 +3911,13 @@ class SiteRepository:
         database = get_database()
         if database is not None:
             # Check for existing refinement job for THIS specific site (not all sites for this lead)
+            stale_cutoff = _now() - timedelta(minutes=30)
             existing_job = await database["jobs"].find_one(
                 {
                     "metadata.siteId": site_id,
                     "jobType": {"$in": ["site_refine"]},
                     "status": {"$in": ["queued", "running"]},
+                    "updatedAt": {"$gte": stale_cutoff},
                 }
             )
             if existing_job is not None:
