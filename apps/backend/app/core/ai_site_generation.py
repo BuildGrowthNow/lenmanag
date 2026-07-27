@@ -887,7 +887,11 @@ async def refine_landing_page_code(
     llm = get_llm_client()
     compiler = get_compiler_client()
 
-    is_html_variant = variant_type.startswith("html_") or current_source_code.lstrip().startswith(
+    _stripped = current_source_code.lstrip()
+    # Strip 'use client'; directive before checking for HTML — some sites have it prepended
+    if _stripped.startswith(("'use client'", '"use client"')):
+        _stripped = _stripped.split("\n", 1)[-1].lstrip()
+    is_html_variant = variant_type.startswith("html_") or _stripped.startswith(
         ("<!DOCTYPE", "<html", "<!doctype")
     )
 
