@@ -41,6 +41,7 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
   const [jobStep, setJobStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountChecked = useRef(false);
 
   const VARIANT_LABELS: Record<string, string> = {
     html_v1: "HTML v1",
@@ -98,6 +99,23 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
     },
     [item.siteId, stopPolling]
   );
+
+  // On mount: resume if a job is already running for this site
+  useEffect(() => {
+    if (mountChecked.current) return;
+    mountChecked.current = true;
+    void (async () => {
+      const latest = await getSiteLatestJob(item.siteId);
+      if (!latest) return;
+      const status = latest.job.status as JobStatus;
+      if (status === "queued" || status === "running") {
+        setBusy(true);
+        setJobStatus(status);
+        setJobStep(latest.job.step ?? null);
+        pollJob(latest.job.id, () => {});
+      }
+    })();
+  }, [item.siteId, pollJob]);
 
   async function handleApprove() {
     setBusy(true);
