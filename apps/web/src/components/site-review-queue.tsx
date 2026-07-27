@@ -112,6 +112,13 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
     }
   }
 
+  function onRefineComplete() {
+    setBusy(false);
+    setJobStatus("completed");
+    // Reset back to form after a moment so another refinement can be sent
+    setTimeout(() => setJobStatus(null), 3000);
+  }
+
   async function handleRefine() {
     if (!prompt.trim()) return;
     setBusy(true);
@@ -122,11 +129,9 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
       const result = await refineSite(item.siteId, prompt.trim());
       setPrompt("");
       if (result.status === "completed") {
-        setBusy(false);
-        setJobStatus("completed");
-        onRegenerated();
+        onRefineComplete();
       } else {
-        pollJob(result.jobId, onRegenerated);
+        pollJob(result.jobId, onRefineComplete);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to queue refinement.");
@@ -167,7 +172,7 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
       : jobStatus === "running"
       ? jobStep ?? "Refining…"
       : jobStatus === "completed"
-      ? "Done — updating queue…"
+      ? "Refinement complete ✓"
       : null;
 
   return (
@@ -246,52 +251,54 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
 
           {/* Prompt + actions */}
           <div className="space-y-3">
-            <Textarea
-              rows={3}
-              placeholder='Describe targeted changes to refine — e.g. "change the hero font to serif, make the CTA button larger"'
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              disabled={busy}
-              className="resize-none text-sm"
-            />
-            {statusLabel ? (
-              <div className="flex items-center gap-2 text-sm text-sky-300">
+            {busy ? (
+              <div className="flex items-center gap-3 rounded-xl border border-sky-500/20 bg-sky-500/5 px-4 py-3">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-400" />
-                {statusLabel}
+                <span className={`text-sm ${jobStatus === "completed" ? "text-emerald-300" : "text-sky-300"}`}>
+                  {statusLabel ?? "Working…"}
+                </span>
               </div>
-            ) : null}
-            {error ? (
-              <div className="rounded-xl border border-rose-500/30 px-3 py-2 text-sm text-rose-300">
-                {error}
-              </div>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                onClick={handleApprove}
-                disabled={busy}
-                className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
-                variant="ghost"
-              >
-                {busy && jobStatus === null ? "Working…" : "Approve →"}
-              </Button>
-              <Button
-                onClick={handleRefine}
-                disabled={busy || !prompt.trim()}
-                variant="ghost"
-                className="border-sky-500/40 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
-              >
-                {busy && jobStatus !== null ? "Refining…" : "Refine →"}
-              </Button>
-              <Button
-                onClick={handleRegenerate}
-                disabled={busy}
-                variant="ghost"
-                size="sm"
-                className="text-xs text-muted hover:text-text"
-              >
-                Full regeneration
-              </Button>
-            </div>
+            ) : (
+              <>
+                <Textarea
+                  rows={3}
+                  placeholder='Describe targeted changes to refine — e.g. "change the hero font to serif, make the CTA button larger"'
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  className="resize-none text-sm"
+                />
+                {error ? (
+                  <div className="rounded-xl border border-rose-500/30 px-3 py-2 text-sm text-rose-300">
+                    {error}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    onClick={handleApprove}
+                    className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
+                    variant="ghost"
+                  >
+                    Approve →
+                  </Button>
+                  <Button
+                    onClick={handleRefine}
+                    disabled={!prompt.trim()}
+                    variant="ghost"
+                    className="border-sky-500/40 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
+                  >
+                    Refine →
+                  </Button>
+                  <Button
+                    onClick={handleRegenerate}
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted hover:text-text"
+                  >
+                    Full regeneration
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </CardContent>
       </div>
