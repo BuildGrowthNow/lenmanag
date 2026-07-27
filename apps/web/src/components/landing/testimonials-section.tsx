@@ -4,55 +4,50 @@ import { motion } from "framer-motion";
 import { Star, Quote } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useSupportsHover } from "@/hooks/use-supports-hover";
+import Image from "next/image";
 
 const TESTIMONIALS = [
   {
-    name: "Marcus Williams",
-    role: "CEO, TechVenture Solutions",
-    avatar: "MW",
+    name: "Marcus W.",
+    role: "CEO, TechVenture",
+    photo: "https://i.pravatar.cc/96?img=11",
     rating: 5,
-    text: "Conversions up 40% in two months. Worth every dollar.",
-    gradient: "from-blue-500 to-cyan-500",
+    text: "bro i was skeptical ngl. site was live in 3 days and my leads doubled. no cap",
   },
   {
     name: "Sophia Chen",
     role: "Founder, GreenLeaf Organics",
-    avatar: "SC",
+    photo: "https://i.pravatar.cc/96?img=47",
     rating: 5,
     text: "Honestly didn't believe the 3-day promise. They delivered in 2. Design is clean, customers keep complimenting it, and I didn't have to chase anyone once.",
-    gradient: "from-green-500 to-emerald-500",
   },
   {
-    name: "Jordan Blake",
-    role: "Marketing Director, Apex Digital",
-    avatar: "JB",
+    name: "Jordan B.",
+    role: "Marketing Director",
+    photo: "https://i.pravatar.cc/96?img=15",
     rating: 5,
-    text: "On time. No back-and-forth. SEO alone paid for it.",
-    gradient: "from-purple-500 to-pink-500",
+    text: "clean. fast. done.",
   },
   {
     name: "Elena Rodriguez",
     role: "Owner, Coastal Realty Group",
-    avatar: "ER",
+    photo: "https://i.pravatar.cc/96?img=44",
     rating: 5,
-    text: "I've worked with three agencies before LenQuant. This was the first time I didn't have to explain myself twice. They got it right on the first preview and the whole process felt effortless.",
-    gradient: "from-orange-500 to-red-500",
+    text: "I've worked with three agencies before LenQuant. First time I didn't have to explain myself twice. They got it right on the first preview and the whole process felt effortless.",
   },
   {
-    name: "David Park",
-    role: "CTO, CloudSync Systems",
-    avatar: "DP",
+    name: "David P.",
+    role: "CTO, CloudSync",
+    photo: "https://i.pravatar.cc/96?img=53",
     rating: 5,
-    text: "Fast, clean code, mobile-ready. These guys know what they're doing.",
-    gradient: "from-indigo-500 to-blue-500",
+    text: "these guys actually know what theyre doing. solid code, fast load, no drama",
   },
   {
     name: "Rachel Thompson",
     role: "Creative Director, Artisan Studios",
-    avatar: "RT",
+    photo: "https://i.pravatar.cc/96?img=49",
     rating: 5,
     text: "I'm a designer. I'm picky. They still impressed me.",
-    gradient: "from-pink-500 to-rose-500",
   },
 ];
 
@@ -104,13 +99,13 @@ export function TestimonialsSection() {
                 </p>
 
                 <div className="flex items-center gap-3 relative z-10">
-                  <div
-                    className={`w-12 h-12 rounded-full bg-gradient-to-br ${testimonial.gradient} flex items-center justify-center shadow-lg flex-shrink-0`}
-                  >
-                    <span className="text-white font-bold text-sm">
-                      {testimonial.avatar}
-                    </span>
-                  </div>
+                  <Image
+                    src={testimonial.photo}
+                    alt={testimonial.name}
+                    width={48}
+                    height={48}
+                    className="rounded-full object-cover shadow-lg flex-shrink-0"
+                  />
                   <div>
                     <div className="text-white font-semibold">
                       {testimonial.name}
