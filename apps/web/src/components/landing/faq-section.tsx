@@ -6,9 +6,9 @@ import { useState } from "react";
 
 const FAQS = [
   {
-    question: "How can you deliver a landing page in just 3 days?",
+    question: "How can LenQuant deliver my landing page in just 3 days?",
     answer:
-      "We've built a focused, hands-on process that cuts out unnecessary back-and-forth while keeping the quality high. Our team works closely on every project from start to finish. Most agencies spend weeks on revisions — we get it right the first time.",
+      "We've been doing this for over 6 years. We specialize in transforming outdated websites into high-converting landing pages. Our streamlined, hands-on process eliminates unnecessary back-and-forth, allowing us to deliver high-quality results in just 3 days.",
   },
   {
     question: "What does the $1,000 include exactly?",
@@ -16,34 +16,39 @@ const FAQS = [
       "Everything you need to launch: a complete custom landing page built for your brand, mobile-optimised, fast-loading, SEO-ready, and with a contact form set up. You own all the code and assets outright. The full scope is confirmed on our call before any payment.",
   },
   {
+    question: "How does LenQuant's process work?",
+    answer:
+      "We developed a simple and efficient process to save you time and money. First, we'll schedule a free 30-minute call to understand your goals. Then, we'll research your niche and present the best solution for your business. Once you approve the proposal, we'll deliver your landing page within 3 days. You'll have 7 days to request revisions, and if you're not completely satisfied, we'll give you a full refund.",
+  },
+  {
+    question: "Do I own the website after purchase?",
+    answer:
+      "Yes, fully. You receive full ownership of all design files, code, and assets. While we don't provide hosting, we're happy to help you connect your existing or new domain to your preferred hosting provider — or one of our recommended ones — at no extra cost. We'll guide you through the entire process from start to finish until your website is live.",
+  },
+  {
     question: "What if I need more than one page?",
     answer:
       "No problem. We handle multi-page projects too. The $1,000 covers your core landing page — if you need additional pages or specific features, we scope that together on the call and agree on a price before we start.",
   },
   {
-    question: "Do I own the website after purchase?",
-    answer:
-      "Yes, fully. You receive complete ownership of all design files, code, and assets. Hosting is separate — we can discuss options on the call, or you can deploy to your own provider.",
-  },
-  {
     question: "What happens after delivery?",
     answer:
-      "Your package includes 7 days of post-launch support. Anything beyond that — ongoing updates, hosting, maintenance — we can cover in your agreement. We'll go through all of this on the call.",
+      "Your package includes 7 days of post-launch support. During this time, we're available to make adjustments and provide any additional help you need. The entire process takes up to 11 days: 1 day for our online meeting, 3 days to build your landing page, and 7 days for revisions and support. After that, we can continue helping with updates, hosting, and maintenance as outlined in your agreement with LenQuant.",
   },
   {
     question: "What happens if I'm not satisfied?",
     answer:
-      "We stand behind our work with a 100% satisfaction guarantee. If we don't deliver what we agreed, you get a full refund within the first 7 days. No questions asked.",
+      "We have a 98% satisfaction rate — and we intend to keep it that way. If we don't deliver what we agreed, you get a full refund within the first 7 days. No questions asked.",
   },
   {
-    question: "How does the process work after the call?",
+    question: "How LenQuant works?",
     answer:
-      "We get on a free 30-minute call, align on your goals, scope, and any extras. Once we agree, you'll receive a summary and payment link. Work starts as soon as payment is confirmed, and you'll have your site live within 3 days.",
+      "After building more than 100 websites, we've developed a proven 11-day process. Day 1: We meet for a free 30-minute discovery call to align on your goals, project scope, and any additional requirements. After we agree on the proposal, you'll receive a project summary and payment link. 3 Days Production: We design and build your landing page — throughout the process, you'll receive previews so you can follow the progress. 7 Days Support: We provide dedicated post-delivery support, making any necessary revisions to ensure your landing page is exactly what you need.",
   },
   {
-    question: "What do I need to prepare for the call?",
+    question: "I'm ready to start! What do I need to prepare for the call?",
     answer:
-      "Just a rough idea of your business, who your customers are, and what you want the site to do. If you have a logo or brand colours, great — but not required. We'll guide you through everything.",
+      "Click the button below to get started and choose a date and time that works best for you. For our meeting, just find a quiet place where we can talk about your business. We only need a general understanding of what you do, who your customers are, and what you're looking to achieve. If you already have a website, logo, or brand colors, that's great — but it's not required. We'll guide you through the entire process.",
   },
 ];
 

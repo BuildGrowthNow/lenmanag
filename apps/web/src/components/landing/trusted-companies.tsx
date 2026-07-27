@@ -5,12 +5,14 @@ import Image from "next/image";
 import { useSupportsHover } from "@/hooks/use-supports-hover";
 
 const COMPANIES = [
+  { name: "Banco Santander", logo: "/logos/Banco_Santander.svg" },
+  { name: "Disney+", logo: "/logos/Disney.svg" },
+  { name: "MongoDB", logo: "/logos/MongoDB.svg" },
+  { name: "YouCan", logo: "/logos/youcan.png" },
+  { name: "Looping Livre", logo: "/logos/loopinglivre.png" },
+  { name: "Star+", logo: "/logos/Star+.svg" },
   { name: "Nexora", logo: "/logos/nexora.png" },
   { name: "Veltrix", logo: "/logos/veltrix.png" },
-  { name: "CloudByte", logo: "/logos/cloudbyte.png" },
-  { name: "Pulse.io", logo: "/logos/pulseio.png" },
-  { name: "Synthwave", logo: "/logos/synthwave.png" },
-  { name: "DataCore", logo: "/logos/datacore.png" },
 ];
 
 export function TrustedCompanies() {
@@ -40,18 +42,14 @@ export function TrustedCompanies() {
               transition={{ delay: i * 0.05, duration: 0.4 }}
               viewport={{ once: true, amount: 0.3 }}
               {...(supportsHover && { whileHover: { scale: 1.05 } })}
-              className="flex items-center gap-2 group cursor-pointer"
+              className="relative h-8 w-28 cursor-pointer opacity-70 [@media(hover:hover)]:hover:opacity-100 transition-opacity"
             >
               <Image
                 src={company.logo}
                 alt={company.name}
-                width={32}
-                height={32}
-                className="transition-transform [@media(hover:hover)]:group-hover:scale-110"
+                fill
+                className="object-contain"
               />
-              <span className="text-slate-300 font-medium [@media(hover:hover)]:group-hover:text-yellow-500 transition-colors text-sm">
-                {company.name}
-              </span>
             </motion.div>
           ))}
         </div>

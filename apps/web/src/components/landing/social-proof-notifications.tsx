@@ -2,36 +2,35 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, MapPin } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
 interface Notification {
   id: number;
   name: string;
-  location: string;
   timeAgo: string;
 }
 
 const FAKE_PURCHASES = [
-  { name: "Nathan Rivera", location: "San Francisco, CA" },
-  { name: "Chloe Bennett", location: "Austin, TX" },
-  { name: "Ethan Murphy", location: "Miami, FL" },
-  { name: "Grace Nguyen", location: "Seattle, WA" },
-  { name: "Owen Fletcher", location: "Boston, MA" },
-  { name: "Isla Chambers", location: "Denver, CO" },
-  { name: "Caleb Warren", location: "Portland, OR" },
-  { name: "Zoe Harrington", location: "Phoenix, AZ" },
-  { name: "Miles Donovan", location: "Chicago, IL" },
-  { name: "Ava Sinclair", location: "Dallas, TX" },
-  { name: "Liam Fitzgerald", location: "Atlanta, GA" },
-  { name: "Nora Callahan", location: "Nashville, TN" },
-  { name: "Finn Whitfield", location: "San Diego, CA" },
-  { name: "Ellie Stratton", location: "Las Vegas, NV" },
-  { name: "Leo Padilla", location: "Charlotte, NC" },
-  { name: "Hazel Tran", location: "Minneapolis, MN" },
-  { name: "Jonah Mercer", location: "Detroit, MI" },
-  { name: "Scarlett Odom", location: "Philadelphia, PA" },
-  { name: "Cole Espinoza", location: "Salt Lake City, UT" },
-  { name: "Piper Vance", location: "Columbus, OH" },
+  { name: "Nathan Rivera" },
+  { name: "Chloe Bennett" },
+  { name: "Ethan Murphy" },
+  { name: "Grace Nguyen" },
+  { name: "Owen Fletcher" },
+  { name: "Isla Chambers" },
+  { name: "Caleb Warren" },
+  { name: "Zoe Harrington" },
+  { name: "Miles Donovan" },
+  { name: "Ava Sinclair" },
+  { name: "Liam Fitzgerald" },
+  { name: "Nora Callahan" },
+  { name: "Finn Whitfield" },
+  { name: "Ellie Stratton" },
+  { name: "Leo Padilla" },
+  { name: "Hazel Tran" },
+  { name: "Jonah Mercer" },
+  { name: "Scarlett Odom" },
+  { name: "Cole Espinoza" },
+  { name: "Piper Vance" },
 ];
 
 const TIME_PHRASES = [
@@ -69,7 +68,6 @@ export function SocialProofNotifications() {
       setNotification({
         id: Date.now(),
         name: randomPurchase.name,
-        location: randomPurchase.location,
         timeAgo: randomTime,
       });
 
@@ -131,9 +129,6 @@ export function SocialProofNotifications() {
                     ordered a website
                   </p>
                   <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                    <MapPin className="w-3 h-3" />
-                    <span>{notification.location}</span>
-                    <span className="mx-1">•</span>
                     <span>{notification.timeAgo}</span>
                   </div>
                 </div>

@@ -52,7 +52,7 @@ export function RiskReversalBadge() {
                 className="flex items-start gap-2 text-sm text-zinc-200"
               >
                 <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5 flex-shrink-0" />
-                <span>7 full days to decide. If it&apos;s not perfect, we refund everything.</span>
+                <span>7 full days to review. Not happy? Full refund, no questions asked.</span>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
@@ -61,7 +61,7 @@ export function RiskReversalBadge() {
                 className="flex items-start gap-2 text-sm text-zinc-200"
               >
                 <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5 flex-shrink-0" />
-                <span>No explaining yourself. Just ask and it&apos;s done.</span>
+                <span>Tell us your goal, we handle the rest.</span>
               </motion.div>
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
@@ -70,7 +70,7 @@ export function RiskReversalBadge() {
                 className="flex items-start gap-2 text-sm text-zinc-200"
               >
                 <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5 flex-shrink-0" />
-                <span>Try it risk-free. Your wallet is protected.</span>
+                <span>100% satisfaction or your money back. Your investment is protected.</span>
               </motion.div>
             </motion.div>
           )}

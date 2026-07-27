@@ -8,10 +8,10 @@ import { useSupportsHover } from "@/hooks/use-supports-hover";
 const TESTIMONIALS = [
   {
     name: "Marcus Williams",
-    role: "CEO at TechVenture Solutions",
+    role: "CEO, TechVenture Solutions",
     avatar: "MW",
     rating: 5,
-    text: "The team delivered exactly what we needed in record time. Our new website has increased conversions by 40% in just two months.",
+    text: "Conversions up 40% in two months. Worth every dollar.",
     gradient: "from-blue-500 to-cyan-500",
   },
   {
@@ -19,7 +19,7 @@ const TESTIMONIALS = [
     role: "Founder, GreenLeaf Organics",
     avatar: "SC",
     rating: 5,
-    text: "I was skeptical about the 3-day timeline, but they exceeded all expectations. The design is beautiful and our customers love it.",
+    text: "Honestly didn't believe the 3-day promise. They delivered in 2. Design is clean, customers keep complimenting it, and I didn't have to chase anyone once.",
     gradient: "from-green-500 to-emerald-500",
   },
   {
@@ -27,7 +27,7 @@ const TESTIMONIALS = [
     role: "Marketing Director, Apex Digital",
     avatar: "JB",
     rating: 5,
-    text: "Professional, responsive, and delivered on time. The SEO optimization alone has been worth every penny. Highly recommend!",
+    text: "On time. No back-and-forth. SEO alone paid for it.",
     gradient: "from-purple-500 to-pink-500",
   },
   {
@@ -35,7 +35,7 @@ const TESTIMONIALS = [
     role: "Owner, Coastal Realty Group",
     avatar: "ER",
     rating: 5,
-    text: "From start to finish, the process was seamless. They understood our brand perfectly and created a website that truly represents us.",
+    text: "I've worked with three agencies before LenQuant. This was the first time I didn't have to explain myself twice. They got it right on the first preview and the whole process felt effortless.",
     gradient: "from-orange-500 to-red-500",
   },
   {
@@ -43,7 +43,7 @@ const TESTIMONIALS = [
     role: "CTO, CloudSync Systems",
     avatar: "DP",
     rating: 5,
-    text: "The technical quality is outstanding. Fast loading times, mobile-responsive, and clean code. These folks know what they're doing.",
+    text: "Fast, clean code, mobile-ready. These guys know what they're doing.",
     gradient: "from-indigo-500 to-blue-500",
   },
   {
@@ -51,7 +51,7 @@ const TESTIMONIALS = [
     role: "Creative Director, Artisan Studios",
     avatar: "RT",
     rating: 5,
-    text: "As a designer myself, I'm impressed. They nailed the aesthetics and user experience. Our portfolio has never looked better.",
+    text: "I'm a designer. I'm picky. They still impressed me.",
     gradient: "from-pink-500 to-rose-500",
   },
 ];
