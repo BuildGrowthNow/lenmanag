@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from app.core.audit import write_audit_log
 from app.core.auth_dependencies import CurrentUserId
-from app.core.leads import lead_repository
+from app.core.leads import _job_doc_to_summary, lead_repository
 from app.core.sites import site_repository, validate_operator_prompt
 from app.core.versioning import response_meta
 from app.schemas.job import JobResponse
@@ -144,7 +144,9 @@ async def get_site_latest_job(
     if job_doc is None:
         return success_response(None, meta=response_meta(request))
 
-    return success_response(await _job_response(job_doc), meta=response_meta(request))
+    return success_response(
+        await _job_response(_job_doc_to_summary(job_doc)), meta=response_meta(request)
+    )
 
 
 @router.delete("/{site_id}", response_model=ResponseEnvelope[dict[str, bool]])
