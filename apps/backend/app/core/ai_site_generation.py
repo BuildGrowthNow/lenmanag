@@ -835,9 +835,27 @@ def _validate_tsx_source(source_code: str) -> list[str]:
 
 
 def _build_refinement_prompt(
-    *, current_source_code: str, refinement_prompt: str
+    *, current_source_code: str, refinement_prompt: str, is_html: bool = False
 ) -> str:
     """Build a prompt for targeted in-place edits to existing generated code."""
+    if is_html:
+        return f"""You are editing an existing HTML landing page. Apply the requested changes precisely and return the complete modified code.
+
+## Existing Code
+```html
+{current_source_code}
+```
+
+## Operator Instructions (apply these changes ONLY)
+{refinement_prompt}
+
+## Rules
+- Apply ONLY the requested changes — do not redesign, restructure, or alter anything not mentioned
+- Preserve all styles, scripts, animations, and layout that are not being changed
+- Do NOT add, remove, or reorder sections unless explicitly asked
+- Return ONLY the complete modified HTML — no markdown fences, no explanations
+- Start with `<!DOCTYPE html>` and include the full document
+"""
     return f"""You are editing an existing React landing page component. Apply the requested changes precisely and return the complete modified code.
 
 ## Existing Code
@@ -869,11 +887,14 @@ async def refine_landing_page_code(
     llm = get_llm_client()
     compiler = get_compiler_client()
 
-    is_html_variant = variant_type.startswith("html_")
+    is_html_variant = variant_type.startswith("html_") or current_source_code.lstrip().startswith(
+        ("<!DOCTYPE", "<html", "<!doctype")
+    )
 
     prompt = _build_refinement_prompt(
         current_source_code=current_source_code,
         refinement_prompt=refinement_prompt,
+        is_html=is_html_variant,
     )
 
     logger.info(f"Refining {variant_type} code for site {site_id}")
