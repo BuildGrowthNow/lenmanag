@@ -207,6 +207,11 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
               <Badge className={readinessTone(item.readinessStatus)}>
                 {item.readinessStatus.replace(/_/g, " ")}
               </Badge>
+              {item.isManuallyRefined && item.refinedCount > 0 && (
+                <Badge className="border border-violet-500/30 bg-violet-500/10 text-violet-300">
+                  Refined v{item.refinedCount}
+                </Badge>
+              )}
               <Button variant="secondary" size="sm">
                 <Link href={item.previewUrl} target="_blank" className="flex items-center gap-1.5">
                   Preview

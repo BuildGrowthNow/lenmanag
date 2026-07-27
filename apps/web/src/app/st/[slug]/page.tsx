@@ -35,14 +35,11 @@ export default async function PreviewPage({ params }: PageProps) {
     notFound();
   }
 
-  // Check for static HTML variant (html_v1, html_v2, html_v3)
-  const isStaticHtml = !!site.staticHtml;
+  // Resolve the HTML content — prefer staticHtml, fall back to sourceCode for refined sites
+  const htmlContent = site.staticHtml || (site.sourceCode?.trimStart().startsWith('<') ? site.sourceCode : null);
 
-  if (isStaticHtml) {
-    // Render static HTML directly (no React runtime)
-    return (
-      <div dangerouslySetInnerHTML={{ __html: site.staticHtml }} />
-    );
+  if (htmlContent) {
+    return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
   }
 
   // Check if this is a compiled Next.js bundle
@@ -52,13 +49,11 @@ export default async function PreviewPage({ params }: PageProps) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-50">
         <div className="text-center space-y-4">
-          <h1 className="text-2xl font-semibold">Legacy Site Format</h1>
+          <h1 className="text-2xl font-semibold">Not compiled yet</h1>
           <p className="text-zinc-400">
-            This site uses the legacy JSON format. It has not been compiled yet.
+            This site is still being processed. Check back shortly.
           </p>
-          <p className="text-sm text-zinc-500">
-            Slug: {slug}
-          </p>
+          <p className="text-sm text-zinc-500">Slug: {slug}</p>
         </div>
       </div>
     );

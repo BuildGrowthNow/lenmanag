@@ -203,6 +203,8 @@ class SiteReviewQueueItem(BaseModel):
     screenshotCount: int = 0
     screenshotRefs: list[SiteScreenshotMetadata] = Field(default_factory=list)
     sourceAttribution: Optional[SiteSourceAttribution] = None
+    isManuallyRefined: bool = False
+    refinedCount: int = 0
     updatedAt: datetime
 
 

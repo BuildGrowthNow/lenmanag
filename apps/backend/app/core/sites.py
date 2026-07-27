@@ -2266,6 +2266,8 @@ def _queue_item_from_site(site: GeneratedSite) -> SiteReviewQueueItem:
         screenshotCount=len(site.screenshotRefs),
         screenshotRefs=list(site.screenshotRefs),
         sourceAttribution=site.sourceAttribution,
+        isManuallyRefined=site.isManuallyRefined,
+        refinedCount=len([p for p in site.promptHistory if p.status == "completed"]),
         updatedAt=site.updatedAt,
     )
 

@@ -818,6 +818,8 @@ export type SiteReviewQueueItem = {
   reviewRubric: SiteQualityCheck[];
   screenshotCount: number;
   screenshotRefs: SiteScreenshotMetadata[];
+  isManuallyRefined: boolean;
+  refinedCount: number;
   sourceAttribution: {
     leadId: string;
     sourceType: string | null;
