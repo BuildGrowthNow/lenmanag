@@ -5,8 +5,7 @@ import Link from "next/link";
 import { ExternalLink, SkipForward } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { approveSiteReview, patchSiteReview, refineSite, submitRefinementPrompt } from "@/lib/api/sites";
-import { getJob } from "@/lib/api/jobs";
+import { approveSiteReview, getSiteLatestJob, patchSiteReview, refineSite, submitRefinementPrompt } from "@/lib/api/sites";
 import type { SiteReviewQueueItem, SiteReviewQueueResponse } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,10 +72,13 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
   useEffect(() => stopPolling, [stopPolling]);
 
   const pollJob = useCallback(
-    (jobId: string, onDone: () => void) => {
+    (_jobId: string, onDone: () => void) => {
       const tick = async () => {
-        const result = await getJob(jobId);
-        if (!result) return;
+        const result = await getSiteLatestJob(item.siteId);
+        if (!result) {
+          pollRef.current = setTimeout(tick, 3000);
+          return;
+        }
         const status = result.job.status as JobStatus;
         setJobStatus(status);
         setJobStep(result.job.step ?? null);
@@ -94,7 +96,7 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
       };
       pollRef.current = setTimeout(tick, 2000);
     },
-    [stopPolling]
+    [item.siteId, stopPolling]
   );
 
   async function handleApprove() {

@@ -62,11 +62,30 @@ export function RefinementPromptInput({ siteId }: { siteId: string }) {
     async function checkActiveJob() {
       try {
         const latestJob = await getSiteLatestJob(siteId);
-        if (latestJob && (latestJob.job.status === "queued" || latestJob.job.status === "running")) {
-          setJobStatus(latestJob.job.status as JobStatus);
+        if (!latestJob) return;
+        const status = latestJob.job.status as JobStatus;
+        if (status === "queued" || status === "running") {
+          setJobStatus(status);
           setJobStep(latestJob.job.step ?? null);
           setIsLoading(true);
           pollJob(latestJob.job.id);
+        } else if (status === "completed") {
+          // Job finished before or after a page refresh — show completed state briefly
+          // then let the page stay in its current (already-refreshed) form view
+          const finishedAt = latestJob.job.finishedAt ? new Date(latestJob.job.finishedAt).getTime() : 0;
+          const ageMs = Date.now() - finishedAt;
+          if (ageMs < 60_000) {
+            // Completed within the last minute — show the green banner
+            setJobStatus("completed");
+          }
+          // Older than 1 min: don't show anything, just show the form ready for next prompt
+        } else if (status === "failed") {
+          const finishedAt = latestJob.job.finishedAt ? new Date(latestJob.job.finishedAt).getTime() : 0;
+          const ageMs = Date.now() - finishedAt;
+          if (ageMs < 60_000) {
+            setJobStatus("failed");
+            setError(latestJob.job.errorMessage ?? "Last refinement failed");
+          }
         }
       } catch (err) {
         console.error("Failed to check active job:", err);
