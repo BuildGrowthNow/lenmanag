@@ -14,7 +14,7 @@ import { LeadExtractionControls } from "@/components/lead-extraction-controls";
 import { LeadVariantsView } from "@/components/lead-variants-view";
 import { PipelineActivityLog } from "@/components/pipeline-activity-log";
 import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages, getLeadAnalysis } from "@/lib/api/leads";
-import { getSite, hasVariantsReadyForSharing } from "@/lib/api/sites";
+import { getSite } from "@/lib/api/sites";
 import { evaluateExtractionHealth } from "@/lib/extraction-health";
 import type { LeadDetail, ExtractionSnapshot, MasterBrief, GeneratedSite, PipelineStage, ExtractionAnalysisResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -352,14 +352,13 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
 
     async function loadData() {
       try {
-        const [leadData, extractionData, pagesData, briefData, siteData, analysisData, variantsReady] = await Promise.all([
+        const [leadData, extractionData, pagesData, briefData, siteData, analysisData] = await Promise.all([
           getLead(id),
           getLeadExtraction(id),
           getLeadPages(id),
           getLeadMasterBrief(id),
           getSite(id),
           getLeadAnalysis(id),
-          hasVariantsReadyForSharing(id),
         ]);
 
         if (!mounted) return;
@@ -370,7 +369,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         setBrief(briefData);
         setSite(siteData);
         setAnalysis(analysisData);
-        setShowClientLinks(variantsReady);
+        const sharingStages: PipelineStage[] = ["qa", "ready", "published"];
+        setShowClientLinks(sharingStages.includes(leadData.pipelineStage));
         setLoading(false);
       } catch (error) {
         console.error("Failed to load lead data:", error);
