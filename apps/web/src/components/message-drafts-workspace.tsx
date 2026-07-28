@@ -436,7 +436,7 @@ export function MessageDraftsWorkspace({ leadSummaries }: MessageDraftsWorkspace
                     href={`/app/leads/${selectedEntry.lead.id}`}
                     className="rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-muted transition-colors hover:text-text"
                   >
-                    Open lead
+                    View lead
                   </Link>
                 </div>
               </div>

@@ -243,8 +243,8 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
                   <ExternalLink className="h-3 w-3" />
                 </Link>
               </Button>
-              <Button variant="ghost" size="sm">
-                <Link href={`/app/leads/${item.leadId}`}>Open spec</Link>
+              <Button variant="secondary" size="sm">
+                <Link href={`/app/leads/${item.leadId}`}>View lead</Link>
               </Button>
               <Button variant="ghost" size="sm" onClick={onSkipped} disabled={busy}>
                 <SkipForward className="h-3.5 w-3.5" />
