@@ -78,12 +78,8 @@ async def get_redesign_page(
     # Fetch all sites for this lead
     sites = await site_repository.list_sites_by_lead(lead_id)
 
-    # Filter to only successfully compiled sites that have screenshots
-    eligible = [
-        s
-        for s in sites
-        if s.compilationStatus == "success" and len(s.screenshotRefs) > 0
-    ]
+    # Filter to successfully compiled sites (screenshots optional)
+    eligible = [s for s in sites if s.compilationStatus == "success"]
 
     if not eligible:
         raise HTTPException(status_code=404, detail="Redesign page not found")
@@ -91,10 +87,10 @@ async def get_redesign_page(
     # Sort by variantPosition
     eligible.sort(key=lambda s: s.variantPosition)
 
-    # Build variant list
+    # Build variant list — use first screenshot if available, else empty string
     variants: list[RedesignVariant] = []
     for site in eligible:
-        screenshot_url = site.screenshotRefs[0].url
+        screenshot_url = site.screenshotRefs[0].url if site.screenshotRefs else ""
         variants.append(
             RedesignVariant(
                 siteId=site.id,

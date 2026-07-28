@@ -81,8 +81,7 @@ export default async function ComparePage({ params }: PageProps) {
   const publishedVariants = variants.filter(
     (v) =>
       v.compilationStatus === "success" &&
-      v.readinessStatus !== "blocked" &&
-      (v.compiledBundleUrl || v.staticHtml)
+      v.readinessStatus !== "blocked"
   );
 
   if (publishedVariants.length === 0) {

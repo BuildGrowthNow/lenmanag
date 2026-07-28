@@ -46,15 +46,24 @@ function VariantCard({ variant }: { variant: RedesignVariant }) {
       rel="noopener noreferrer"
       className="group block rounded-2xl overflow-hidden border border-white/[0.08] transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-yellow-500/10 cursor-pointer"
     >
-      <div className="aspect-[4/3] overflow-hidden bg-slate-800">
-        <Image
-          src={variant.screenshotUrl}
-          alt="Site preview"
-          width={720}
-          height={540}
-          className="w-full h-full object-cover object-top"
-          unoptimized
-        />
+      <div className="aspect-[4/3] overflow-hidden bg-slate-800 flex items-center justify-center">
+        {variant.screenshotUrl ? (
+          <Image
+            src={variant.screenshotUrl}
+            alt="Site preview"
+            width={720}
+            height={540}
+            className="w-full h-full object-cover object-top"
+            unoptimized
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-2 text-zinc-400 group-hover:text-yellow-400 transition-colors">
+            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+            </svg>
+            <span className="text-sm font-medium">Click to preview</span>
+          </div>
+        )}
       </div>
     </a>
   );
