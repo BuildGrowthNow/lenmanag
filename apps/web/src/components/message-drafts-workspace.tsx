@@ -25,7 +25,7 @@ import type {
   CtaVariant,
   DeliveryChannel,
   GeneratedSite,
-  LeadDetail,
+  LeadListItem,
   MasterBrief,
   MessageDraft,
   TonePreset,
@@ -46,7 +46,7 @@ const CTA_VARIANTS: CtaVariant[] = [
 import { cn } from "@/lib/utils";
 
 type MessageLeadSummary = {
-  lead: LeadDetail;
+  lead: LeadListItem;
   brief: MasterBrief | null;
   site: GeneratedSite | null;
   drafts: MessageDraft[];

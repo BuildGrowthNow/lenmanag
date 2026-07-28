@@ -4,17 +4,18 @@ import { useEffect, useState } from "react";
 
 import { MessageDraftsWorkspace } from "@/components/message-drafts-workspace";
 import { PageFrame } from "@/components/shell/page-frame";
-import { getLead, getLeadMasterBrief, listLeads } from "@/lib/api/leads";
-import { getVariantsForLead } from "@/lib/api/sites";
+import { listLeads } from "@/lib/api/leads";
 import { listMessageDrafts } from "@/lib/api/messages";
-import type { GeneratedSite, LeadDetail, MasterBrief, MessageDraft } from "@/lib/types";
+import type { LeadListItem, MessageDraft } from "@/lib/types";
 
 type MessageLeadSummary = {
-  lead: LeadDetail;
-  brief: MasterBrief | null;
-  site: GeneratedSite | null;
+  lead: LeadListItem;
+  brief: null;
+  site: null;
   drafts: MessageDraft[];
 };
+
+const OUTREACH_STAGES = new Set(["qa", "ready", "published"]);
 
 export default function MessagesPage() {
   const [leadSummaries, setLeadSummaries] = useState<MessageLeadSummary[]>([]);
@@ -25,24 +26,18 @@ export default function MessagesPage() {
 
     async function loadData() {
       try {
-        const leads = await listLeads({ limit: 200 });
+        const leadsResponse = await listLeads({ limit: 200 });
+        const outreachLeads = leadsResponse.items.filter(
+          (l) => OUTREACH_STAGES.has(l.pipelineStage)
+        );
         const summaries = await Promise.all(
-          leads.items.map(async (lead) => {
-            const [detail, brief, variants, drafts] = await Promise.all([
-              getLead(lead.id),
-              getLeadMasterBrief(lead.id),
-              getVariantsForLead(lead.id),
-              listMessageDrafts(lead.id),
-            ]);
-            if (!detail) return null;
-            const site = variants[0] ?? null;
-            return { lead: detail, brief, site, drafts: drafts.items };
+          outreachLeads.map(async (lead) => {
+            const drafts = await listMessageDrafts(lead.id);
+            return { lead, brief: null, site: null, drafts: drafts.items };
           })
         );
         if (mounted) {
-          setLeadSummaries(
-            summaries.filter((e): e is NonNullable<typeof e> => e !== null)
-          );
+          setLeadSummaries(summaries);
           setLoading(false);
         }
       } catch (error) {
@@ -61,7 +56,7 @@ export default function MessagesPage() {
     <PageFrame
       eyebrow="Outreach"
       title="Messages"
-      description="Draft, review, and send outreach for published leads. Drafts stay tied to the approved brief and generated preview."
+      description="Draft, review, and send outreach for leads in QA, ready, and published stages."
     >
       {loading ? (
         <div className="text-sm text-muted">Loading leads…</div>
