@@ -100,7 +100,7 @@ export default function SitesLandingPage() {
               url: "https://sites.lenquant.com",
             },
             description:
-              "Professional websites delivered in 3 days. Custom design, premium technology, SEO optimization included.",
+              "Professional websites delivered in 3 days. Custom design, premium technology, SEO and GEO optimization — built to rank on Google and get cited by AI like Claude, ChatGPT, and Gemini.",
             offers: {
               "@type": "Offer",
               price: "1000",
@@ -286,7 +286,7 @@ export default function SitesLandingPage() {
                   step: "03",
                   title: "Development",
                   description:
-                    "Our team crafts your website with care and precision. Fully responsive, SEO-optimized, and performance-tuned.",
+                    "Our team crafts your website with care and precision. Fully responsive, SEO + GEO optimized — built to rank on Google and get cited by AI like Claude, ChatGPT, and Gemini.",
                   icon: Code,
                 },
                 {
@@ -392,7 +392,7 @@ export default function SitesLandingPage() {
                 "Professional custom design built for your brand",
                 "Works perfectly on phones and tablets",
                 "Loads instantly so customers don't wait",
-                "Found easily on Google search",
+                "Optimized for Google, Claude, ChatGPT & Gemini",
                 "Secure and trusted by visitors",
                 "Connect with your customers easily",
                 "Share your success on social media",

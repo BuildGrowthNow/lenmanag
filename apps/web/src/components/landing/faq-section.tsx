@@ -13,7 +13,12 @@ const FAQS = [
   {
     question: "What does the $1,000 include exactly?",
     answer:
-      "Everything you need to launch: a complete custom landing page built for your brand, mobile-optimised, fast-loading, SEO-ready, and with a contact form set up. You own all the code and assets outright. The full scope is confirmed on our call before any payment.",
+      "Everything you need to launch: a complete custom landing page built for your brand, mobile-optimised, fast-loading, SEO-ready, GEO-optimised (so AI assistants like Claude, ChatGPT, and Gemini surface your business in responses), and with a contact form set up. You own all the code and assets outright. The full scope is confirmed on our call before any payment.",
+  },
+  {
+    question: "What is GEO and why does it matter for my website?",
+    answer:
+      "GEO stands for Generative Engine Optimization — the practice of structuring your website so AI assistants like Claude, ChatGPT, Gemini, and Perplexity recommend and cite your business when users ask relevant questions. While traditional SEO focuses on ranking in Google's blue links, GEO ensures your brand appears in AI-generated answers, which is how a growing share of buyers now research and discover businesses. Every site we deliver is built with both in mind: proper structured data, authoritative copy, clear entity signals, and content formatted the way AI models prefer to read and cite.",
   },
   {
     question: "How does LenQuant's process work?",

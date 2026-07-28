@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import {
   Palette,
-  Zap,
+  BrainCircuit,
   Smartphone,
   Sliders,
   Headphones,
@@ -23,10 +23,10 @@ const FEATURES = [
     position: 0,
   },
   {
-    id: "performance",
-    title: "Fast Loading",
-    description: "Better user experience and improved search rankings",
-    icon: Zap,
+    id: "geo",
+    title: "SEO + GEO Ready",
+    description: "Ranks on Google and gets cited by Claude, ChatGPT, and Gemini",
+    icon: BrainCircuit,
     orbit: 0,
     position: 1,
   },
