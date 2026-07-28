@@ -76,7 +76,7 @@ export default async function SiteBriefPage({ params }: { params: Promise<{ id: 
                 <div className="text-xs uppercase tracking-[0.18em] text-muted">Workspace links</div>
                 <div className="mt-3 flex flex-wrap gap-3">
                   <Button>
-                    <Link href={`/app/leads/${lead.id}`}>Open lead workspace</Link>
+                    <Link href={`/app/leads/${lead.id}`}>View lead</Link>
                   </Button>
                   <Button variant="secondary">
                     <Link href={`/app/sites/${lead.id}`}>Open site workspace</Link>
