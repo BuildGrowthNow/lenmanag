@@ -213,9 +213,7 @@ export async function hasVariantsReadyForSharing(leadId: string): Promise<boolea
   return variants.some(
     (v) =>
       v.compilationStatus === "success" &&
-      v.readinessStatus !== "blocked" &&
-      (v.compiledBundleUrl || v.staticHtml) &&
-      (v.screenshotRefs?.length ?? 0) > 0
+      v.readinessStatus !== "blocked"
   );
 }
 
@@ -227,8 +225,6 @@ export async function getReadyVariantCount(leadId: string): Promise<number> {
   return variants.filter(
     (v) =>
       v.compilationStatus === "success" &&
-      v.readinessStatus !== "blocked" &&
-      (v.compiledBundleUrl || v.staticHtml) &&
-      (v.screenshotRefs?.length ?? 0) > 0
+      v.readinessStatus !== "blocked"
   ).length;
 }
