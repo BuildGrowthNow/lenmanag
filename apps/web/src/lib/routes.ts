@@ -11,7 +11,7 @@ export const outreachRoutes = [
 ];
 
 export const opsRoutes = [
-  { href: "/app/scale", label: "Scale", hint: "Queues & retries" },
+  { href: "/app/scale", label: "Queue health", hint: "Queues & retries" },
   { href: "/app/orders", label: "Orders", hint: "Landing page orders" },
 ];
 

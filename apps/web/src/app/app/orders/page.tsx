@@ -7,6 +7,7 @@ import {
   Phone,
   Building2,
   Calendar,
+  ChevronDown,
   DollarSign,
   CheckCircle2,
   Clock,
@@ -61,6 +62,26 @@ function formatDate(dateString: string) {
   });
 }
 
+function formatSource(source: string) {
+  const map: Record<string, string> = {
+    landing_page: "Landing page",
+    referral: "Referral",
+    direct: "Direct",
+    organic: "Organic",
+  };
+  return map[source] ?? source;
+}
+
+function formatOrderType(orderType: string) {
+  const map: Record<string, string> = {
+    "one-time": "One-time",
+    monthly: "Monthly",
+    annual: "Annual",
+    landing_page: "Landing page",
+  };
+  return map[orderType] ?? orderType;
+}
+
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -102,6 +123,7 @@ export default function OrdersPage() {
   const [leads, setLeads] = useState<LandingLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<LandingLead | null>(null);
 
   useEffect(() => {
@@ -141,7 +163,7 @@ export default function OrdersPage() {
       ));
     } catch (err) {
       console.error("Error updating status:", err);
-      alert("Failed to update status");
+      setUpdateError("Failed to update order status. Please try again.");
     }
   }
 
@@ -163,7 +185,7 @@ export default function OrdersPage() {
       ));
     } catch (err) {
       console.error("Error updating payment status:", err);
-      alert("Failed to update payment status");
+      setUpdateError("Failed to update payment status. Please try again.");
     }
   }
 
@@ -189,11 +211,11 @@ export default function OrdersPage() {
   return (
     <PageFrame
       eyebrow="Orders"
-      title="Landing Page Orders"
+      title="Orders"
       description="Manage customer orders from the landing page. Track payments, project status, and client communications."
     >
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Card>
           <CardHeader>
             <CardDescription>Total Orders</CardDescription>
@@ -249,11 +271,13 @@ export default function OrdersPage() {
               {leads.map((lead) => (
                 <div
                   key={lead._id}
-                  className="rounded-2xl border border-line bg-panel p-6 hover:border-accent/50 transition-colors cursor-pointer"
-                  onClick={() => setSelectedLead(selectedLead?._id === lead._id ? null : lead)}
+                  className="relative rounded-2xl border border-line bg-panel p-6 hover:border-accent/50 transition-colors cursor-pointer"
+                  onClick={() => { setUpdateError(null); setSelectedLead(selectedLead?._id === lead._id ? null : lead); }}
+                  aria-expanded={selectedLead?._id === lead._id}
                 >
                   {/* Header */}
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <ChevronDown className={`absolute right-6 top-6 h-4 w-4 shrink-0 text-muted transition-transform ${selectedLead?._id === lead._id ? "rotate-180" : ""}`} />
                     <div className="flex-1">
                       <div className="flex items-start gap-3">
                         <div className="flex-1">
@@ -310,12 +334,8 @@ export default function OrdersPage() {
                       <Calendar className="h-3.5 w-3.5" />
                       {formatDate(lead.createdAt)}
                     </span>
-                    <Badge className="text-xs">
-                      {lead.source}
-                    </Badge>
-                    <Badge className="text-xs">
-                      {lead.orderType}
-                    </Badge>
+                    <Badge className="text-xs">{formatSource(lead.source)}</Badge>
+                    <Badge className="text-xs">{formatOrderType(lead.orderType)}</Badge>
                   </div>
 
                   {/* Expanded Details */}
@@ -375,11 +395,14 @@ export default function OrdersPage() {
 
                       {/* Actions */}
                       <div className="flex flex-wrap gap-2 pt-4 border-t border-line">
+                        {updateError && selectedLead?._id === lead._id && (
+                          <div className="w-full text-xs text-rose-400">{updateError}</div>
+                        )}
                         <div className="flex-1">
                           <label className="text-xs text-muted mb-1 block">Order Status</label>
                           <select
                             value={lead.status}
-                            onChange={(e) => updateLeadStatus(lead._id, e.target.value)}
+                            onChange={(e) => { setUpdateError(null); updateLeadStatus(lead._id, e.target.value); }}
                             className="px-3 py-2 rounded-lg bg-panel-2 border border-line text-sm text-text"
                           >
                             <option value="pending">Pending</option>
@@ -394,7 +417,7 @@ export default function OrdersPage() {
                           <label className="text-xs text-muted mb-1 block">Payment Status</label>
                           <select
                             value={lead.paymentStatus}
-                            onChange={(e) => updatePaymentStatus(lead._id, e.target.value)}
+                            onChange={(e) => { setUpdateError(null); updatePaymentStatus(lead._id, e.target.value); }}
                             className="px-3 py-2 rounded-lg bg-panel-2 border border-line text-sm text-text"
                           >
                             <option value="unpaid">Unpaid</option>

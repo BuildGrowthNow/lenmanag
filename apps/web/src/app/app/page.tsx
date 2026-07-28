@@ -10,7 +10,21 @@ import { getAnalyticsDashboard } from "@/lib/api/dashboard";
 import { listLeads } from "@/lib/api/leads";
 import { getQueueHealth } from "@/lib/api/jobs";
 import { useAuth } from "@/lib/auth-context";
-import type { AnalyticsDashboardResponse, LeadListResponse, JobQueueHealthResponse } from "@/lib/types";
+import type { AnalyticsDashboardResponse, LeadListResponse, JobQueueHealthResponse, PipelineStage } from "@/lib/types";
+
+const STAGE_LABEL: Record<PipelineStage, string> = {
+  new: "New",
+  extracting: "Extracting",
+  extracted: "Extracted",
+  briefing: "Briefing",
+  brief_ready: "Brief ready",
+  generating: "Generating",
+  qa: "QA",
+  ready: "Ready",
+  published: "Published",
+  needs_attention: "Needs attention",
+  archived: "Archived",
+};
 
 function fmt(n: number): string {
   return n.toLocaleString();
@@ -27,11 +41,11 @@ function relativeTime(iso: string): string {
 }
 
 const PIPELINE_STAGES = [
-  { key: "processing", label: "Extracting" },
-  { key: "brief_ready", label: "Brief" },
-  { key: "site_generated", label: "Generating" },
-  { key: "ready_to_publish", label: "QA" },
-  { key: "published", label: "Published" },
+  { key: "processing", label: "Extracting", filterStage: "extracting" },
+  { key: "brief_ready", label: "Brief ready", filterStage: "brief_ready" },
+  { key: "site_generated", label: "QA", filterStage: "qa" },
+  { key: "ready_to_publish", label: "Ready", filterStage: "ready" },
+  { key: "published", label: "Published", filterStage: "published" },
 ] as const;
 
 const EMPTY_HEALTH: JobQueueHealthResponse = {
@@ -109,16 +123,13 @@ export default function DashboardPage() {
   const needsAttention = leadsResponse.items.filter(
     (l) => l.pipelineStage === "needs_attention"
   );
-  const blockedSites = leadsResponse.items.filter(
-    (l) => l.pipelineStage === "qa" && l.pipelineStatusDetail?.includes("blocked")
-  );
 
   const recentLeads = [...leadsResponse.items]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 10);
 
   const hasAttentionItems =
-    needsAttention.length > 0 || blockedSites.length > 0 || health.failedJobs > 0;
+    needsAttention.length > 0 || health.failedJobs > 0 || health.stalledJobs > 0;
 
   if (authLoading || dataLoading) {
     return (
@@ -198,7 +209,7 @@ export default function DashboardPage() {
                 return (
                   <div key={stage.key} className="flex items-center">
                     <Link
-                      href={`/app/leads`}
+                      href={`/app/leads?stage=${stage.filterStage}`}
                       className="flex min-w-[80px] flex-col items-center gap-1.5 rounded-2xl border border-line bg-panel-2 px-4 py-3 text-center transition-colors hover:bg-panel"
                     >
                       <span className="text-2xl font-semibold text-text">{fmt(count)}</span>
@@ -214,11 +225,11 @@ export default function DashboardPage() {
                 <>
                   <span className="shrink-0 px-2 text-muted">·</span>
                   <Link
-                    href="/app/leads"
+                    href="/app/leads?stage=needs_attention"
                     className="flex min-w-[80px] flex-col items-center gap-1.5 rounded-2xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-center transition-colors hover:bg-red-500/10"
                   >
                     <span className="text-2xl font-semibold text-red-400">{fmt(pipeline.needs_attention)}</span>
-                    <span className="text-[10px] uppercase tracking-widest text-muted">Blocked</span>
+                    <span className="text-[10px] uppercase tracking-widest text-muted">Needs attention</span>
                   </Link>
                 </>
               )}
@@ -244,7 +255,7 @@ export default function DashboardPage() {
                       <span className="text-sm font-medium text-text truncate">
                         {lead.companyName ?? lead.websiteUrl}
                       </span>
-                      <Badge className="shrink-0 text-[10px]">{lead.pipelineStage.replace(/_/g, " ")}</Badge>
+                      <Badge className="shrink-0 text-[10px]">{STAGE_LABEL[lead.pipelineStage as PipelineStage] ?? lead.pipelineStage}</Badge>
                     </div>
                     {lead.pipelineStatusDetail && (
                       <div className="mt-0.5 text-xs text-muted truncate">{lead.pipelineStatusDetail}</div>
@@ -260,7 +271,15 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted">No leads yet.</p>
+              <div className="flex flex-col items-start gap-3 py-2">
+                <p className="text-sm text-muted">No leads yet.</p>
+                <Link
+                  href="/app/leads"
+                  className="text-sm text-accent underline-offset-2 hover:underline"
+                >
+                  Add your first lead →
+                </Link>
+              </div>
             )}
           </CardContent>
         </Card>

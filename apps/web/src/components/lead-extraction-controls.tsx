@@ -25,7 +25,7 @@ export function LeadExtractionControls({ leadId, extraction }: LeadExtractionCon
     try {
       const result =
         mode === "refresh" && hasCrawlHistory ? await refreshLeadExtraction(leadId) : await startLeadExtraction(leadId);
-      setMessage(`${result.job.step}. ${result.extraction.pagesCrawled} page(s) crawled.`);
+      setMessage(`Crawl started — ${result.extraction.pagesCrawled} page(s) crawled so far.`);
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to start extraction.");
@@ -38,11 +38,17 @@ export function LeadExtractionControls({ leadId, extraction }: LeadExtractionCon
     <div className="space-y-3">
       <div className="flex flex-wrap gap-3">
         <Button type="button" onClick={() => void triggerExtraction(hasCrawlHistory ? "refresh" : "start")} disabled={busy}>
-          {busy ? "Working..." : hasCrawlHistory ? "Refresh crawl" : "Start crawl"}
+          {busy ? (hasCrawlHistory ? "Refreshing crawl…" : "Starting crawl…") : hasCrawlHistory ? "Refresh crawl" : "Start crawl"}
         </Button>
         {hasCrawlHistory ? (
-          <Button type="button" variant="secondary" onClick={() => void triggerExtraction("start")} disabled={busy}>
-            Run another crawl
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void triggerExtraction("start")}
+            disabled={busy}
+            title="Start a fresh crawl from scratch, ignoring existing data"
+          >
+            Fresh crawl
           </Button>
         ) : null}
       </div>

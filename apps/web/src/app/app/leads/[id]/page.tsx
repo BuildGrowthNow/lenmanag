@@ -186,7 +186,7 @@ function StageWorkspace({
               </div>
             </div>
             {site && site.previewSlug ? (
-              <Link href={`/sites/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
+              <Link href={site.previewUrl || `/st/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
             ) : (
               <Button variant="secondary" disabled>Preview (loading...)</Button>
             )}
@@ -228,11 +228,11 @@ function StageWorkspace({
           </p>
           <div className="flex flex-wrap gap-2">
             {site && site.previewSlug ? (
-              <Link href={`/sites/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
+              <Link href={site.previewUrl || `/st/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
             ) : (
               <Button variant="secondary" disabled>Preview (loading...)</Button>
             )}
-            <Link href={`/app/sites/${lead.id}`} className={buttonVariants()}>Publish →</Link>
+            <Link href={`/app/sites/${lead.id}`} className={buttonVariants()}>Open site workspace →</Link>
           </div>
         </div>
       </WorkspaceCard>
@@ -330,6 +330,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const [brief, setBrief] = useState<MasterBrief | null>(null);
   const [site, setSite] = useState<GeneratedSite | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showClientLinks, setShowClientLinks] = useState(false);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
@@ -373,6 +374,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         setLoading(false);
       } catch (error) {
         console.error("Failed to load lead data:", error);
+        setLoadError(true);
         setLoading(false);
       }
     }
@@ -422,6 +424,17 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     );
   }
 
+  if (loadError) {
+    return (
+      <PageFrame eyebrow="Lead detail" title="Error loading lead" description="">
+        <div className="text-sm text-muted">
+          Failed to load lead data. Please try refreshing.{" "}
+          <Link href="/app/leads" className="text-accent hover:underline">Back to leads</Link>
+        </div>
+      </PageFrame>
+    );
+  }
+
   if (!lead) {
     return (
       <PageFrame eyebrow="Lead detail" title={`Lead: ${id}`} description="Lead not found.">
@@ -454,7 +467,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <PageFrame
       eyebrow="Lead detail"
-      title={lead.companyName ?? "Missing company name"}
+      title={lead.companyName ?? lead.normalizedDomain ?? "Unnamed lead"}
       description={lead.normalizedDomain}
     >
       {/* Header bar */}
@@ -755,9 +768,6 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                 ) : null}
 
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Link href={`/app/leads/${lead.id}/extraction`} className={buttonVariants({ variant: "secondary" })}>View full page inventory</Link>
-                </div>
               </div>
             </details>
           ) : null}

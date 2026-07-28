@@ -126,7 +126,7 @@ function LeadUrlStateSync({
   return null;
 }
 
-// ── Add Lead modal ────────────────────────────────────────────────────────
+// ── Add lead modal ────────────────────────────────────────────────────────
 
 type AddLeadModalProps = {
   open: boolean;
@@ -429,6 +429,11 @@ function ImportModal({ open, onClose, onImported }: ImportModalProps) {
                     )}
                   >
                     <div className="font-medium capitalize">{m}</div>
+                    <div className="mt-0.5 text-xs opacity-70">
+                      {m === "auto"
+                        ? "Runs all steps automatically"
+                        : "Pauses at brief and QA for approval"}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -497,6 +502,13 @@ export default function LeadsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!actionMessage) return;
+    const t = setTimeout(() => setActionMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [actionMessage]);
 
   const handleUrlStateChange = useCallback(
     (s: { q: string; stage: StageFilter; page: number }) => {
@@ -571,7 +583,10 @@ export default function LeadsPage() {
     syncUrl({ stage: next, page: 1 });
   }
 
-  async function handleArchive(id: string) {
+  async function handleArchiveConfirmed() {
+    if (!confirmArchiveId) return;
+    const id = confirmArchiveId;
+    setConfirmArchiveId(null);
     setActionMessage(null);
     try {
       await archiveLead(id);
@@ -590,11 +605,11 @@ export default function LeadsPage() {
   const endItem = Math.min(data.pagination.offset + items.length, data.pagination.total);
 
   const summaryChips: Array<{ key: StageFilter; label: string; count: number; color: string }> = [
-    { key: "extracting", label: "Processing", count: summary?.processing ?? 0, color: "blue" },
+    { key: "extracting", label: "Extracting", count: summary?.processing ?? 0, color: "blue" },
     { key: "needs_attention", label: "Needs attention", count: summary?.needs_attention ?? 0, color: "rose" },
     { key: "brief_ready", label: "Brief ready", count: summary?.brief_ready ?? 0, color: "yellow" },
-    { key: "qa", label: "Site generated", count: summary?.site_generated ?? 0, color: "purple" },
-    { key: "ready", label: "Ready to publish", count: summary?.ready_to_publish ?? 0, color: "emerald" },
+    { key: "qa", label: "QA", count: summary?.site_generated ?? 0, color: "purple" },
+    { key: "ready", label: "Ready", count: summary?.ready_to_publish ?? 0, color: "emerald" },
     { key: "published", label: "Published", count: summary?.published ?? 0, color: "emerald" },
   ];
 
@@ -615,6 +630,19 @@ export default function LeadsPage() {
         onImported={() => { refresh(); setActionMessage("Import complete."); }}
       />
 
+      <Dialog open={!!confirmArchiveId} onOpenChange={(o) => !o && setConfirmArchiveId(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Archive lead?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted">This lead will be removed from the active pipeline. You can restore it later by filtering for archived leads.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmArchiveId(null)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => void handleArchiveConfirmed()}>Archive</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <PageFrame
         eyebrow="Pipeline"
         title="Leads"
@@ -630,7 +658,7 @@ export default function LeadsPage() {
             </Button>
             <Button onClick={() => setShowAdd(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Add Lead
+              Add lead
             </Button>
           </div>
         </div>
@@ -715,12 +743,18 @@ export default function LeadsPage() {
         ) : items.length === 0 ? (
           <EmptyState
             title={stageFilter !== "all" ? `No leads in "${STAGE_LABEL[stageFilter as PipelineStage]}"` : "No leads yet"}
-            description="Add a lead or import a CSV to start the pipeline."
+            description={stageFilter !== "all" ? "No leads are currently in this stage." : "Add a lead or import a CSV to start the pipeline."}
             action={
-              <Button onClick={() => setShowAdd(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Lead
-              </Button>
+              stageFilter !== "all" ? (
+                <Button variant="secondary" onClick={() => applyStage("all")}>
+                  Clear filter
+                </Button>
+              ) : (
+                <Button onClick={() => setShowAdd(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add lead
+                </Button>
+              )
             }
           />
         ) : (
@@ -738,7 +772,7 @@ export default function LeadsPage() {
               {/* Rows */}
               <div className="divide-y divide-line">
                 {items.map((lead: LeadListItem) => (
-                  <LeadRow key={lead.id} lead={lead} onArchive={handleArchive} />
+                  <LeadRow key={lead.id} lead={lead} onArchive={(id) => setConfirmArchiveId(id)} />
                 ))}
               </div>
             </div>

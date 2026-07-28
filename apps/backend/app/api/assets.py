@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
 
-router = APIRouter(prefix="/api/internal/assets")
+router = APIRouter(prefix="/internal/assets")
 settings = get_settings()
 
 

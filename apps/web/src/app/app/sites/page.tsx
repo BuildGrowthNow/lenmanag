@@ -10,7 +10,7 @@ import { ErrorState } from "@/components/state/error-state";
 import { LoadingState } from "@/components/state/loading-state";
 import { PageFrame } from "@/components/shell/page-frame";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -54,9 +54,9 @@ const READINESS_LABELS: Record<SiteReadinessStatus, string> = {
 };
 
 const VARIANT_TYPE_LABELS: Record<string, string> = {
-  html_v1: "HTML v1",
-  html_v2: "HTML v2",
-  html_v3: "HTML v3",
+  html_v1: "Professional",
+  html_v2: "Bold",
+  html_v3: "Creative",
   nextjs: "Next.js",
 };
 
@@ -97,6 +97,7 @@ export default function SitesPage() {
   const [q, setQ] = useState("");
   const [refreshSeed, setRefreshSeed] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,11 +118,12 @@ export default function SitesPage() {
 
   async function handleDelete(siteId: string) {
     setDeletingId(siteId);
+    setDeleteError(null);
     try {
       await deleteSite(siteId);
       setSites((prev) => prev.filter((s) => s.id !== siteId));
-    } catch {
-      // silently restore — the card stays, user can retry
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete site. Please try again.");
     } finally {
       setDeletingId(null);
     }
@@ -166,7 +168,7 @@ export default function SitesPage() {
 
   return (
     <PageFrame
-      eyebrow="Websites"
+      eyebrow="Generated sites"
       title="Websites"
       description="Library of all generated sites. Browse, filter, preview, and manage site readiness."
     >
@@ -175,7 +177,7 @@ export default function SitesPage() {
         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
           <div className="text-xs uppercase tracking-[0.18em] text-muted">Ready to publish</div>
           <div className="mt-1 text-2xl font-semibold text-emerald-300">
-            {counts.ready_to_publish + counts.published}
+            {counts.ready_to_publish}
           </div>
         </div>
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
@@ -221,7 +223,7 @@ export default function SitesPage() {
               }
             }}
           />
-          <Button variant="secondary" onClick={applySearch}>
+          <Button variant="secondary" onClick={applySearch} aria-label="Search">
             <Search className="h-4 w-4" />
           </Button>
           <Button variant="ghost" onClick={() => setRefreshSeed((s) => s + 1)}>
@@ -231,6 +233,7 @@ export default function SitesPage() {
       </div>
 
       {error ? <ErrorState title="Failed to load websites" description={error} /> : null}
+      {deleteError ? <ErrorState title="Failed to delete site" description={deleteError} /> : null}
 
       {loading ? (
         <LoadingState label="Loading websites…" />
@@ -245,9 +248,7 @@ export default function SitesPage() {
           }
           description="Generate a preview from an approved lead brief and it will appear here."
           action={
-            <Button>
-              <Link href="/app/leads">Go to leads</Link>
-            </Button>
+            <Link href="/app/leads" className={buttonVariants()}>Go to leads</Link>
           }
         />
       ) : (
@@ -322,9 +323,6 @@ export default function SitesPage() {
                         {VARIANT_TYPE_LABELS[site.variantType] ?? site.variantType}
                       </Badge>
                     ) : null}
-                    {site.paletteMode ? (
-                      <Badge className="border-white/10 bg-white/5 text-text">{site.paletteMode}</Badge>
-                    ) : null}
                   </div>
                   <div className="text-sm">
                     <span className="text-xs uppercase tracking-[0.18em] text-muted">Score </span>
@@ -335,15 +333,11 @@ export default function SitesPage() {
                     )}
                   </div>
                   <div className="mt-auto flex gap-2 pt-2">
-                    <Button variant="secondary" className="flex-1">
-                      <Link href={`/app/leads/${site.leadId}`}>View lead</Link>
-                    </Button>
-                    <Button className="flex-1">
-                      <Link href={previewPath} target="_blank" className="flex items-center gap-1.5">
-                        Preview
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
+                    <Link href={`/app/leads/${site.leadId}`} className={cn(buttonVariants({ variant: "secondary" }), "flex-1 justify-center")}>View lead</Link>
+                    <Link href={previewPath} target="_blank" className={cn(buttonVariants(), "flex-1 justify-center gap-1.5")}>
+                      Preview
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
                   </div>
                 </CardContent>
               </Card>

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getVariantsForLead, recaptureScreenshot } from "@/lib/api/sites";
-import type { GeneratedSite, SiteReadinessStatus, SiteQaStatus, VariantType } from "@/lib/types";
+import type { GeneratedSite, SiteReadinessStatus, VariantType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type VariantsViewProps = {
@@ -20,6 +20,14 @@ const VARIANT_LABELS: Record<VariantType, { name: string; description: string }>
   html_v2: { name: "Bold", description: "Vibrant colors and dynamic layouts" },
   html_v3: { name: "Creative", description: "Unique artistic direction" },
   nextjs: { name: "Next.js", description: "Full React-based component site" },
+};
+
+const READINESS_LABELS: Record<string, string> = {
+  blocked: "Blocked",
+  needs_review: "Needs review",
+  ready_for_review: "Ready for QA",
+  ready_to_publish: "Ready to publish",
+  published: "Published",
 };
 
 function StatusIcon({ status }: { status: SiteReadinessStatus }) {
@@ -38,32 +46,25 @@ function StatusIcon({ status }: { status: SiteReadinessStatus }) {
   }
 }
 
-function ReadinessBadge({ status }: { status: SiteReadinessStatus }) {
-  const config: Record<SiteReadinessStatus, { label: string; className: string }> = {
-    blocked: { label: "Blocked", className: "border-rose-500/40 bg-rose-500/10 text-rose-200" },
-    needs_review: { label: "Needs Review", className: "border-amber-500/40 bg-amber-500/10 text-amber-200" },
-    ready_for_review: { label: "Ready for Review", className: "border-blue-500/40 bg-blue-500/10 text-blue-200" },
-    ready_to_publish: { label: "Ready to Publish", className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200" },
-    published: { label: "Published", className: "border-emerald-400/60 bg-emerald-400/15 text-emerald-100" },
-  };
-  const c = config[status] || config.blocked;
-  return <Badge className={c.className}>{c.label}</Badge>;
+function readinessBadgeClass(status: SiteReadinessStatus): string {
+  if (status === "published") return "border-emerald-400/60 bg-emerald-400/15 text-emerald-100 font-semibold";
+  if (status === "ready_to_publish") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  if (status === "ready_for_review") return "border-sky-500/40 bg-sky-500/10 text-sky-200";
+  if (status === "needs_review") return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+  return "border-rose-500/40 bg-rose-500/10 text-rose-200";
 }
 
-function QaBadge({ status }: { status: SiteQaStatus }) {
-  const config: Record<SiteQaStatus, { label: string; className: string }> = {
-    pass: { label: "QA Pass", className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200" },
-    warn: { label: "QA Warning", className: "border-amber-500/40 bg-amber-500/10 text-amber-200" },
-    fail: { label: "QA Failed", className: "border-rose-500/40 bg-rose-500/10 text-rose-200" },
-  };
-  const c = config[status] || config.warn;
-  return <Badge className={c.className}>{c.label}</Badge>;
+function ReadinessBadge({ status }: { status: SiteReadinessStatus }) {
+  return (
+    <Badge className={readinessBadgeClass(status)}>
+      {READINESS_LABELS[status] ?? status}
+    </Badge>
+  );
 }
 
 function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () => void }) {
   const variantType = site.variantType || "nextjs";
   const variantInfo = VARIANT_LABELS[variantType];
-  const isHtmlVariant = variantType.startsWith("html_");
   // All variants (HTML and Next.js) now use /st/{slug}
   const previewUrl = `/st/${site.previewSlug}`;
   const screenshotUrl = site.screenshotRefs?.[0]?.url ?? null;
@@ -126,12 +127,6 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-2">
           <ReadinessBadge status={site.readinessStatus} />
-          <QaBadge status={site.qaStatus} />
-          {isHtmlVariant && (
-            <Badge className="border-purple-500/40 bg-purple-500/10 text-purple-200">
-              Static HTML
-            </Badge>
-          )}
         </div>
 
         {site.qualityScore !== undefined && site.qualityScore !== null && (

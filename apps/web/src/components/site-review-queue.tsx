@@ -8,10 +8,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { approveSiteReview, getSiteLatestJob, patchSiteReview, refineSite, submitRefinementPrompt } from "@/lib/api/sites";
 import type { SiteReviewQueueItem, SiteReviewQueueResponse } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+
+const READINESS_LABELS: Record<string, string> = {
+  blocked: "Blocked",
+  needs_review: "Needs review",
+  ready_for_review: "Ready for QA",
+  ready_to_publish: "Ready to publish",
+  published: "Published",
+};
 
 function readinessTone(status: string) {
   if (status === "published" || status === "ready_to_publish" || status === "approved")
@@ -230,22 +238,27 @@ function ReviewCard({ item, onApproved, onRegenerated, onSkipped }: ReviewCardPr
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge className={readinessTone(item.readinessStatus)}>
-                {item.readinessStatus.replace(/_/g, " ")}
+                {READINESS_LABELS[item.readinessStatus] ?? item.readinessStatus}
               </Badge>
               {item.isManuallyRefined && item.refinedCount > 0 && (
                 <Badge className="border border-violet-500/30 bg-violet-500/10 text-violet-300">
                   Refined v{item.refinedCount}
                 </Badge>
               )}
-              <Button variant="secondary" size="sm">
-                <Link href={item.previewUrl} target="_blank" className="flex items-center gap-1.5">
-                  Preview
-                  <ExternalLink className="h-3 w-3" />
-                </Link>
-              </Button>
-              <Button variant="secondary" size="sm">
-                <Link href={`/app/leads/${item.leadId}`}>View lead</Link>
-              </Button>
+              <Link
+                href={item.previewUrl}
+                target="_blank"
+                className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "flex items-center gap-1.5")}
+              >
+                Preview
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+              <Link
+                href={`/app/leads/${item.leadId}`}
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
+              >
+                View lead
+              </Link>
               <Button variant="ghost" size="sm" onClick={onSkipped} disabled={busy}>
                 <SkipForward className="h-3.5 w-3.5" />
               </Button>

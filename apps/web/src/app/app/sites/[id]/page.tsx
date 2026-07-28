@@ -4,7 +4,8 @@ import { ExternalLink, Sparkles, ShieldAlert } from "lucide-react";
 import { EmptyState } from "@/components/state/empty-state";
 import { PageFrame } from "@/components/shell/page-frame";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SiteWorkspaceControls } from "@/components/site-workspace-controls";
@@ -56,11 +57,14 @@ function readinessBadgeClass(status: string) {
   return "border-rose-500/40 bg-rose-500/10 text-rose-100";
 }
 
-function qaBadgeClass(status: string) {
-  if (status === "pass") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-100";
-  if (status === "warn") return "border-amber-500/40 bg-amber-500/10 text-amber-100";
-  return "border-rose-500/40 bg-rose-500/10 text-rose-100";
-}
+const READINESS_LABELS: Record<string, string> = {
+  blocked: "Blocked",
+  needs_review: "Needs review",
+  ready_for_review: "Ready for QA",
+  ready_to_publish: "Ready to publish",
+  published: "Published",
+};
+
 
 function paletteClass(mode: string) {
   if (mode === "colorful") return "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-100";
@@ -134,9 +138,8 @@ function OverviewTab({ site }: { site: GeneratedSite }) {
           <div className="flex flex-wrap gap-2">
             <Badge className={qualityBadgeClass(score)}>{qualityLabel(score)} quality</Badge>
             <Badge className={readinessBadgeClass(site.readinessStatus)}>
-              {site.readinessStatus.replace(/_/g, " ")}
+              {READINESS_LABELS[site.readinessStatus] ?? site.readinessStatus}
             </Badge>
-            <Badge className={qaBadgeClass(site.qaStatus)}>{site.qaStatus}</Badge>
           </div>
         </div>
 
@@ -492,7 +495,7 @@ function HistoryTab({
                     {version.qualityScore} / 100
                   </Badge>
                   <Badge className={readinessBadgeClass(version.readinessStatus)}>
-                    {version.readinessStatus.replace(/_/g, " ")}
+                    {READINESS_LABELS[version.readinessStatus] ?? version.readinessStatus}
                   </Badge>
                 </div>
               </div>
@@ -500,7 +503,16 @@ function HistoryTab({
                 <div>Theme: {version.themeName}</div>
                 <div>Palette: {version.paletteMode}</div>
                 <div>Job: {version.generationJobId || "Not recorded"}</div>
-                <div className="break-all">Preview: {version.previewUrl}</div>
+                <div className="break-all">
+                  Preview:{" "}
+                  {version.previewUrl ? (
+                    <a href={version.previewUrl} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                      {version.previewUrl}
+                    </a>
+                  ) : (
+                    "Not recorded"
+                  )}
+                </div>
               </div>
             </div>
           ))
@@ -568,9 +580,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
           title="Site source not found"
           description="The workspace needs a lead record before the generator can build a preview site."
           action={
-            <Button>
-              <Link href="/app/leads">Back to leads</Link>
-            </Button>
+            <Link href="/app/leads" className={buttonVariants()}>Back to leads</Link>
           }
         />
       </PageFrame>
@@ -601,9 +611,8 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                 {qualityScoreDisplay(site)} — {qualityLabel(score)}
               </Badge>
               <Badge className={readinessBadgeClass(site.readinessStatus)}>
-                {site.readinessStatus.replace(/_/g, " ")}
+                {READINESS_LABELS[site.readinessStatus] ?? site.readinessStatus}
               </Badge>
-              <Badge className={qaBadgeClass(site.qaStatus)}>{site.qaStatus}</Badge>
               {!hasScreenshotQA && (
                 <span className="text-xs text-amber-400">screenshot QA pending</span>
               )}
@@ -613,21 +622,28 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary">
-            <Link href={`/compare/${lead.id}`} target="_blank" className="flex items-center gap-1.5">
-              Compare all
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-          <Button variant="secondary">
-            <Link href={previewUrl} target="_blank" className="flex items-center gap-1.5">
-              Preview site
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-          <Button variant="secondary">
-            <Link href={`/app/leads/${lead.id}`}>← Lead</Link>
-          </Button>
+          <Link
+            href={`/compare/${lead.id}`}
+            target="_blank"
+            className={cn(buttonVariants({ variant: "secondary" }), "flex items-center gap-1.5")}
+          >
+            Compare all
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+          <Link
+            href={previewUrl}
+            target="_blank"
+            className={cn(buttonVariants({ variant: "secondary" }), "flex items-center gap-1.5")}
+          >
+            Preview site
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+          <Link
+            href={`/app/leads/${lead.id}`}
+            className={buttonVariants({ variant: "secondary" })}
+          >
+            ← Back to lead
+          </Link>
         </div>
       </div>
 
@@ -673,32 +689,30 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
             </Card>
           ) : null}
 
-          {site ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Source status</CardTitle>
-                <CardDescription>Brief and extraction must be ready before generating.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-line bg-panel-2 p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-muted">Brief</div>
-                  <div className="mt-2 text-sm text-text">
-                    {brief?.approvalState || "No brief yet"}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">v{brief?.version ?? 0}</div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Source status</CardTitle>
+              <CardDescription>Brief and extraction must be ready before generating.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted">Brief</div>
+                <div className="mt-2 text-sm text-text">
+                  {brief?.approvalState || "No brief yet"}
                 </div>
-                <div className="rounded-2xl border border-line bg-panel-2 p-4">
-                  <div className="text-xs uppercase tracking-[0.18em] text-muted">Extraction</div>
-                  <div className="mt-2 text-sm text-text">
-                    {extraction?.crawlStatus || "idle"}
-                  </div>
-                  <div className="mt-1 text-xs text-muted">
-                    {extraction?.pagesCrawled ?? 0} pages crawled
-                  </div>
+                <div className="mt-1 text-xs text-muted">v{brief?.version ?? 0}</div>
+              </div>
+              <div className="rounded-2xl border border-line bg-panel-2 p-4">
+                <div className="text-xs uppercase tracking-[0.18em] text-muted">Extraction</div>
+                <div className="mt-2 text-sm text-text">
+                  {extraction?.crawlStatus || "idle"}
                 </div>
-              </CardContent>
-            </Card>
-          ) : null}
+                <div className="mt-1 text-xs text-muted">
+                  {extraction?.pagesCrawled ?? 0} pages crawled
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {site ? (
             <Card>
@@ -785,7 +799,13 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
           <div className="space-y-4">
             <EmptyState
               title="Preview not generated yet"
-              description="The approved brief exists, but no generated site has been created for this lead yet."
+              description={
+                hasApprovedBrief
+                  ? "An approved brief is ready — use the generation controls to build the first preview."
+                  : hasExtraction
+                  ? "Extraction is complete. Approve the brief first, then generate the preview."
+                  : "Extract the website and approve the brief before generating a preview."
+              }
             />
 
             {/* Theme library — still useful pre-generation */}
