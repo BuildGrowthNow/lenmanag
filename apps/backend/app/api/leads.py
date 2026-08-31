@@ -11,6 +11,7 @@ from app.core.versioning import response_meta
 from app.schemas.brief import (
     MasterBrief,
     MasterBriefApprovalRequest,
+    MasterBriefBrandAssetsPatch,
     MasterBriefRefinementRequest,
 )
 from app.schemas.extraction import (
@@ -27,6 +28,7 @@ from app.schemas.lead import (
     LeadPatchRequest,
     LeadUpsertRequest,
 )
+from app.schemas.site import ClientShareRequest, ClientShareResponse
 from app.schemas.response import ResponseEnvelope, success_response
 
 logger = logging.getLogger(__name__)
@@ -109,6 +111,32 @@ async def get_lead(
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     return success_response(lead, meta=response_meta(http_request))
+
+
+@router.get("/{lead_id}/client-link", response_model=ResponseEnvelope[ClientShareResponse | None])
+async def get_client_link(
+    lead_id: str, user_id: CurrentUserId, http_request: Request
+) -> ResponseEnvelope[ClientShareResponse | None]:
+    share = await lead_repository.get_client_share(lead_id, user_id)
+    if share is None and await lead_repository.get_lead(lead_id, user_id=user_id) is None:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+    return success_response(share, meta=response_meta(http_request))
+
+
+@router.put("/{lead_id}/client-link", response_model=ResponseEnvelope[ClientShareResponse])
+async def save_client_link(
+    lead_id: str,
+    payload: ClientShareRequest,
+    user_id: CurrentUserId,
+    http_request: Request,
+) -> ResponseEnvelope[ClientShareResponse]:
+    try:
+        share = await lead_repository.save_client_share(lead_id, payload.siteIds, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if share is None:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+    return success_response(ClientShareResponse.model_validate(share), meta=response_meta(http_request))
 
 
 @router.patch("/{lead_id}", response_model=ResponseEnvelope[LeadDetail])
@@ -375,3 +403,21 @@ async def approve_master_brief(
         after=master_brief.model_dump(),
     )
     return success_response(master_brief, meta=response_meta(http_request))
+
+
+@router.patch(
+    "/{lead_id}/master-brief/assets", response_model=ResponseEnvelope[MasterBrief]
+)
+async def update_master_brief_assets(
+    lead_id: str,
+    user_id: CurrentUserId,
+    payload: MasterBriefBrandAssetsPatch,
+    http_request: Request,
+) -> ResponseEnvelope[MasterBrief]:
+    brief = await lead_repository.update_master_brief_assets(
+        lead_id, payload.model_dump(exclude_unset=True), user_id=user_id
+    )
+    if brief is None:
+        raise HTTPException(status_code=404, detail="Brief not found.")
+    await write_audit_log(user_id, "lead", lead_id, "master_brief_assets_updated", after=payload.model_dump(exclude_unset=True))
+    return success_response(brief, meta=response_meta(http_request))

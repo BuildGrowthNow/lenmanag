@@ -11,6 +11,8 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+import json
+from urllib.parse import urljoin
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 _VIEWPORT_WIDTH = 1440
 _VIEWPORT_HEIGHT = 900
+_MOBILE_VIEWPORT = {"width": 390, "height": 844}
 
 
 def capture_site_screenshot(
@@ -59,6 +62,8 @@ def capture_site_screenshot(
 
     # ── Take screenshot via Playwright ──────────────────────────────────────
     jpeg_bytes: bytes | None = None
+    mobile_bytes: bytes | None = None
+    qa: dict[str, object] = {"consoleErrors": [], "pageErrors": [], "failedRequests": [], "hiddenAfterScroll": 0, "mobileMenu": "not-tested"}
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
@@ -73,9 +78,36 @@ def capture_site_screenshot(
                     viewport={"width": _VIEWPORT_WIDTH, "height": _VIEWPORT_HEIGHT}
                 )
                 page = context.new_page()
+                page_errors = qa["pageErrors"]
+                page.on("console", lambda msg: qa["consoleErrors"].append(msg.text) if msg.type == "error" else None)
+                page.on("pageerror", lambda exc: page_errors.append(str(exc)))
+                page.on("requestfailed", lambda req: qa["failedRequests"].append(req.url))
                 page.goto(preview_url, wait_until="networkidle", timeout=30_000)
-                page.wait_for_timeout(2_000)
-                jpeg_bytes = page.screenshot(full_page=False, type="jpeg", quality=85)
+                frame = page.locator("iframe").first
+                if frame.count() > 0:
+                    src = frame.get_attribute("src")
+                    if src:
+                        page.goto(urljoin(preview_url, src), wait_until="networkidle", timeout=30_000)
+                page.evaluate("document.fonts ? document.fonts.ready : Promise.resolve()")
+                page.wait_for_function("Array.from(document.images).every((img) => img.complete)", timeout=15_000)
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.wait_for_timeout(500)
+                qa["horizontalOverflow"] = page.evaluate("document.documentElement.scrollWidth > window.innerWidth")
+                qa["fontsReady"] = page.evaluate("document.fonts ? document.fonts.status === 'loaded' : true")
+                qa["hiddenAfterScroll"] = page.locator("[data-animate], .animate-on-scroll").evaluate_all("els => els.filter(el => getComputedStyle(el).opacity === '0' || getComputedStyle(el).visibility === 'hidden').length")
+                jpeg_bytes = page.screenshot(full_page=True, type="jpeg", quality=85)
+                mobile_context = browser.new_context(viewport=_MOBILE_VIEWPORT)
+                mobile = mobile_context.new_page()
+                mobile.goto(page.url, wait_until="networkidle", timeout=30_000)
+                mobile.evaluate("document.fonts ? document.fonts.ready : Promise.resolve()")
+                mobile.wait_for_function("Array.from(document.images).every((img) => img.complete)", timeout=15_000)
+                menu = mobile.locator("button[aria-label*='menu' i], button:has-text('Menu'), [data-menu-toggle]").first
+                if menu.count() > 0:
+                    menu.click()
+                    qa["mobileMenu"] = "opened" if mobile.locator("nav:visible, [role='menu']:visible, .mobile-menu:visible").count() > 0 else "clicked"
+                mobile_bytes = mobile.screenshot(full_page=True, type="jpeg", quality=85)
+                mobile.close()
+                mobile_context.close()
             finally:
                 browser.close()
     except Exception as exc:
@@ -110,6 +142,8 @@ def capture_site_screenshot(
             ContentType="image/jpeg",
             CacheControl="public, max-age=86400",
         )
+        if mobile_bytes:
+            s3_client.put_object(Bucket=bucket, Key=f"{prefix}screenshots/{site_id}/mobile.jpg", Body=mobile_bytes, ContentType="image/jpeg", CacheControl="public, max-age=86400")
     except Exception as exc:
         logger.error(
             "capture_site_screenshot: S3 upload failed for site %s: %s",
@@ -131,4 +165,5 @@ def capture_site_screenshot(
         capturedAt=datetime.now(timezone.utc),
         width=_VIEWPORT_WIDTH,
         height=_VIEWPORT_HEIGHT,
+        notes=json.dumps({**qa, "mobileUrl": f"{backend_public_url}/api/v1/screenshots/{site_id}/mobile.jpg" if mobile_bytes else None}),
     )

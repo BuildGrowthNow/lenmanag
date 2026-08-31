@@ -312,6 +312,7 @@ class GeneratedSiteVersion(BaseModel):
     ctaStrategy: CtaStrategy
     navigationConfig: Optional[dict[str, Any]] = None
     qualityScore: int
+    qualityScoreSource: Literal["visual", "fallback"] = "fallback"
     readinessStatus: SiteReadinessStatus
     qaStatus: SiteQaStatus
     reviewRubric: list[SiteQualityCheck] = Field(default_factory=list)
@@ -393,6 +394,7 @@ class GeneratedSite(BaseModel):
     navigationConfig: Optional[dict[str, Any]] = None
     awwwardsPatternMetadata: Optional[dict[str, Any]] = None
     qualityScore: int
+    qualityScoreSource: Literal["visual", "fallback"] = "fallback"
     readinessStatus: SiteReadinessStatus
     qaStatus: SiteQaStatus
     reviewRubric: list[SiteQualityCheck] = Field(default_factory=list)
@@ -429,6 +431,7 @@ class GeneratedSite(BaseModel):
     compiledBundleUrl: Optional[str] = Field(
         default=None, description="URL to the compiled JavaScript bundle (Next.js only)"
     )
+    compiledCssUrl: Optional[str] = Field(default=None, description="URL to the generated per-site stylesheet")
     compilationStatus: Optional[str] = Field(
         default=None, description="Status of compilation: pending, success, failed"
     )
@@ -505,8 +508,23 @@ class SiteOverrideCreateRequest(BaseModel):
 class RedesignVariant(BaseModel):
     siteId: str
     previewUrl: str
-    screenshotUrl: str
+    screenshotUrl: str = ""
     variantPosition: int
+    optionNumber: int = 1
+    variantLabel: Optional[str] = None
+
+
+class ClientShareRequest(BaseModel):
+    siteIds: list[str] = Field(..., min_length=1, max_length=4)
+
+
+class ClientShareResponse(BaseModel):
+    id: str
+    leadId: str
+    slug: str
+    siteIds: list[str]
+    url: str
+    updatedAt: datetime
 
 
 class RedesignPageData(BaseModel):

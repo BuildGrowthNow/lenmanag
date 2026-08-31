@@ -32,7 +32,15 @@ export interface BrandAssets {
   primaryColor?: string;
   secondaryColor?: string;
   fontFamily?: string;
+  fontUrl?: string;
+  fontWeight?: string;
+  fontStyle?: string;
+  fontFormat?: string;
+  logoVariants?: string[];
   imageUrls: string[];
+  imageInventory?: Array<{ url: string; altText?: string; category?: string }>;
+  palette?: Record<string, string>;
+  derivedColors?: string[];
 }
 
 export interface MasterBrief {
@@ -97,5 +105,15 @@ export async function approveMasterBrief(
   return request<MasterBrief>(`/api/leads/${leadId}/master-brief/approve`, {
     method: 'POST',
     body: { approvedBy, notes }
+  });
+}
+
+export async function updateMasterBriefAssets(
+  leadId: string,
+  assets: Partial<BrandAssets>
+): Promise<MasterBrief> {
+  return request<MasterBrief>(`/api/leads/${leadId}/master-brief/assets`, {
+    method: 'PATCH',
+    body: assets,
   });
 }

@@ -25,6 +25,26 @@ export async function getVariantsForLead(leadId: string): Promise<GeneratedSite[
   return safeRequest<GeneratedSite[]>(`/api/sites/variants/${leadId}`, []);
 }
 
+export type ClientShare = {
+  id: string;
+  leadId: string;
+  slug: string;
+  siteIds: string[];
+  url: string;
+  updatedAt: string;
+};
+
+export async function getClientShare(leadId: string): Promise<ClientShare | null> {
+  return safeRequest<ClientShare | null>(`/api/leads/${leadId}/client-link`, null);
+}
+
+export async function saveClientShare(leadId: string, siteIds: string[]): Promise<ClientShare> {
+  return request<ClientShare>(`/api/leads/${leadId}/client-link`, {
+    method: "PUT",
+    body: { siteIds },
+  });
+}
+
 export async function getSites(params: { limit?: number; offset?: number } = {}): Promise<GeneratedSite[]> {
   const searchParams = new URLSearchParams();
   if (typeof params.limit === "number") {

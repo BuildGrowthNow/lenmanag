@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import cast
+import os
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -62,8 +63,8 @@ async def get_redesign_page(
 ) -> ResponseEnvelope[RedesignPageData]:
     """
     Public client-facing endpoint: returns data for the /redesign/{slug} page.
-    Looks up the lead by redesignSlug and returns all variants that have
-    been successfully compiled and have at least one screenshot.
+    Looks up the saved operator selection by redesignSlug. The public payload is
+    intentionally small and never exposes the full GeneratedSite records.
     """
     database = get_database()
     if database is None:
@@ -75,28 +76,41 @@ async def get_redesign_page(
 
     lead_id: str = str(lead_doc["id"])
 
-    # Fetch all sites for this lead
-    sites = await site_repository.list_sites_by_lead(lead_id)
+    share = lead_doc.get("clientShare") or {}
+    selected_ids = list(share.get("selectedSiteIds") or [])
+    if not 1 <= len(selected_ids) <= 4:
+        raise HTTPException(status_code=404, detail="Redesign page not found")
 
-    # Filter to successfully compiled sites (screenshots optional)
-    eligible = [s for s in sites if s.compilationStatus == "success"]
+    sites = await site_repository.list_sites_by_lead(lead_id)
+    by_id = {site.id: site for site in sites}
+    eligible = [by_id[site_id] for site_id in selected_ids if site_id in by_id]
+    if len(eligible) != len(selected_ids):
+        raise HTTPException(status_code=404, detail="Redesign page not found")
+    eligible = [
+        site for site in eligible
+        if site.compilationStatus in {"success", "completed"}
+        and site.readinessStatus != "blocked"
+        and bool(site.previewUrl or site.previewSlug)
+    ]
 
     if not eligible:
         raise HTTPException(status_code=404, detail="Redesign page not found")
 
-    # Sort by variantPosition
-    eligible.sort(key=lambda s: s.variantPosition)
-
-    # Build variant list — use first screenshot if available, else empty string
+    # Preserve the saved selection order. Screenshots are optional.
     variants: list[RedesignVariant] = []
-    for site in eligible:
+    for option_number, site in enumerate(eligible, start=1):
         screenshot_url = site.screenshotRefs[0].url if site.screenshotRefs else ""
+        preview_url = site.previewUrl
+        if not preview_url or "localhost" in preview_url or "127.0.0.1" in preview_url:
+            preview_url = f"{os.getenv('FRONTEND_PUBLIC_URL', 'https://sites.lenquant.com').rstrip('/')}/st/{site.previewSlug}"
         variants.append(
             RedesignVariant(
                 siteId=site.id,
-                previewUrl=site.previewUrl,
+                previewUrl=preview_url,
                 screenshotUrl=screenshot_url,
                 variantPosition=site.variantPosition,
+                optionNumber=option_number,
+                variantLabel=site.variantLabel,
             )
         )
 
@@ -121,3 +135,18 @@ async def get_redesign_page(
         ResponseEnvelope[RedesignPageData],
         success_response(data, meta=response_meta(request)),
     )
+
+
+@router.get("/compare/{lead_id}", response_model=ResponseEnvelope[RedesignPageData])
+async def get_public_compare(
+    lead_id: str, request: Request
+) -> ResponseEnvelope[RedesignPageData]:
+    """Compatibility endpoint for the operator preview, backed by the saved share."""
+    database = get_database()
+    if database is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    lead_doc = await database["leads"].find_one({"id": lead_id})
+    slug = lead_doc.get("redesignSlug") if lead_doc else None
+    if not slug:
+        raise HTTPException(status_code=404, detail="Compare page not found")
+    return await get_redesign_page(slug, request)

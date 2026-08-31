@@ -42,7 +42,14 @@ export default async function PreviewPage({ params }: PageProps) {
   const htmlContent = strippedSource.startsWith('<') ? strippedSource : null;
 
   if (htmlContent) {
-    return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
+    return (
+      <iframe
+        title={`Generated preview for ${slug}`}
+        src={`/st/${encodeURIComponent(slug)}/document`}
+        className="min-h-screen w-full border-0"
+        style={{ height: '100vh' }}
+      />
+    );
   }
 
   // Check if this is a compiled Next.js bundle
@@ -73,6 +80,7 @@ export default async function PreviewPage({ params }: PageProps) {
       <PreviewRenderer
         slug={slug}
         bundleUrl={site.compiledBundleUrl}
+        cssUrl={site.compiledCssUrl}
         brandTokens={site.brandTokens}
         compilationStatus={site.compilationStatus}
       />

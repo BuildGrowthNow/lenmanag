@@ -271,6 +271,7 @@ Return ONLY valid JSON, no markdown or additional text:
                 logger.error(f"Failed to parse QA response for {site_id}: {e}")
                 qa_result = {
                     "qualityScore": 30,  # Conservative default when response is unparseable
+                    "available": False,
                     "sectionScores": [],
                     "overallCritique": qa_response[:500],
                     "readinessAssessment": "needs_refinement",
@@ -280,8 +281,13 @@ Return ONLY valid JSON, no markdown or additional text:
                     "missingImages": True,
                 }
 
+            raw_score = qa_result.get("qualityScore")
+            score_available = isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool)
             return {
-                "qualityScore": qa_result.get("qualityScore", 50),
+                # Keep the legacy diagnostic value for callers/tests, but mark
+                # it unavailable so it can never replace the real fallback.
+                "qualityScore": max(0, min(100, int(raw_score or 0))),
+                "available": bool(qa_result.get("available", True)) and score_available,
                 "sectionScores": qa_result.get("sectionScores", []),
                 "rawCritique": qa_response,
                 "passThreshold": qa_result.get("qualityScore", 0) >= quality_threshold,

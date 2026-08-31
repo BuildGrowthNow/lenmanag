@@ -1246,6 +1246,7 @@ export type LeadListItem = {
   version: number;
   latestJob: LeadJobSummary | null;
   redesignSlug: string | null;
+  clientShareSiteIds: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -1277,6 +1278,7 @@ export type LeadDetail = {
   jobs: LeadJobSummary[];
   pipelineEvents: PipelineEvent[];
   redesignSlug: string | null;
+  clientShareSiteIds: string[];
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;

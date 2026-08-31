@@ -129,7 +129,8 @@ class ScreenshotComparator:
                 # attach screenshotRefs and rely on existing quality scoring.
                 logger.error("QA analysis failed for %s: %s", site_id, e)
                 qa_result = {
-                    "qualityScore": 0,
+                    "qualityScore": None,
+                    "available": False,
                     "sectionScores": [],
                     "rawCritique": f"QA analysis failed: {e}",
                     "readinessAssessment": "needs_refinement",
@@ -142,6 +143,8 @@ class ScreenshotComparator:
                 "mobileScreenshotUrl": screenshots["mobileUrl"],
                 "layoutHash": screenshots["layoutHash"],
                 "qualityScore": qa_result.get("qualityScore", 50),
+                "qualityScoreSource": "visual" if qa_result.get("available", False) else "fallback",
+                "qaAvailable": bool(qa_result.get("available", False)),
                 "sectionScores": qa_result.get("sectionScores", []),
                 "rawCritique": qa_result.get("rawCritique", ""),
                 "readinessAssessment": qa_result.get(

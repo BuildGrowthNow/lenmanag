@@ -15,6 +15,44 @@ import colorsys
 from typing import Literal
 
 
+def deduplicate_colors(colors: list[str]) -> list[str]:
+    """Normalize hex colors and remove equivalent/invalid duplicates."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for color in colors:
+        try:
+            value = color.strip().lower()
+            if not value.startswith("#"):
+                continue
+            rgb = parse_hex_color(value)
+            normalized = rgb_to_hex(*rgb)
+        except (TypeError, ValueError, IndexError):
+            continue
+        if normalized not in seen:
+            seen.add(normalized)
+            result.append(normalized)
+    return result
+
+
+def build_brand_palette(source_colors: list[str]) -> dict[str, str | list[str]]:
+    """Create stable semantic roles while recording derived design colors."""
+    colors = deduplicate_colors(source_colors)
+    primary = colors[0] if colors else "#6366f1"
+    secondary = next((c for c in colors[1:] if c != primary), complementary(primary))
+    if secondary == primary:
+        secondary = shade(primary, 0.35) if primary != "#000000" else tint(primary, 0.35)
+    accent = next((c for c in colors[2:] if c not in {primary, secondary}), triadic(primary)[0])
+    if accent in {primary, secondary}:
+        accent = tint(primary, 0.25) if primary != "#ffffff" else shade(primary, 0.25)
+    return {
+        "primary": primary,
+        "secondary": secondary,
+        "accent": accent,
+        "source": colors,
+        "derived": [secondary, accent],
+    }
+
+
 def parse_hex_color(hex_color: str) -> tuple[float, float, float]:
     """Parse hex color to RGB tuple (0-1 range)."""
     hex_color = hex_color.lstrip("#")

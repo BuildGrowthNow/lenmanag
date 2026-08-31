@@ -11,6 +11,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 interface PreviewRendererProps {
   slug: string;
   bundleUrl: string;
+  cssUrl?: string;
   brandTokens?: any;
   compilationStatus?: string;
 }
@@ -45,6 +46,7 @@ function ErrorFallback({ error }: { error: unknown }) {
 export function PreviewRenderer({
   slug,
   bundleUrl,
+  cssUrl,
   brandTokens,
   compilationStatus,
 }: PreviewRendererProps) {
@@ -59,8 +61,26 @@ export function PreviewRenderer({
       return;
     }
 
+    let cancelled = false;
+    let stylesheet: HTMLLinkElement | null = null;
+    const loadStylesheet = () => new Promise<void>((resolve, reject) => {
+      if (!cssUrl) return resolve();
+      const link = document.createElement('link');
+      stylesheet = link;
+      link.rel = 'stylesheet';
+      link.href = cssUrl;
+      link.dataset.generatedSiteCss = slug;
+      link.onload = () => resolve();
+      link.onerror = () => reject(new Error('Failed to load generated stylesheet'));
+      document.head.appendChild(link);
+    });
+
     const loadBundle = async () => {
       try {
+        // CSS must be ready before React mounts: otherwise the first render is
+        // captured unstyled by screenshot/QA tooling.
+        await loadStylesheet();
+        if (cancelled) return;
         // Ensure React and JSX runtime are available globally for the bundle
         if (typeof window !== 'undefined') {
           const react = require('react');
@@ -97,6 +117,7 @@ export function PreviewRenderer({
           );
         }
 
+        if (cancelled) return;
         setComponent(() => ResolvedComponent);
         document.head.removeChild(script);
       } catch (err: unknown) {
@@ -107,7 +128,8 @@ export function PreviewRenderer({
     };
 
     loadBundle();
-  }, [bundleUrl, compilationStatus, slug]);
+    return () => { cancelled = true; stylesheet?.remove(); };
+  }, [bundleUrl, compilationStatus, cssUrl, slug]);
 
   if (loadError) {
     return (

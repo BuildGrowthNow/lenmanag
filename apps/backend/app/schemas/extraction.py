@@ -140,8 +140,11 @@ class BrandAssetCue(BaseModel):
     assetType: Literal["logo", "color", "image", "typography"]
     label: str
     value: str
-    sourceUrl: str
+    assetUrl: Optional[str] = None
+    pageUrl: Optional[str] = None
+    sourceUrl: str = ""
     cachedUri: Optional[str] = None
+    cachedUrl: Optional[str] = None
     cachedAt: Optional[datetime] = None
     expiresAt: Optional[datetime] = None
     bytes: Optional[int] = None

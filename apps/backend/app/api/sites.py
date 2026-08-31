@@ -121,7 +121,9 @@ async def get_site(
     return success_response(site, meta=response_meta(request))
 
 
-@router.get("/{site_id}/latest-job", response_model=ResponseEnvelope[JobResponse | None])
+@router.get(
+    "/{site_id}/latest-job", response_model=ResponseEnvelope[JobResponse | None]
+)
 async def get_site_latest_job(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[JobResponse | None]:
@@ -518,7 +520,11 @@ async def recapture_screenshot(
     )
 
     return success_response(
-        {"status": "queued", "siteId": site_id, "message": "Screenshot recapture queued"},
+        {
+            "status": "queued",
+            "siteId": site_id,
+            "message": "Screenshot recapture queued",
+        },
         meta=response_meta(request),
     )
 

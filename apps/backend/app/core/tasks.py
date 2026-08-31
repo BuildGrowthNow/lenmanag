@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
+import boto3
 
 from app.core.celery_app import celery_app
 from app.core.leads import lead_repository
 from app.core.sites import site_repository
+from app.core.screenshot_analyzer import get_screenshot_analyzer
 from app.schemas.site import SiteGenerateRequest
 from app.core.asset_retention import AssetRetentionManager
 
@@ -127,7 +129,9 @@ def run_site_generation_job_task(
             try:
                 run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
             except Exception as exc:
-                logging.warning("Could not queue screenshot task for site %s: %s", site.id, exc)
+                logging.warning(
+                    "Could not queue screenshot task for site %s: %s", site.id, exc
+                )
 
     try:
         _run(runner())
@@ -156,6 +160,7 @@ def run_site_generation_job_task(
 )
 def run_site_republish_task(self, site_id: str, job_id: str) -> None:
     """Recompile and re-upload existing site without regenerating via LLM."""
+
     async def runner() -> None:
         await site_repository.run_republish_job(site_id=site_id, job_id=job_id)
         site = await site_repository.get_site(site_id)
@@ -163,7 +168,9 @@ def run_site_republish_task(self, site_id: str, job_id: str) -> None:
             try:
                 run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
             except Exception as exc:
-                logging.warning("Could not queue screenshot task for site %s: %s", site.id, exc)
+                logging.warning(
+                    "Could not queue screenshot task for site %s: %s", site.id, exc
+                )
 
     try:
         _run(runner())
@@ -263,6 +270,35 @@ def run_screenshot_task(self, site_id: str, preview_url: str) -> None:
                 }
             },
         )
+        # Screenshot capture is asynchronous with generation. Run visual QA
+        # now, so the provisional fallback score is replaced when possible.
+        try:
+            settings = get_settings()
+            s3_key = f"{settings.asset_s3_prefix or 'lenmanag/'}screenshots/{site_id}/preview.jpg"
+            image = boto3.client(
+                "s3", region_name=settings.asset_s3_region or "us-east-1"
+            ).get_object(Bucket=settings.asset_s3_bucket, Key=s3_key)["Body"].read()
+            site = await site_repository.get_site(site_id)
+            if site is not None:
+                qa = await get_screenshot_analyzer().perform_qa_analysis(
+                    site_id=site_id,
+                    desktop_screenshot=image,
+                    extraction_summary="Generated preview page",
+                    section_stack=[section.title for section in site.sectionStack],
+                    quality_threshold=settings.visual_redesign_quality_threshold,
+                )
+                if qa.get("available") and qa.get("qualityScore") is not None:
+                    await site_repository.persist_visual_quality(
+                        site_id, int(qa["qualityScore"]), qa
+                    )
+                    logger.info(
+                        "run_screenshot_task: visual quality %.0f persisted for %s",
+                        qa["qualityScore"], site_id,
+                    )
+                else:
+                    logger.info("run_screenshot_task: visual QA unavailable for %s; retaining fallback", site_id)
+        except Exception as exc:
+            logger.warning("run_screenshot_task: visual QA unavailable for %s: %s", site_id, exc)
         logger.info(
             "run_screenshot_task: screenshot captured and saved for site %s", site_id
         )
@@ -604,6 +640,7 @@ def run_site_refinement_job_task(
     self, site_id: str, job_id: str, prompt_id: str
 ) -> None:
     """Apply targeted operator refinement to existing site source code."""
+
     async def runner() -> None:
         await site_repository.run_refinement_job(
             site_id=site_id, job_id=job_id, prompt_id=prompt_id
@@ -613,7 +650,9 @@ def run_site_refinement_job_task(
             try:
                 run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
             except Exception as exc:
-                logging.warning("Could not queue screenshot task for site %s: %s", site.id, exc)
+                logging.warning(
+                    "Could not queue screenshot task for site %s: %s", site.id, exc
+                )
 
     try:
         _run(runner())

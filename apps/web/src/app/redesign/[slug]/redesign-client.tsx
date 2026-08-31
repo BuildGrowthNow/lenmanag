@@ -39,18 +39,15 @@ function buildHeadline(
 }
 
 function VariantCard({ variant }: { variant: RedesignVariant }) {
+  const hasPreview = Boolean(variant.previewUrl);
   return (
-    <a
-      href={variant.previewUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group block rounded-2xl overflow-hidden border border-white/[0.08] transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-yellow-500/10 cursor-pointer"
-    >
+    <div className={`group overflow-hidden rounded-2xl border border-white/[0.08] transition-all ${hasPreview ? "hover:scale-[1.02] hover:shadow-2xl hover:shadow-yellow-500/10" : "opacity-75"}`}>
+      {hasPreview ? <a href={variant.previewUrl} target="_blank" rel="noopener noreferrer" className="block" aria-label={`Open Option ${variant.optionNumber}`}>
       <div className="aspect-[4/3] overflow-hidden bg-slate-800 flex items-center justify-center">
         {variant.screenshotUrl ? (
           <Image
             src={variant.screenshotUrl}
-            alt="Site preview"
+            alt={`Option ${variant.optionNumber} preview`}
             width={720}
             height={540}
             className="w-full h-full object-cover object-top"
@@ -61,11 +58,17 @@ function VariantCard({ variant }: { variant: RedesignVariant }) {
             <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
             </svg>
-            <span className="text-sm font-medium">Click to preview</span>
+            <span className="text-sm font-medium">Screenshot coming soon</span>
           </div>
         )}
       </div>
-    </a>
+      </a> : <div className="flex aspect-[4/3] items-center justify-center bg-slate-800 px-6 text-center text-sm text-zinc-400">This option is temporarily unavailable.</div>}
+      <div className="border-t border-white/[0.08] bg-slate-900/80 px-4 py-3">
+        <div className="font-semibold text-white">Option {variant.optionNumber}</div>
+        {variant.variantLabel ? <div className="mt-1 text-sm text-zinc-400">{variant.variantLabel}</div> : null}
+        {hasPreview ? <div className="mt-2 text-xs text-yellow-400">Click to preview live ↗</div> : null}
+      </div>
+    </div>
   );
 }
 
@@ -125,7 +128,7 @@ export function RedesignClient({ data }: { data: RedesignPageData }) {
             Love one of these? Let&apos;s build your final version.
           </p>
           <a
-            href="https://calendly.com/lenquant/sites"
+            href={process.env.NEXT_PUBLIC_CALENDLY_URL || "https://calendly.com/lenquant/sites"}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block rounded-full bg-yellow-500 px-8 py-3 text-sm font-semibold text-slate-900 transition-colors hover:bg-yellow-400"

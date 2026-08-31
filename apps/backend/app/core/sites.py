@@ -1948,25 +1948,46 @@ def _quality_score(
 
         return max(0, min(100, score))
 
-    # Fallback: very conservative data completeness score (no visual validation)
-    score = 20
+    # Fallback: data-richness score (no visual validation available)
+    # Base reflects a minimally complete pipeline run
+    score = 40
+
+    # Brief quality (up to +20)
     if brief.approvalState == "approved":
-        score += 5
-    score += min(len(extraction.sourceCitations), 3) * 2
-    score += min(len(extraction.brandAssetCues), 2) * 2
-    score += min(len(site_sections), 3) * 2
-    score += (
-        4
-        if brand_tokens["primaryColor"]["evidence"]["sourceKind"] == "source_backed"
-        else 0
-    )
-    score += (
-        3
-        if brand_tokens["typography"]["evidence"]["sourceKind"] == "source_backed"
-        else 0
-    )
-    score += int(diversity_score * 0.05)
-    score -= min(len(missing_requirements), 5) * 5
+        score += 8
+    score += min(len(brief.recommendedSections), 5) * 2  # up to +10
+    score += min(len(brief.proofPoints), 2) * 1  # up to +2
+
+    # Brief confidence (0–100 → up to +8)
+    score += int(brief.confidenceScore * 0.08)
+
+    # Extraction richness (up to +15)
+    score += min(len(extraction.sourceCitations), 5) * 1  # up to +5
+    score += min(len(extraction.brandAssetCues), 3) * 1  # up to +3
+    score += min(extraction.pagesCrawled, 5) * 1  # up to +5
+    if extraction.extractedTestimonials:
+        score += 1
+    if extraction.extractedImages:
+        score += 1
+
+    # Extraction confidence (0–100 → up to +5)
+    score += int(extraction.confidenceScore * 0.05)
+
+    # Brand tokens grounded in source data (up to +6)
+    if brand_tokens["primaryColor"]["evidence"]["sourceKind"] == "source_backed":
+        score += 3
+    if brand_tokens["typography"]["evidence"]["sourceKind"] == "source_backed":
+        score += 3
+
+    # Visual redesign briefs present (up to +4)
+    score += min(len(brief.visualRedesign), 2) * 2
+
+    # Diversity bonus (up to +3)
+    score += int(diversity_score * 0.06)
+
+    # Penalise missing requirements
+    score -= min(len(missing_requirements), 5) * 4
+
     return max(0, min(100, score))
 
 
@@ -2702,12 +2723,15 @@ class SiteRepository:
                 if not doc:
                     # Fallback: treat site_id as a leadId and return lowest-position variant
                     candidates = [
-                        d for d in self._sites.values()
+                        d
+                        for d in self._sites.values()
                         if d.get("leadId") == site_id
                         and (not user_id or d.get("userId") == user_id)
                     ]
                     if candidates:
-                        doc = min(candidates, key=lambda d: d.get("variantPosition", 99))
+                        doc = min(
+                            candidates, key=lambda d: d.get("variantPosition", 99)
+                        )
                 if doc:
                     if user_id and doc.get("userId") != user_id:
                         return None
@@ -2722,7 +2746,12 @@ class SiteRepository:
             lead_query: dict[str, Any] = {"leadId": site_id}
             if user_id:
                 lead_query["userId"] = user_id
-            cursor = database["generated_sites"].find(lead_query).sort("variantPosition", 1).limit(1)
+            cursor = (
+                database["generated_sites"]
+                .find(lead_query)
+                .sort("variantPosition", 1)
+                .limit(1)
+            )
             docs = await cursor.to_list(length=1)
             doc = docs[0] if docs else None
         if doc:
@@ -2786,6 +2815,26 @@ class SiteRepository:
         docs = await cursor.to_list(length=100)
         sites = [_site_doc_to_current(doc) for doc in docs]
         return sorted(sites, key=lambda s: s.variantPosition)
+
+    async def persist_visual_quality(
+        self, site_id: str, quality_score: int, qa_metadata: dict[str, Any]
+    ) -> None:
+        """Replace the provisional completeness score after visual QA."""
+        score = max(0, min(100, int(quality_score)))
+        now = _now()
+        update = {
+            "qualityScore": score,
+            "qualityScoreSource": "visual",
+            "screenshotQA": qa_metadata,
+            "updatedAt": now,
+        }
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                if site_id in self._sites:
+                    self._sites[site_id].update(update)
+            return
+        await database["generated_sites"].update_one({"id": site_id}, {"$set": update})
 
     async def generate_site_variant(
         self,
@@ -2971,6 +3020,8 @@ class SiteRepository:
         settings = get_settings()
         preview_base = settings.preview_base_url.rstrip("/")
 
+        sections = self._master_section_stack(master_brief, extraction)
+        cta_strategy = self._master_cta_strategy(master_brief)
         return GeneratedSite(
             id=site_id,
             leadId=lead_id,
@@ -2986,17 +3037,18 @@ class SiteRepository:
             themeRationale="AI-generated Next.js site",
             paletteMode=variant_strategy.get("paletteMode", "zinc"),
             paletteRationale="From variant strategy",
-            brandTokens=self._default_brand_tokens(),
+            brandTokens=self._brand_tokens_from_brief(master_brief),
             heroVariant=self._default_hero_variant(),
-            sectionStack=[],
-            ctaStrategy=self._default_cta_strategy(),
+            sectionStack=[SiteSection.model_validate(section) for section in sections],
+            ctaStrategy=CtaStrategy.model_validate(cta_strategy),
             qualityScore=_quality_score(
                 brief=master_brief,
                 extraction=extraction,
-                brand_tokens=_default_brand_tokens_dict(),
-                site_sections=[],
+                brand_tokens=self._brand_tokens_from_brief(master_brief).model_dump(),
+                site_sections=sections,
                 missing_requirements=list(master_brief.missingRequirements or []),
             ),
+            qualityScoreSource="fallback",
             readinessStatus="ready_for_review",
             qaStatus="warn",
             previewSlug=slug,
@@ -3004,6 +3056,7 @@ class SiteRepository:
             overrideCount=0,
             sourceCode=code_result.get("sourceCode"),
             compiledBundleUrl=code_result.get("compiledBundleUrl"),
+            compiledCssUrl=code_result.get("compiledCssUrl"),
             compilationStatus=code_result.get("compilationStatus", "pending"),
             createdAt=_now(),
             updatedAt=_now(),
@@ -3024,6 +3077,8 @@ class SiteRepository:
         settings = get_settings()
         preview_base = settings.preview_base_url.rstrip("/")
 
+        sections = self._master_section_stack(master_brief, extraction)
+        cta_strategy = self._master_cta_strategy(master_brief)
         return GeneratedSite(
             id=site_id,
             leadId=lead_id,
@@ -3042,27 +3097,82 @@ class SiteRepository:
             themeRationale="AI-generated static HTML",
             paletteMode=variant_strategy.get("paletteMode", "light"),
             paletteRationale="From variant strategy",
-            brandTokens=self._default_brand_tokens(),
+            brandTokens=self._brand_tokens_from_brief(master_brief),
             heroVariant=self._default_hero_variant(),
-            sectionStack=[],
-            ctaStrategy=self._default_cta_strategy(),
+            sectionStack=[SiteSection.model_validate(section) for section in sections],
+            ctaStrategy=CtaStrategy.model_validate(cta_strategy),
             qualityScore=_quality_score(
                 brief=master_brief,
                 extraction=extraction,
-                brand_tokens=_default_brand_tokens_dict(),
-                site_sections=[],
+                brand_tokens=self._brand_tokens_from_brief(master_brief).model_dump(),
+                site_sections=sections,
                 missing_requirements=list(master_brief.missingRequirements or []),
             ),
+            qualityScoreSource="fallback",
             readinessStatus="ready_for_review",
             qaStatus="warn",
             previewSlug=slug,
             previewUrl=f"{preview_base}/{slug}",
             overrideCount=0,
             sourceCode=html_result.get("html"),
+            compilationStatus="success" if html_result.get("html") else "failed",
             createdAt=_now(),
             updatedAt=_now(),
         )
 
+    def _brand_tokens_from_brief(self, brief: Any) -> BrandTokens:
+        """Persist approved brief assets instead of unrelated defaults."""
+        tokens = self._default_brand_tokens()
+        assets = getattr(brief, "brandAssets", None)
+        evidence = BriefEvidence(
+            sourceKind="source_backed",
+            inferenceLabel="Approved master brief",
+            confidence=85,
+        )
+        if assets:
+            values = {
+                "primaryColor": assets.primaryColor,
+                "secondaryColor": assets.secondaryColor,
+                "accentColor": assets.palette.get("accent") or assets.secondaryColor or assets.primaryColor,
+                "typography": assets.fontFamily,
+            }
+            for field, value in values.items():
+                if value:
+                    setattr(tokens, field, SiteToken(value=str(value), evidence=evidence))
+            if assets.logoUrl:
+                tokens.logoAsset = SiteToken(value=assets.logoUrl, evidence=evidence)
+        return tokens
+
+    def _master_section_stack(self, brief: Any, extraction: ExtractionSnapshot) -> list[dict[str, Any]]:
+        """Convert the approved master brief blueprint into persisted site metadata."""
+        evidence = BriefEvidence(sourceKind="source_backed", inferenceLabel="Approved master brief section", confidence=85)
+        result: list[dict[str, Any]] = []
+        for section in list(getattr(brief, "sections", []) or []):
+            purpose = _text(section.purpose) or "section"
+            result.append({
+                "kind": purpose,
+                "title": section.headline or purpose,
+                "headline": section.headline or purpose,
+                "body": _sanitize_public_copy(section.contentSummary),
+                "items": [_sanitize_public_copy(item) for item in section.contentPoints[:6]],
+                "ctaLabel": _ensure_client_safe_cta(_text(brief.conversionAction)) if purpose.lower() in {"cta", "contact", "conversion"} else None,
+                "componentId": _map_section_kind_to_component_id(purpose),
+                "evidence": evidence.model_dump(),
+            })
+        if not result:
+            result.append({"kind": "overview", "title": "Overview", "headline": brief.headline,
+                           "body": _sanitize_public_copy(brief.valueProposition), "items": [], "ctaLabel": None,
+                           "componentId": _map_section_kind_to_component_id("overview"), "evidence": evidence.model_dump()})
+        return result
+
+    def _master_cta_strategy(self, brief: Any) -> dict[str, Any]:
+        """Persist CTA labels and destinations derived from the approved conversion action."""
+        action = _ensure_client_safe_cta(_text(getattr(brief, "conversionAction", "")) or "Get started")
+        rationale = _text(getattr(brief, "ctaStrategy", "")) or _text(getattr(brief, "conversionAction", ""))
+        evidence = BriefEvidence(sourceKind="source_backed", inferenceLabel="Approved conversion action", confidence=85).model_dump()
+        return {"primary": {"label": action, "href": "#contact", "rationale": rationale, "evidence": evidence},
+                "secondary": {"label": "Learn more", "href": "#overview", "rationale": "Lower-friction exploration path.", "evidence": evidence},
+                "footer": {"label": action, "href": "#contact", "rationale": rationale, "evidence": evidence}}
     def _default_brand_tokens(self) -> BrandTokens:
         """Return default brand tokens."""
         default_evidence = BriefEvidence(
@@ -4315,11 +4425,13 @@ class SiteRepository:
         )
 
         missing_reqs = list(master_brief.missingRequirements or [])
+        generated_sections = self._master_section_stack(master_brief, extraction)
+        generated_cta = self._master_cta_strategy(master_brief)
         computed_quality_score = _quality_score(
             brief=master_brief,
             extraction=extraction,
             brand_tokens=brand_tokens,
-            site_sections=[],
+            site_sections=generated_sections,
             missing_requirements=missing_reqs,
         )
         settings_for_readiness = get_settings()
@@ -4355,9 +4467,10 @@ class SiteRepository:
             "paletteRationale": palette_rationale,
             "brandTokens": brand_tokens,
             "heroVariant": hero_variant,
-            "sectionStack": [],
-            "ctaStrategy": cta_strategy,
+            "sectionStack": generated_sections,
+            "ctaStrategy": generated_cta,
             "qualityScore": computed_quality_score,
+            "qualityScoreSource": "fallback",
             "readinessStatus": computed_readiness,
             "qaStatus": computed_qa,
             "reviewRubric": [],
@@ -4380,7 +4493,9 @@ class SiteRepository:
             "promptHistory": [
                 (r.model_dump() if hasattr(r, "model_dump") else r)
                 for r in (current.promptHistory or [])
-            ] if current else [],
+            ]
+            if current
+            else [],
             "isManuallyRefined": refinement_prompt_id is not None,
             "improvementRecommendations": None,
             "sourceCode": result.get("sourceCode"),
@@ -5097,7 +5212,11 @@ class SiteRepository:
         self, sites: list[GeneratedSite]
     ) -> list[GeneratedSite]:
         """For sites with no sourceAttribution, fetch lead names in one batch query."""
-        missing = [s for s in sites if not s.sourceAttribution or not s.sourceAttribution.companyName]
+        missing = [
+            s
+            for s in sites
+            if not s.sourceAttribution or not s.sourceAttribution.companyName
+        ]
         if not missing:
             return sites
         lead_ids = list({s.leadId for s in missing})

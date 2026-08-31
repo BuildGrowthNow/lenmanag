@@ -10,6 +10,7 @@ import {
   type MasterBrief,
   approveMasterBrief,
   refineMasterBrief,
+  updateMasterBriefAssets,
 } from '@/lib/api/master-brief';
 
 interface BriefReviewClientProps {
@@ -24,6 +25,21 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
   const [isRefining, setIsRefining] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [assets, setAssets] = useState(initialBrief.brandAssets);
+  const [isSavingAssets, setIsSavingAssets] = useState(false);
+
+  const saveAssets = async () => {
+    setIsSavingAssets(true);
+    try {
+      const updated = await updateMasterBriefAssets(leadId, assets);
+      setBrief(updated);
+      setAssets(updated.brandAssets);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to save brand assets');
+    } finally {
+      setIsSavingAssets(false);
+    }
+  };
 
   const handleRefine = async () => {
     if (!feedback.trim()) return;
@@ -374,27 +390,49 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
             {/* Brand Assets */}
             {(brief.brandAssets.logoUrl ||
               brief.brandAssets.primaryColor ||
-              brief.brandAssets.fontFamily) && (
+              brief.brandAssets.secondaryColor ||
+              brief.brandAssets.fontFamily ||
+              brief.brandAssets.imageUrls?.length) && (
               <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-3">
                 <h3 className="text-sm font-medium text-zinc-300">Brand Assets</h3>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <input aria-label="Logo URL" value={assets.logoUrl || ''} onChange={(e) => setAssets({...assets, logoUrl: e.target.value})} placeholder="Logo URL" className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs" />
+                  <input aria-label="Font family" value={assets.fontFamily || ''} onChange={(e) => setAssets({...assets, fontFamily: e.target.value})} placeholder="Font family" className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs" />
+                  <input aria-label="Font file URL" value={assets.fontUrl || ''} onChange={(e) => setAssets({...assets, fontUrl: e.target.value})} placeholder="Font file URL" className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs" />
+                  <input aria-label="Primary color" value={assets.primaryColor || ''} onChange={(e) => setAssets({...assets, primaryColor: e.target.value})} placeholder="Primary color" className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs" />
+                  <input aria-label="Secondary color" value={assets.secondaryColor || ''} onChange={(e) => setAssets({...assets, secondaryColor: e.target.value})} placeholder="Secondary color" className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs" />
+                </div>
+                {(assets.imageInventory || []).length > 0 && <div className="grid grid-cols-3 gap-2">{(assets.imageInventory || []).slice(0, 12).map((image: any) => <label key={image.url} className="relative"><img src={image.url} alt={image.altText || image.category || 'Extracted image'} className="h-20 w-full rounded object-cover border border-zinc-800" /><input type="checkbox" checked={(assets.imageUrls || []).includes(image.url)} onChange={(e) => setAssets({...assets, imageUrls: e.target.checked ? [...(assets.imageUrls || []), image.url] : (assets.imageUrls || []).filter((url) => url !== image.url)})} className="absolute left-1 top-1" /></label>)}</div>}
+                <button type="button" onClick={() => void saveAssets()} disabled={isSavingAssets} className="rounded bg-blue-600 px-3 py-1 text-xs hover:bg-blue-500 disabled:opacity-50">{isSavingAssets ? 'Saving...' : 'Save brand assets'}</button>
+                {brief.brandAssets.logoUrl && (
+                  <div className="flex items-center gap-3">
+                    <div className="h-14 w-40 rounded border border-zinc-700 bg-white p-2 flex items-center">
+                      <img src={brief.brandAssets.logoUrl} alt="Selected primary logo" className="max-h-full max-w-full object-contain" />
+                    </div>
+                    <span className="text-xs text-zinc-500 break-all">Primary logo</span>
+                  </div>
+                )}
                 {brief.brandAssets.primaryColor && (
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-6 h-6 rounded border border-zinc-700"
-                      style={{ backgroundColor: brief.brandAssets.primaryColor }}
-                    />
-                    <span className="text-xs text-zinc-400">
-                      {brief.brandAssets.primaryColor}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[['Primary', brief.brandAssets.primaryColor], ['Secondary', brief.brandAssets.secondaryColor], ['Accent', brief.brandAssets.palette?.accent]].filter((item): item is [string, string] => Boolean(item[1])).map(([label, color]) => (
+                      <div key={label} className="flex items-center gap-2 rounded border border-zinc-800 px-2 py-1">
+                        <div className="w-6 h-6 rounded border border-zinc-700" style={{ backgroundColor: color }} />
+                        <span className="text-xs text-zinc-400">{label}: {color}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
                 {brief.brandAssets.fontFamily && (
-                  <div className="text-xs text-zinc-400">
-                    Font: {brief.brandAssets.fontFamily}
+                  <div className="text-sm text-zinc-300" style={{ fontFamily: brief.brandAssets.fontFamily }}>
+                    {brief.brandAssets.fontFamily} <span className="text-xs text-zinc-500">({brief.brandAssets.fontWeight || 'fallback preview'})</span>
                   </div>
                 )}
-                {brief.brandAssets.logoUrl && (
-                  <div className="text-xs text-zinc-500">Logo: Captured</div>
+                {brief.brandAssets.imageUrls?.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {brief.brandAssets.imageUrls.slice(0, 6).map((url) => (
+                      <img key={url} src={url} alt="Approved extracted brand imagery" className="h-20 w-full rounded object-cover border border-zinc-800" />
+                    ))}
+                  </div>
                 )}
               </div>
             )}

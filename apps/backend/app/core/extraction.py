@@ -1509,6 +1509,8 @@ def _extract_brand_asset_cues(
                     "assetType": "logo",
                     "label": "Primary logo",
                     "value": best_logo,
+                    "assetUrl": best_logo,
+                    "pageUrl": page_url,
                     "sourceUrl": page_url,
                     "confidence": confidence,
                     "note": best_note,
@@ -1524,6 +1526,8 @@ def _extract_brand_asset_cues(
                             "assetType": "logo",
                             "label": "Secondary logo",
                             "value": second_logo,
+                            "assetUrl": second_logo,
+                            "pageUrl": page_url,
                             "sourceUrl": page_url,
                             "confidence": min(85, max(45, second_score - 10)),
                             "note": f"Alternative: {second_note}",
@@ -1546,6 +1550,8 @@ def _extract_brand_asset_cues(
                 "assetType": "image",
                 "label": "Image asset reference",
                 "value": signals.images[0],
+                "assetUrl": signals.images[0],
+                "pageUrl": page_url,
                 "sourceUrl": page_url,
                 "confidence": 60,
                 "note": "Public image or icon reference discovered on the page.",
@@ -1557,6 +1563,7 @@ def _extract_brand_asset_cues(
                 "assetType": "typography",
                 "label": "Typography cue",
                 "value": signals.font_family,
+                "pageUrl": page_url,
                 "sourceUrl": page_url,
                 "confidence": 52,
                 "note": "Detected from font-family or font resource hints.",
@@ -1993,6 +2000,13 @@ def crawl_website(
             page_data["cleanedText"] = pw_data.get("cleanedText", "")
             page_data["fonts"] = pw_data.get("fonts", [])
             page_data["colors"] = list(set(pw_data.get("colors", [])))
+            for color in page_data["colors"]:
+                if color and color not in {cue.get("value") for cue in brand_asset_cues if cue.get("assetType") == "color"}:
+                    brand_asset_cues.append({
+                        "assetType": "color", "label": "Computed rendered color", "value": color,
+                        "pageUrl": url, "sourceUrl": url, "confidence": 68,
+                        "note": "Captured from Playwright computed styles.",
+                    })
             page_data["headings"] = pw_data.get("headings", [])
             page_data["playwrightLinks"] = pw_data.get("links", [])
             page_data["playwrightImages"] = pw_data.get("images", [])

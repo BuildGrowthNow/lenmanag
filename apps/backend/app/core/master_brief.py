@@ -19,6 +19,7 @@ from app.core.asset_utils import (
     log_asset_cache_stats,
 )
 from app.core.llm import get_llm_client
+from app.core.color_system import build_brand_palette
 from app.core.variant_strategy import get_variant_strategy
 from app.schemas.brief import (
     BrandAssets,
@@ -479,23 +480,55 @@ def _build_master_brief_from_response(
     if extraction.brandAssetCues:
         colors = [c for c in extraction.brandAssetCues if c.assetType == "color"]
         if colors:
-            brand_assets.primaryColor = colors[0].value
-            if len(colors) > 1:
-                brand_assets.secondaryColor = colors[1].value
+            palette = build_brand_palette([c.value for c in colors])
+            brand_assets.primaryColor = str(palette["primary"])
+            brand_assets.secondaryColor = str(palette["secondary"])
+            brand_assets.palette = {k: str(v) for k, v in palette.items() if k in {"primary", "secondary", "accent"}}
+            brand_assets.derivedColors = [str(v) for v in palette["derived"]]
 
         logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
         if logos:
-            brand_assets.logoUrl = get_best_asset_url(logos[0])
+            ranked_logos = sorted(logos, key=lambda item: item.confidence, reverse=True)
+            brand_assets.logoUrl = get_best_asset_url(ranked_logos[0])
+            brand_assets.logoVariants = [url for url in (get_best_asset_url(item) for item in ranked_logos) if url]
+            for logo in ranked_logos:
+                url = get_best_asset_url(logo)
+                hint = f"{logo.label} {logo.note or ''} {url or ''}".lower()
+                if url and not brand_assets.logoLightUrl and any(token in hint for token in ("light", "white", "inverse")):
+                    brand_assets.logoLightUrl = url
+                if url and not brand_assets.logoDarkUrl and any(token in hint for token in ("dark", "black", "primary")):
+                    brand_assets.logoDarkUrl = url
             log_asset_cache_stats(logos, "logo", lead_id)
 
-        fonts = [c for c in extraction.brandAssetCues if c.assetType == "typography"]
+        fonts = sorted(
+            extraction.extractedFonts,
+            key=lambda item: (item.confidence, bool(item.fontUrl)),
+            reverse=True,
+        )
         if fonts:
-            brand_assets.fontFamily = fonts[0].value
+            font = fonts[0]
+            brand_assets.fontFamily = font.fontFamily
+            brand_assets.fontUrl = font.fontUrl
+            brand_assets.fontWeight = font.fontWeight
+            brand_assets.fontStyle = font.fontStyle
+        else:
+            typography = [c for c in extraction.brandAssetCues if c.assetType == "typography"]
+            if typography:
+                brand_assets.fontFamily = typography[0].value
+                brand_assets.fontUrl = typography[0].assetUrl or typography[0].cachedUri
 
-        images = [c for c in extraction.brandAssetCues if c.assetType == "image"]
-        brand_assets.imageUrls = get_best_asset_urls(images, max_count=5)
+        images = sorted(
+            extraction.extractedImages,
+            key=lambda item: (item.confidence, item.category != "unknown", item.width or 0),
+            reverse=True,
+        )
+        brand_assets.imageInventory = [image.model_dump() for image in images[:50]]
+        brand_assets.imageUrls = [image.url for image in images if image.url][:5]
+        if not images:
+            cue_images = [c for c in extraction.brandAssetCues if c.assetType == "image"]
+            brand_assets.imageUrls = get_best_asset_urls(cue_images, max_count=5)
         if images:
-            log_asset_cache_stats(images, "image", lead_id)
+            log_asset_cache_stats([c for c in extraction.brandAssetCues if c.assetType == "image"], "image", lead_id)
 
     # Extract content - prefer analyzed data, fall back to keywords
     extracted_content: dict[str, list[str]] = {}

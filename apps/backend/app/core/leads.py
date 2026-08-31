@@ -4,6 +4,7 @@ import asyncio
 import csv
 import io
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
@@ -270,6 +271,7 @@ def _lead_doc_to_detail(
         jobs=[_job_doc_to_summary(job) for job in (jobs or [])],
         pipelineEvents=pipeline_events,
         redesignSlug=doc.get("redesignSlug"),
+        clientShareSiteIds=list((doc.get("clientShare") or {}).get("selectedSiteIds", [])),
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
         archivedAt=_serialize_datetime(doc.get("archivedAt")),
@@ -297,6 +299,7 @@ def _lead_doc_to_list_item(
         version=int(doc.get("version", 1)),
         latestJob=_job_doc_to_summary(latest_job) if latest_job else None,
         redesignSlug=doc.get("redesignSlug"),
+        clientShareSiteIds=list((doc.get("clientShare") or {}).get("selectedSiteIds", [])),
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
     )
@@ -1569,6 +1572,88 @@ class LeadRepository:
 
         return await self.get_lead(lead_id, user_id=user_id)
 
+    async def save_client_share(
+        self, lead_id: str, site_ids: list[str], user_id: str
+    ) -> dict[str, Any] | None:
+        """Persist the operator's ordered 1–4 site client-share selection."""
+        from app.core.sites import site_repository
+
+        unique_ids = list(dict.fromkeys(site_ids))
+        if not 1 <= len(unique_ids) <= 4:
+            raise ValueError("Select between one and four unique websites.")
+        lead = await self.get_lead(lead_id, user_id=user_id)
+        if lead is None:
+            return None
+        sites = await site_repository.list_sites_by_lead(lead_id, user_id=user_id)
+        by_id = {site.id: site for site in sites}
+        selected = [by_id.get(site_id) for site_id in unique_ids]
+        if any(site is None for site in selected):
+            raise ValueError("Every selected website must belong to this lead.")
+        if any(
+            site.compilationStatus != "success"
+            or not (site.previewUrl or site.previewSlug)
+            or site.readinessStatus == "blocked"
+            for site in selected
+            if site is not None
+        ):
+            raise ValueError("Only compiled, available, non-blocked websites can be shared.")
+
+        now = _now()
+        share = {
+            "id": (lead.redesignSlug or uuid4().hex),
+            "leadId": lead_id,
+            "slug": lead.redesignSlug or uuid4().hex,
+            "selectedSiteIds": unique_ids,
+            "createdAt": now,
+            "updatedAt": now,
+            "isActive": True,
+        }
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                doc = self._memory.get(lead_id)
+                if doc is None:
+                    return None
+                doc["clientShare"] = share
+                doc["updatedAt"] = now
+        else:
+            await database["leads"].update_one(
+                {"id": lead_id, "user_id": user_id},
+                {"$set": {"clientShare": share, "updatedAt": now}},
+            )
+        return {
+            "id": share["id"],
+            "leadId": lead_id,
+            "slug": share["slug"],
+            "siteIds": unique_ids,
+            "url": f"{os.getenv('FRONTEND_PUBLIC_URL', 'https://sites.lenquant.com').rstrip('/')}/redesign/{share['slug']}",
+            "updatedAt": now,
+        }
+
+    async def get_client_share(
+        self, lead_id: str, user_id: str
+    ) -> dict[str, Any] | None:
+        lead = await self.get_lead(lead_id, user_id=user_id)
+        if lead is None:
+            return None
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                share = self._memory.get(lead_id, {}).get("clientShare")
+        else:
+            doc = await database["leads"].find_one({"id": lead_id, "user_id": user_id})
+            share = doc.get("clientShare") if doc else None
+        if not share:
+            return None
+        return {
+            "id": share.get("id", lead.redesignSlug),
+            "leadId": lead_id,
+            "slug": share.get("slug", lead.redesignSlug),
+            "siteIds": list(share.get("selectedSiteIds", [])),
+            "url": f"{os.getenv('FRONTEND_PUBLIC_URL', 'https://sites.lenquant.com').rstrip('/')}/redesign/{share.get('slug', lead.redesignSlug)}",
+            "updatedAt": _utc(share.get("updatedAt")) or _now(),
+        }
+
     def _apply_patch(
         self, doc: dict[str, Any], patch: LeadPatchRequest
     ) -> dict[str, Any]:
@@ -2539,6 +2624,31 @@ class LeadRepository:
         await self.advance_pipeline_after_brief(lead_id)
 
         return MasterBrief.model_validate(doc)
+
+    async def update_master_brief_assets(
+        self, lead_id: str, assets: dict[str, Any], user_id: str | None = None
+    ) -> MasterBrief | None:
+        """Persist operator corrections to brand assets before approval."""
+        if await self.get_lead(lead_id, user_id=user_id) is None:
+            return None
+        brief = await self.get_master_brief(lead_id)
+        if brief is None:
+            return None
+        merged = brief.brandAssets.model_dump()
+        merged.update({key: value for key, value in assets.items() if value is not None})
+        database = get_database()
+        now = _now()
+        if database is None:
+            async with self._memory_lock:
+                records = self._memory.setdefault("master_briefs", {}).get(lead_id, [])
+                if records:
+                    records[-1]["brandAssets"] = merged
+                    records[-1]["updatedAt"] = now
+        else:
+            await database["master_briefs"].update_one(
+                {"id": brief.id}, {"$set": {"brandAssets": merged, "updatedAt": now}}
+            )
+        return brief.model_copy(update={"brandAssets": merged, "updatedAt": now})
 
     async def start_extraction(
         self, lead_id: str, *, refresh: bool = False, user_id: str | None = None

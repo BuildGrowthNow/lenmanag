@@ -4,6 +4,8 @@
  */
 
 import * as esbuild from 'esbuild';
+import postcss from 'postcss';
+import tailwindcss from 'tailwindcss';
 import { validateTsxSource, sanitizeComponentName } from './validate.js';
 import { createVirtualModulesPlugin } from './virtual-modules-plugin.js';
 
@@ -113,10 +115,21 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
       };
     }
 
+    // Generated TSX is not part of the web app's Tailwind content globs. Build
+    // a stylesheet from this exact source so arbitrary, responsive, hover,
+    // and animation utilities are deterministic per site.
+    const generatedCss = await postcss([
+      tailwindcss({
+        content: [{ raw: sourceCode, extension: 'tsx' }],
+        corePlugins: { preflight: true },
+        theme: { extend: {} },
+      }),
+    ]).process('@tailwind base;\n@tailwind components;\n@tailwind utilities;', { from: `${safeName}.css` });
+
     return {
       success: true,
       bundleCode,
-      cssCode: cssCode || undefined,
+      cssCode: `${generatedCss.css}\n${cssCode}`,
     };
   } catch (err: any) {
     const errorMessage = err?.message || String(err);

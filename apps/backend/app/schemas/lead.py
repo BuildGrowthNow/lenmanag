@@ -152,6 +152,7 @@ class LeadListItem(BaseModel):
     version: int
     latestJob: Optional[JobSummary] = None
     redesignSlug: Optional[str] = None
+    clientShareSiteIds: list[str] = Field(default_factory=list)
     createdAt: datetime
     updatedAt: datetime
 
@@ -181,6 +182,7 @@ class LeadDetail(BaseModel):
     jobs: list[JobSummary] = Field(default_factory=list)
     pipelineEvents: list[PipelineEvent] = Field(default_factory=list)
     redesignSlug: Optional[str] = None
+    clientShareSiteIds: list[str] = Field(default_factory=list)
     createdAt: datetime
     updatedAt: datetime
     archivedAt: Optional[datetime] = None

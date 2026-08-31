@@ -17,6 +17,8 @@ export type RedesignVariant = {
   previewUrl: string;
   screenshotUrl: string;
   variantPosition: number;
+  optionNumber: number;
+  variantLabel: string | null;
 };
 
 export type RedesignPageData = {

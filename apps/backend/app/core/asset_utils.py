@@ -58,11 +58,11 @@ def get_best_asset_url(cue: BrandAssetCue | dict[str, Any]) -> str | None:
         Best available valid URL, or None if no valid URL available
     """
     if isinstance(cue, dict):
-        cached = cue.get("cachedUri")
-        source = cue.get("sourceUrl")
+        cached = cue.get("cachedUrl") or cue.get("cachedUri")
+        source = cue.get("assetUrl") or cue.get("value") or cue.get("sourceUrl")
     else:
-        cached = cue.cachedUri
-        source = cue.sourceUrl
+        cached = getattr(cue, "cachedUrl", None) or cue.cachedUri
+        source = getattr(cue, "assetUrl", None) or cue.value or cue.sourceUrl
 
     # Prefer cached (S3) URL, fall back to source
     url = cached or source

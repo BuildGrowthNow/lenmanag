@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 MAX_COMPILATION_RETRIES = 3
 
 
-def _upload_bundle_to_s3(bundle_code: str, css_code: str | None, site_id: str) -> str:
+def _upload_bundle_assets_to_s3(bundle_code: str, css_code: str | None, site_id: str) -> tuple[str, str | None]:
     """
     Upload compiled bundle to S3 and return public URL.
 
@@ -78,7 +78,12 @@ def _upload_bundle_to_s3(bundle_code: str, css_code: str | None, site_id: str) -
     bundle_url = f"{api_base_url}/api/v1/bundles/{site_id}/bundle.js"
 
     logger.info(f"Uploaded bundle for site {site_id} to S3, proxied URL: {bundle_url}")
-    return bundle_url
+    css_url = f"{api_base_url}/api/v1/bundles/{site_id}/styles.css" if css_code else None
+    return bundle_url, css_url
+
+
+def _upload_bundle_to_s3(bundle_code: str, css_code: str | None, site_id: str) -> str:
+    return _upload_bundle_assets_to_s3(bundle_code, css_code, site_id)[0]
 
 
 async def generate_landing_page_code(
@@ -176,7 +181,7 @@ async def generate_landing_page_code(
                 }
 
             try:
-                bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id)
+                bundle_url, css_url = _upload_bundle_assets_to_s3(bundle_code, css_code, site_id)
             except Exception as upload_error:
                 logger.error(
                     f"Failed to upload bundle for site {site_id}: {upload_error}"
@@ -192,6 +197,7 @@ async def generate_landing_page_code(
                 "success": True,
                 "sourceCode": source_code,
                 "compiledBundleUrl": bundle_url,
+                "compiledCssUrl": css_url,
                 "compilationStatus": "success",
                 "bundleCode": bundle_code,
                 "cssCode": css_code,
@@ -231,7 +237,7 @@ def _build_generation_prompt(
             f"  {i + 1}. **{section.headline}** ({section.purpose})\n"
             f"     Approach: {section.suggestedApproach}\n"
             f"     Content: {section.contentSummary}\n"
-            f"     Key points: {', '.join(section.contentPoints[:3])}"
+            f"     Key points (all approved): {', '.join(section.contentPoints)}"
             for i, section in enumerate(master_brief.sections)
         ]
     )
@@ -284,14 +290,14 @@ Mixed font sizes (huge headlines, small captions). Image/text juxtaposition. Gen
 - Use text-8xl or larger for key headlines
 - Mix serif and sans-serif for contrast
 - Remember to give proper space btw contents/arts and use paddings approprietaly
-- Use pictures provided or from unsplash
+- Use approved client images first; if none are suitable, use CSS/typography/texture instead of random stock photography.
 - Consider pull quotes, drop caps, full-bleed images
 - Sections should feel like turning pages""",
             "immersive": """
 **IMMERSIVE MODE**: Think cinematic experience. Full-bleed everything. Parallax depth layers.
 Ambient backgrounds (gradients, particles, video). Story-driven scroll progression.
 - Use useScroll + useTransform extensively for parallax
-- Consider ambient Three.js backgrounds
+- Consider CSS/SVG ambient backgrounds and layered depth
 - Sections should flow like a film, not a document
 - Sound/motion cues (even if just visual representations)""",
             "interactive": """
@@ -327,6 +333,14 @@ Subtle motion. Trust signals. Refined color usage.
 
     prompt = f"""You are building an Awwwards-worthy landing page. Your goal is to create something memorable — not a template, but an experience.
 
+## PRIORITY ORDER
+1. Use only accurate client facts and approved content.
+2. Use the exact approved logo, structured brand colors, typography, and imagery.
+3. Transform those assets into an art-directed redesign with one memorable signature moment.
+4. Ensure responsive and runtime reliability.
+
+Do not copy the source layout or default to a generic SaaS template. Choose one coherent concept and one or two excellent signature effects. Creative risk is encouraged for this sales concept, but it must fit this client and cannot depend on unavailable libraries.
+
 ## YOUR CREATIVE TOOLKIT
 
 You have access to powerful libraries. YOU CAN USE THEM OR SOME OF THEM CREATIVELY, OR NOT AT ALL. The choice is yours, but the final product must be visually stunning and interactive.:
@@ -348,22 +362,14 @@ You have access to powerful libraries. YOU CAN USE THEM OR SOME OF THEM CREATIVE
 - **Lenis**: Smooth scrolling that makes the whole page feel premium
 
 ### 3D & Visual Effects
-- **@react-three/fiber + @react-three/drei**: 3D scenes, floating objects, ambient backgrounds
-  - Floating product renders
-  - Particle systems
-  - Gradient spheres and abstract shapes
+3D packages are not available in the preview compiler; create depth with CSS, SVG, gradients, and layered composition instead.
 
-### UI Components (FULL shadcn/ui library available)
+### UI Components (only these virtual shadcn components are available)
 Import from '@/components/ui/*':
-- **Layout**: Card, Separator, AspectRatio, ScrollArea
-- **Interactive**: Button, Toggle, ToggleGroup, Tabs, Accordion, Collapsible, Dialog, Sheet, Drawer, DropdownMenu, NavigationMenu, Menubar, ContextMenu
-- **Forms**: Input, Textarea, Select, Checkbox, RadioGroup, Switch, Slider, Label, Form
-- **Feedback**: Alert, AlertDialog, Toast, Progress, Skeleton
-- **Data Display**: Avatar, Badge, Calendar, Table, HoverCard, Tooltip, Popover, Command
-- **Navigation**: Breadcrumb, Pagination
+- Button, Card, Badge, Separator
 
 ### Images & Videos
-- **Use pictures provided or from unsplash**
+- Use approved extracted images by role; do not use random stock imagery.
 
 ### Icons
 - **lucide-react**: 1000+ icons — Menu, X, ArrowRight, ArrowUpRight, Check, Star, Phone, Mail, MapPin, Play, Pause, ChevronDown, ExternalLink, etc.
@@ -461,7 +467,7 @@ This runs in the browser, NOT Node.js:
 - Start with `'use client';`
 - Export a single default function component
 - Import only what you actually use
-- Available imports: `react`, `framer-motion`, `gsap`, `gsap/ScrollTrigger`, `lenis`, `@/components/ui/*`, `lucide-react`, `embla-carousel-react`, `@react-three/fiber`, `@react-three/drei`
+- Available imports: `react`, `framer-motion`, `gsap`, `gsap/ScrollTrigger`, `lenis`, `lucide-react`, `embla-carousel-react`, and `@/components/ui/{button,card,badge,separator}` only.
 
 ## OUTPUT
 
@@ -617,6 +623,10 @@ def _build_brand_tokens_section(
         sections.append(
             f"**Font Family**: {master_brief.brandAssets.fontFamily} — Apply this font throughout the design"
         )
+    if master_brief.brandAssets.fontUrl:
+        sections.append(
+            f"**Font File**: {master_brief.brandAssets.fontUrl} (weight {master_brief.brandAssets.fontWeight or '400'}) — load with @font-face and provide a compatible fallback"
+        )
 
     # Images
     if master_brief.brandAssets.imageUrls:
@@ -628,7 +638,7 @@ def _build_brand_tokens_section(
         )
 
     if not sections:
-        return "**Brand Assets**: Use default Tailwind colors and styling."
+        return "**Brand Assets**: No approved assets were extracted; use a restrained inferred palette and never invent a logo."
 
     return "## Brand Assets (USE THESE)\n\n" + "\n".join(sections)
 
@@ -722,7 +732,7 @@ Do NOT simplify or remove animations/effects just to fix validation errors.
 - React and hooks from 'react'
 - framer-motion for animations (motion.div, useScroll, useTransform, useInView, AnimatePresence)
 - GSAP and ScrollTrigger
-- Three.js via @react-three/fiber and @react-three/drei
+- CSS/SVG depth effects (React Three Fiber and Drei are not available)
 - Lenis for smooth scrolling
 - shadcn/ui components from '@/components/ui/*'
 - Lucide React icons from 'lucide-react'
@@ -908,7 +918,11 @@ async def refine_landing_page_code(
         max_tokens=32768,
     )
 
-    source_code = _extract_tsx_code(response) if not is_html_variant else _extract_html_code(response)
+    source_code = (
+        _extract_tsx_code(response)
+        if not is_html_variant
+        else _extract_html_code(response)
+    )
 
     # Only validate TSX for Next.js sites, skip for HTML variants
     if not is_html_variant:
@@ -927,7 +941,9 @@ async def refine_landing_page_code(
 
     # For HTML variants, skip compilation and return immediately
     if is_html_variant:
-        logger.info(f"HTML variant {variant_type} refined successfully for site {site_id}")
+        logger.info(
+            f"HTML variant {variant_type} refined successfully for site {site_id}"
+        )
         return {
             "success": True,
             "sourceCode": source_code,
@@ -956,7 +972,7 @@ async def refine_landing_page_code(
                 }
 
             try:
-                bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id)
+                bundle_url, css_url = _upload_bundle_assets_to_s3(bundle_code, css_code, site_id)
             except Exception as upload_error:
                 logger.error(
                     f"Failed to upload refined bundle for site {site_id}: {upload_error}"
@@ -972,6 +988,7 @@ async def refine_landing_page_code(
                 "success": True,
                 "sourceCode": source_code,
                 "compiledBundleUrl": bundle_url,
+                "compiledCssUrl": css_url,
                 "compilationStatus": "success",
                 "bundleCode": bundle_code,
                 "cssCode": css_code,

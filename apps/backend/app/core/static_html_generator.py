@@ -121,10 +121,42 @@ async def generate_static_html(
         html_final = html_final.replace(
             "</head>", f'<link rel="stylesheet" href="{css_url}">\n</head>'
         )
+    runtime_bootstrap = """<script>
+window.__LENMANAG_RUNTIME__ = { initialized: false, animationSetupComplete: false, errors: [] };
+window.addEventListener('error', function (event) {
+  window.__LENMANAG_RUNTIME__.errors.push(event.error?.message || event.message || 'Runtime error');
+});
+window.addEventListener('unhandledrejection', function (event) {
+  window.__LENMANAG_RUNTIME__.errors.push(event.reason?.message || String(event.reason || 'Unhandled rejection'));
+});
+</script>"""
+    html_final = html_final.replace("</head>", runtime_bootstrap + "\n</head>")
     if js_url:
         html_final = html_final.replace(
-            "</body>", f'<script src="{js_url}"></script>\n</body>'
+            "</body>", f'<script src="{js_url}" onerror="window.__LENMANAG_RUNTIME__.errors.push(\'Failed to load generated JavaScript\')"></script>\n</body>'
         )
+    # Keep local/test previews functional when object storage is unavailable.
+    if not css_url:
+        html_final = html_final.replace(
+            "</head>", f"<style data-generated-site-css>{css_content}</style>\n</head>"
+        )
+    if not js_url:
+        html_final = html_final.replace(
+            "</body>",
+            f"<script data-generated-site-js>{js_content}</script>\n</body>",
+        )
+    # Register after generated code so DOMContentLoaded means generated setup has run.
+    runtime_ready = """<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var runtime = window.__LENMANAG_RUNTIME__;
+  if (runtime && runtime.errors.length === 0) {
+    runtime.initialized = true;
+    runtime.animationSetupComplete = true;
+  }
+  window.__LENMANAG_STATIC_READY__ = !!(runtime && runtime.initialized);
+});
+</script>\n</body>"""
+    html_final = html_final.replace("</body>", runtime_ready)
 
     logger.info(
         f"[DEBUG] Final HTML length: {len(html_final)} (original: {len(html_content)})"
@@ -146,14 +178,16 @@ def _build_static_html_prompt(
     """Build LLM prompt for static HTML generation."""
     # Build sections summary
     sections_summary = "\n".join(
-        f"  - {s.purpose}: {s.headline}" for s in brief.sections[:7]
-    )
+        f"  - {s.purpose}: {s.headline}\n    Purpose: {s.contentSummary}\n    Approved points: {', '.join(s.contentPoints)}\n    Approach: {s.suggestedApproach}"
+        for s in brief.sections
+    ) or "  - No approved sections; create visual interest without inventing facts."
 
     # Get brand info
     logo_url = brief.brandAssets.logoUrl or "None"
     primary_color = brief.brandAssets.primaryColor or "#000000"
     secondary_color = brief.brandAssets.secondaryColor or "#666666"
     font_family = brief.brandAssets.fontFamily or "system-ui, sans-serif"
+    font_url = brief.brandAssets.fontUrl or "None"
 
     # Get company name
     company_name = extraction.summary.companyName or "Company"
@@ -200,6 +234,7 @@ BRAND ASSETS:
 - Primary Color: {primary_color}
 - Secondary Color: {secondary_color}
 - Font Family: {font_family}
+- Font File URL: {font_url}
 
 VARIANT TYPE: {variant_type}
 
@@ -216,7 +251,8 @@ REQUIREMENTS:
    - Include all sections from the master brief
    - Use brand logo if available (as img src)
    - NO inline styles or scripts
-   - Use placeholder image URLs from https://images.unsplash.com for any images
+   - Use approved extracted client images first. If none are suitable, prefer typographic, geometric, textured, or diagrammatic art direction. Use external imagery only when genuinely necessary and contextually relevant; never use random stock photography.
+   - If a font file URL is provided, load it with @font-face; never use placeholder family names such as "Preloaded Font" as literal CSS.
 
 3. CSS Requirements:
    - Use CSS custom properties for colors/spacing

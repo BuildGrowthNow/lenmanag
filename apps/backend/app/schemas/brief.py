@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -164,10 +164,36 @@ class BrandAssets(BaseModel):
     """Brand assets extracted from source site"""
 
     logoUrl: Optional[str] = None
+    logoLightUrl: Optional[str] = None
+    logoDarkUrl: Optional[str] = None
     primaryColor: Optional[str] = None
     secondaryColor: Optional[str] = None
     fontFamily: Optional[str] = None
+    fontUrl: Optional[str] = None
+    fontWeight: Optional[str] = None
+    fontStyle: Optional[str] = None
+    fontFormat: Optional[str] = None
+    logoVariants: list[str] = Field(default_factory=list)
     imageUrls: list[str] = Field(default_factory=list)
+    imageInventory: list[dict[str, Any]] = Field(default_factory=list)
+    palette: dict[str, str] = Field(default_factory=dict)
+    derivedColors: list[str] = Field(default_factory=list)
+
+
+class MasterBriefBrandAssetsPatch(BaseModel):
+    logoUrl: Optional[str] = None
+    primaryColor: Optional[str] = None
+    secondaryColor: Optional[str] = None
+    fontFamily: Optional[str] = None
+    fontUrl: Optional[str] = None
+    fontWeight: Optional[str] = None
+    fontStyle: Optional[str] = None
+    fontFormat: Optional[str] = None
+    logoVariants: Optional[list[str]] = None
+    imageUrls: Optional[list[str]] = None
+    imageInventory: Optional[list[dict[str, Any]]] = None
+    palette: Optional[dict[str, str]] = None
+    derivedColors: Optional[list[str]] = None
 
 
 class MasterBriefSection(BaseModel):
