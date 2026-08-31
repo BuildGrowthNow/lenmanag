@@ -1981,7 +1981,7 @@ def _quality_score(
     # Keep this tolerant of older brief objects so persistence cannot fail
     # while calculating a fallback quality score.
     score += min(len(getattr(brief, "sections", []) or []), 5) * 2  # up to +10
-    score += min(len(brief.proofPoints), 2) * 1  # up to +2
+    score += min(len(getattr(brief, "proofPoints", []) or []), 2) * 1  # up to +2
 
     # Brief confidence (0–100 → up to +8)
     score += int(brief.confidenceScore * 0.08)
