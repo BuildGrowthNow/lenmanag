@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urljoin, urlparse
 
 if TYPE_CHECKING:
     from app.schemas.extraction import BrandAssetCue
@@ -59,15 +60,40 @@ def get_best_asset_url(cue: BrandAssetCue | dict[str, Any]) -> str | None:
     """
     if isinstance(cue, dict):
         cached = cue.get("cachedUrl") or cue.get("cachedUri")
-        source = cue.get("assetUrl") or cue.get("value") or cue.get("sourceUrl")
+        asset, value, page, legacy = cue.get("assetUrl"), cue.get("value"), cue.get("pageUrl"), cue.get("sourceUrl")
     else:
         cached = getattr(cue, "cachedUrl", None) or cue.cachedUri
-        source = getattr(cue, "assetUrl", None) or cue.value or cue.sourceUrl
+        asset, value, page, legacy = getattr(cue, "assetUrl", None), cue.value, getattr(cue, "pageUrl", None), cue.sourceUrl
 
     # Prefer the cached URL when it is valid, then fall back to the source URL.
     # A malformed cached/relative value must not prevent a valid source asset
     # from being selected.
-    return validate_asset_url(cached) or validate_asset_url(source)
+    if validate_asset_url(cached):
+        return validate_asset_url(cached)
+    for candidate in (asset, value):
+        resolved = _resolve_asset_candidate(candidate, page)
+        if resolved:
+            return resolved
+    # sourceUrl is legacy page provenance, never an asset merely because it is
+    # absolute. Only accept it when its path demonstrably identifies an asset.
+    return _resolve_asset_candidate(legacy, None, require_asset_path=True)
+
+
+def _resolve_asset_candidate(value: str | None, page_url: str | None, require_asset_path: bool = False) -> str | None:
+    if not value:
+        return None
+    resolved = urljoin(page_url, value) if page_url and not value.startswith(("http://", "https://")) else value
+    resolved = validate_asset_url(resolved)
+    if not resolved:
+        return None
+    path = urlparse(resolved).path.lower()
+    asset_path = any(path.endswith(ext) for ext in (".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".woff", ".woff2", ".ttf", ".otf"))
+    if require_asset_path and not asset_path:
+        return None
+    # A root/homepage URL cannot be an image asset even when stale data labels it so.
+    if not path or path == "/":
+        return None
+    return resolved
 
 
 def get_best_asset_urls(

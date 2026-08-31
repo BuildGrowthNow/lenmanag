@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from typing import Any
 import boto3
 
 from app.core.celery_app import celery_app
@@ -272,6 +273,10 @@ def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id:
             {
                 "$set": {
                     "screenshotRefs": [metadata.model_dump()],
+                    # Runtime health is authoritative. A captured screenshot is
+                    # not evidence that the generated application works.
+                    "qaStatus": "fail" if _metadata_has_fatal_runtime_failure(metadata) else "warn",
+                    "readinessStatus": "blocked" if _metadata_has_fatal_runtime_failure(metadata) else "ready_for_review",
                     "updatedAt": datetime.now(timezone.utc),
                 }
             },
@@ -314,7 +319,7 @@ def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id:
             "run_screenshot_task: screenshot captured and saved for site %s", site_id
         )
         if generation_run_id:
-            await _record_runtime_qa_result(generation_run_id, site_id, "completed")
+            await _record_runtime_qa_result(generation_run_id, site_id, "failed" if _metadata_has_fatal_runtime_failure(metadata) else "completed")
 
     try:
         _run(_async_runner())
@@ -359,6 +364,14 @@ async def _record_runtime_qa_result(run_id: str, site_id: str, status: str) -> N
         await lead_repository.update_generation_stage_if_latest(
             refreshed["leadId"], run_id, "ready" if not failed else "needs_attention"
         )
+
+
+def _metadata_has_fatal_runtime_failure(metadata: Any) -> bool:
+    try:
+        runtime = json.loads(metadata.notes or "{}")
+    except (TypeError, ValueError):
+        return True
+    return bool(runtime.get("fatalRuntimeFailures")) or runtime.get("runtimeStatus") == "failed"
 
 
 @celery_app.task(

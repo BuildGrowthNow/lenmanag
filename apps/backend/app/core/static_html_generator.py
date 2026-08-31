@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess
+import tempfile
+from html.parser import HTMLParser
 from typing import Any
 
 import boto3
@@ -93,7 +96,18 @@ async def generate_static_html(
             logger.error(f"[DEBUG] HTML block length would be: {html_end - html_start}")
         raise
 
-    # Upload CSS and JS to S3
+    _validate_generated_document(html_content, css_content, js_content)
+    if not _javascript_is_valid(js_content):
+        js_content = await _repair_javascript(llm, html_content, js_content, variant_type)
+        _validate_generated_document(html_content, css_content, js_content)
+        if not _javascript_is_valid(js_content):
+            raise ValueError("Generated JavaScript remains invalid after repair; refusing to publish")
+
+    # The model never owns delivery URLs. Remove any relative/generated asset
+    # references before the backend deterministically injects the final URLs.
+    html_content = _remove_generated_asset_references(html_content)
+
+    # Upload CSS and JS to S3 only after every validation above has succeeded.
     settings = get_settings()
     logger.info(
         f"[DEBUG] S3 config: bucket={settings.asset_s3_bucket}, "
@@ -122,7 +136,12 @@ async def generate_static_html(
             "</head>", f'<link rel="stylesheet" href="{css_url}">\n</head>'
         )
     runtime_bootstrap = """<script>
-window.__LENMANAG_RUNTIME__ = { initialized: false, animationSetupComplete: false, errors: [] };
+window.__LENMANAG_RUNTIME__ = { initialized: false, animationSetupComplete: false, errors: [], jsLoaded: false };
+window.__LENMANAG_STATIC_READY__ = false;
+window.__LENMANAG_RUNTIME__.markInitialized = function () {
+  this.initialized = true;
+  this.animationSetupComplete = true;
+};
 window.addEventListener('error', function (event) {
   window.__LENMANAG_RUNTIME__.errors.push(event.error?.message || event.message || 'Runtime error');
 });
@@ -132,9 +151,7 @@ window.addEventListener('unhandledrejection', function (event) {
 </script>"""
     html_final = html_final.replace("</head>", runtime_bootstrap + "\n</head>")
     if js_url:
-        html_final = html_final.replace(
-            "</body>", f'<script src="{js_url}" onerror="window.__LENMANAG_RUNTIME__.errors.push(\'Failed to load generated JavaScript\')"></script>\n</body>'
-        )
+        html_final = html_final.replace("</body>", f'<script src="{js_url}" onload="window.__LENMANAG_RUNTIME__.jsLoaded=true" onerror="window.__LENMANAG_RUNTIME__.errors.push(\'Failed to load generated JavaScript\')"></script>\n</body>')
     # Keep local/test previews functional when object storage is unavailable.
     if not css_url:
         html_final = html_final.replace(
@@ -143,17 +160,13 @@ window.addEventListener('unhandledrejection', function (event) {
     if not js_url:
         html_final = html_final.replace(
             "</body>",
-            f"<script data-generated-site-js>{js_content}</script>\n</body>",
+            f"<script data-generated-site-js>{js_content}</script><script>window.__LENMANAG_RUNTIME__.jsLoaded=true;</script>\n</body>",
         )
     # Register after generated code so DOMContentLoaded means generated setup has run.
     runtime_ready = """<script>
 document.addEventListener('DOMContentLoaded', function () {
   var runtime = window.__LENMANAG_RUNTIME__;
-  if (runtime && runtime.errors.length === 0) {
-    runtime.initialized = true;
-    runtime.animationSetupComplete = true;
-  }
-  window.__LENMANAG_STATIC_READY__ = !!(runtime && runtime.initialized);
+  window.__LENMANAG_STATIC_READY__ = !!(runtime && runtime.jsLoaded && runtime.initialized && runtime.animationSetupComplete && runtime.errors.length === 0);
 });
 </script>\n</body>"""
     html_final = html_final.replace("</body>", runtime_ready)
@@ -268,6 +281,7 @@ REQUIREMENTS:
    - Mobile menu toggle
    - {_animation_notes}
    - Form validation if contact form present
+   - Call window.__LENMANAG_RUNTIME__.markInitialized() only after every required interaction has been bound and animation setup has completed. This call is mandatory.
 
 5. Design Quality:
    - Match the visual style and creative direction
@@ -316,91 +330,82 @@ Generate high-quality, production-ready code that implements this brief faithful
 
 def _parse_llm_response(response: str) -> tuple[str, str, str]:
     """Parse HTML, CSS, JS from LLM response."""
-
-    # Extract HTML - try multiple patterns with increasing leniency
-    html_match = None
-    # Pattern 1: Standard with explicit newline
-    html_match = re.search(r"```html\s*\n(.*?)\n```", response, re.DOTALL)
-    if not html_match:
-        # Pattern 2: Any whitespace after marker
-        html_match = re.search(r"```html\s+(.*?)```", response, re.DOTALL)
-    if not html_match:
-        # Pattern 3: No whitespace requirement, greedy
-        html_match = re.search(r"```html(.*?)```", response, re.DOTALL)
-    if not html_match:
-        # Pattern 4: Manual extraction if markers exist
-        html_start_pos = response.find("```html")
-        html_end_pos = (
-            response.find("```", html_start_pos + 7) if html_start_pos >= 0 else -1
-        )
-        if html_start_pos >= 0 and html_end_pos >= 0:
-            html = response[html_start_pos + 7 : html_end_pos].strip()
-            logger.info(f"[DEBUG] Manual HTML extraction: {len(html)} chars")
-        else:
-            raise ValueError("No HTML code block found in LLM response")
-    else:
-        html = html_match.group(1).strip()
-
-    # Extract CSS - same pattern approach with truncation handling
-    css_match = None
-    css_match = re.search(r"```css\s*\n(.*?)\n```", response, re.DOTALL)
-    if not css_match:
-        css_match = re.search(r"```css\s+(.*?)```", response, re.DOTALL)
-    if not css_match:
-        css_match = re.search(r"```css(.*?)```", response, re.DOTALL)
-    if not css_match:
-        # Pattern 4: Manual extraction if markers exist
-        css_start_pos = response.find("```css")
-        if css_start_pos >= 0:
-            css_end_pos = response.find("```", css_start_pos + 6)
-            if css_end_pos >= 0:
-                css = response[css_start_pos + 6 : css_end_pos].strip()
-                logger.info(f"[DEBUG] Manual CSS extraction: {len(css)} chars")
-            else:
-                # CSS block started but no closing marker (truncated response)
-                # Take everything from CSS start to end of response
-                css = response[css_start_pos + 6 :].strip()
-                logger.warning(
-                    f"[DEBUG] CSS truncated (no closing marker), extracted {len(css)} chars"
-                )
-        else:
-            raise ValueError("No CSS code block found in LLM response")
-    else:
-        css = css_match.group(1).strip()
-
-    # Extract JS - same pattern approach with truncation handling
-    js_match = None
-    js_match = re.search(r"```(?:javascript|js)\s*\n(.*?)\n```", response, re.DOTALL)
-    if not js_match:
-        js_match = re.search(r"```(?:javascript|js)\s+(.*?)```", response, re.DOTALL)
-    if not js_match:
-        js_match = re.search(r"```(?:javascript|js)(.*?)```", response, re.DOTALL)
-    if not js_match:
-        # Pattern 4: Manual extraction if markers exist
-        js_start_pos = response.find("```javascript")
-        if js_start_pos < 0:
-            js_start_pos = response.find("```js")
-            js_marker_len = 5 if js_start_pos >= 0 else 0
-        else:
-            js_marker_len = 13
-        if js_start_pos >= 0:
-            js_end_pos = response.find("```", js_start_pos + js_marker_len)
-            if js_end_pos >= 0:
-                js = response[js_start_pos + js_marker_len : js_end_pos].strip()
-                logger.info(f"[DEBUG] Manual JS extraction: {len(js)} chars")
-            else:
-                # JS block started but no closing marker (truncated)
-                js = response[js_start_pos + js_marker_len :].strip()
-                logger.warning(
-                    f"[DEBUG] JS truncated (no closing marker), extracted {len(js)} chars"
-                )
-        else:
-            logger.warning("No JavaScript code block found, using minimal JS")
-            js = "// Minimal script\ndocument.addEventListener('DOMContentLoaded', () => {});"
-    else:
-        js = js_match.group(1).strip()
-
+    blocks = re.findall(r"```([A-Za-z0-9_-]+)[ \t]*\r?\n(.*?)\r?\n```", response, re.DOTALL)
+    found = {language.lower(): content.strip() for language, content in blocks}
+    html, css = found.get("html"), found.get("css")
+    js = found.get("javascript") or found.get("js")
+    if not html or not css or not js:
+        # Any opening fence without a matching close is a hard failure, not a
+        # permission to upload a partial page.
+        raise ValueError("Expected closed html, css, and javascript code blocks; response was truncated or malformed")
     return html, css, js
+
+
+class _DocumentStructureParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.stack: list[str] = []
+        self.seen: set[str] = set()
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.seen.add(tag.lower())
+        if tag.lower() not in {"meta", "link", "img", "input", "br", "hr", "source", "area", "base", "embed", "param", "track", "wbr"}:
+            self.stack.append(tag.lower())
+    def handle_endtag(self, tag: str) -> None:
+        if not self.stack or self.stack[-1] != tag.lower():
+            raise ValueError(f"Malformed HTML closing tag: </{tag}>")
+        self.stack.pop()
+
+
+def _validate_generated_document(html: str, css: str, js: str) -> None:
+    if "```" in html or "```" in css or "```" in js:
+        raise ValueError("Markdown fence leaked into generated asset")
+    if not html.lstrip().lower().startswith("<!doctype html"):
+        raise ValueError("Generated HTML must begin with <!DOCTYPE html>")
+    parser = _DocumentStructureParser()
+    parser.feed(html)
+    parser.close()
+    if parser.stack or not {"html", "head", "body"}.issubset(parser.seen) or not re.search(r"</html>\s*$", html, re.I):
+        raise ValueError("Generated HTML is structurally incomplete")
+    if not css.strip() or css.count("{") != css.count("}") or css.rstrip().endswith(("{", ",", ":")):
+        raise ValueError("Generated CSS is structurally incomplete")
+    if not js.strip():
+        raise ValueError("Generated JavaScript is empty")
+
+
+def _javascript_is_valid(script: str) -> bool:
+    """Use Node's real parser; never infer JavaScript validity from regex."""
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as handle:
+            handle.write(script)
+            filename = handle.name
+        result = subprocess.run(["node", "--check", filename], capture_output=True, text=True, timeout=10, check=False)
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        logger.exception("JavaScript validator unavailable")
+        return False
+    finally:
+        try:
+            import os
+            os.unlink(filename)
+        except (UnboundLocalError, OSError):
+            pass
+
+
+async def _repair_javascript(llm: Any, html: str, invalid_js: str, variant_type: str) -> str:
+    prompt = f"""Repair this invalid generated JavaScript for a {variant_type} static site. Return ONLY one closed ```javascript block. Preserve its interaction intent and selectors from the finalized HTML. Do not use libraries. Call window.__LENMANAG_RUNTIME__.markInitialized() after binding interactions.\n\nHTML:\n{html}\n\nINVALID SCRIPT:\n{invalid_js}"""
+    for _ in range(2):
+        response = await llm.generate_text(prompt=prompt, temperature=0.2, max_tokens=8000)
+        match = re.search(r"```(?:javascript|js)[ \t]*\r?\n(.*?)\r?\n```", response, re.DOTALL)
+        if match and _javascript_is_valid(match.group(1).strip()):
+            return match.group(1).strip()
+    raise ValueError("JavaScript repair exhausted without a valid closed script")
+
+
+def _remove_generated_asset_references(html: str) -> str:
+    # Preserve absolute third-party assets (e.g. a verified font loader) but
+    # remove all relative stylesheet/script delivery references.
+    html = re.sub(r"\s*<link\b(?=[^>]*\brel\s*=\s*['\"]?stylesheet)(?=[^>]*\bhref\s*=\s*['\"](?!https?://)[^'\"]+\.css(?:\?[^'\"]*)?['\"])[^>]*>", "", html, flags=re.I)
+    return re.sub(r"\s*<script\b(?=[^>]*\bsrc\s*=\s*['\"](?!https?://)[^'\"]+\.js(?:\?[^'\"]*)?['\"])[^>]*>\s*</script>", "", html, flags=re.I)
 
 
 def _upload_to_s3(

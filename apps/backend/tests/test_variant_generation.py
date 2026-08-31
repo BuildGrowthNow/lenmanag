@@ -239,7 +239,7 @@ body { margin: 0; }
 console.log('test');
 ```
 """
-        with pytest.raises(ValueError, match="No HTML code block"):
+        with pytest.raises(ValueError, match="Expected closed"):
             _parse_llm_response(response)
 
     def test_parse_llm_response_missing_css(self) -> None:
@@ -255,11 +255,11 @@ console.log('test');
 console.log('test');
 ```
 """
-        with pytest.raises(ValueError, match="No CSS code block"):
+        with pytest.raises(ValueError, match="Expected closed"):
             _parse_llm_response(response)
 
-    def test_parse_llm_response_missing_js_uses_default(self) -> None:
-        """Test that missing JS block uses minimal JS placeholder."""
+    def test_parse_llm_response_missing_js_is_rejected(self) -> None:
+        """A missing JavaScript block must never publish a fake no-op script."""
         from app.core.static_html_generator import _parse_llm_response
 
         response = """
@@ -271,11 +271,8 @@ console.log('test');
 body { margin: 0; }
 ```
 """
-        html, css, js = _parse_llm_response(response)
-
-        assert "<!DOCTYPE html>" in html
-        assert "margin: 0" in css
-        assert "Minimal script" in js or "DOMContentLoaded" in js
+        with pytest.raises(ValueError, match="Expected closed"):
+            _parse_llm_response(response)
 
     def test_parse_llm_response_js_alternate_syntax(self) -> None:
         """Test parsing JS with ```js instead of ```javascript."""

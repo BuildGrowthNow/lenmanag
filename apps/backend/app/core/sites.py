@@ -2855,6 +2855,11 @@ class SiteRepository:
         """Replace the provisional score after visual QA and runtime checks."""
         score = max(0, min(100, int(quality_score)))
         runtime = qa_metadata.get("runtimeQA") or {}
+        fatal_runtime = bool(runtime.get("fatalRuntimeFailures")) or runtime.get("runtimeStatus") == "failed"
+        if fatal_runtime:
+            # Vision availability or a prior fallback score can never mask a
+            # parse/load/init failure in a public preview.
+            score = 0
         if runtime:
             penalties = 0
             if runtime.get("consoleErrors") or runtime.get("pageErrors"):
@@ -2891,6 +2896,8 @@ class SiteRepository:
             "screenshotQA": qa_metadata,
             "updatedAt": now,
         }
+        if fatal_runtime:
+            update.update({"qaStatus": "fail", "readinessStatus": "blocked"})
         database = get_database()
         if database is None:
             async with self._memory_lock:

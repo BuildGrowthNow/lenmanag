@@ -63,7 +63,7 @@ def capture_site_screenshot(
     # ── Take screenshot via Playwright ──────────────────────────────────────
     jpeg_bytes: bytes | None = None
     mobile_bytes: bytes | None = None
-    qa: dict[str, object] = {"consoleErrors": [], "pageErrors": [], "failedRequests": [], "hiddenAfterScroll": 0, "mobileMenu": "not-tested"}
+    qa: dict[str, object] = {"consoleErrors": [], "pageErrors": [], "failedRequests": [], "assetFailures": [], "hiddenAfterScroll": 0, "mobileMenu": "not-tested"}
     try:
         with sync_playwright() as pw:
             browser = pw.chromium.launch(
@@ -82,6 +82,15 @@ def capture_site_screenshot(
                 page.on("console", lambda msg: qa["consoleErrors"].append(msg.text) if msg.type == "error" else None)
                 page.on("pageerror", lambda exc: page_errors.append(str(exc)))
                 page.on("requestfailed", lambda req: qa["failedRequests"].append(req.url))
+                def inspect_response(response):
+                    resource = response.request.resource_type
+                    if resource not in {"script", "stylesheet"}:
+                        return
+                    content_type = response.headers.get("content-type", "").lower()
+                    valid_type = (resource == "script" and ("javascript" in content_type or "ecmascript" in content_type)) or (resource == "stylesheet" and "text/css" in content_type)
+                    if response.status >= 400 or not valid_type:
+                        qa["assetFailures"].append({"url": response.url, "status": response.status, "contentType": content_type, "resource": resource})
+                page.on("response", inspect_response)
                 page.goto(preview_url, wait_until="networkidle", timeout=30_000)
                 frame = page.locator("iframe").first
                 if frame.count() > 0:
@@ -101,6 +110,10 @@ def capture_site_screenshot(
                 qa["horizontalOverflow"] = page.evaluate("document.documentElement.scrollWidth > window.innerWidth")
                 qa["fontsReady"] = page.evaluate("document.fonts ? document.fonts.status === 'loaded' : true")
                 qa["hiddenAfterScroll"] = page.locator("[data-animate], .animate-on-scroll").evaluate_all("els => els.filter(el => getComputedStyle(el).opacity === '0' || getComputedStyle(el).visibility === 'hidden').length")
+                runtime = page.evaluate("""() => ({ ready: window.__LENMANAG_STATIC_READY__ === true, runtime: window.__LENMANAG_RUNTIME__ || null, mainVisible: !!document.querySelector('main') && document.querySelector('main').getBoundingClientRect().height > 0 })""")
+                qa["readiness"] = runtime.get("ready")
+                qa["runtimeInitializationError"] = (runtime.get("runtime") or {}).get("errors") or []
+                qa["mainContentRendered"] = runtime.get("mainVisible")
                 jpeg_bytes = page.screenshot(full_page=True, type="jpeg", quality=85)
                 mobile_context = browser.new_context(viewport=_MOBILE_VIEWPORT)
                 mobile = mobile_context.new_page()
@@ -113,7 +126,10 @@ def capture_site_screenshot(
                 menu = mobile.locator("button[aria-label*='menu' i], button:has-text('Menu'), [data-menu-toggle]").first
                 if menu.count() > 0:
                     menu.click()
-                    qa["mobileMenu"] = "opened" if mobile.locator("nav:visible, [role='menu']:visible, .mobile-menu:visible").count() > 0 else "clicked"
+                    opened = mobile.locator("nav:visible, [role='menu']:visible, .mobile-menu:visible").count() > 0
+                    menu.click()
+                    closed = mobile.locator("nav:visible, [role='menu']:visible, .mobile-menu:visible").count() == 0
+                    qa["mobileMenu"] = "passed" if opened and closed else "failed"
                 mobile_bytes = mobile.screenshot(full_page=True, type="jpeg", quality=85)
                 mobile.close()
                 mobile_context.close()
@@ -167,6 +183,8 @@ def capture_site_screenshot(
     ).rstrip("/")
     screenshot_url = f"{backend_public_url}/api/v1/screenshots/{site_id}/preview.jpg"
 
+    qa["fatalRuntimeFailures"] = _fatal_runtime_failures(qa)
+    qa["runtimeStatus"] = "failed" if qa["fatalRuntimeFailures"] else "passed"
     return SiteScreenshotMetadata(
         id=uuid4().hex,
         label="preview",
@@ -176,3 +194,18 @@ def capture_site_screenshot(
         height=_VIEWPORT_HEIGHT,
         notes=json.dumps({**qa, "mobileUrl": f"{backend_public_url}/api/v1/screenshots/{site_id}/mobile.jpg" if mobile_bytes else None}),
     )
+
+
+def _fatal_runtime_failures(qa: dict[str, object]) -> list[str]:
+    """Deterministic health gate; vision scoring is deliberately irrelevant."""
+    failures: list[str] = []
+    if qa.get("consoleErrors"): failures.append("console_errors")
+    if qa.get("pageErrors"): failures.append("page_errors")
+    if qa.get("failedRequests"): failures.append("failed_requests")
+    if qa.get("assetFailures"): failures.append("generated_asset_request_or_mime")
+    if qa.get("readiness") is not True: failures.append("readiness_missing_or_false")
+    if qa.get("runtimeInitializationError"): failures.append("runtime_initialization_error")
+    if qa.get("mainContentRendered") is not True: failures.append("main_content_not_rendered")
+    if qa.get("mobileMenu") == "failed": failures.append("mobile_menu_failed")
+    if qa.get("hiddenAfterScroll"): failures.append("content_hidden_after_scroll")
+    return failures

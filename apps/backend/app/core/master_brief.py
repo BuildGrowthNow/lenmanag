@@ -488,10 +488,22 @@ def _build_master_brief_from_response(
 
         logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
         if logos:
-            ranked_logos = sorted(logos, key=lambda item: item.confidence, reverse=True)
-            brand_assets.logoUrl = get_best_asset_url(ranked_logos[0])
-            brand_assets.logoVariants = [url for url in (get_best_asset_url(item) for item in ranked_logos) if url]
-            for logo in ranked_logos:
+            # A high-confidence stale homepage record is not a logo. Rank only
+            # usable asset URLs, then penalize the service/icon names commonly
+            # misclassified by crawlers.
+            ranked_logos = sorted(
+                logos,
+                key=lambda item: (
+                    bool(get_best_asset_url(item)),
+                    -any(token in f"{item.label} {item.value}".lower() for token in ("water.svg", "settings", "valve", "favicon", "icon")),
+                    item.confidence,
+                ),
+                reverse=True,
+            )
+            usable_logos = [item for item in ranked_logos if get_best_asset_url(item)]
+            brand_assets.logoUrl = get_best_asset_url(usable_logos[0]) if usable_logos else None
+            brand_assets.logoVariants = list(dict.fromkeys(url for url in (get_best_asset_url(item) for item in usable_logos) if url))
+            for logo in usable_logos:
                 url = get_best_asset_url(logo)
                 hint = f"{logo.label} {logo.note or ''} {url or ''}".lower()
                 if url and not brand_assets.logoLightUrl and any(token in hint for token in ("light", "white", "inverse")):
