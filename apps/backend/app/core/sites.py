@@ -1977,7 +1977,10 @@ def _quality_score(
     # Brief quality (up to +20)
     if brief.approvalState == "approved":
         score += 8
-    score += min(len(brief.recommendedSections), 5) * 2  # up to +10
+    # MasterBrief stores the approved content blueprint as `sections`.
+    # Keep this tolerant of older brief objects so persistence cannot fail
+    # while calculating a fallback quality score.
+    score += min(len(getattr(brief, "sections", []) or []), 5) * 2  # up to +10
     score += min(len(brief.proofPoints), 2) * 1  # up to +2
 
     # Brief confidence (0–100 → up to +8)
