@@ -2572,12 +2572,17 @@ def crawl_website(
 
 def _extract_contact_info(page_inventory: list[dict[str, Any]]) -> dict[str, Any]:
     """Extract source-backed contact values without manufacturing a fallback."""
-    text = "\n".join(str(page.get("cleanedText") or page.get("summary") or "") for page in page_inventory)
+    # Telephone/mailto values are commonly absent from visual text but retained
+    # in crawled markup, so inspect both source and extracted text.
+    text = "\n".join(
+        "\n".join(str(page.get(field) or "") for field in ("cleanedText", "summary", "rawHtml", "html"))
+        for page in page_inventory
+    )
     source = next((str(page.get("url")) for page in page_inventory if "contact" in str(page.get("url", "")).lower()), None)
     source = source or (str(page_inventory[0].get("url")) if page_inventory else None)
     phones = list(dict.fromkeys(re.findall(r"(?:\+1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}", text)))
     normalised = [re.sub(r"[^\d+]", "", value) for value in phones]
-    emergency = next((p for p in normalised if re.search(r"emergency[^\n]{0,60}" + re.escape(p[-4:]), text, re.I)), None)
+    emergency = next((p for p in normalised if re.search(r"emergency.{0,120}" + re.escape(p[-4:]), text, re.I | re.S)), None)
     office = next((p for p in normalised if p != emergency), None)
     emails = re.findall(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text, re.I)
     return {"officePhone": office, "emergencyPhone": emergency, "email": emails[0] if emails else None, "contactUrl": source, "sourceUrl": source, "confidence": 80 if (office or emergency or emails) else 0}
