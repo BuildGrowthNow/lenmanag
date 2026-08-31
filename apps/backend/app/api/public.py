@@ -97,8 +97,8 @@ async def get_redesign_page(
 ) -> ResponseEnvelope[RedesignPageData]:
     """
     Public client-facing endpoint: returns data for the /redesign/{slug} page.
-    Looks up the saved operator selection by redesignSlug. The public payload is
-    intentionally small and never exposes the full GeneratedSite records.
+    Looks up the lead by redesignSlug. The public payload is intentionally small
+    and exposes all current, usable strategy variants without full site records.
     """
     database = get_database()
     if database is None:
