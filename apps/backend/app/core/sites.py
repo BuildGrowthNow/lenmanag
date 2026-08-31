@@ -58,6 +58,7 @@ from app.schemas.site import (
     SiteReviewRecord,
     SiteReviewRequest,
     SiteScreenshotMetadata,
+    SiteSection,
     SiteSourceAttribution,
     SiteToken,
     ThemeLibraryResponse,
