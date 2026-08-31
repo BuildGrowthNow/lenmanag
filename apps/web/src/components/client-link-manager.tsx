@@ -8,7 +8,7 @@ import { getClientShare, getVariantsForLead, saveClientShare } from "@/lib/api/s
 import type { GeneratedSite } from "@/lib/types";
 
 function eligible(site: GeneratedSite) {
-  return site.compilationStatus === "success" && site.readinessStatus !== "blocked" && Boolean(site.previewUrl || site.previewSlug);
+  return site.compilationStatus !== "failed" && site.readinessStatus !== "blocked" && Boolean(site.previewUrl || site.previewSlug);
 }
 
 export function ClientLinkManager({ leadId }: { leadId: string }) {

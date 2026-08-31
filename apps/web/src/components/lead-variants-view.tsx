@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { ExternalLink, RefreshCw, CheckCircle2, Clock, AlertTriangle, XCircle } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -268,9 +269,14 @@ export function LeadVariantsView({ leadId }: VariantsViewProps) {
     <Card className="border-line bg-panel">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">Site Variants ({variants.length})</CardTitle>
-        <Button variant="ghost" size="sm" onClick={refreshVariants}>
-          <RefreshCw className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href={`/compare/${leadId}`} target="_blank" className="inline-flex items-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-accent hover:bg-accent/20">
+            Compare variants ↗
+          </Link>
+          <Button variant="ghost" size="sm" onClick={refreshVariants}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
