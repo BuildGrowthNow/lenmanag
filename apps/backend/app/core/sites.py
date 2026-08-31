@@ -2005,7 +2005,7 @@ def _quality_score(
         score += 3
 
     # Visual redesign briefs present (up to +4)
-    score += min(len(brief.visualRedesign), 2) * 2
+    score += min(len(getattr(brief, "visualRedesign", []) or []), 2) * 2
 
     # Diversity bonus (up to +3)
     score += int(diversity_score * 0.06)
