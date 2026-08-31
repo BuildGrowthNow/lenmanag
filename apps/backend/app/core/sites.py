@@ -2819,8 +2819,38 @@ class SiteRepository:
     async def persist_visual_quality(
         self, site_id: str, quality_score: int, qa_metadata: dict[str, Any]
     ) -> None:
-        """Replace the provisional completeness score after visual QA."""
+        """Replace the provisional score after visual QA and runtime checks."""
         score = max(0, min(100, int(quality_score)))
+        runtime = qa_metadata.get("runtimeQA") or {}
+        if runtime:
+            penalties = 0
+            if runtime.get("consoleErrors") or runtime.get("pageErrors"):
+                penalties += 20
+            if runtime.get("failedRequests"):
+                penalties += 15
+            if runtime.get("brokenImages") or runtime.get("imageLoadTimeout"):
+                penalties += 15
+            if runtime.get("hiddenAfterScroll"):
+                penalties += 15
+            if runtime.get("horizontalOverflow"):
+                penalties += 10
+            if runtime.get("fontsReady") is False:
+                penalties += 10
+            score = max(0, score - penalties)
+            qa_metadata = {
+                **qa_metadata,
+                "qualityComponents": {
+                    "brandFidelity": int(qa_metadata.get("brandFidelity", score)),
+                    "visualImpact": int(qa_metadata.get("visualImpact", score)),
+                    "typography": int(qa_metadata.get("typography", score)),
+                    "layoutComposition": int(qa_metadata.get("layoutComposition", score)),
+                    "imagery": int(qa_metadata.get("imagery", score)),
+                    "responsiveness": 0 if runtime.get("horizontalOverflow") else 100,
+                    "runtimeHealth": 0 if penalties else 100,
+                    "contentCompleteness": 0 if runtime.get("hiddenAfterScroll") else 100,
+                },
+                "runtimePenalty": penalties,
+            }
         now = _now()
         update = {
             "qualityScore": score,

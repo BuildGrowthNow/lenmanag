@@ -89,7 +89,13 @@ def capture_site_screenshot(
                     if src:
                         page.goto(urljoin(preview_url, src), wait_until="networkidle", timeout=30_000)
                 page.evaluate("document.fonts ? document.fonts.ready : Promise.resolve()")
-                page.wait_for_function("Array.from(document.images).every((img) => img.complete)", timeout=15_000)
+                try:
+                    page.wait_for_function("Array.from(document.images).every((img) => img.complete)", timeout=15_000)
+                except Exception:
+                    # Broken images must be reported in QA, not prevent the
+                    # screenshot and the rest of the runtime checks.
+                    qa["imageLoadTimeout"] = True
+                qa["brokenImages"] = page.locator("img").evaluate_all("els => els.filter(img => !img.complete || !img.naturalWidth).length")
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 page.wait_for_timeout(500)
                 qa["horizontalOverflow"] = page.evaluate("document.documentElement.scrollWidth > window.innerWidth")
@@ -100,7 +106,10 @@ def capture_site_screenshot(
                 mobile = mobile_context.new_page()
                 mobile.goto(page.url, wait_until="networkidle", timeout=30_000)
                 mobile.evaluate("document.fonts ? document.fonts.ready : Promise.resolve()")
-                mobile.wait_for_function("Array.from(document.images).every((img) => img.complete)", timeout=15_000)
+                try:
+                    mobile.wait_for_function("Array.from(document.images).every((img) => img.complete)", timeout=15_000)
+                except Exception:
+                    qa["mobileImageLoadTimeout"] = True
                 menu = mobile.locator("button[aria-label*='menu' i], button:has-text('Menu'), [data-menu-toggle]").first
                 if menu.count() > 0:
                     menu.click()

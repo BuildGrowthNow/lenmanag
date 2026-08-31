@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone
 import boto3
@@ -288,6 +289,11 @@ def run_screenshot_task(self, site_id: str, preview_url: str) -> None:
                     quality_threshold=settings.visual_redesign_quality_threshold,
                 )
                 if qa.get("available") and qa.get("qualityScore") is not None:
+                    try:
+                        runtime_qa = json.loads(metadata.notes or "{}")
+                    except (TypeError, ValueError):
+                        runtime_qa = {}
+                    qa["runtimeQA"] = runtime_qa
                     await site_repository.persist_visual_quality(
                         site_id, int(qa["qualityScore"]), qa
                     )
