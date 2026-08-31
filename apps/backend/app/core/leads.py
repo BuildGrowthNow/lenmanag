@@ -1604,13 +1604,16 @@ class LeadRepository:
         if any(site is None for site in selected):
             raise ValueError("Every selected website must belong to this lead.")
         if any(
-            site.compilationStatus != "success"
+            (
+                site.compilationStatus not in {"success", "completed"}
+                and not site.staticHtml
+            )
             or not (site.previewUrl or site.previewSlug)
             or site.readinessStatus == "blocked"
             for site in selected
             if site is not None
         ):
-            raise ValueError("Only compiled, available, non-blocked websites can be shared.")
+            raise ValueError("Only available, non-blocked websites with a preview can be shared.")
 
         now = _now()
         share = {
