@@ -260,6 +260,7 @@ def _lead_doc_to_detail(
         detectedWebsiteUrl=doc.get("detectedWebsiteUrl"),
         status=doc["status"],
         pipelineStage=doc.get("pipelineStage", "new"),
+        latestGenerationRunId=doc.get("latestGenerationRunId"),
         pipelineMode=doc.get("pipelineMode", "auto"),
         pipelineStatusDetail=doc.get("pipelineStatusDetail"),
         industry=doc.get("industry"),
@@ -291,6 +292,7 @@ def _lead_doc_to_list_item(
         normalizedDomain=doc["normalizedDomain"],
         status=doc["status"],
         pipelineStage=doc.get("pipelineStage", "new"),
+        latestGenerationRunId=doc.get("latestGenerationRunId"),
         pipelineMode=doc.get("pipelineMode", "auto"),
         pipelineStatusDetail=doc.get("pipelineStatusDetail"),
         industry=doc.get("industry"),
@@ -1539,7 +1541,7 @@ class LeadRepository:
                     return None
                 updated = self._apply_patch(doc, patch)
                 self._memory[lead_id] = updated
-                return _lead_doc_to_detail(updated, self._jobs_for_lead_memory(lead_id))
+            return _lead_doc_to_detail(updated, self._jobs_for_lead_memory(lead_id))
 
         query: dict[str, Any] = {"id": lead_id}
         if user_id:
@@ -1548,7 +1550,6 @@ class LeadRepository:
         if doc is None:
             return None
 
-        # Optimistic locking: check version if provided
         expected_version = getattr(patch, "expectedVersion", None)
         if expected_version is not None:
             current_version = int(doc.get("version", 1))
@@ -1558,19 +1559,32 @@ class LeadRepository:
                 )
 
         updated = self._apply_patch(doc, patch)
-
-        # Use version in query for atomic check-and-update
         result = await database["leads"].replace_one(
             {"id": lead_id, "version": doc.get("version", 1)}, updated
         )
-
         if result.matched_count == 0:
-            # Version mismatch - concurrent modification
-            raise ValueError(
-                "Concurrent modification detected. Please refresh and try again."
-            )
-
+            raise ValueError("Concurrent modification detected. Please refresh and try again.")
         return await self.get_lead(lead_id, user_id=user_id)
+
+    async def update_generation_stage_if_latest(
+        self, lead_id: str, generation_run_id: str, stage: str
+    ) -> bool:
+        """Update pipeline stage only while this run is still the lead's latest run."""
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                doc = self._memory.get(lead_id)
+                if not doc or doc.get("latestGenerationRunId") != generation_run_id:
+                    return False
+                doc["pipelineStage"] = stage
+                doc["version"] = int(doc.get("version", 1)) + 1
+                doc["updatedAt"] = _now()
+                return True
+        result = await database["leads"].update_one(
+            {"id": lead_id, "latestGenerationRunId": generation_run_id},
+            {"$set": {"pipelineStage": stage, "updatedAt": _now()}, "$inc": {"version": 1}},
+        )
+        return result.modified_count == 1
 
     async def save_client_share(
         self, lead_id: str, site_ids: list[str], user_id: str
@@ -1681,6 +1695,8 @@ class LeadRepository:
             updated["pipelineMode"] = patch.pipelineMode
         if patch.pipelineStage is not None:
             updated["pipelineStage"] = patch.pipelineStage
+        if patch.latestGenerationRunId is not None:
+            updated["latestGenerationRunId"] = patch.latestGenerationRunId
         if patch.generationTypes is not None:
             updated["generationTypes"] = patch.generationTypes
         updated["missingFields"] = _missing_fields(updated)
@@ -1711,6 +1727,7 @@ class LeadRepository:
         step: str,
         metadata: dict[str, Any] | None = None,
         error_message: str | None = None,
+        job_id: str | None = None,
     ) -> JobSummary:
         await self._maybe_ensure_indexes()
         job = await self._create_job(
@@ -1721,6 +1738,7 @@ class LeadRepository:
             step=step,
             metadata=metadata,
             error_message=error_message,
+            job_id=job_id,
         )
         return job
 
@@ -1734,10 +1752,11 @@ class LeadRepository:
         step: str,
         metadata: dict[str, Any] | None = None,
         error_message: str | None = None,
+        job_id: str | None = None,
     ) -> JobSummary:
         now = _now()
         doc = {
-            "id": uuid4().hex,
+            "id": job_id or uuid4().hex,
             "leadId": lead_ids[0] if len(lead_ids) == 1 else None,
             "leadIds": lead_ids,
             "jobType": job_type,
@@ -2300,6 +2319,25 @@ class LeadRepository:
             analysis=ExtractionAnalysis(**analysis_data)
             if isinstance(analysis_data, dict)
             else analysis_data,
+            extractionId=str(doc["id"]),
+            extractionVersion=int(doc.get("version", 1)),
+        )
+
+    async def get_analysis_version(
+        self, lead_id: str, extraction_id: str, version: int
+    ) -> ExtractionAnalysisResponse | None:
+        """Load analysis from the exact extraction version pinned by a run."""
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                docs = self._extractions.get(lead_id, [])
+                doc = next((d for d in docs if str(d.get("id")) == extraction_id and int(d.get("version", 0)) == version), None)
+        else:
+            doc = await database["site_extractions"].find_one({"id": extraction_id, "leadId": lead_id, "version": version})
+        if not doc or not doc.get("analysis"):
+            return None
+        return ExtractionAnalysisResponse(
+            analysis=ExtractionAnalysis(**doc["analysis"]),
             extractionId=str(doc["id"]),
             extractionVersion=int(doc.get("version", 1)),
         )

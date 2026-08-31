@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 GenerationRunStatus = Literal[
-    "queued", "running", "partial", "completed", "failed", "superseded", "cancelled"
+    "queued", "running", "generated", "runtime_qa", "partial", "completed", "failed", "superseded", "cancelled"
 ]
 VariantRunStatus = Literal[
     "pending", "generating_brief", "generating_site", "compiling",

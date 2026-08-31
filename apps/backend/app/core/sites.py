@@ -2363,6 +2363,7 @@ class SiteRepository:
         await database["generation_runs"].create_index([("leadId", 1), ("createdAt", -1)])
         await database["generation_runs"].create_index([("leadId", 1), ("status", 1)])
         await database["generation_runs"].create_index("generationInputHash")
+        await database["generation_input_claims"].create_index([("leadId", 1), ("generationInputHash", 1)], unique=True)
         await database["generated_site_versions"].create_index("siteId")
         await database["generated_site_versions"].create_index(
             [("siteId", 1), ("version", -1)]
@@ -3762,6 +3763,40 @@ class SiteRepository:
             return
         await database["generation_runs"].update_one({"id": run_id}, {"$set": update})
 
+    async def _claim_generation_input(self, *, lead_id: str, input_hash: str, job_id: str) -> dict[str, Any] | None:
+        """Atomically claim an active immutable input fingerprint."""
+        now = _now()
+        claim = {"leadId": lead_id, "generationInputHash": input_hash, "jobId": job_id, "createdAt": now}
+        database = get_database()
+        if database is None:
+            async with lead_repository._memory_lock:
+                key = (lead_id, input_hash)
+                claims = getattr(self, "_generation_input_claims", {})
+                existing = claims.get(key)
+                if existing:
+                    return existing
+                claims[key] = claim
+                self._generation_input_claims = claims
+                return None
+        try:
+            await database["generation_input_claims"].insert_one(claim)
+            return None
+        except Exception as exc:
+            if "duplicate" not in str(exc).lower() and "11000" not in str(exc):
+                raise
+            return await database["generation_input_claims"].find_one({"leadId": lead_id, "generationInputHash": input_hash})
+
+    async def _release_generation_input(self, *, lead_id: str, input_hash: str, job_id: str) -> None:
+        database = get_database()
+        if database is None:
+            async with lead_repository._memory_lock:
+                claims = getattr(self, "_generation_input_claims", {})
+                claim = claims.get((lead_id, input_hash))
+                if claim and claim.get("jobId") == job_id:
+                    claims.pop((lead_id, input_hash), None)
+            return
+        await database["generation_input_claims"].delete_one({"leadId": lead_id, "generationInputHash": input_hash, "jobId": job_id})
+
     async def list_generation_runs(self, lead_id: str, limit: int = 20) -> list[dict[str, Any]]:
         database = get_database()
         if database is None:
@@ -3782,14 +3817,16 @@ class SiteRepository:
         instructions = None
         if request and request.refinementPromptId:
             instructions = f"refinement_prompt:{request.refinementPromptId}"
-        strategies = []
-        if request and request.variantTypes:
-            from app.core.variant_strategy import get_variant_strategies
-            strategies = [dict(get_variant_strategies(lead.industry).get(v, {})) for v in generation_types]
+        from app.core.variant_strategy import get_variant_strategies
+        all_strategies = get_variant_strategies(lead.industry)
+        default_nextjs = {"variantType": "nextjs", "variantLabel": "Next.js Site", "variantPosition": 4,
+                          "designMode": "interactive", "paletteMode": "zinc", "creativeBriefGuidance": "",
+                          "inspirationKeywords": [], "avoidPatterns": []}
+        strategies = [dict(all_strategies.get(v, default_nextjs if v == "nextjs" else {})) for v in generation_types]
         snapshot = {
             "leadId": lead.id, "leadVersion": getattr(lead, "version", None),
             "extractionId": extraction.id, "extractionVersion": extraction.version,
-            "analysisId": None, "analysisVersion": None,
+            "analysisId": extraction.id, "analysisVersion": extraction.version,
             "briefId": brief.id, "briefVersion": brief.version,
             "brandRevision": int(getattr(brief, "brandRevision", 1) or 1),
             "brandSnapshotHash": brand_snapshot_hash(assets), "brandSnapshot": assets,
@@ -3836,7 +3873,7 @@ class SiteRepository:
         prospective = {"leadId": lead.id, "leadVersion": getattr(lead, "version", None),
                        "briefId": master_brief.id, "briefVersion": master_brief.version,
                        "extractionId": extraction.id, "extractionVersion": extraction.version,
-                       "analysisId": None, "analysisVersion": None,
+                       "analysisId": extraction.id, "analysisVersion": extraction.version,
                        "generationTypes": list(request.variantTypes if request and request.variantTypes else ["nextjs"]),
                        "operatorInstructions": f"refinement_prompt:{request.refinementPromptId}" if request and request.refinementPromptId else None,
                        "brandSnapshotHash": brand_snapshot_hash(assets_for_hash), "brandSnapshot": assets_for_hash,
@@ -3844,11 +3881,28 @@ class SiteRepository:
                        "brandRevision": int(getattr(master_brief, "brandRevision", 1) or 1),
                        "variantStrategies": [],
                        "generatorVersion": "generation-run-v1", "promptVersion": "master-brief-v1"}
-        if request and request.variantTypes:
-            from app.core.variant_strategy import get_variant_strategies
-            prospective["variantStrategies"] = [dict(get_variant_strategies(lead.industry).get(v, {})) for v in prospective["generationTypes"]]
+        from app.core.variant_strategy import get_variant_strategies
+        default_nextjs = {"variantType": "nextjs", "variantLabel": "Next.js Site", "variantPosition": 4,
+                          "designMode": "interactive", "paletteMode": "zinc", "creativeBriefGuidance": "",
+                          "inspirationKeywords": [], "avoidPatterns": []}
+        strategy_map = get_variant_strategies(lead.industry)
+        prospective["variantStrategies"] = [dict(strategy_map.get(v, default_nextjs if v == "nextjs" else {})) for v in prospective["generationTypes"]]
         input_hash = generation_input_hash(prospective)
         database = get_database()
+        # This claim closes the read-then-create race between identical requests.
+        # It is released only after runtime QA has finalized the run.
+        provisional_job_id = uuid4().hex
+        existing_claim = await self._claim_generation_input(lead_id=site_id, input_hash=input_hash, job_id=provisional_job_id)
+        if existing_claim is not None:
+            existing_job_id = existing_claim.get("jobId")
+            existing_job = await database["jobs"].find_one({"id": existing_job_id}) if database is not None else lead_repository._jobs.get(existing_job_id)
+            if existing_job is not None:
+                await self._release_generation_input(lead_id=site_id, input_hash=input_hash, job_id=provisional_job_id)
+                return _job_doc_to_summary(existing_job)
+            await self._release_generation_input(lead_id=site_id, input_hash=input_hash, job_id=existing_job_id or "")
+            existing_claim = await self._claim_generation_input(lead_id=site_id, input_hash=input_hash, job_id=provisional_job_id)
+            if existing_claim is not None:
+                raise ValueError("generation_input_claim_unavailable")
         if database is not None:
             existing_gen_job = await database["jobs"].find_one({"leadId": site_id, "jobType": {"$in": ["site_generate", "site_republish"]}, "status": {"$in": ["queued", "running"]}, "metadata.generationInputHash": input_hash})
             if existing_gen_job is not None:
@@ -3857,6 +3911,7 @@ class SiteRepository:
                     site_id,
                     existing_gen_job["id"],
                 )
+                await self._release_generation_input(lead_id=site_id, input_hash=input_hash, job_id=provisional_job_id)
                 return _job_doc_to_summary(existing_gen_job)
         else:
             async with lead_repository._memory_lock:
@@ -3946,6 +4001,7 @@ class SiteRepository:
                 "nextVersion": next_version,
                 "request": request.model_dump() if request else {},
             },
+            job_id=provisional_job_id,
         )
         run = await self._create_generation_run(lead=lead, extraction=extraction, brief=master_brief, request=request, job_id=job.id, requested_by=requested_by)
         # Supersede older queued runs with different inputs. Running runs remain

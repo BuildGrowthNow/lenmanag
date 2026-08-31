@@ -229,7 +229,7 @@ def purge_expired_assets_task() -> dict:
     retry_backoff=True,
     retry_backoff_max=120,
 )
-def run_screenshot_task(self, site_id: str, preview_url: str) -> None:
+def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id: str | None = None) -> None:
     """Capture a viewport screenshot for a generated site and persist it to MongoDB."""
 
     async def _async_runner() -> None:
@@ -309,6 +309,8 @@ def run_screenshot_task(self, site_id: str, preview_url: str) -> None:
         logger.info(
             "run_screenshot_task: screenshot captured and saved for site %s", site_id
         )
+        if generation_run_id:
+            await _record_runtime_qa_result(generation_run_id, site_id, "completed")
 
     try:
         _run(_async_runner())
@@ -320,6 +322,34 @@ def run_screenshot_task(self, site_id: str, preview_url: str) -> None:
             exc_info=True,
         )
         raise
+
+
+async def _record_runtime_qa_result(run_id: str, site_id: str, status: str) -> None:
+    """Record one variant QA result and close the run only after all QA completes."""
+    run = await site_repository._get_generation_run(run_id)
+    if not run or run.get("status") in {"superseded", "cancelled", "completed", "failed"}:
+        return
+    results = [dict(item) for item in run.get("variantResults", [])]
+    for item in results:
+        if item.get("siteId") == site_id:
+            item["status"] = status
+    await site_repository._update_generation_run(run_id, {"variantResults": results})
+    refreshed = await site_repository._get_generation_run(run_id)
+    if not refreshed:
+        return
+    terminal = {"completed", "failed"}
+    if results and all(item.get("status") in terminal for item in refreshed.get("variantResults", [])):
+        failed = any(item.get("status") == "failed" for item in refreshed["variantResults"])
+        await site_repository._update_generation_run(
+            run_id,
+            {"status": "completed" if not failed else "partial", "finishedAt": datetime.now(timezone.utc)},
+        )
+        await site_repository._release_generation_input(
+            lead_id=refreshed["leadId"], input_hash=refreshed["generationInputHash"], job_id=refreshed["jobId"]
+        )
+        await lead_repository.update_generation_stage_if_latest(
+            refreshed["leadId"], run_id, "ready" if not failed else "needs_attention"
+        )
 
 
 @celery_app.task(
@@ -385,8 +415,6 @@ async def _run_multi_variant_generation_async(
         log_generation_start,
         log_variant_progress,
     )
-    from app.core.variant_strategy import get_variant_strategies
-    from app.schemas.lead import LeadPatchRequest
     from app.schemas.site import VariantType
 
     # Initialize metrics collector
@@ -407,17 +435,16 @@ async def _run_multi_variant_generation_async(
     if not extraction or extraction.version <= 0:
         raise ValueError(f"Extraction not available for lead {lead_id}")
 
-    analysis = await lead_repository.get_analysis(lead_id)
+    analysis = await (lead_repository.get_analysis_version(lead_id, run["snapshot"]["analysisId"], run["snapshot"]["analysisVersion"]) if run and run["snapshot"].get("analysisId") else lead_repository.get_analysis(lead_id))
     approved_brief = await (lead_repository.get_master_brief_version(lead_id, run["snapshot"]["briefId"], run["snapshot"]["briefVersion"]) if run else lead_repository.get_master_brief(lead_id))
     if run and (not approved_brief or approved_brief.approvalState != "approved"):
         raise ValueError("pinned_brief_not_approved")
 
-    # Get variant strategies - industry from lead or analysis
-    industry = lead.industry
-    if not industry and analysis and hasattr(analysis, "analysis"):
-        # ExtractionAnalysisResponse wraps ExtractionAnalysis
-        industry = getattr(analysis.analysis, "industry", None)
-    strategies = get_variant_strategies(industry)
+    # Strategies are immutable run inputs; never recalculate them from the live lead.
+    strategies = {
+        item.get("variantType"): item
+        for item in ((run or {}).get("snapshot", {}).get("variantStrategies") or [])
+    }
 
     # Log generation start
     total_variants = len(generation_types)
@@ -617,28 +644,23 @@ async def _run_multi_variant_generation_async(
 
     if run:
         await site_repository._update_generation_run(generation_run_id, {
-            "status": "completed" if not failed_variants else ("partial" if generated_sites else "failed"),
-            "finishedAt": __import__("datetime").datetime.now(__import__("datetime").timezone.utc),
-            "variantResults": [{"variantType": s.variantType, "siteId": s.id, "status": "completed"} for s in generated_sites],
+            "status": "generated",
+            "variantResults": [{"variantType": s.variantType, "siteId": s.id, "status": "runtime_qa"} for s in generated_sites],
         })
 
-    # Update lead pipeline stage (only if at least one succeeded)
-    if generated_sites:
-        await lead_repository.update_lead(
-            lead_id,
-            LeadPatchRequest(pipelineStage="ready"),
-        )
-    else:
-        await lead_repository.update_lead(
-            lead_id,
-            LeadPatchRequest(pipelineStage="needs_attention"),
-        )
+    # Do not mark the lead ready until runtime QA has completed for every variant.
+    if run and generated_sites:
+        await site_repository._update_generation_run(generation_run_id, {"status": "runtime_qa"})
+    elif run:
+        await site_repository._update_generation_run(generation_run_id, {"status": "failed", "finishedAt": datetime.now(timezone.utc)})
+        await site_repository._release_generation_input(lead_id=lead_id, input_hash=run["generationInputHash"], job_id=run["jobId"])
+        await lead_repository.update_generation_stage_if_latest(lead_id, generation_run_id, "needs_attention")
 
     # Best-effort: queue a screenshot task for each successfully generated site.
     # Failures here must never block or fail the generation job.
     for site in generated_sites:
         try:
-            run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
+            run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl, generation_run_id=generation_run_id)  # type: ignore[attr-defined]
         except Exception as exc:
             logger.warning(
                 "Could not queue screenshot task for site %s: %s", site.id, exc

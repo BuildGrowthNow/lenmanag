@@ -144,6 +144,7 @@ class LeadListItem(BaseModel):
     normalizedDomain: str
     status: LeadStatus
     pipelineStage: PipelineStage = "new"
+    latestGenerationRunId: Optional[str] = None
     pipelineMode: PipelineMode = "auto"
     pipelineStatusDetail: Optional[str] = None
     industry: Optional[str] = None
@@ -213,6 +214,7 @@ class LeadPatchRequest(BaseModel):
     status: Optional[LeadStatus] = None
     pipelineMode: Optional[PipelineMode] = None
     pipelineStage: Optional[PipelineStage] = None
+    latestGenerationRunId: Optional[str] = None
     generationTypes: Optional[list[GenerationType]] = None
 
 
