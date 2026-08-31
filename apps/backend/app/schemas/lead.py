@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 GenerationType = Literal["html_v1", "html_v2", "html_v3", "nextjs"]
 LeadSourceType = Literal["csv", "manual", "crm", "future"]
 LeadStatus = Literal["new", "needs_review", "archived"]
-JobStatus = Literal["queued", "running", "completed", "failed"]
+JobStatus = Literal["queued", "running", "partial", "completed", "failed", "superseded"]
 JobType = Literal[
     "lead_import",
     "lead_create",

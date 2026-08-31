@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.core.industry_detection import get_industry_design_config
 from app.core.leads import _job_doc_to_summary, lead_repository  # type: ignore[attr-defined]
 from app.core.mongo import get_database
+from app.core.generation_run import brand_snapshot_hash, generation_input_hash, supersede_reason
 from app.core.screenshot_comparator import ScreenshotComparator
 from app.schemas.brief import (
     BriefEvidence,
@@ -28,6 +29,7 @@ from app.schemas.brief import (
 )
 from app.schemas.extraction import ExtractionSnapshot
 from app.schemas.lead import JobSummary
+from app.schemas.generation_run import GenerationRun, GenerationRunSnapshot
 from app.schemas.site import (
     BrandTokens,
     CtaAction,
@@ -2345,6 +2347,7 @@ class SiteRepository:
         self._handoffs: dict[str, dict[str, Any]] = {}
         self._memory_ready = False
         self._screenshot_comparator = ScreenshotComparator()
+        self._generation_runs: dict[str, dict[str, Any]] = {}
 
     async def _maybe_ensure_indexes(self) -> None:
         database = get_database()
@@ -2354,6 +2357,12 @@ class SiteRepository:
         await database["generated_sites"].create_index("id", unique=True)
         await database["generated_sites"].create_index("leadId")
         await database["generated_sites"].create_index("previewSlug")
+        await database["generated_sites"].create_index("generationRunId")
+        await database["generated_sites"].create_index([("generationRunId", 1), ("variantType", 1)], unique=True, partialFilterExpression={"generationRunId": {"$type": "string"}})
+        await database["generation_runs"].create_index("id", unique=True)
+        await database["generation_runs"].create_index([("leadId", 1), ("createdAt", -1)])
+        await database["generation_runs"].create_index([("leadId", 1), ("status", 1)])
+        await database["generation_runs"].create_index("generationInputHash")
         await database["generated_site_versions"].create_index("siteId")
         await database["generated_site_versions"].create_index(
             [("siteId", 1), ("version", -1)]
@@ -2875,6 +2884,8 @@ class SiteRepository:
         extraction: ExtractionSnapshot,
         analysis: Any,
         user_id: str,
+        approved_brief: Any | None = None,
+        generation_run_id: str | None = None,
     ) -> GeneratedSite:
         """
         Generate a single site variant (HTML or Next.js).
@@ -2894,18 +2905,38 @@ class SiteRepository:
         from app.core.static_html_generator import generate_static_html
         from app.core.ai_site_generation import generate_landing_page_code
 
-        # Step 1: Generate variant-specific master brief
+        if generation_run_id:
+            database = get_database()
+            existing_doc = None
+            if database is not None:
+                existing_doc = await database["generated_sites"].find_one({"generationRunId": generation_run_id, "variantType": variant_type})
+            else:
+                async with self._memory_lock:
+                    existing_doc = next((d for d in self._sites.values() if d.get("generationRunId") == generation_run_id and d.get("variantType") == variant_type), None)
+            if existing_doc:
+                return GeneratedSite.model_validate(existing_doc)
+
+        # Step 1: derive a variant brief from the approved brief. This preserves
+        # the exact approved brand assets and factual source while allowing each
+        # variant to have an independent creative direction.
         industry = None
         if analysis and hasattr(analysis, "analysis"):
             industry = getattr(analysis.analysis, "industry", None)
 
-        logger.info(f"Generating master brief for {variant_type} (lead {lead_id})")
-        master_brief = await generate_master_brief(
-            lead_id=lead_id,
-            extraction=extraction,
-            variant_type=variant_type,
-            industry=industry,
-        )
+        if approved_brief is None:
+            logger.info(f"Generating master brief for {variant_type} (legacy path)")
+            master_brief = await generate_master_brief(lead_id=lead_id, extraction=extraction, variant_type=variant_type, industry=industry)
+        else:
+            master_brief = approved_brief.model_copy(deep=True, update={
+                "id": f"{generation_run_id}:{variant_type}" if generation_run_id else approved_brief.id,
+                "visualStyle": variant_strategy.get("designMode", approved_brief.visualStyle),
+                "designMode": variant_strategy.get("designMode", approved_brief.designMode),
+                "creativeDirection": approved_brief.creativeDirection.model_copy(update={
+                    "designConcept": variant_strategy.get("creativeBriefGuidance", approved_brief.creativeDirection.designConcept),
+                    "inspirationKeywords": variant_strategy.get("inspirationKeywords", approved_brief.creativeDirection.inspirationKeywords),
+                    "avoidPatterns": variant_strategy.get("avoidPatterns", approved_brief.creativeDirection.avoidPatterns),
+                }),
+            })
 
         # Save brief to database
         database = get_database()
@@ -2978,6 +3009,22 @@ class SiteRepository:
 
         # Stamp the owning user and source attribution before saving
         site.userId = user_id
+        if generation_run_id:
+            site.generationRunId = generation_run_id
+            site.briefId = approved_brief.id if approved_brief else master_brief.id
+            site.briefVersion = approved_brief.version if approved_brief else master_brief.version
+            site.variantBriefId = master_brief.id
+            site.variantBriefVersion = master_brief.version
+            run = await self._get_generation_run(generation_run_id)
+            if run:
+                site.generationInputHash = run.get("generationInputHash")
+                site.brandSnapshotHash = run["snapshot"].get("brandSnapshotHash")
+                site.brandRevision = run["snapshot"].get("brandRevision", 1)
+                site.extractionId = run["snapshot"].get("extractionId")
+                site.extractionVersion = run["snapshot"].get("extractionVersion")
+                site.generatorVersion = run["snapshot"].get("generatorVersion")
+                site.promptVersion = run["snapshot"].get("promptVersion")
+                await self._update_generation_run(generation_run_id, {"variantBriefs": [*(run.get("variantBriefs") or []), {"id": master_brief.id, "variantType": variant_type, "version": master_brief.version, "contentStrategy": {"headline": master_brief.headline, "sections": [s.purpose for s in master_brief.sections], "cta": master_brief.ctaStrategy}, "creativeStrategy": variant_strategy}]})
         site.sourceAttribution = SiteSourceAttribution.model_validate(
             _site_source_attribution(
                 lead=await lead_repository.get_lead(lead_id),
@@ -3690,6 +3737,81 @@ class SiteRepository:
                 return None
         return current
 
+    async def _get_generation_run(self, run_id: str) -> dict[str, Any] | None:
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                return self._generation_runs.get(run_id)
+        return await database["generation_runs"].find_one({"id": run_id})
+
+    async def _save_generation_run(self, run: dict[str, Any]) -> None:
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                self._generation_runs[run["id"]] = run
+            return
+        await database["generation_runs"].insert_one(run)
+
+    async def _update_generation_run(self, run_id: str, update: dict[str, Any]) -> None:
+        update["updatedAt"] = _now()
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                if run_id in self._generation_runs:
+                    self._generation_runs[run_id].update(update)
+            return
+        await database["generation_runs"].update_one({"id": run_id}, {"$set": update})
+
+    async def list_generation_runs(self, lead_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                runs = [r for r in self._generation_runs.values() if r.get("leadId") == lead_id]
+                return sorted(runs, key=lambda r: r.get("createdAt", _now()), reverse=True)[:limit]
+        cursor = database["generation_runs"].find({"leadId": lead_id}).sort("createdAt", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
+    async def _create_generation_run(
+        self, *, lead: Any, extraction: ExtractionSnapshot, brief: Any,
+        request: SiteGenerateRequest | None, job_id: str, requested_by: str | None = None,
+    ) -> dict[str, Any]:
+        from app.core.generation_run import canonical_json
+
+        generation_types = list((request.variantTypes if request and request.variantTypes else ["nextjs"]))
+        assets = brief.brandAssets.model_dump(mode="json") if getattr(brief, "brandAssets", None) else {}
+        instructions = None
+        if request and request.refinementPromptId:
+            instructions = f"refinement_prompt:{request.refinementPromptId}"
+        strategies = []
+        if request and request.variantTypes:
+            from app.core.variant_strategy import get_variant_strategies
+            strategies = [dict(get_variant_strategies(lead.industry).get(v, {})) for v in generation_types]
+        snapshot = {
+            "leadId": lead.id, "leadVersion": getattr(lead, "version", None),
+            "extractionId": extraction.id, "extractionVersion": extraction.version,
+            "analysisId": None, "analysisVersion": None,
+            "briefId": brief.id, "briefVersion": brief.version,
+            "brandRevision": int(getattr(brief, "brandRevision", 1) or 1),
+            "brandSnapshotHash": brand_snapshot_hash(assets), "brandSnapshot": assets,
+            "approvedImageInventory": list(assets.get("imageInventory") or []),
+            "rejectedImages": list(assets.get("rejectedImages") or []),
+            "operatorInstructions": instructions, "generationTypes": generation_types,
+            "variantStrategies": strategies, "generatorVersion": "generation-run-v1",
+            "promptVersion": "master-brief-v1",
+        }
+        input_hash = generation_input_hash(snapshot)
+        now = _now()
+        run = {
+            "id": uuid4().hex, "leadId": lead.id, "jobId": job_id, "status": "queued",
+            "snapshot": snapshot, "generationInputHash": input_hash,
+            "requestedBy": requested_by, "operatorInstructions": instructions,
+            "variantBriefs": [], "variantResults": [], "createdAt": now,
+            "startedAt": None, "finishedAt": None, "supersededByRunId": None,
+            "supersededReason": None,
+        }
+        await self._save_generation_run(run)
+        return run
+
     async def queue_generation_job(
         self, site_id: str, request: SiteGenerateRequest | None = None
     ) -> JobSummary | None:
@@ -3707,16 +3829,28 @@ class SiteRepository:
         if extraction is None or extraction.version <= 0:
             raise ValueError("extraction_required")
 
-        # Prevent duplicate generation jobs (same guard as start_extraction)
+        # Build a pinned run before deduplicating. Active jobs only match when the
+        # immutable input fingerprint is identical; a lead-only guard caused stale reuse.
+        requested_by = getattr(lead, "user_id", None)
+        assets_for_hash = master_brief.brandAssets.model_dump(mode="json")
+        prospective = {"leadId": lead.id, "leadVersion": getattr(lead, "version", None),
+                       "briefId": master_brief.id, "briefVersion": master_brief.version,
+                       "extractionId": extraction.id, "extractionVersion": extraction.version,
+                       "analysisId": None, "analysisVersion": None,
+                       "generationTypes": list(request.variantTypes if request and request.variantTypes else ["nextjs"]),
+                       "operatorInstructions": f"refinement_prompt:{request.refinementPromptId}" if request and request.refinementPromptId else None,
+                       "brandSnapshotHash": brand_snapshot_hash(assets_for_hash), "brandSnapshot": assets_for_hash,
+                       "approvedImageInventory": list(assets_for_hash.get("imageInventory") or []), "rejectedImages": list(assets_for_hash.get("rejectedImages") or []),
+                       "brandRevision": int(getattr(master_brief, "brandRevision", 1) or 1),
+                       "variantStrategies": [],
+                       "generatorVersion": "generation-run-v1", "promptVersion": "master-brief-v1"}
+        if request and request.variantTypes:
+            from app.core.variant_strategy import get_variant_strategies
+            prospective["variantStrategies"] = [dict(get_variant_strategies(lead.industry).get(v, {})) for v in prospective["generationTypes"]]
+        input_hash = generation_input_hash(prospective)
         database = get_database()
         if database is not None:
-            existing_gen_job = await database["jobs"].find_one(
-                {
-                    "leadId": site_id,
-                    "jobType": {"$in": ["site_generate", "site_republish"]},
-                    "status": {"$in": ["queued", "running"]},
-                }
-            )
+            existing_gen_job = await database["jobs"].find_one({"leadId": site_id, "jobType": {"$in": ["site_generate", "site_republish"]}, "status": {"$in": ["queued", "running"]}, "metadata.generationInputHash": input_hash})
             if existing_gen_job is not None:
                 logger.info(
                     "Generation already in progress for site %s (job %s)",
@@ -3724,6 +3858,14 @@ class SiteRepository:
                     existing_gen_job["id"],
                 )
                 return _job_doc_to_summary(existing_gen_job)
+        else:
+            async with lead_repository._memory_lock:
+                existing_gen_job = next((j for j in lead_repository._jobs.values()
+                    if site_id in j.get("leadIds", []) and j.get("jobType") in {"site_generate", "site_republish"}
+                    and j.get("status") in {"queued", "running"}
+                    and (j.get("metadata") or {}).get("generationInputHash") == input_hash), None)
+                if existing_gen_job is not None:
+                    return _job_doc_to_summary(existing_gen_job)
 
         current = await self.get_site(site_id)
         next_version = int(current.version if current else 0) + 1
@@ -3805,8 +3947,38 @@ class SiteRepository:
                 "request": request.model_dump() if request else {},
             },
         )
+        run = await self._create_generation_run(lead=lead, extraction=extraction, brief=master_brief, request=request, job_id=job.id, requested_by=requested_by)
+        # Supersede older queued runs with different inputs. Running runs remain
+        # historical and are allowed to finish without becoming the latest state.
+        if database is not None:
+            old_jobs = await database["jobs"].find({"leadId": site_id, "jobType": {"$in": ["site_generate", "site_republish"]}, "status": "queued", "id": {"$ne": job.id}}).to_list(length=50)
+            for old_job in old_jobs:
+                old_run_id = (old_job.get("metadata") or {}).get("generationRunId")
+                if old_run_id:
+                    old_run = await self._get_generation_run(old_run_id)
+                    if old_run and old_run.get("generationInputHash") != run["generationInputHash"]:
+                        reason = supersede_reason(old_run, run)
+                        await self._update_generation_run(old_run_id, {"status": "superseded", "supersededByRunId": run["id"], "supersededReason": reason, "finishedAt": _now()})
+                        await database["jobs"].update_one({"id": old_job["id"], "status": "queued"}, {"$set": {"status": "failed", "step": "Superseded by newer generation run", "errorMessage": f"superseded:{reason}", "finishedAt": _now(), "updatedAt": _now(), "metadata.supersededByRunId": run["id"], "metadata.supersededReason": reason}})
+        # Store the exact run reference and fingerprint on the job itself for old
+        # monitoring surfaces and safe task dispatch.
+        database = get_database()
+        if database is None:
+            async with lead_repository._memory_lock:
+                if job.id in lead_repository._jobs:
+                    lead_repository._jobs[job.id]["metadata"].update({"generationRunId": run["id"], "generationInputHash": run["generationInputHash"], "snapshot": run["snapshot"]})
+            old_jobs = [j for j in lead_repository._jobs.values() if site_id in j.get("leadIds", []) and j.get("jobType") in {"site_generate", "site_republish"} and j.get("status") == "queued" and j.get("id") != job.id]
+            for old_job in old_jobs:
+                old_run_id = (old_job.get("metadata") or {}).get("generationRunId")
+                old_run = self._generation_runs.get(old_run_id) if old_run_id else None
+                if old_run and old_run.get("generationInputHash") != run["generationInputHash"]:
+                    reason = supersede_reason(old_run, run)
+                    old_run.update({"status": "superseded", "supersededByRunId": run["id"], "supersededReason": reason, "finishedAt": _now()})
+                    old_job.update({"status": "failed", "step": "Superseded by newer generation run", "errorMessage": f"superseded:{reason}", "finishedAt": _now(), "updatedAt": _now()})
+        else:
+            await database["jobs"].update_one({"id": job.id}, {"$set": {"metadata.generationRunId": run["id"], "metadata.generationInputHash": run["generationInputHash"], "metadata.snapshot": run["snapshot"]}})
         await self._dispatch_generation_job(
-            site_id=site_id, job_id=job.id, request=request
+            site_id=site_id, job_id=job.id, request=request, generation_run_id=run["id"]
         )
         return job
 
@@ -3819,9 +3991,21 @@ class SiteRepository:
         return await self.get_site(site_id)
 
     async def run_generation_job(
-        self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None = None
+        self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None = None,
+        generation_run_id: str | None = None,
     ) -> GeneratedSite | None:
         await self._maybe_ensure_indexes()
+        run = await self._get_generation_run(generation_run_id) if generation_run_id else None
+        if run:
+            if run.get("jobId") != job_id or run.get("leadId") != site_id:
+                raise ValueError("generation_run_job_or_lead_mismatch")
+            if run.get("status") in {"superseded", "cancelled"}:
+                logger.warning("Skipping non-executable generation run %s", generation_run_id)
+                return None
+            snapshot = run["snapshot"]
+            await self._update_generation_run(generation_run_id, {"status": "running", "startedAt": run.get("startedAt") or _now()})
+        else:
+            snapshot = None
         lead = await lead_repository.get_lead(site_id)
         if lead is None:
             await lead_repository._update_job(  # noqa: SLF001
@@ -3836,7 +4020,7 @@ class SiteRepository:
             return None
 
         # Check for master brief (AI generation support)
-        master_brief = await lead_repository.get_master_brief(site_id)
+        master_brief = await (lead_repository.get_master_brief_version(site_id, snapshot["briefId"], snapshot["briefVersion"]) if snapshot else lead_repository.get_master_brief(site_id))
         use_ai_generation = (
             master_brief is not None and master_brief.approvalState == "approved"
         )
@@ -3844,9 +4028,11 @@ class SiteRepository:
         # Phase 3: Legacy briefs deleted; only master_brief now
         if not use_ai_generation:
             raise ValueError("brief_not_approved")
-        extraction = await lead_repository.get_extraction(site_id)
+        extraction = await (lead_repository.get_extraction_version(site_id, snapshot["extractionId"], snapshot["extractionVersion"]) if snapshot else lead_repository.get_extraction(site_id))
         if extraction is None or extraction.version <= 0:
             raise ValueError("extraction_required")
+        if snapshot and (master_brief is None or master_brief.approvalState != "approved"):
+            raise ValueError("pinned_brief_not_approved")
 
         # High-level generation trace
         logger.info("=== Starting site generation for %s ===", site_id)
@@ -3955,6 +4141,7 @@ class SiteRepository:
                 version=next_version,
                 current=current,
                 refinement_prompt_id=refinement_prompt_id,
+                generation_run_id=generation_run_id,
             )
 
             # Verify site was persisted successfully
@@ -4011,6 +4198,8 @@ class SiteRepository:
                 finished=True,
                 lead_ids=[site_id],
             )
+            if run:
+                await self._update_generation_run(generation_run_id, {"status": "completed", "finishedAt": _now(), "variantResults": [{"variantType": "nextjs", "siteId": persisted_site.id, "status": "completed"}]})
             from app.core.analytics import analytics_repository
 
             await analytics_repository.record_admin_event(
@@ -4331,6 +4520,7 @@ class SiteRepository:
         version: int,
         current: GeneratedSite | None,
         refinement_prompt_id: str | None = None,
+        generation_run_id: str | None = None,
     ) -> None:
         """Persist generated site record after successful AI code generation."""
         now = _now()
@@ -4378,6 +4568,7 @@ class SiteRepository:
             "confidence": 80,
             "references": [],
         }
+        approved_tokens = self._brand_tokens_from_brief(master_brief).model_dump()
         brand_tokens = {
             "paletteMode": palette_mode,
             "primaryColor": {"value": "#1a1a2e", "evidence": default_evidence},
@@ -4401,6 +4592,12 @@ class SiteRepository:
             },
             "layoutDensity": {"value": "balanced", "evidence": default_evidence},
         }
+        # Approved brand assets are the source of truth for every generation run.
+        for token_name in ("primaryColor", "secondaryColor", "accentColor", "typography"):
+            if approved_tokens.get(token_name):
+                brand_tokens[token_name] = approved_tokens[token_name]
+        if approved_tokens.get("logoAsset"):
+            brand_tokens["logoAsset"] = approved_tokens["logoAsset"]
 
         hero_variant = {
             "headline": master_brief.headline,
@@ -4486,8 +4683,18 @@ class SiteRepository:
             "id": site_id,
             "leadId": lead.id,
             "generationJobId": job_id,
+            "generationRunId": generation_run_id,
             "briefId": master_brief.id,
             "briefVersion": master_brief.version,
+            "variantBriefId": master_brief.id if generation_run_id is None else f"{generation_run_id}:nextjs",
+            "variantBriefVersion": master_brief.version,
+            "extractionId": extraction.id,
+            "extractionVersion": extraction.version,
+            "brandRevision": int(getattr(master_brief, "brandRevision", 1) or 1),
+            "brandSnapshotHash": brand_snapshot_hash(master_brief.brandAssets.model_dump(mode="json")),
+            "generationInputHash": ((await self._get_generation_run(generation_run_id) or {}).get("generationInputHash") if generation_run_id else None),
+            "generatorVersion": "generation-run-v1",
+            "promptVersion": "master-brief-v1",
             "version": version,
             "themeId": theme["id"],
             "themeKey": theme["themeKey"],
@@ -4597,7 +4804,8 @@ class SiteRepository:
         )
 
     async def _dispatch_generation_job(
-        self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None
+        self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None,
+        generation_run_id: str | None = None,
     ) -> None:
         settings = get_settings()
 
@@ -4613,6 +4821,7 @@ class SiteRepository:
                         lead_id=site_id,
                         job_id=job_id,
                         generation_types=list(variant_types),
+                        generation_run_id=generation_run_id,
                     )
                 except Exception:  # pragma: no cover - eager path logging
                     logging.getLogger("lenquant.jobs").exception(
@@ -4624,7 +4833,7 @@ class SiteRepository:
             from app.core.tasks import run_multi_variant_generation_task
 
             run_multi_variant_generation_task.delay(  # type: ignore[attr-defined]
-                lead_id=site_id, job_id=job_id, generation_types=list(variant_types)
+                lead_id=site_id, job_id=job_id, generation_types=list(variant_types), generation_run_id=generation_run_id
             )
             return
 
@@ -4632,7 +4841,7 @@ class SiteRepository:
         if settings.celery_task_always_eager:
             try:
                 await self.run_generation_job(
-                    site_id=site_id, job_id=job_id, request=request
+                    site_id=site_id, job_id=job_id, request=request, generation_run_id=generation_run_id
                 )
                 await self._maybe_queue_auto_iteration(
                     site_id=site_id, job_id=job_id, request=request
@@ -4648,7 +4857,7 @@ class SiteRepository:
 
         payload = request.model_dump() if request else None
         run_site_generation_job_task.delay(  # type: ignore[attr-defined]
-            site_id=site_id, job_id=job_id, request_payload=payload
+            site_id=site_id, job_id=job_id, request_payload=payload, generation_run_id=generation_run_id
         )
 
     async def run_republish_job(self, *, site_id: str, job_id: str) -> None:

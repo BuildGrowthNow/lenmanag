@@ -113,6 +113,14 @@ async def list_variants_for_lead(
     )
 
 
+@router.get("/generation-runs/{lead_id}", response_model=ResponseEnvelope[list[dict[str, Any]]])
+async def list_generation_runs(
+    lead_id: str, request: Request, _user_id: OptionalUserId
+) -> ResponseEnvelope[list[dict[str, Any]]]:
+    """Operator-facing immutable generation lineage and status history."""
+    return success_response(await site_repository.list_generation_runs(lead_id), meta=response_meta(request))
+
+
 @router.get("/{site_id}", response_model=ResponseEnvelope[GeneratedSite | None])
 async def get_site(
     site_id: str, request: Request, user_id: CurrentUserId

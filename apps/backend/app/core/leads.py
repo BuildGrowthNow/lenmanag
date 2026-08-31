@@ -2229,6 +2229,19 @@ class LeadRepository:
             return None
         return self._extraction_doc_to_snapshot(doc)
 
+    async def get_extraction_version(
+        self, lead_id: str, extraction_id: str, version: int
+    ) -> ExtractionSnapshot | None:
+        """Load the exact extraction pinned by a generation run."""
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                docs = self._extractions.get(lead_id, [])
+                doc = next((d for d in docs if str(d.get("id")) == extraction_id and int(d.get("version", 0)) == version), None)
+        else:
+            doc = await database["site_extractions"].find_one({"id": extraction_id, "leadId": lead_id, "version": version})
+        return self._extraction_doc_to_snapshot(doc) if doc else None
+
     async def list_pages(
         self, lead_id: str, user_id: str | None = None
     ) -> PageInventoryResponse | None:
@@ -2624,6 +2637,19 @@ class LeadRepository:
         await self.advance_pipeline_after_brief(lead_id)
 
         return MasterBrief.model_validate(doc)
+
+    async def get_master_brief_version(
+        self, lead_id: str, brief_id: str, version: int
+    ) -> MasterBrief | None:
+        """Load the exact approved brief pinned by a generation run."""
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                docs = self._memory.get("master_briefs", {}).get(lead_id, [])
+                doc = next((d for d in docs if str(d.get("id")) == brief_id and int(d.get("version", 0)) == version), None)
+        else:
+            doc = await database["master_briefs"].find_one({"id": brief_id, "leadId": lead_id, "version": version})
+        return MasterBrief.model_validate(doc) if doc else None
 
     async def update_master_brief_assets(
         self, lead_id: str, assets: dict[str, Any], user_id: str | None = None

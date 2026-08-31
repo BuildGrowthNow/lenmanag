@@ -103,7 +103,8 @@ def run_extraction_job_task(self, lead_id: str, job_id: str, refresh: bool) -> N
     max_retries=2,
 )
 def run_site_generation_job_task(
-    self, site_id: str, job_id: str, request_payload: dict | None = None
+    self, site_id: str, job_id: str, request_payload: dict | None = None,
+    generation_run_id: str | None = None,
 ) -> None:
     """Run site generation job with automatic retry on failure.
 
@@ -117,7 +118,7 @@ def run_site_generation_job_task(
     async def runner() -> None:
         # Run the primary generation job
         await site_repository.run_generation_job(
-            site_id=site_id, job_id=job_id, request=request
+            site_id=site_id, job_id=job_id, request=request, generation_run_id=generation_run_id
         )
         # Best-effort scheduling of an automatic refinement pass when
         # screenshot QA fails the strict visual threshold.
@@ -337,6 +338,7 @@ def run_multi_variant_generation_task(
     lead_id: str,
     job_id: str,
     generation_types: list[str],
+    generation_run_id: str | None = None,
 ) -> None:
     """
     Generate multiple site variants for a lead.
@@ -345,7 +347,7 @@ def run_multi_variant_generation_task(
     Each variant generation is atomic and sequential.
     """
     try:
-        _run(_run_multi_variant_generation_async(lead_id, job_id, generation_types))
+        _run(_run_multi_variant_generation_async(lead_id, job_id, generation_types, generation_run_id))
     except Exception as exc:
         logger.error(
             f"Multi-variant generation failed for lead {lead_id}, job {job_id}. "
@@ -371,6 +373,7 @@ async def _run_multi_variant_generation_async(
     lead_id: str,
     job_id: str,
     generation_types: list[str],
+    generation_run_id: str | None = None,
 ) -> None:
     """Async implementation of multi-variant generation."""
     import time
@@ -390,16 +393,24 @@ async def _run_multi_variant_generation_async(
     metrics_collector = GenerationMetricsCollector()
     generation_start_time = time.monotonic()
 
-    # Get lead and extraction (shared across all variants)
+    run = await site_repository._get_generation_run(generation_run_id) if generation_run_id else None
+    if run and run.get("status") in {"superseded", "cancelled"}:
+        logger.info("Skipping superseded multi-variant run %s", generation_run_id)
+        return
+    # Resolve the immutable source-of-truth snapshot. Never fall back to latest
+    # records once a run has been created.
     lead = await lead_repository.get_lead(lead_id)
     if not lead:
         raise ValueError(f"Lead {lead_id} not found")
 
-    extraction = await lead_repository.get_extraction(lead_id)
+    extraction = await (lead_repository.get_extraction_version(lead_id, run["snapshot"]["extractionId"], run["snapshot"]["extractionVersion"]) if run else lead_repository.get_extraction(lead_id))
     if not extraction or extraction.version <= 0:
         raise ValueError(f"Extraction not available for lead {lead_id}")
 
     analysis = await lead_repository.get_analysis(lead_id)
+    approved_brief = await (lead_repository.get_master_brief_version(lead_id, run["snapshot"]["briefId"], run["snapshot"]["briefVersion"]) if run else lead_repository.get_master_brief(lead_id))
+    if run and (not approved_brief or approved_brief.approvalState != "approved"):
+        raise ValueError("pinned_brief_not_approved")
 
     # Get variant strategies - industry from lead or analysis
     industry = lead.industry
@@ -490,6 +501,8 @@ async def _run_multi_variant_generation_async(
                         extraction=extraction,
                         analysis=analysis,
                         user_id=lead.user_id,
+                        approved_brief=approved_brief,
+                        generation_run_id=generation_run_id,
                     )
 
                     generated_sites.append(site)
@@ -565,7 +578,7 @@ async def _run_multi_variant_generation_async(
     # Mark job complete
     await lead_repository._update_job(
         job_id=job_id,
-        status="completed",
+        status="completed" if not failed_variants else ("partial" if generated_sites else "failed"),
         progress=100,
         step=f"Generated {len(generated_sites)}/{total_variants} variants",
         finished=True,
@@ -601,6 +614,13 @@ async def _run_multi_variant_generation_async(
             duration_ms=total_time_ms,
             metadata={"failedCount": failed_variants},
         )
+
+    if run:
+        await site_repository._update_generation_run(generation_run_id, {
+            "status": "completed" if not failed_variants else ("partial" if generated_sites else "failed"),
+            "finishedAt": __import__("datetime").datetime.now(__import__("datetime").timezone.utc),
+            "variantResults": [{"variantType": s.variantType, "siteId": s.id, "status": "completed"} for s in generated_sites],
+        })
 
     # Update lead pipeline stage (only if at least one succeeded)
     if generated_sites:

@@ -297,6 +297,17 @@ class GeneratedSiteVersion(BaseModel):
     siteId: str
     leadId: str
     generationJobId: Optional[str] = None
+    generationRunId: Optional[str] = None
+    extractionId: Optional[str] = None
+    extractionVersion: Optional[int] = None
+    analysisId: Optional[str] = None
+    brandRevision: Optional[int] = None
+    brandSnapshotHash: Optional[str] = None
+    generationInputHash: Optional[str] = None
+    variantBriefId: Optional[str] = None
+    variantBriefVersion: Optional[int] = None
+    generatorVersion: Optional[str] = None
+    promptVersion: Optional[str] = None
     version: int
     briefId: str
     briefVersion: int
@@ -361,6 +372,17 @@ class GeneratedSite(BaseModel):
     leadId: str
     userId: str = ""
     generationJobId: Optional[str] = None
+    generationRunId: Optional[str] = None
+    extractionId: Optional[str] = None
+    extractionVersion: Optional[int] = None
+    analysisId: Optional[str] = None
+    brandRevision: Optional[int] = None
+    brandSnapshotHash: Optional[str] = None
+    generationInputHash: Optional[str] = None
+    variantBriefId: Optional[str] = None
+    variantBriefVersion: Optional[int] = None
+    generatorVersion: Optional[str] = None
+    promptVersion: Optional[str] = None
     briefId: str
     briefVersion: int
     version: int
