@@ -5,6 +5,7 @@ import logging
 from typing import Any, Optional
 
 import google.genai as genai  # type: ignore[import-untyped]
+from google.genai import types  # type: ignore[import-untyped]
 from google.api_core import retry
 
 from app.core.config import get_settings
@@ -36,7 +37,7 @@ class GeminiClient:
             response = self.client.models.generate_content(
                 model=self.text_model,
                 contents=prompt,
-                config=genai.GenerateContentConfig(  # type: ignore[attr-defined]
+                config=types.GenerateContentConfig(
                     temperature=temperature,
                     max_output_tokens=max_tokens,
                 ),
@@ -62,7 +63,7 @@ class GeminiClient:
         """Analyze image with Gemini Vision."""
         try:
             # Convert bytes to Part
-            image_part = genai.Part.from_data(  # type: ignore[attr-defined]
+            image_part = types.Part.from_bytes(
                 data=image_data,
                 mime_type=image_mime_type,
             )
@@ -70,7 +71,7 @@ class GeminiClient:
             response = self.client.models.generate_content(
                 model=self.vision_model,
                 contents=[prompt, image_part],
-                config=genai.GenerateContentConfig(  # type: ignore[attr-defined]
+                config=types.GenerateContentConfig(
                     temperature=temperature,
                     max_output_tokens=max_tokens,
                 ),
