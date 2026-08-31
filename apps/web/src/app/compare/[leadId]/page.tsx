@@ -13,12 +13,10 @@ interface PageProps {
 }
 
 type SiteVariant = {
-  id: string;
-  leadId: string;
-  variantLabel: string;
+  siteId: string;
+  variantLabel: string | null;
   variantType: string;
   variantPosition: number;
-  previewSlug: string;
   previewUrl: string;
   optionNumber: number;
   screenshotUrl: string;

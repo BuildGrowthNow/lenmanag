@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 import os
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -19,6 +20,39 @@ router = APIRouter(prefix="/public", tags=["public"])
 
 def _normalize_preview_slug(slug: str) -> str:
     return slug.strip().rstrip("`'\" ")
+
+
+def _public_image_url(value: object) -> str | None:
+    """Return an image URL only when it looks like an actual image asset."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    path = parsed.path.lower().split("?")[0]
+    if not path.endswith((".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif", ".avif")):
+        return None
+    return value.strip()
+
+
+def _publicly_eligible(site: GeneratedSite) -> bool:
+    return (
+        site.readinessStatus != "blocked"
+        and bool(site.previewUrl or site.previewSlug)
+        and (site.compilationStatus in {"success", "completed"} or bool(site.staticHtml))
+    )
+
+
+def _latest_public_variants(sites: list[GeneratedSite]) -> list[GeneratedSite]:
+    """Keep one current, usable site per strategy; never publish stale duplicates."""
+    eligible = [site for site in sites if _publicly_eligible(site)]
+    latest: dict[str, GeneratedSite] = {}
+    for site in eligible:
+        key = site.variantType or site.id
+        current = latest.get(key)
+        if current is None or (site.version, site.variantPosition) > (current.version, current.variantPosition):
+            latest[key] = site
+    return sorted(latest.values(), key=lambda site: (site.variantPosition, site.variantType, site.id))
 
 
 @router.get("/st/{slug}", response_model=ResponseEnvelope[GeneratedSite])
@@ -76,23 +110,8 @@ async def get_redesign_page(
 
     lead_id: str = str(lead_doc["id"])
 
-    share = lead_doc.get("clientShare") or {}
-    selected_ids = list(share.get("selectedSiteIds") or [])
-    if not 1 <= len(selected_ids) <= 4:
-        raise HTTPException(status_code=404, detail="Redesign page not found")
-
     sites = await site_repository.list_sites_by_lead(lead_id)
-    by_id = {site.id: site for site in sites}
-    eligible = [by_id[site_id] for site_id in selected_ids if site_id in by_id]
-    if len(eligible) != len(selected_ids):
-        raise HTTPException(status_code=404, detail="Redesign page not found")
-    eligible = [
-        site for site in eligible
-        if site.compilationStatus in {"success", "completed"}
-        or bool(site.staticHtml)
-        and site.readinessStatus != "blocked"
-        and bool(site.previewUrl or site.previewSlug)
-    ]
+    eligible = _latest_public_variants(sites)
 
     if not eligible:
         raise HTTPException(status_code=404, detail="Redesign page not found")
@@ -119,8 +138,8 @@ async def get_redesign_page(
     logo_url: str | None = None
     try:
         master_brief = await lead_repository.get_master_brief(lead_id)
-        if master_brief is not None and master_brief.brandAssets.logoUrl:
-            logo_url = master_brief.brandAssets.logoUrl
+        if master_brief is not None:
+            logo_url = _public_image_url(master_brief.brandAssets.logoUrl)
     except Exception:
         pass  # Best effort — logo is optional
 
