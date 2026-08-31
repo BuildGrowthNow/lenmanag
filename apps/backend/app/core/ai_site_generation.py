@@ -467,7 +467,7 @@ This runs in the browser, NOT Node.js:
 - Start with `'use client';`
 - Export a single default function component
 - Import only what you actually use
-- Available imports: `react`, `framer-motion`, `gsap`, `gsap/ScrollTrigger`, `lenis`, `lucide-react`, `embla-carousel-react`, and `@/components/ui/{button,card,badge,separator}` only.
+- Available imports: `react`, `framer-motion`, `gsap`, `gsap/ScrollTrigger`, `lenis`, `lucide-react`, `embla-carousel-react`, and `@/components/ui/{{button,card,badge,separator}}` only.
 
 ## OUTPUT
 
