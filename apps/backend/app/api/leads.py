@@ -94,7 +94,7 @@ async def list_leads(
 ) -> ResponseEnvelope[LeadListResponse]:
     try:
         result = await lead_repository.list_leads(
-            q=q, status=status, stage=stage, limit=limit, offset=offset
+            q=q, status=status, stage=stage, limit=limit, offset=offset, user_id=user_id
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -107,7 +107,7 @@ async def get_lead(
     user_id: CurrentUserId,
     http_request: Request,
 ) -> ResponseEnvelope[LeadDetail]:
-    lead = await lead_repository.get_lead(lead_id)
+    lead = await lead_repository.get_lead(lead_id, user_id=user_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     return success_response(lead, meta=response_meta(http_request))
@@ -146,7 +146,7 @@ async def patch_lead(
     payload: LeadPatchRequest,
     http_request: Request,
 ) -> ResponseEnvelope[LeadDetail]:
-    lead = await lead_repository.update_lead(lead_id, payload)
+    lead = await lead_repository.update_lead(lead_id, payload, user_id=user_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
@@ -165,7 +165,7 @@ async def delete_lead(
     user_id: CurrentUserId,
     http_request: Request,
 ) -> ResponseEnvelope[LeadDetail]:
-    lead = await lead_repository.delete_lead(lead_id)
+    lead = await lead_repository.delete_lead(lead_id, user_id=user_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
@@ -187,7 +187,7 @@ async def start_extraction(
     user_id: CurrentUserId,
     http_request: Request,
 ) -> ResponseEnvelope[ExtractionJobResponse]:
-    result = await lead_repository.start_extraction(lead_id, refresh=False)
+    result = await lead_repository.start_extraction(lead_id, refresh=False, user_id=user_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
@@ -209,7 +209,7 @@ async def refresh_extraction(
     user_id: CurrentUserId,
     http_request: Request,
 ) -> ResponseEnvelope[ExtractionJobResponse]:
-    result = await lead_repository.start_extraction(lead_id, refresh=True)
+    result = await lead_repository.start_extraction(lead_id, refresh=True, user_id=user_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
@@ -258,7 +258,7 @@ async def start_lead_analysis(
 ) -> ResponseEnvelope[ExtractionJobResponse]:
     """Re-run LLM analysis on existing extraction data without re-crawling."""
     try:
-        result = await lead_repository.start_analysis_refresh(lead_id)
+        result = await lead_repository.start_analysis_refresh(lead_id, user_id=user_id)
     except ValueError as exc:
         if str(exc) == "extraction_not_completed":
             raise HTTPException(
@@ -288,7 +288,7 @@ async def get_lead_analysis(
     http_request: Request,
 ) -> ResponseEnvelope[ExtractionAnalysisResponse]:
     """Get the latest LLM analysis for a lead's extraction."""
-    analysis_response = await lead_repository.get_analysis(lead_id)
+    analysis_response = await lead_repository.get_analysis(lead_id, user_id=user_id)
     if analysis_response is None:
         raise HTTPException(
             status_code=404, detail="No analysis available for this lead."
@@ -307,10 +307,10 @@ async def get_master_brief(
     user_id: CurrentUserId,
     http_request: Request,
 ) -> ResponseEnvelope[MasterBrief | None]:
-    lead = await lead_repository.get_lead(lead_id)
+    lead = await lead_repository.get_lead(lead_id, user_id=user_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
-    master_brief = await lead_repository.get_master_brief(lead_id)
+    master_brief = await lead_repository.get_master_brief(lead_id, user_id=user_id)
     return success_response(master_brief, meta=response_meta(http_request))
 
 
