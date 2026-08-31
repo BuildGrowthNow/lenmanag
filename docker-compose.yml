@@ -16,6 +16,8 @@ services:
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-unknown}
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
@@ -36,6 +38,8 @@ services:
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-unknown}
     restart: unless-stopped
     command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
     env_file:
@@ -52,6 +56,8 @@ services:
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-unknown}
     restart: unless-stopped
     command: celery -A app.core.celery_app beat --loglevel=info
     env_file:

@@ -24,6 +24,7 @@ jobs:
             echo "Hard resetting to origin/main (discarding local changes)..."
             git reset --hard origin/main
             git clean -fd -e .env.production
+            export BUILD_VERSION=$(git rev-parse HEAD)
             echo "Building Docker images..."
             docker compose build
             echo "Recreating containers..."

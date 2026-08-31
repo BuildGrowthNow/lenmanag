@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "LenQuant Website Fabric API"
+    build_version: str = "unknown"
     api_prefix: str = "/api"
     mongodb_uri: str = ""
     mongodb_db_name: str = "lenquant"

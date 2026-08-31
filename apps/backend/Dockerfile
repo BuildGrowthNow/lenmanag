@@ -1,6 +1,8 @@
 FROM python:3.11-slim
 
 WORKDIR /app
+ARG BUILD_VERSION=unknown
+ENV BUILD_VERSION=${BUILD_VERSION}
 
 # Install system dependencies including Chromium and its required libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
