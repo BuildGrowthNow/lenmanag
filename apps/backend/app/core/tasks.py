@@ -253,6 +253,8 @@ def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id:
             logger.warning(
                 "run_screenshot_task: capture returned None for site %s", site_id
             )
+            if generation_run_id:
+                await _record_runtime_qa_result(generation_run_id, site_id, "failed")
             return
 
         database = get_database()
@@ -261,6 +263,8 @@ def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id:
                 "run_screenshot_task: no database available — cannot persist screenshot for site %s",
                 site_id,
             )
+            if generation_run_id:
+                await _record_runtime_qa_result(generation_run_id, site_id, "failed")
             return
 
         await database["generated_sites"].update_one(
@@ -321,6 +325,11 @@ def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id:
             exc,
             exc_info=True,
         )
+        if generation_run_id and self.request.retries >= self.max_retries:
+            try:
+                _run(_record_runtime_qa_result(generation_run_id, site_id, "failed"))
+            except Exception:
+                logger.exception("Could not record failed runtime QA for %s", site_id)
         raise
 
 
@@ -665,6 +674,8 @@ async def _run_multi_variant_generation_async(
             logger.warning(
                 "Could not queue screenshot task for site %s: %s", site.id, exc
             )
+            if generation_run_id:
+                await _record_runtime_qa_result(generation_run_id, site.id, "failed")
 
     logger.info(
         f"Multi-variant generation completed for lead {lead_id}: "
