@@ -10,6 +10,7 @@ import logging
 import re
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from typing import Any
 
@@ -96,10 +97,11 @@ async def generate_static_html(
             logger.error(f"[DEBUG] HTML block length would be: {html_end - html_start}")
         raise
 
-    _validate_generated_document(html_content, css_content, js_content)
+    html_content = _enforce_footer_year(html_content)
+    _validate_generated_document(html_content, css_content, js_content, master_brief)
     if not _javascript_is_valid(js_content):
         js_content = await _repair_javascript(llm, html_content, js_content, variant_type)
-        _validate_generated_document(html_content, css_content, js_content)
+        _validate_generated_document(html_content, css_content, js_content, master_brief)
         if not _javascript_is_valid(js_content):
             raise ValueError("Generated JavaScript remains invalid after repair; refusing to publish")
 
@@ -201,6 +203,10 @@ def _build_static_html_prompt(
     secondary_color = brief.brandAssets.secondaryColor or "#666666"
     font_family = brief.brandAssets.fontFamily or "system-ui, sans-serif"
     font_url = brief.brandAssets.fontUrl or "None"
+    year = datetime.now(timezone.utc).year
+    contacts = brief.contactInfo or {}
+    image_inventory = [item for item in brief.brandAssets.imageInventory if item.get("url")][:12]
+    asset_inventory = "\n".join(f"- {item.get('category', 'image')}: {item.get('url')} | alt={item.get('altText') or ''} | source={item.get('sourceUrl') or ''} | dimensions={item.get('width') or '?'}x{item.get('height') or '?'} | confidence={item.get('confidence') or 0}" for item in image_inventory) or "- No approved photography available"
 
     # Get company name
     company_name = extraction.summary.companyName or "Company"
@@ -248,6 +254,11 @@ BRAND ASSETS:
 - Secondary Color: {secondary_color}
 - Font Family: {font_family}
 - Font File URL: {font_url}
+- Logo variants: {', '.join(brief.brandAssets.logoVariants) or 'None'}
+- Approved image inventory (use these URLs, never random stock):
+{asset_inventory}
+- Verified contact data: {contacts or 'None; omit rather than invent'}
+- Current server year for footer copyright: {year}
 
 VARIANT TYPE: {variant_type}
 
@@ -263,6 +274,8 @@ REQUIREMENTS:
    - Accessibility: ARIA labels, alt text, semantic structure
    - Include all sections from the master brief
    - Use brand logo if available (as img src)
+   - Map approved assets to header, hero, service/about, and footer before writing markup. If an approved logo exists, the header MUST contain it. If approved photography exists, use at least one <img> unless this specific concept is explicitly typography-only.
+   - Use only the verified contact data above. Never invent phone numbers, emails, addresses, metrics, or placeholder contacts. Use the current server year in the copyright footer.
    - NO inline styles or scripts
    - Use approved extracted client images first. If none are suitable, prefer typographic, geometric, textured, or diagrammatic art direction. Use external imagery only when genuinely necessary and contextually relevant; never use random stock photography.
    - If a font file URL is provided, load it with @font-face; never use placeholder family names such as "Preloaded Font" as literal CSS.
@@ -356,7 +369,7 @@ class _DocumentStructureParser(HTMLParser):
         self.stack.pop()
 
 
-def _validate_generated_document(html: str, css: str, js: str) -> None:
+def _validate_generated_document(html: str, css: str, js: str, brief: MasterBrief | None = None) -> None:
     if "```" in html or "```" in css or "```" in js:
         raise ValueError("Markdown fence leaked into generated asset")
     if not html.lstrip().lower().startswith("<!doctype html"):
@@ -370,6 +383,18 @@ def _validate_generated_document(html: str, css: str, js: str) -> None:
         raise ValueError("Generated CSS is structurally incomplete")
     if not js.strip():
         raise ValueError("Generated JavaScript is empty")
+    prohibited = (r"\b(?:xxx|xxxx|000-0000|555[- )]?\d{3,4}|lorem ipsum|example\.com|your@email\.com|todo)\b")
+    if re.search(prohibited, "\n".join((html, css, js)), re.I):
+        raise ValueError("Generated output contains prohibited placeholder content")
+    if brief:
+        current_year = str(datetime.now(timezone.utc).year)
+        if re.search(r"(?:copyright|©|&copy;)[^<]{0,80}\b20\d{2}\b", html, re.I) and current_year not in html:
+            raise ValueError("Generated footer uses a stale year")
+        valid_logos = [url for url in [brief.brandAssets.logoUrl, brief.brandAssets.logoLightUrl, brief.brandAssets.logoDarkUrl, *brief.brandAssets.logoVariants] if url]
+        if valid_logos and not any(re.search(r"<img\b[^>]*\bsrc\s*=\s*['\"]" + re.escape(url), html, re.I) for url in valid_logos):
+            raise ValueError("Generated HTML omitted the approved header logo")
+        if brief.brandAssets.imageUrls and "<img" not in html:
+            raise ValueError("Generated HTML omitted approved photography")
 
 
 def _javascript_is_valid(script: str) -> bool:
@@ -406,6 +431,11 @@ def _remove_generated_asset_references(html: str) -> str:
     # remove all relative stylesheet/script delivery references.
     html = re.sub(r"\s*<link\b(?=[^>]*\brel\s*=\s*['\"]?stylesheet)(?=[^>]*\bhref\s*=\s*['\"](?!https?://)[^'\"]+\.css(?:\?[^'\"]*)?['\"])[^>]*>", "", html, flags=re.I)
     return re.sub(r"\s*<script\b(?=[^>]*\bsrc\s*=\s*['\"](?!https?://)[^'\"]+\.js(?:\?[^'\"]*)?['\"])[^>]*>\s*</script>", "", html, flags=re.I)
+
+
+def _enforce_footer_year(html: str) -> str:
+    year = str(datetime.now(timezone.utc).year)
+    return re.sub(r"((?:©|&copy;|copyright)[^<]{0,80}?)(?:20\d{2})", lambda match: match.group(1) + year, html, flags=re.I)
 
 
 def _upload_to_s3(

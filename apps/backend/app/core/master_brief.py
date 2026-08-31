@@ -660,6 +660,7 @@ def _build_master_brief_from_response(
             "ctaStrategy", "Primary CTA: Contact, Secondary: Learn More"
         ),
         extractedContent=extracted_content,
+        contactInfo={key: str(value) for key, value in extraction.contactInfo.model_dump().items() if value and key not in {"confidence", "sourceUrl"}},
         brandAssets=brand_assets,
         competitorInsights="",
         confidenceScore=min(100, max(0, brief_data.get("confidenceScore", 75))),

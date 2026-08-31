@@ -203,6 +203,11 @@ def get_variant_strategies(
             ],
         }
 
+    if any(keyword in industry_lower for keyword in ("well", "water", "drilling", "trades", "home service")):
+        base_strategies["html_v1"].update({"variantLabel": "Regional Trust", "paletteMode": "light", "creativeBriefGuidance": "Premium editorial direction built on real regional field imagery, heritage, trust and source-backed service information. Use a bright, grounded palette and a quiet reveal system.", "inspirationKeywords": ["regional", "editorial", "trust", "field photography", "heritage"], "avoidPatterns": ["startup", "neon", "generic svg art", "legal language"]})
+        base_strategies["html_v2"].update({"variantLabel": "Field Precision", "paletteMode": "zinc", "creativeBriefGuidance": "Cinematic industrial direction: equipment and drilling photography, high-contrast but brand-grounded palette, technical precision and emergency response. Use one operational carousel or progress interaction.", "inspirationKeywords": ["cinematic", "industrial", "precision", "equipment", "water"], "avoidPatterns": ["purple gradient", "SaaS", "bento template", "random stock"]})
+        base_strategies["html_v3"].update({"variantLabel": "Clean Water, Close to Home", "paletteMode": "light", "creativeBriefGuidance": "Warm community and clean-water direction with real people/location imagery, friendly but premium typography, a service-area story and gentle tactile motion.", "inspirationKeywords": ["community", "clean water", "warm", "craft", "local"], "avoidPatterns": ["playful blobs", "legal terminology", "fake metrics", "generic icons"]})
+
     return base_strategies
 
 

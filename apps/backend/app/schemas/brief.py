@@ -278,6 +278,7 @@ class MasterBrief(BaseModel):
     extractedContent: dict[str, list[str]] = Field(
         default_factory=dict, description="Key content from extraction"
     )
+    contactInfo: dict[str, str] = Field(default_factory=dict)
     brandAssets: BrandAssets = Field(
         default_factory=BrandAssets, description="Logo, colors, fonts found"
     )

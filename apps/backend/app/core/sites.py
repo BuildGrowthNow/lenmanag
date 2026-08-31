@@ -2958,12 +2958,28 @@ class SiteRepository:
             logger.info(f"Generating master brief for {variant_type} (legacy path)")
             master_brief = await generate_master_brief(lead_id=lead_id, extraction=extraction, variant_type=variant_type, industry=industry)
         else:
+            variant_copy = {
+                "html_v1": ("Trusted water. Proven locally.", "An editorial trust-and-heritage story with a calm service path.", "Request service or call the office."),
+                "html_v2": ("Precision below the surface.", "A cinematic equipment-and-response story for urgent water systems work.", "Call emergency service when water cannot wait."),
+                "html_v3": ("Good water starts close to home.", "A warm, community-focused clean-water story built around people and place.", "Talk with our local team."),
+            }.get(str(variant_type), (approved_brief.headline, approved_brief.subheadline, approved_brief.ctaStrategy))
+            ordered_sections = list(approved_brief.sections)
+            if variant_type == "html_v2":
+                ordered_sections = sorted(ordered_sections, key=lambda section: 0 if section.purpose in {"services", "process"} else 1)
+            elif variant_type == "html_v3":
+                ordered_sections = sorted(ordered_sections, key=lambda section: 0 if section.purpose in {"about", "proof", "testimonial"} else 1)
             master_brief = approved_brief.model_copy(deep=True, update={
                 "id": f"{generation_run_id}:{variant_type}" if generation_run_id else approved_brief.id,
                 "visualStyle": variant_strategy.get("designMode", approved_brief.visualStyle),
                 "designMode": variant_strategy.get("designMode", approved_brief.designMode),
+                "headline": variant_copy[0], "subheadline": variant_copy[1], "ctaStrategy": variant_copy[2], "sections": ordered_sections,
                 "creativeDirection": approved_brief.creativeDirection.model_copy(update={
                     "designConcept": variant_strategy.get("creativeBriefGuidance", approved_brief.creativeDirection.designConcept),
+                    "heroTreatment": {"html_v1": "Editorial regional authority with a real field image", "html_v2": "Cinematic equipment image with operational carousel", "html_v3": "Warm community image collage"}.get(str(variant_type), approved_brief.creativeDirection.heroTreatment),
+                    "signatureTechnique": {"html_v1": "Measured editorial reveal", "html_v2": "Equipment/service carousel with controls", "html_v3": "Layered local-water story scroll"}.get(str(variant_type), approved_brief.creativeDirection.signatureTechnique),
+                    "layoutStrategy": {"html_v1": "Asymmetric editorial columns", "html_v2": "Full-bleed cinematic panels", "html_v3": "Warm staggered storytelling blocks"}.get(str(variant_type), approved_brief.creativeDirection.layoutStrategy),
+                    "colorMood": {"html_v1": "Bright, grounded brand neutrals", "html_v2": "Deep mineral contrast with brand accent", "html_v3": "Light water-and-earth warmth"}.get(str(variant_type), approved_brief.creativeDirection.colorMood),
+                    "typographyPersonality": {"html_v1": "Authority-led editorial display", "html_v2": "Condensed technical display and humanist body", "html_v3": "Warm expressive display and clear body"}.get(str(variant_type), approved_brief.creativeDirection.typographyPersonality),
                     "inspirationKeywords": variant_strategy.get("inspirationKeywords", approved_brief.creativeDirection.inspirationKeywords),
                     "avoidPatterns": variant_strategy.get("avoidPatterns", approved_brief.creativeDirection.avoidPatterns),
                 }),
@@ -3056,6 +3072,20 @@ class SiteRepository:
                 site.generatorVersion = run["snapshot"].get("generatorVersion")
                 site.promptVersion = run["snapshot"].get("promptVersion")
                 await self._update_generation_run(generation_run_id, {"variantBriefs": [*(run.get("variantBriefs") or []), {"id": master_brief.id, "variantType": variant_type, "version": master_brief.version, "contentStrategy": {"headline": master_brief.headline, "sections": [s.purpose for s in master_brief.sections], "cta": master_brief.ctaStrategy}, "creativeStrategy": variant_strategy}]})
+                previous = list(run.get("variantBriefs") or [])
+                current_sections = [section.purpose for section in master_brief.sections]
+                similarities: list[float] = []
+                for item in previous:
+                    content = item.get("contentStrategy") or {}
+                    prior_sections = content.get("sections") or []
+                    section_similarity = 1.0 if prior_sections == current_sections else len(set(prior_sections) & set(current_sections)) / max(1, len(set(prior_sections) | set(current_sections)))
+                    headline_similarity = 1.0 if str(content.get("headline", "")).strip().lower() == master_brief.headline.strip().lower() else 0.0
+                    similarities.append((section_similarity * 0.7) + (headline_similarity * 0.3))
+                max_similarity = max(similarities, default=0.0)
+                site.diversityScore = max(0, round((1 - max_similarity) * 100))
+                site.diversityNotes = [f"Compared with {len(previous)} prior variants; maximum structural/content similarity {max_similarity:.2f}."]
+                if max_similarity >= 0.95:
+                    raise ValueError("diversity_gate_failed: identical section/copy blueprint")
         site.sourceAttribution = SiteSourceAttribution.model_validate(
             _site_source_attribution(
                 lead=await lead_repository.get_lead(lead_id),
@@ -3901,6 +3931,20 @@ class SiteRepository:
         extraction = await lead_repository.get_extraction(site_id)
         if extraction is None or extraction.version <= 0:
             raise ValueError("extraction_required")
+        database = get_database()
+
+        # Use source evidence when an imported lead did not carry an industry;
+        # this prevents trade businesses from falling into SaaS defaults.
+        if not getattr(lead, "industry", None):
+            from app.core.industry_detection import detect_industry
+            inferred_industry, confidence = detect_industry(
+                company_name=extraction.summary.companyName or "",
+                services=list(getattr(extraction.analysis, "services", []) or extraction.summary.serviceClues),
+                content_snippets=[extraction.summary.positioningSummary or "", *extraction.summary.serviceClues],
+            )
+            lead.industry = inferred_industry
+            if database is not None:
+                await database["leads"].update_one({"id": lead.id, "industry": {"$in": [None, ""]}}, {"$set": {"industry": inferred_industry, "inferredIndustry": {"value": inferred_industry, "confidence": confidence, "extractionId": extraction.id, "source": "extraction"}, "updatedAt": _now()}})
 
         # Build a pinned run before deduplicating. Active jobs only match when the
         # immutable input fingerprint is identical; a lead-only guard caused stale reuse.
@@ -3924,7 +3968,6 @@ class SiteRepository:
         strategy_map = get_variant_strategies(lead.industry)
         prospective["variantStrategies"] = [dict(strategy_map.get(v, default_nextjs if v == "nextjs" else {})) for v in prospective["generationTypes"]]
         input_hash = generation_input_hash(prospective)
-        database = get_database()
         # This claim closes the read-then-create race between identical requests.
         # It is released only after runtime QA has finalized the run.
         provisional_job_id = uuid4().hex

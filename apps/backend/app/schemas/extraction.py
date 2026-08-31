@@ -258,6 +258,18 @@ class ExtractionSummary(BaseModel):
     toneClues: list[str] = Field(default_factory=list)
 
 
+class ExtractedContactInfo(BaseModel):
+    """Verified business contact values and the page from which each was read."""
+    officePhone: Optional[str] = None
+    emergencyPhone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    hours: Optional[str] = None
+    contactUrl: Optional[str] = None
+    sourceUrl: Optional[str] = None
+    confidence: int = Field(default=0, ge=0, le=100)
+
+
 class ExtractionSnapshot(BaseModel):
     id: str
     leadId: str
@@ -291,6 +303,7 @@ class ExtractionSnapshot(BaseModel):
     extractedClientLogos: list[ExtractedClientLogo] = Field(default_factory=list)
     extractedFonts: list[ExtractedFontFile] = Field(default_factory=list)
     extractedImages: list[ExtractedImage] = Field(default_factory=list)
+    contactInfo: ExtractedContactInfo = Field(default_factory=ExtractedContactInfo)
     createdAt: datetime
     updatedAt: datetime
 

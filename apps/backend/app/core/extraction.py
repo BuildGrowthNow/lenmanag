@@ -2500,6 +2500,8 @@ def crawl_website(
         f"status={crawl_status}, sitemap={sitemap_status}"
     )
 
+    contact_info = _extract_contact_info(page_inventory)
+
     # Deduplicate enhanced extraction results
     seen_testimonials: set[tuple[str, str | None]] = set()
     unique_testimonials = []
@@ -2564,4 +2566,18 @@ def crawl_website(
         "extractedClientLogos": unique_client_logos[:30],
         "extractedFonts": unique_fonts[:15],
         "extractedImages": unique_images[:50],
+        "contactInfo": contact_info,
     }
+
+
+def _extract_contact_info(page_inventory: list[dict[str, Any]]) -> dict[str, Any]:
+    """Extract source-backed contact values without manufacturing a fallback."""
+    text = "\n".join(str(page.get("cleanedText") or page.get("summary") or "") for page in page_inventory)
+    source = next((str(page.get("url")) for page in page_inventory if "contact" in str(page.get("url", "")).lower()), None)
+    source = source or (str(page_inventory[0].get("url")) if page_inventory else None)
+    phones = list(dict.fromkeys(re.findall(r"(?:\+1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}", text)))
+    normalised = [re.sub(r"[^\d+]", "", value) for value in phones]
+    emergency = next((p for p in normalised if re.search(r"emergency[^\n]{0,60}" + re.escape(p[-4:]), text, re.I)), None)
+    office = next((p for p in normalised if p != emergency), None)
+    emails = re.findall(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text, re.I)
+    return {"officePhone": office, "emergencyPhone": emergency, "email": emails[0] if emails else None, "contactUrl": source, "sourceUrl": source, "confidence": 80 if (office or emergency or emails) else 0}
