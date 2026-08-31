@@ -89,6 +89,7 @@ async def get_redesign_page(
     eligible = [
         site for site in eligible
         if site.compilationStatus in {"success", "completed"}
+        or bool(site.staticHtml)
         and site.readinessStatus != "blocked"
         and bool(site.previewUrl or site.previewSlug)
     ]
