@@ -1589,12 +1589,12 @@ class LeadRepository:
     async def save_client_share(
         self, lead_id: str, site_ids: list[str], user_id: str
     ) -> dict[str, Any] | None:
-        """Persist the operator's ordered 1–4 site client-share selection."""
+        """Persist the operator's ordered optional client-share selection."""
         from app.core.sites import site_repository
 
         unique_ids = list(dict.fromkeys(site_ids))
-        if not 1 <= len(unique_ids) <= 4:
-            raise ValueError("Select between one and four unique websites.")
+        if len(unique_ids) > 0 and any(not isinstance(site_id, str) or not site_id.strip() for site_id in unique_ids):
+            raise ValueError("Selected website IDs must be non-empty strings.")
         lead = await self.get_lead(lead_id, user_id=user_id)
         if lead is None:
             return None

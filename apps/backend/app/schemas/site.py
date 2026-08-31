@@ -537,7 +537,7 @@ class RedesignVariant(BaseModel):
 
 
 class ClientShareRequest(BaseModel):
-    siteIds: list[str] = Field(..., min_length=1, max_length=4)
+    siteIds: list[str] = Field(default_factory=list)
 
 
 class ClientShareResponse(BaseModel):

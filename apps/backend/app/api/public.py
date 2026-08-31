@@ -43,16 +43,12 @@ def _publicly_eligible(site: GeneratedSite) -> bool:
     )
 
 
-def _latest_public_variants(sites: list[GeneratedSite]) -> list[GeneratedSite]:
-    """Keep one current, usable site per strategy; never publish stale duplicates."""
-    eligible = [site for site in sites if _publicly_eligible(site)]
-    latest: dict[str, GeneratedSite] = {}
-    for site in eligible:
-        key = site.variantType or site.id
-        current = latest.get(key)
-        if current is None or (site.version, site.variantPosition) > (current.version, current.variantPosition):
-            latest[key] = site
-    return sorted(latest.values(), key=lambda site: (site.variantPosition, site.variantType, site.id))
+def _all_public_variants(sites: list[GeneratedSite]) -> list[GeneratedSite]:
+    """Return every usable built variant; the operator may optionally narrow it."""
+    return sorted(
+        (site for site in sites if _publicly_eligible(site)),
+        key=lambda site: (site.variantPosition, site.createdAt, site.id),
+    )
 
 
 @router.get("/st/{slug}", response_model=ResponseEnvelope[GeneratedSite])
@@ -111,7 +107,16 @@ async def get_redesign_page(
     lead_id: str = str(lead_doc["id"])
 
     sites = await site_repository.list_sites_by_lead(lead_id)
-    eligible = _latest_public_variants(sites)
+    all_eligible = _all_public_variants(sites)
+    share = lead_doc.get("clientShare") or {}
+    selected_ids = list(share.get("selectedSiteIds") or [])
+    if selected_ids:
+        by_id = {site.id: site for site in all_eligible}
+        eligible = [by_id[site_id] for site_id in selected_ids if site_id in by_id]
+        if len(eligible) != len(selected_ids):
+            raise HTTPException(status_code=404, detail="Redesign page not found")
+    else:
+        eligible = all_eligible
 
     if not eligible:
         raise HTTPException(status_code=404, detail="Redesign page not found")
