@@ -64,10 +64,10 @@ def get_best_asset_url(cue: BrandAssetCue | dict[str, Any]) -> str | None:
         cached = getattr(cue, "cachedUrl", None) or cue.cachedUri
         source = getattr(cue, "assetUrl", None) or cue.value or cue.sourceUrl
 
-    # Prefer cached (S3) URL, fall back to source
-    url = cached or source
-
-    return validate_asset_url(url)
+    # Prefer the cached URL when it is valid, then fall back to the source URL.
+    # A malformed cached/relative value must not prevent a valid source asset
+    # from being selected.
+    return validate_asset_url(cached) or validate_asset_url(source)
 
 
 def get_best_asset_urls(

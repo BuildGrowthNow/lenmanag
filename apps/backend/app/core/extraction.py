@@ -1441,6 +1441,11 @@ def _extract_brand_asset_cues(
         scored_logos: list[tuple[str, int, str]] = []
 
         for candidate in signals.logo_candidates[:10]:  # Limit to top 10 candidates
+            # HTML parsers can leave image src values relative to the page.
+            # Resolve those before scoring and caching so a valid logo is not
+            # demoted in favor of the page URL or discarded as invalid.
+            if candidate.startswith(("/", "./", "../", "//")):
+                candidate = _absolute_url(page_url, candidate)
             score = 50  # Base score
             note_parts = []
 
