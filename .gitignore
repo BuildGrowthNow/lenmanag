@@ -6,6 +6,11 @@ __pycache__/
 *.pyc
 .env
 .env.local
+.env.*
+!.env.example
+.aws/
+*.pem
+*.key
 .DS_Store
 .venv/
 apps/backend/.venv/
@@ -14,4 +19,3 @@ apps/web/node_modules/
 apps/backend/.pytest_cache/
 apps/backend/.mypy_cache/
 coverage/
-
