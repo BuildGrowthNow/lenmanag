@@ -390,6 +390,8 @@ class GeneratedSite(BaseModel):
     # NEW: Variant identification
     variantType: VariantType = "nextjs"
     variantLabel: str = "Next.js Site"
+    variantTitle: Optional[str] = None
+    variantDescription: Optional[str] = None
     variantPosition: int = 1  # Display order: 1=first, 2=second, etc.
 
     # NEW: Static HTML output (for HTML variants only)
@@ -534,6 +536,8 @@ class RedesignVariant(BaseModel):
     variantPosition: int
     optionNumber: int = 1
     variantLabel: Optional[str] = None
+    variantTitle: Optional[str] = None
+    variantDescription: Optional[str] = None
 
 
 class ClientShareRequest(BaseModel):

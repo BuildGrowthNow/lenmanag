@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.core.config import get_settings
 from app.core.leads import lead_repository
+from app.core.sites import CLIENT_VARIANT_COPY
 from app.core.mongo import get_database
 from app.core.sites import site_repository
 from app.core.versioning import response_meta
@@ -49,6 +50,13 @@ def _all_public_variants(sites: list[GeneratedSite]) -> list[GeneratedSite]:
         (site for site in sites if _publicly_eligible(site)),
         key=lambda site: (site.variantPosition, site.createdAt, site.id),
     )
+
+
+def _client_variant_copy(site: GeneratedSite) -> tuple[str, str]:
+    default_title, default_description = CLIENT_VARIANT_COPY.get(
+        str(site.variantType), ("A New Direction", "A distinct visual direction shaped around the approved brief.")
+    )
+    return site.variantTitle or default_title, site.variantDescription or default_description
 
 
 @router.get("/st/{slug}", response_model=ResponseEnvelope[GeneratedSite])
@@ -124,6 +132,7 @@ async def get_redesign_page(
     # Preserve the saved selection order. Screenshots are optional.
     variants: list[RedesignVariant] = []
     for option_number, site in enumerate(eligible, start=1):
+        variant_title, variant_description = _client_variant_copy(site)
         screenshot_url = site.screenshotRefs[0].url if site.screenshotRefs else ""
         preview_url = site.previewUrl
         if not preview_url or "localhost" in preview_url or "127.0.0.1" in preview_url:
@@ -136,6 +145,8 @@ async def get_redesign_page(
                 variantPosition=site.variantPosition,
                 optionNumber=option_number,
                 variantLabel=site.variantLabel,
+                variantTitle=variant_title,
+                variantDescription=variant_description,
             )
         )
 

@@ -101,7 +101,7 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
         {screenshotUrl ? (
           <Image
             src={screenshotUrl}
-            alt={`Preview of ${site.variantLabel || variantInfo.name}`}
+            alt={`Preview of ${site.variantTitle || site.variantLabel || variantInfo.name}`}
             fill
             className="object-cover object-top transition-transform duration-300 group-hover:scale-105"
             unoptimized
@@ -116,9 +116,9 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <CardTitle className="text-base font-medium text-text truncate">
-              {site.variantLabel || variantInfo.name}
+              {site.variantTitle || site.variantLabel || variantInfo.name}
             </CardTitle>
-            <p className="text-xs text-muted mt-0.5">{variantInfo.description}</p>
+            <p className="text-xs text-muted mt-0.5">{site.variantDescription || variantInfo.description}</p>
           </div>
           <div className="flex items-center gap-1.5">
             <StatusIcon status={site.readinessStatus} />

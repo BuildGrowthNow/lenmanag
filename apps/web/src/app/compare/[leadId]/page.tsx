@@ -15,6 +15,8 @@ interface PageProps {
 type SiteVariant = {
   siteId: string;
   variantLabel: string | null;
+  variantTitle: string | null;
+  variantDescription: string | null;
   variantType: string;
   variantPosition: number;
   previewUrl: string;

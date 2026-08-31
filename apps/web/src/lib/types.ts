@@ -660,6 +660,8 @@ export type GeneratedSite = {
   // Variant fields
   variantType?: VariantType;
   variantLabel?: string;
+  variantTitle?: string | null;
+  variantDescription?: string | null;
   variantPosition?: number;
   staticHtml?: string;
   staticCssUrl?: string;

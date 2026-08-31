@@ -19,6 +19,8 @@ export type RedesignVariant = {
   variantPosition: number;
   optionNumber: number;
   variantLabel: string | null;
+  variantTitle: string | null;
+  variantDescription: string | null;
 };
 
 export type RedesignPageData = {

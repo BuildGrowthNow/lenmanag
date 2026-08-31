@@ -65,7 +65,8 @@ function VariantCard({ variant }: { variant: RedesignVariant }) {
       </a> : <div className="flex aspect-[4/3] items-center justify-center bg-slate-800 px-6 text-center text-sm text-zinc-400">This option is temporarily unavailable.</div>}
       <div className="border-t border-white/[0.08] bg-slate-900/80 px-4 py-3">
         <div className="font-semibold text-white">Option {variant.optionNumber}</div>
-        {variant.variantLabel ? <div className="mt-1 text-sm text-zinc-400">{variant.variantLabel}</div> : null}
+        {variant.variantTitle ? <div className="mt-1 text-sm font-medium text-zinc-200">{variant.variantTitle}</div> : null}
+        {variant.variantDescription ? <div className="mt-1 text-xs leading-5 text-zinc-400">{variant.variantDescription}</div> : null}
         {hasPreview ? <div className="mt-2 text-xs text-yellow-400">Click to preview live ↗</div> : null}
       </div>
     </div>

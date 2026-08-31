@@ -68,6 +68,25 @@ from app.schemas.site import (
 
 logger = logging.getLogger(__name__)
 
+
+CLIENT_VARIANT_COPY: dict[str, tuple[str, str]] = {
+    "html_v1": ("The Authority Edit", "Editorial clarity with a composed, high-trust presentation."),
+    "html_v2": ("Signal & Structure", "A confident, energetic direction built for momentum and action."),
+    "html_v3": ("The Counsel Atelier", "A warmer, more distinctive expression with memorable detail."),
+    "nextjs": ("The Interactive Brief", "A polished interactive direction with room for richer product moments."),
+}
+
+
+def _client_variant_copy(variant_strategy: dict[str, Any]) -> tuple[str, str]:
+    variant_type = str(variant_strategy.get("variantType") or "nextjs")
+    default_title, default_description = CLIENT_VARIANT_COPY.get(
+        variant_type, ("A New Direction", "A distinct visual direction shaped around the approved brief.")
+    )
+    return (
+        str(variant_strategy.get("variantTitle") or default_title),
+        str(variant_strategy.get("variantDescription") or default_description),
+    )
+
 THEME_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "editorial-frame",
@@ -3101,6 +3120,7 @@ class SiteRepository:
 
         sections = self._master_section_stack(master_brief, extraction)
         cta_strategy = self._master_cta_strategy(master_brief)
+        variant_title, variant_description = _client_variant_copy(variant_strategy)
         return GeneratedSite(
             id=site_id,
             leadId=lead_id,
@@ -3109,6 +3129,8 @@ class SiteRepository:
             version=1,
             variantType="nextjs",
             variantLabel=variant_strategy.get("variantLabel", "Next.js Site"),
+            variantTitle=variant_title,
+            variantDescription=variant_description,
             variantPosition=variant_strategy.get("variantPosition", 4),
             themeId="nextjs-generated",
             themeKey="nextjs-generated",
@@ -3158,6 +3180,7 @@ class SiteRepository:
 
         sections = self._master_section_stack(master_brief, extraction)
         cta_strategy = self._master_cta_strategy(master_brief)
+        variant_title, variant_description = _client_variant_copy(variant_strategy)
         return GeneratedSite(
             id=site_id,
             leadId=lead_id,
@@ -3166,6 +3189,8 @@ class SiteRepository:
             version=1,
             variantType=variant_strategy.get("variantType", "html_v1"),
             variantLabel=variant_strategy.get("variantLabel", "Static HTML"),
+            variantTitle=variant_title,
+            variantDescription=variant_description,
             variantPosition=variant_strategy.get("variantPosition", 1),
             staticHtml=html_result.get("html"),
             staticCssUrl=html_result.get("cssUrl"),
