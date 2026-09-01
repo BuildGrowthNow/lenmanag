@@ -2954,9 +2954,14 @@ class LeadRepository:
         # boundary as a defense against enrichment/checkpoint code dropping
         # enhanced fields. This remains source-backed and never invents data.
         from app.core.extraction import _extract_contact_info
-        persisted_contact_info = crawl_data.get("contactInfo") or _extract_contact_info(
-            crawl_data.get("pageInventory", [])
-        )
+        persisted_contact_info = crawl_data.get("contactInfo") or {}
+        if not any(
+            persisted_contact_info.get(key)
+            for key in ("officePhone", "emergencyPhone", "email", "address", "hours")
+        ):
+            persisted_contact_info = _extract_contact_info(
+                crawl_data.get("pageInventory", [])
+            )
         # Persist an evidence-backed category as soon as extraction is ready so
         # review and subsequent variant strategy selection share the same
         # industry context. Never overwrite a manually supplied industry.
