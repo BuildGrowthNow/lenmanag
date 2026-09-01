@@ -33,8 +33,20 @@ class Settings(BaseSettings):
     celery_default_queue: str = "lenquant"
     celery_task_always_eager: bool = True
 
-    # LLM Provider: "gemini" (default for local) or "bedrock" (production)
-    llm_provider: str = "gemini"
+    # LLM Provider: cloudflare, gemini, or bedrock
+    llm_provider: str = "cloudflare"
+
+    # Cloudflare Workers AI Configuration
+    cloudflare_account_id: Optional[str] = None
+    cloudflare_api_token: Optional[str] = None
+    cloudflare_model: str = "@cf/deepseek-ai/deepseek-v4-pro-0813"
+    cloudflare_fallback_models: str = "@cf/zai-org/glm-5.3,@cf/qwen/qwen3.8-27b,@cf/deepseek-ai/deepseek-v4-flash-0731,@cf/zai-org/glm-5.3-flash"
+    cloudflare_vision_model: str = "@cf/zai-org/glm-5.3-flash"
+    cloudflare_timeout_seconds: int = 600
+
+    @property
+    def cloudflare_fallback_model_list(self) -> list[str]:
+        return [model.strip() for model in self.cloudflare_fallback_models.split(",") if model.strip()]
 
     # Gemini Configuration (used when llm_provider=gemini)
     gemini_api_key: Optional[str] = None

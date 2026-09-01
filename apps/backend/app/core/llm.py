@@ -1,4 +1,4 @@
-"""LLM provider abstraction. Returns the configured client (Gemini or Bedrock)."""
+"""LLM provider abstraction."""
 
 from __future__ import annotations
 
@@ -37,6 +37,10 @@ def get_llm_client() -> LLMClient:
     settings = get_settings()
     provider = (settings.llm_provider or "gemini").lower()
 
+    if provider == "cloudflare":
+        from app.core.cloudflare_client import get_cloudflare_client
+
+        return get_cloudflare_client()
     if provider == "bedrock":
         from app.core.bedrock_client import get_bedrock_client
 
