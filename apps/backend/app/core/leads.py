@@ -2950,6 +2950,13 @@ class LeadRepository:
         previous_doc = await self._latest_extraction_doc(lead_id)
         version = int(previous_doc.get("version", 0)) + 1 if previous_doc else 1
         extraction_id = uuid4().hex
+        # Recompute from the persisted page inventory at the final write
+        # boundary as a defense against enrichment/checkpoint code dropping
+        # enhanced fields. This remains source-backed and never invents data.
+        from app.core.extraction import _extract_contact_info
+        persisted_contact_info = crawl_data.get("contactInfo") or _extract_contact_info(
+            crawl_data.get("pageInventory", [])
+        )
         # Persist an evidence-backed category as soon as extraction is ready so
         # review and subsequent variant strategy selection share the same
         # industry context. Never overwrite a manually supplied industry.
@@ -2995,7 +3002,7 @@ class LeadRepository:
             "extractedClientLogos": crawl_data.get("extractedClientLogos", []),
             "extractedFonts": crawl_data.get("extractedFonts", []),
             "extractedImages": crawl_data.get("extractedImages", []),
-            "contactInfo": crawl_data.get("contactInfo", {}),
+            "contactInfo": persisted_contact_info,
             "crawlBudgetUsed": crawl_data.get("crawlBudgetUsed", 0),
             "crawlBudgetLimit": crawl_data.get(
                 "crawlBudgetLimit", get_settings().crawl_budget_bytes
