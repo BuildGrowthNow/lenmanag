@@ -2949,8 +2949,25 @@ class LeadRepository:
         now = _now()
         previous_doc = await self._latest_extraction_doc(lead_id)
         version = int(previous_doc.get("version", 0)) + 1 if previous_doc else 1
+        extraction_id = uuid4().hex
+        # Persist an evidence-backed category as soon as extraction is ready so
+        # review and subsequent variant strategy selection share the same
+        # industry context. Never overwrite a manually supplied industry.
+        if not getattr(lead, "industry", None):
+            from app.core.industry_detection import detect_industry
+            inferred_industry, industry_confidence = detect_industry(
+                company_name=str(crawl_data.get("summary", {}).get("companyName") or lead.companyName or ""),
+                services=list((crawl_data.get("analysis") or {}).get("services") or crawl_data.get("summary", {}).get("serviceClues") or []),
+                content_snippets=[str(crawl_data.get("summary", {}).get("positioningSummary") or ""), *list(crawl_data.get("summary", {}).get("serviceClues") or [])],
+            )
+            lead.industry = inferred_industry
+            if database := get_database():
+                await database["leads"].update_one(
+                    {"id": lead_id, "industry": {"$in": [None, ""]}},
+                    {"$set": {"industry": inferred_industry, "inferredIndustry": {"value": inferred_industry, "confidence": industry_confidence, "extractionId": extraction_id, "source": "extraction"}, "updatedAt": now}},
+                )
         doc = {
-            "id": uuid4().hex,
+            "id": extraction_id,
             "leadId": lead_id,
             "jobId": job_id,
             "version": version,
@@ -2977,6 +2994,7 @@ class LeadRepository:
             "extractedClientLogos": crawl_data.get("extractedClientLogos", []),
             "extractedFonts": crawl_data.get("extractedFonts", []),
             "extractedImages": crawl_data.get("extractedImages", []),
+            "contactInfo": crawl_data.get("contactInfo", {}),
             "crawlBudgetUsed": crawl_data.get("crawlBudgetUsed", 0),
             "crawlBudgetLimit": crawl_data.get(
                 "crawlBudgetLimit", get_settings().crawl_budget_bytes
