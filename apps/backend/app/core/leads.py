@@ -2194,6 +2194,7 @@ class LeadRepository:
             extractedClientLogos=list(doc.get("extractedClientLogos", [])),
             extractedFonts=list(doc.get("extractedFonts", [])),
             extractedImages=list(doc.get("extractedImages", [])),
+            contactInfo=dict(doc.get("contactInfo", {})),
             createdAt=_utc(doc["createdAt"]) or _now(),
             updatedAt=_utc(doc["updatedAt"]) or _now(),
         )
