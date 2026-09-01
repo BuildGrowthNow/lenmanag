@@ -526,7 +526,7 @@ class _SignalParser(HTMLParser):
                 ):
                     self.signals.font_files.append(
                         {
-                            "fontFamily": "Preloaded Font",
+                            "fontFamily": "Source font file (family unresolved)",
                             "fontUrl": href.strip(),
                             "sourceType": "link_tag",
                             "confidence": 80,
@@ -2573,16 +2573,41 @@ def crawl_website(
 def _extract_contact_info(page_inventory: list[dict[str, Any]]) -> dict[str, Any]:
     """Extract source-backed contact values without manufacturing a fallback."""
     # Telephone/mailto values are commonly absent from visual text but retained
-    # in crawled markup, so inspect both source and extracted text.
-    text = "\n".join(
-        "\n".join(str(page.get(field) or "") for field in ("cleanedText", "summary", "rawHtml", "html"))
-        for page in page_inventory
+    # in crawled markup, so inspect both source and extracted text. Restrict
+    # matches to visibly formatted numbers so asset hashes are not contacts.
+    phone_pattern = re.compile(r"(?:\+1[\s.-]*)?\(?\d{3}\)?[\s.-]+\d{3}[\s.-]+\d{4}")
+    candidates: list[tuple[str, str, str]] = []
+    all_text: list[str] = []
+    for page in page_inventory:
+        page_url = str(page.get("url") or "")
+        page_text = "\n".join(str(page.get(field) or "") for field in ("cleanedText", "summary", "rawHtml", "html"))
+        all_text.append(page_text)
+        for match in phone_pattern.finditer(page_text):
+            normalised = re.sub(r"[^\d+]", "", match.group(0))
+            if len(re.sub(r"\D", "", normalised)) in {10, 11}:
+                candidates.append((normalised, page_url, page_text))
+    deduped: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate[0] not in seen:
+            seen.add(candidate[0])
+            deduped.append(candidate)
+    emergency_candidate = next(
+        (item for item in deduped if re.search(r"emergency.{0,5000}" + re.escape(item[0][-4:]), item[2], re.I | re.S)),
+        None,
     )
-    source = next((str(page.get("url")) for page in page_inventory if "contact" in str(page.get("url", "")).lower()), None)
-    source = source or (str(page_inventory[0].get("url")) if page_inventory else None)
-    phones = list(dict.fromkeys(re.findall(r"(?:\+1[\s.-]*)?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]*\d{4}", text)))
-    normalised = [re.sub(r"[^\d+]", "", value) for value in phones]
-    emergency = next((p for p in normalised if re.search(r"emergency.{0,120}" + re.escape(p[-4:]), text, re.I | re.S)), None)
-    office = next((p for p in normalised if p != emergency), None)
-    emails = re.findall(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text, re.I)
-    return {"officePhone": office, "emergencyPhone": emergency, "email": emails[0] if emails else None, "contactUrl": source, "sourceUrl": source, "confidence": 80 if (office or emergency or emails) else 0}
+    office_candidate = next((item for item in deduped if not emergency_candidate or item[0] != emergency_candidate[0]), None)
+    text = "\n".join(all_text)
+    emails = list(dict.fromkeys(re.findall(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text, re.I)))
+    source = (emergency_candidate or office_candidate or (deduped[0] if deduped else None))
+    source_url = source[1] if source else next((str(page.get("url")) for page in page_inventory if page.get("url")), None)
+    hours_match = re.search(r"((?:Monday|Mon)\s*[-–]\s*(?:Friday|Fri)[^\n]{0,100})", text, re.I)
+    return {
+        "officePhone": office_candidate[0] if office_candidate else None,
+        "emergencyPhone": emergency_candidate[0] if emergency_candidate else None,
+        "email": emails[0] if emails else None,
+        "hours": hours_match.group(1).strip() if hours_match else None,
+        "contactUrl": source_url,
+        "sourceUrl": source_url,
+        "confidence": 80 if (office_candidate or emergency_candidate or emails) else 0,
+    }
