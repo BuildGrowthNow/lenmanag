@@ -164,6 +164,7 @@ async def get_redesign_page(
         companyName=lead_doc.get("companyName"),
         contactName=lead_doc.get("contactName"),
         logoUrl=logo_url,
+        bookingUrl=share.get("bookingUrl") or "https://calendly.com/lenquant/sites",
         variants=variants,
     )
 

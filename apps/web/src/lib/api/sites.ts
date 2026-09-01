@@ -31,6 +31,7 @@ export type ClientShare = {
   slug: string;
   siteIds: string[];
   url: string;
+  bookingUrl: string;
   updatedAt: string;
 };
 
@@ -38,10 +39,10 @@ export async function getClientShare(leadId: string): Promise<ClientShare | null
   return safeRequest<ClientShare | null>(`/api/leads/${leadId}/client-link`, null);
 }
 
-export async function saveClientShare(leadId: string, siteIds: string[]): Promise<ClientShare> {
+export async function saveClientShare(leadId: string, siteIds: string[], bookingUrl: string): Promise<ClientShare> {
   return request<ClientShare>(`/api/leads/${leadId}/client-link`, {
     method: "PUT",
-    body: { siteIds },
+    body: { siteIds, bookingUrl },
   });
 }
 

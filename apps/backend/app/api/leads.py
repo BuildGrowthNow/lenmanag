@@ -131,7 +131,7 @@ async def save_client_link(
     http_request: Request,
 ) -> ResponseEnvelope[ClientShareResponse]:
     try:
-        share = await lead_repository.save_client_share(lead_id, payload.siteIds, user_id)
+        share = await lead_repository.save_client_share(lead_id, payload.siteIds, user_id, payload.bookingUrl)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if share is None:

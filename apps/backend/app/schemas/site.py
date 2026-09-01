@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal, Optional
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.brief import BriefEvidence, BriefSourceReference
 
@@ -542,6 +543,17 @@ class RedesignVariant(BaseModel):
 
 class ClientShareRequest(BaseModel):
     siteIds: list[str] = Field(default_factory=list)
+    bookingUrl: str | None = None
+
+    @field_validator("bookingUrl")  # type: ignore[misc]
+    @classmethod
+    def validate_booking_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        parsed = urlparse(value.strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Book a call URL must be a valid http(s) URL.")
+        return value.strip()
 
 
 class ClientShareResponse(BaseModel):
@@ -550,6 +562,7 @@ class ClientShareResponse(BaseModel):
     slug: str
     siteIds: list[str]
     url: str
+    bookingUrl: str | None = None
     updatedAt: datetime
 
 
@@ -558,4 +571,5 @@ class RedesignPageData(BaseModel):
     companyName: Optional[str] = None
     contactName: Optional[str] = None
     logoUrl: Optional[str] = None
+    bookingUrl: str = "https://calendly.com/lenquant/sites"
     variants: list[RedesignVariant] = Field(default_factory=list)

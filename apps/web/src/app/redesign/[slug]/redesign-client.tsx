@@ -74,7 +74,7 @@ function VariantCard({ variant }: { variant: RedesignVariant }) {
 }
 
 export function RedesignClient({ data }: { data: RedesignPageData }) {
-  const { companyName, contactName, logoUrl, variants } = data;
+  const { companyName, contactName, logoUrl, bookingUrl, variants } = data;
   const { headline, sub } = buildHeadline(companyName, contactName, variants.length);
 
   return (
@@ -129,7 +129,7 @@ export function RedesignClient({ data }: { data: RedesignPageData }) {
             Love one of these? Let&apos;s build your final version.
           </p>
           <a
-            href={process.env.NEXT_PUBLIC_CALENDLY_URL || "https://calendly.com/lenquant/sites"}
+            href={bookingUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block rounded-full bg-yellow-500 px-8 py-3 text-sm font-semibold text-slate-900 transition-colors hover:bg-yellow-400"

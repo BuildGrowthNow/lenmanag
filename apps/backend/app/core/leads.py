@@ -1587,7 +1587,8 @@ class LeadRepository:
         return result.modified_count == 1
 
     async def save_client_share(
-        self, lead_id: str, site_ids: list[str], user_id: str
+        self, lead_id: str, site_ids: list[str], user_id: str,
+        booking_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Persist the operator's ordered optional client-share selection."""
         from app.core.sites import site_repository
@@ -1621,6 +1622,7 @@ class LeadRepository:
             "leadId": lead_id,
             "slug": lead.redesignSlug or uuid4().hex,
             "selectedSiteIds": unique_ids,
+            "bookingUrl": booking_url or "https://calendly.com/lenquant/sites",
             "createdAt": now,
             "updatedAt": now,
             "isActive": True,
@@ -1644,6 +1646,7 @@ class LeadRepository:
             "slug": share["slug"],
             "siteIds": unique_ids,
             "url": f"{os.getenv('FRONTEND_PUBLIC_URL', 'https://sites.lenquant.com').rstrip('/')}/redesign/{share['slug']}",
+            "bookingUrl": share["bookingUrl"],
             "updatedAt": now,
         }
 
@@ -1668,6 +1671,7 @@ class LeadRepository:
             "slug": share.get("slug", lead.redesignSlug),
             "siteIds": list(share.get("selectedSiteIds", [])),
             "url": f"{os.getenv('FRONTEND_PUBLIC_URL', 'https://sites.lenquant.com').rstrip('/')}/redesign/{share.get('slug', lead.redesignSlug)}",
+            "bookingUrl": share.get("bookingUrl") or "https://calendly.com/lenquant/sites",
             "updatedAt": _utc(share.get("updatedAt")) or _now(),
         }
 
