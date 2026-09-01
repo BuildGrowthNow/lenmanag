@@ -2961,7 +2961,8 @@ class LeadRepository:
                 content_snippets=[str(crawl_data.get("summary", {}).get("positioningSummary") or ""), *list(crawl_data.get("summary", {}).get("serviceClues") or [])],
             )
             lead.industry = inferred_industry
-            if database := get_database():
+            database = get_database()
+            if database is not None:
                 await database["leads"].update_one(
                     {"id": lead_id, "industry": {"$in": [None, ""]}},
                     {"$set": {"industry": inferred_industry, "inferredIndustry": {"value": inferred_industry, "confidence": industry_confidence, "extractionId": extraction_id, "source": "extraction"}, "updatedAt": now}},
