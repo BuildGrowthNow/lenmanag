@@ -10,7 +10,10 @@ from app.core.static_html_generator import (
     _parse_llm_response,
     _remove_generated_asset_references,
     _validate_generated_document,
+    _verified_contact_data,
 )
+from app.schemas.brief import MasterBrief
+from app.schemas.extraction import ExtractionSnapshot
 from app.core.extraction import _extract_contact_info
 from datetime import datetime, timezone
 
@@ -50,6 +53,23 @@ def test_footer_year_is_current_but_historic_year_is_preserved() -> None:
     html = "<p>Since 1989</p><footer>© 2024 Example</footer>"
     result = _enforce_footer_year(html)
     assert "Since 1989" in result and f"© {year}" in result
+
+
+def test_footer_year_is_injected_when_footer_has_no_copyright() -> None:
+    year = str(datetime.now(timezone.utc).year)
+    result = _enforce_footer_year("<footer><p>Since 1989</p></footer>", company_name="Champion")
+    assert f"© Champion {year}" in result and "Since 1989" in result
+
+
+def test_generation_contact_context_falls_back_to_structured_extraction() -> None:
+    brief = MasterBrief.model_construct(contactInfo={})
+    extraction = ExtractionSnapshot.model_construct(contactInfo={
+        "officePhone": "+1 574-862-4253", "emergencyPhone": "+1 574-849-6188",
+        "contactUrl": "https://champion.example/contact", "confidence": 90,
+    })
+    contacts = _verified_contact_data(brief, extraction)
+    assert contacts["officePhone"].endswith("4253")
+    assert contacts["emergencyPhone"].endswith("6188")
 
 
 def test_extracted_contact_info_keeps_real_office_and_emergency_numbers() -> None:

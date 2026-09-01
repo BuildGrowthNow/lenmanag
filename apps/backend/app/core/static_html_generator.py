@@ -97,7 +97,7 @@ async def generate_static_html(
             logger.error(f"[DEBUG] HTML block length would be: {html_end - html_start}")
         raise
 
-    html_content = _enforce_footer_year(html_content)
+    html_content = _enforce_footer_year(html_content, extraction=extraction, company_name=extraction.summary.companyName)
     _validate_generated_document(html_content, css_content, js_content, master_brief)
     if not _javascript_is_valid(js_content):
         js_content = await _repair_javascript(llm, html_content, js_content, variant_type)
@@ -204,7 +204,7 @@ def _build_static_html_prompt(
     font_family = brief.brandAssets.fontFamily or "system-ui, sans-serif"
     font_url = brief.brandAssets.fontUrl or "None"
     year = datetime.now(timezone.utc).year
-    contacts = brief.contactInfo or {}
+    contacts = _verified_contact_data(brief, extraction)
     image_inventory = [item for item in brief.brandAssets.imageInventory if item.get("url")][:12]
     asset_inventory = "\n".join(f"- {item.get('category', 'image')}: {item.get('url')} | alt={item.get('altText') or ''} | source={item.get('sourceUrl') or ''} | dimensions={item.get('width') or '?'}x{item.get('height') or '?'} | confidence={item.get('confidence') or 0}" for item in image_inventory) or "- No approved photography available"
 
@@ -433,9 +433,36 @@ def _remove_generated_asset_references(html: str) -> str:
     return re.sub(r"\s*<script\b(?=[^>]*\bsrc\s*=\s*['\"](?!https?://)[^'\"]+\.js(?:\?[^'\"]*)?['\"])[^>]*>\s*</script>", "", html, flags=re.I)
 
 
-def _enforce_footer_year(html: str) -> str:
+def _verified_contact_data(brief: MasterBrief, extraction: ExtractionSnapshot) -> dict[str, str]:
+    """Merge only structured, source-derived contacts into the generation context."""
+    result: dict[str, str] = {}
+    for key, value in (brief.contactInfo or {}).items():
+        if value and str(value).strip():
+            result[key] = str(value).strip()
+    contact_model = extraction.contactInfo
+    extracted = (
+        contact_model.model_dump(exclude_none=True)
+        if hasattr(contact_model, "model_dump")
+        else dict(contact_model or {})
+    )
+    aliases = {"hours": "officeHours", "contactUrl": "contactPageUrl"}
+    for key, value in extracted.items():
+        if key in {"sourceUrl", "confidence"} or not value:
+            continue
+        result.setdefault(aliases.get(key, key), str(value).strip())
+    return result
+
+
+def _enforce_footer_year(html: str, *, extraction: ExtractionSnapshot | None = None, company_name: str | None = None) -> str:
+    """Normalize copyright years and add a current-year footer when absent."""
     year = str(datetime.now(timezone.utc).year)
-    return re.sub(r"((?:©|&copy;|copyright)[^<]{0,80}?)(?:20\d{2})", lambda match: match.group(1) + year, html, flags=re.I)
+    normalized = re.sub(r"((?:©|&copy;|copyright)[^<]{0,80}?)(?:20\d{2})", lambda match: match.group(1) + year, html, flags=re.I)
+    footer_match = re.search(r"<footer\b[^>]*>(.*?)</footer>", normalized, re.I | re.S)
+    if footer_match and not re.search(r"(?:©|&copy;|copyright)\s*20\d{2}", footer_match.group(1), re.I):
+        label = company_name or (extraction.summary.companyName if extraction else None) or "Company"
+        footer = footer_match.group(1).rstrip() + f' <span class="site-copyright">© {re.sub(r"[^A-Za-z0-9 &.-]", "", label)} {year}</span>'
+        normalized = normalized[:footer_match.start(1)] + footer + normalized[footer_match.end(1):]
+    return normalized
 
 
 def _upload_to_s3(

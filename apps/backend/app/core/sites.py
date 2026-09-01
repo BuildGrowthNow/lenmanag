@@ -1884,6 +1884,17 @@ def _quality_score(
     sections) cannot receive high scores.
     """
 
+    # Deterministic factual/runtime failures are never recoverable through a
+    # visual fallback score. Callers pass these markers from generation and QA.
+    fatal_markers = {
+        "invalid_javascript", "runtime_initialization_failed", "missing_stylesheet",
+        "missing_script", "wrong_mime_type", "broken_main_content",
+        "required_interaction_failed", "fake_business_contact", "missing_valid_logo",
+        "stale_footer_year", "diversity_gate_failed",
+    }
+    if any(any(marker in str(requirement).lower() for marker in fatal_markers) for requirement in missing_requirements):
+        return 0
+
     # DESIGN QUALITY CHECKS
     if site_sections:
         sections_with_component_id = sum(
