@@ -310,7 +310,7 @@ async def get_master_brief(
     lead = await lead_repository.get_lead(lead_id, user_id=user_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
-    master_brief = await lead_repository.get_master_brief(lead_id, user_id=user_id)
+    master_brief = await lead_repository.get_master_brief(lead_id)
     return success_response(master_brief, meta=response_meta(http_request))
 
 
