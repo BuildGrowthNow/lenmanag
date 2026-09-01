@@ -28,9 +28,10 @@ jobs:
             echo "Building Docker images..."
             docker compose build
             echo "Recreating containers..."
-            docker compose up -d --force-recreate
+            docker compose up -d --force-recreate --remove-orphans
             echo "Waiting for services to start..."
             sleep 15
             docker compose ps
+            docker compose logs --no-color --tail=20 celery-worker celery-beat || true
             curl -sf http://localhost:8000/api/v1/health || (echo "Backend health check failed" && docker compose logs --tail=30 backend && exit 1)
             echo "Deploy successful at $(date)"

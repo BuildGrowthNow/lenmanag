@@ -41,7 +41,7 @@ services:
       args:
         BUILD_VERSION: ${BUILD_VERSION:-unknown}
     restart: unless-stopped
-    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
+    command: celery -A app.core.celery_app.celery_app worker --loglevel=warning --pool=solo --concurrency=1
     env_file:
       - .env.production
     depends_on:
