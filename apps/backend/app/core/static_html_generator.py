@@ -45,72 +45,39 @@ async def generate_static_html(
     """
     llm = get_llm_client()
 
-    # Build HTML generation prompt
-    prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
-
-    # Generate HTML, CSS, JS via LLM
+    # Generate each asset separately. A single response containing a full page,
+    # stylesheet, and script is frequently truncated by reasoning models.
     logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
     try:
-        response = await llm.generate_text(
-            prompt=prompt,
-            temperature=0.7,
-            max_tokens=32768,  # Increased to maximum to avoid truncation
+        html_content, css_content, js_content = await _generate_split_assets(
+            llm, master_brief, extraction, variant_type
         )
     except Exception as exc:
-        # Keep production generation useful during a model permission outage.
-        # The fallback is source-backed and preserves the runtime contract.
-        logger.warning("LLM unavailable for %s; using deterministic fallback: %s", variant_type, exc)
-        return _deterministic_fallback_document(master_brief, extraction, variant_type)
+        # Provider/model failures must fail the generation, never publish a
+        # generic substitute website.
+        logger.exception("Split asset generation failed for %s", variant_type)
+        raise ValueError(f"{variant_type} generation failed before publication") from exc
 
-    # Debug: Log response metadata
     logger.info(
-        f"[DEBUG] LLM response received for {variant_type}: "
-        f"length={len(response)}, first_200_chars={response[:200]}"
+        f"[DEBUG] Split assets received for {variant_type}: "
+        f"html_len={len(html_content)}, css_len={len(css_content)}, js_len={len(js_content)}"
     )
-
-    # Debug: Check for code block markers
-    html_start = response.find("```html")
-    html_end = response.find("```", html_start + 7) if html_start >= 0 else -1
-    css_start = response.find("```css")
-    css_end = response.find("```", css_start + 6) if css_start >= 0 else -1
-    js_start = response.find("```javascript")
-    if js_start < 0:
-        js_start = response.find("```js")
-    logger.info(
-        f"[DEBUG] Code block positions: html_start={html_start}, html_end={html_end}, "
-        f"css_start={css_start}, css_end={css_end}, js_start={js_start}"
-    )
-    if html_start >= 0:
-        # Log 100 chars after ```html marker to see what follows
-        logger.info(
-            f"[DEBUG] After ```html marker: {repr(response[html_start : html_start + 100])}"
-        )
-    if css_start >= 0:
-        logger.info(
-            f"[DEBUG] After ```css marker: {repr(response[css_start : css_start + 100])}"
-        )
-
-    # Parse response
-    try:
-        html_content, css_content, js_content = _parse_llm_response(response)
-        logger.info(
-            f"[DEBUG] Parsed successfully: "
-            f"html_len={len(html_content)}, css_len={len(css_content)}, js_len={len(js_content)}"
-        )
-    except ValueError as e:
-        logger.error(f"[DEBUG] Parsing failed: {e}")
-        logger.error(f"[DEBUG] Response starts with: {repr(response[:150])}")
-        if html_start >= 0 and html_end >= 0:
-            logger.error(f"[DEBUG] HTML block length would be: {html_end - html_start}")
-        raise
 
     html_content = _enforce_footer_year(html_content, extraction=extraction, company_name=extraction.summary.companyName)
-    _validate_generated_document(html_content, css_content, js_content, master_brief)
-    if not _javascript_is_valid(js_content):
-        js_content = await _repair_javascript(llm, html_content, js_content, variant_type)
+    try:
         _validate_generated_document(html_content, css_content, js_content, master_brief)
-        if not _javascript_is_valid(js_content):
-            raise ValueError("Generated JavaScript remains invalid after repair; refusing to publish")
+    except ValueError as exc:
+        logger.error("Rejecting invalid generated document for %s: %s", variant_type, exc)
+        raise ValueError(f"{variant_type} generated invalid document") from exc
+    if not _javascript_is_valid(js_content):
+        try:
+            js_content = await _repair_javascript(llm, html_content, js_content, variant_type)
+            _validate_generated_document(html_content, css_content, js_content, master_brief)
+            if not _javascript_is_valid(js_content):
+                raise ValueError("Generated JavaScript remains invalid after repair")
+        except Exception as exc:
+            logger.error("Rejecting invalid JavaScript for %s: %s", variant_type, exc)
+            raise ValueError(f"{variant_type} generated invalid JavaScript") from exc
 
     # The model never owns delivery URLs. Remove any relative/generated asset
     # references before the backend deterministically injects the final URLs.
@@ -196,7 +163,8 @@ def _deterministic_fallback_document(
     brief: MasterBrief, extraction: ExtractionSnapshot, variant_type: str
 ) -> dict[str, Any]:
     """Build a usable, source-backed preview when the configured LLM is unavailable."""
-    company = escape(extraction.summary.companyName or "Local Water Services")
+    company_name = extraction.summary.companyName or "Local Service Company"
+    company = escape(company_name)
     contact = extraction.contactInfo
     office = escape(contact.officePhone or contact.emergencyPhone or "")
     emergency = escape(contact.emergencyPhone or contact.officePhone or "")
@@ -204,7 +172,7 @@ def _deterministic_fallback_document(
     images = [item.url for item in extraction.extractedImages if item.url][:6]
     hero_image = escape(images[0] if images else "")
     logo_url = next((item.url for item in extraction.extractedImages if item.category == "client_logo"), "")
-    cta_text = brief.ctaStrategy or "Request a free estimate"
+    cta_text = brief.ctaStrategy or "Contact us today"
     if re.search(r"xxx|placeholder|example\\.com", cta_text, re.IGNORECASE):
         cta_text = "Request a free estimate"
     mode = {"html_v1": ("Regional Trust", "#f4efe6", "#0d1b2a"), "html_v2": ("Field Precision", "#111827", "#c8860a"), "html_v3": ("Clean Water, Close to Home", "#eef7f2", "#4a6741")}.get(variant_type, ("Trusted Service", "#f4efe6", "#0d1b2a"))
@@ -212,10 +180,14 @@ def _deterministic_fallback_document(
     section_html = "".join(
         f'<article><p class="eyebrow">{escape(s.purpose)}</p><h2>{escape(s.headline)}</h2><p>{escape(s.contentSummary)}</p></article>'
         for s in sections
-    ) or '<article><h2>Water well expertise for the Michiana area</h2><p>Reliable service, clear communication, and practical water solutions.</p></article>'
+    ) or f'<article><h2>How {company} helps</h2><p>{escape(brief.valueProposition or brief.businessGoal or f"Dependable service from {company}.")}</p></article>'
     gallery = "".join(f'<img src="{escape(url)}" alt="{company} field work">' for url in images[1:])
     logo = f'<img class="logo" src="{escape(logo_url)}" alt="{company} logo">' if logo_url else ''
-    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{company} — {mode[0]}</title><style>:root{{--bg:{mode[1]};--ink:{mode[2]};--accent:#c8860a}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}}main{{max-width:1180px;margin:auto;padding:28px}}header{{min-height:72vh;display:grid;align-content:center;gap:24px;background:linear-gradient(90deg,var(--bg) 35%,transparent),url('{hero_image}') center/cover;border-radius:24px;padding:clamp(28px,8vw,110px)}}.logo{{max-width:150px;max-height:70px;object-fit:contain;object-position:left}}h1{{font-size:clamp(3rem,9vw,8rem);line-height:.9;max-width:850px;margin:0}}h2{{font-size:clamp(1.8rem,4vw,3.5rem);line-height:1.05}}.eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:.75rem;font-weight:700;color:var(--accent)}}.cta{{display:inline-block;background:var(--accent);color:#fff;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700;width:max-content}}section{{padding:90px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}article{{padding:26px;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:18px}}.gallery{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}.gallery img{{width:100%;height:220px;object-fit:cover;border-radius:14px}}footer{{border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);padding:30px 0}}@media(max-width:700px){{main{{padding:16px}}header{{min-height:78vh;padding:28px 20px}}.grid,.gallery{{grid-template-columns:1fr}}.gallery img{{height:180px}}}}</style></head><body><main><header>{logo}<p class="eyebrow">{escape(mode[0])}</p><h1>{escape(brief.headline or f"{company} keeps water moving.")}</h1><p>{escape(brief.subheadline or brief.valueProposition or "Local expertise for dependable water systems.")}</p><a class="cta" href="tel:{office}">{escape(cta_text)}</a></header><section><p class="eyebrow">What we do</p><div class="grid">{section_html}</div></section><section><p class="eyebrow">Field notes</p><div class="gallery">{gallery}</div></section><section><p class="eyebrow">Talk with {company}</p><h2>Ready when your water cannot wait.</h2><p>Office: <a href="tel:{office}">{office}</a><br>Emergency: <a href="tel:{emergency}">{emergency}</a><br>{hours}</p><a class="cta" href="{escape(contact.contactUrl or '#contact')}">Contact the team</a></section><footer><span class="site-copyright">© {company} {datetime.now(timezone.utc).year}</span></footer></main><script>window.__LENMANAG_RUNTIME__={{initialized:true,animationSetupComplete:true,errors:[],jsLoaded:true}};window.__LENMANAG_STATIC_READY__=true;</script></body></html>'''
+    headline = escape(brief.headline or brief.valueProposition or f"Trusted service from {company_name}")
+    subheadline = escape(brief.subheadline or brief.businessGoal or f"A clear, dependable experience from {company_name}.")
+    primary_href = f"tel:{office}" if office else "#contact"
+    contact_heading = escape(brief.ctaStrategy or f"Start a conversation with {company_name}")
+    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{company} — {mode[0]}</title><style>:root{{--bg:{mode[1]};--ink:{mode[2]};--accent:#c8860a}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}}main{{max-width:1180px;margin:auto;padding:28px}}header{{min-height:72vh;display:grid;align-content:center;gap:24px;background:linear-gradient(90deg,var(--bg) 35%,transparent),url('{hero_image}') center/cover;border-radius:24px;padding:clamp(28px,8vw,110px)}}.logo{{max-width:150px;max-height:70px;object-fit:contain;object-position:left}}h1{{font-size:clamp(3rem,9vw,8rem);line-height:.9;max-width:850px;margin:0}}h2{{font-size:clamp(1.8rem,4vw,3.5rem);line-height:1.05}}.eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:.75rem;font-weight:700;color:var(--accent)}}.cta{{display:inline-block;background:var(--accent);color:#fff;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700;width:max-content}}section{{padding:90px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}article{{padding:26px;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:18px}}.gallery{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}.gallery img{{width:100%;height:220px;object-fit:cover;border-radius:14px}}footer{{border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);padding:30px 0}}@media(max-width:700px){{main{{padding:16px}}header{{min-height:78vh;padding:28px 20px}}.grid,.gallery{{grid-template-columns:1fr}}.gallery img{{height:180px}}}}</style></head><body><main><header>{logo}<p class="eyebrow">{escape(mode[0])}</p><h1>{headline}</h1><p>{subheadline}</p><a class="cta" href="{primary_href}">{escape(cta_text)}</a></header><section><p class="eyebrow">What we do</p><div class="grid">{section_html}</div></section><section><p class="eyebrow">Highlights</p><div class="gallery">{gallery}</div></section><section id="contact"><p class="eyebrow">Contact</p><h2>{contact_heading}</h2><p>Office: <a href="tel:{office}">{office or "Contact us for details"}</a><br>Emergency: <a href="tel:{emergency}">{emergency or "Contact us for details"}</a><br>{hours}</p><a class="cta" href="{escape(contact.contactUrl or '#contact')}">Contact the team</a></section><footer><span class="site-copyright">© {company} {datetime.now(timezone.utc).year}</span></footer></main><script>window.__LENMANAG_RUNTIME__={{initialized:true,animationSetupComplete:true,errors:[],jsLoaded:true}};window.__LENMANAG_STATIC_READY__=true;</script></body></html>'''
     formatted_office = office
     if len(re.sub(r"\\D", "", office)) == 11:
         digits = re.sub(r"\\D", "", office)[1:]
@@ -223,6 +195,102 @@ def _deterministic_fallback_document(
     html = html.replace("(574) XXX-XXXX", formatted_office)
     html = html.replace("XXX-XXXX", formatted_office)
     return {"html": html, "cssUrl": None, "jsUrl": None}
+
+
+def _split_generation_context(
+    brief: MasterBrief, extraction: ExtractionSnapshot, variant_type: str
+) -> str:
+    """Keep each asset prompt focused while retaining approved source facts."""
+    sections = "\n".join(
+        f"- {s.headline}: {s.contentSummary}"
+        for s in list(brief.sections or [])[:8]
+    ) or "- Use the approved value proposition and business goal."
+    images = "\n".join(
+        f"- {item.url} ({item.category})"
+        for item in list(extraction.extractedImages or [])[:8]
+        if item.url
+    ) or "- No approved images; use a typography/shape-led design."
+    contact = extraction.contactInfo
+    return f"""VARIANT: {variant_type}
+COMPANY: {extraction.summary.companyName}
+BUSINESS GOAL: {brief.businessGoal}
+AUDIENCE: {brief.primaryAudience}
+VALUE PROPOSITION: {brief.valueProposition}
+HEADLINE: {brief.headline}
+SUBHEADLINE: {brief.subheadline}
+TONE: {brief.toneAndVoice}
+CTA: {brief.ctaStrategy or brief.conversionAction}
+PHONE: {contact.officePhone or contact.emergencyPhone}
+HOURS: {contact.hours}
+CONTACT URL: {contact.contactUrl}
+APPROVED SECTIONS:
+{sections}
+APPROVED IMAGES (use only these URLs):
+{images}
+"""
+
+
+def _extract_single_code_block(response: str, languages: tuple[str, ...]) -> str:
+    language_pattern = "|".join(re.escape(language) for language in languages)
+    match = re.search(
+        rf"```(?:{language_pattern})[ \t]*\r?\n(.*?)\r?\n```",
+        response,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if not match or not match.group(1).strip():
+        raise ValueError(f"Model did not return a closed {'/'.join(languages)} code block")
+    return match.group(1).strip()
+
+
+async def _generate_split_assets(
+    llm: Any,
+    brief: MasterBrief,
+    extraction: ExtractionSnapshot,
+    variant_type: str,
+) -> tuple[str, str, str]:
+    context = _split_generation_context(brief, extraction, variant_type)
+    html_response = await llm.generate_text(
+        prompt=f"""Create only the semantic HTML for a production-ready static landing page.
+Return exactly one closed ```html code block and no commentary.
+Use the approved facts and images below. Include <!doctype html>, head, body, accessible semantic sections, and stable class/id selectors for styling and JavaScript. Do not include CSS or JavaScript. Do not invent contact details.
+
+{context}""",
+        temperature=0.7,
+        max_tokens=16_000,
+    )
+    html = _extract_single_code_block(html_response, ("html",))
+
+    css_response = await llm.generate_text(
+        prompt=f"""Create only the CSS for the static landing page below.
+Return exactly one closed ```css code block and no commentary. Make it polished, responsive, accessible, and visually distinct for this variant. Use modern CSS, custom properties, grid/flex layouts, hover/focus states, and do not add HTML or JavaScript.
+
+DESIGN CONTEXT:
+{context}
+
+HTML TO STYLE:
+{html}""",
+        temperature=0.6,
+        max_tokens=12_000,
+    )
+    css = _extract_single_code_block(css_response, ("css",))
+
+    js_response = await llm.generate_text(
+        prompt=f"""Create only the vanilla JavaScript for the static landing page below.
+Return exactly one closed ```javascript code block and no commentary. Bind interactions only to selectors that exist in the HTML, keep content visible if JavaScript fails, use no libraries, and call window.__LENMANAG_RUNTIME__.markInitialized() after setup when that function exists.
+
+DESIGN CONTEXT:
+{context}
+
+HTML:
+{html}
+
+CSS:
+{css}""",
+        temperature=0.3,
+        max_tokens=8_000,
+    )
+    js = _extract_single_code_block(js_response, ("javascript", "js"))
+    return html, css, js
 
 
 def _build_static_html_prompt(

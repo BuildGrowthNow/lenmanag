@@ -53,10 +53,10 @@ class CloudflareClient:
             if choices and isinstance(choices[0], dict):
                 message = choices[0].get("message", {})
                 content = message.get("content") if isinstance(message, dict) else None
-                if isinstance(content, str) and content:
+                if isinstance(content, str) and content.strip():
                     return content
             response = result.get("response")
-            if isinstance(response, str) and response:
+            if isinstance(response, str) and response.strip():
                 return response
         raise ValueError("Cloudflare Workers AI returned no text")
 
@@ -96,6 +96,16 @@ class CloudflareClient:
                 last_error = exc
                 self._record_failure(model)
                 logger.warning("Cloudflare model %s failed: %s", model, exc)
+        try:
+            from app.core.bedrock_mantle_client import get_bedrock_mantle_client
+
+            result = await get_bedrock_mantle_client().generate_text(
+                prompt, temperature, max_tokens
+            )
+            logger.info("Cloudflare fallback succeeded with Bedrock Mantle")
+            return result
+        except Exception as exc:
+            logger.warning("Bedrock Mantle fallback failed: %s", exc)
         raise ValueError(f"Cloudflare Workers AI failed after all fallbacks: {last_error}")
 
     async def analyze_image(self, prompt: str, image_data: bytes, image_mime_type: str = "image/png", temperature: float = 0.7, max_tokens: int = 2048) -> str:

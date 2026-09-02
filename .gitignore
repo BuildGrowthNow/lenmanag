@@ -19,3 +19,5 @@ apps/web/node_modules/
 apps/backend/.pytest_cache/
 apps/backend/.mypy_cache/
 coverage/
+.playwright-mcp/
+champion-champi20-*.png

@@ -42,10 +42,15 @@ class Settings(BaseSettings):
     # Cloudflare Workers AI Configuration
     cloudflare_account_id: Optional[str] = None
     cloudflare_api_token: Optional[str] = None
-    cloudflare_model: str = "@cf/deepseek-ai/deepseek-v4-pro-0813"
-    cloudflare_fallback_models: str = "@cf/zai-org/glm-5.3,@cf/qwen/qwen3.8-27b,@cf/deepseek-ai/deepseek-v4-flash-0731,@cf/zai-org/glm-5.3-flash"
+    cloudflare_model: str = "@cf/deepseek-ai/deepseek-v4-flash-0731"
+    cloudflare_fallback_models: str = "@cf/zai-org/glm-5.3-flash"
     cloudflare_vision_model: str = "@cf/zai-org/glm-5.3-flash"
-    cloudflare_timeout_seconds: int = 600
+    cloudflare_timeout_seconds: int = 300
+
+    # Final fallback for Cloudflare Workers AI: Amazon Bedrock Mantle.
+    bedrock_mantle_model_id: str = "qwen.qwen3-coder-30b-a3b-instruct"
+    bedrock_mantle_region: str = "us-east-1"
+    bedrock_mantle_timeout_seconds: int = 300
 
     @property
     def cloudflare_fallback_model_list(self) -> list[str]:

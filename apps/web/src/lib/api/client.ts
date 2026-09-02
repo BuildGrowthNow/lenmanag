@@ -22,6 +22,24 @@ type ApiResponseEnvelope<T> = {
   error?: { code: string; message: string; details?: Record<string, unknown> };
 };
 
+function readableError(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim()) return value;
+  if (Array.isArray(value)) {
+    const messages = value
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item && typeof item.msg === "string") return item.msg;
+        return null;
+      })
+      .filter((message): message is string => Boolean(message));
+    if (messages.length) return messages.join("; ");
+  }
+  if (value && typeof value === "object" && "message" in value && typeof value.message === "string") {
+    return value.message;
+  }
+  return fallback;
+}
+
 function normalizePath(path: string): string {
   if (!path.startsWith("/api")) {
     return path;
@@ -44,14 +62,20 @@ function normalizePath(path: string): string {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
-  const payload: ApiResponseEnvelope<T> | null = text ? JSON.parse(text) : null;
+  let payload: ApiResponseEnvelope<T> | null = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(response.ok ? "The API returned an invalid response." : response.statusText);
+  }
   if (!response.ok) {
-    const message = payload?.error?.message || payload?.error?.code || (payload as unknown as { detail?: string })?.detail || response.statusText;
-    throw new Error(message);
+    const raw = payload as ApiResponseEnvelope<T> & { detail?: unknown; error?: unknown };
+    throw new Error(
+      readableError(raw.error, readableError(raw.detail, response.statusText))
+    );
   }
   if (!payload || payload.status !== "success") {
-    const message = payload?.error?.message || "Unknown API error.";
-    throw new Error(message);
+    throw new Error(readableError(payload?.error, "Unknown API error."));
   }
   return payload.data as T;
 }
