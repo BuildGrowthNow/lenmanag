@@ -1616,18 +1616,38 @@ class LeadRepository:
         ):
             raise ValueError("Only available, non-blocked websites with a preview can be shared.")
 
+        # Keep the booking URL when older clients update only the gallery
+        # selection. Otherwise a legacy save silently turns a previously
+        # configured lead URL back into the global Calendly fallback.
+        existing_share: dict[str, Any] | None = None
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                existing_share = self._memory.get(lead_id, {}).get("clientShare")
+        else:
+            existing_doc = await database["leads"].find_one(
+                {"id": lead_id, "user_id": user_id}, {"clientShare": 1}
+            )
+            existing_share = existing_doc.get("clientShare") if existing_doc else None
+
+        persisted_booking_url = (
+            booking_url.strip()
+            if isinstance(booking_url, str) and booking_url.strip()
+            else (existing_share or {}).get("bookingUrl")
+            or "https://calendly.com/lenquant/sites"
+        )
+
         now = _now()
         share = {
             "id": (lead.redesignSlug or uuid4().hex),
             "leadId": lead_id,
             "slug": lead.redesignSlug or uuid4().hex,
             "selectedSiteIds": unique_ids,
-            "bookingUrl": booking_url or "https://calendly.com/lenquant/sites",
+            "bookingUrl": persisted_booking_url,
             "createdAt": now,
             "updatedAt": now,
             "isActive": True,
         }
-        database = get_database()
         if database is None:
             async with self._memory_lock:
                 doc = self._memory.get(lead_id)

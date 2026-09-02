@@ -16,6 +16,7 @@ export function ClientLinkManager({ leadId }: { leadId: string }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [savedUrl, setSavedUrl] = useState<string | null>(null);
   const [bookingUrl, setBookingUrl] = useState("https://calendly.com/lenquant/sites");
+  const [bookingUrlDirty, setBookingUrlDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -28,8 +29,10 @@ export function ClientLinkManager({ leadId }: { leadId: string }) {
     setSites(available);
     setSelected((share?.siteIds ?? []).filter((id) => available.some((site) => site.id === id)));
     setSavedUrl(share?.url ?? null);
-    setBookingUrl(share?.bookingUrl ?? "https://calendly.com/lenquant/sites");
-  }, [leadId]);
+    if (!bookingUrlDirty) {
+      setBookingUrl(share?.bookingUrl ?? "https://calendly.com/lenquant/sites");
+    }
+  }, [bookingUrlDirty, leadId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -46,8 +49,11 @@ export function ClientLinkManager({ leadId }: { leadId: string }) {
   async function save() {
     setSaving(true); setMessage(null);
     try {
-      const share = await saveClientShare(leadId, selected, bookingUrl);
-      setSavedUrl(share.url); setMessage("Client link saved.");
+      const share = await saveClientShare(leadId, selected, bookingUrl.trim());
+      setSavedUrl(share.url);
+      setBookingUrl(share.bookingUrl ?? "https://calendly.com/lenquant/sites");
+      setBookingUrlDirty(false);
+      setMessage("Client link and booking URL saved.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save the client link."); }
     finally { setSaving(false); }
   }
@@ -69,14 +75,14 @@ export function ClientLinkManager({ leadId }: { leadId: string }) {
           <a href={site.previewUrl || `/st/${site.previewSlug}`} target="_blank" rel="noreferrer" className="text-muted hover:text-text" onClick={(event) => event.stopPropagation()}><ExternalLink className="h-4 w-4" /></a>
         </label>)}</div>
         {selectedSites.length > 0 && <div className="space-y-2 rounded-lg bg-white/5 p-3"><div className="text-xs uppercase tracking-wider text-muted">Gallery order</div>{selectedSites.map((site, index) => <div key={site.id} className="flex items-center gap-2 text-sm"><span className="w-16 text-muted">Option {index + 1}</span><span className="flex-1 truncate">{site.variantTitle || site.variantLabel}</span><Button size="icon" variant="ghost" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp className="h-4 w-4" /></Button><Button size="icon" variant="ghost" disabled={index === selectedSites.length - 1} onClick={() => move(index, 1)}><ArrowDown className="h-4 w-4" /></Button></div>)}</div>}
-        <div className="flex flex-wrap gap-2"><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : selected.length ? "Save selection" : "Save all variants"}</Button>{savedUrl && <><Button variant="secondary" onClick={() => void copy()}><Copy className="mr-2 h-4 w-4" />Copy link</Button><a href={savedUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-white/10 px-3 text-sm text-muted hover:text-text">Preview gallery</a></>}</div>
+        <div className="flex flex-wrap gap-2"><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : selected.length ? "Save selection & URL" : "Save all variants & URL"}</Button>{savedUrl && <><Button variant="secondary" onClick={() => void copy()}><Copy className="mr-2 h-4 w-4" />Copy link</Button><a href={savedUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-white/10 px-3 text-sm text-muted hover:text-text">Preview gallery</a></>}</div>
         <div className="space-y-2">
           <label htmlFor="booking-url" className="text-sm font-medium text-text">Book a call URL</label>
           <input
             id="booking-url"
             type="url"
             value={bookingUrl}
-            onChange={(event) => setBookingUrl(event.target.value)}
+            onChange={(event) => { setBookingUrl(event.target.value); setBookingUrlDirty(true); }}
             placeholder="https://calendly.com/lenquant/sites"
             className="flex h-10 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-muted focus:border-yellow-500/60"
           />
