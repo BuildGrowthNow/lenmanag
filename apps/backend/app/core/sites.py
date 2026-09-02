@@ -4566,8 +4566,9 @@ class SiteRepository:
             from app.core.tasks import run_site_refinement_job_task
 
             try:
-                task_result = run_site_refinement_job_task.delay(  # type: ignore[attr-defined]
-                    site_id=site_id, job_id=job.id, prompt_id=prompt_id
+                task_result = run_site_refinement_job_task.apply_async(  # type: ignore[attr-defined]
+                    kwargs={"site_id": site_id, "job_id": job.id, "prompt_id": prompt_id},
+                    task_id=job.id,
                 )
                 logger.info(
                     "Queued refinement task %s for site %s job %s",
@@ -5077,8 +5078,9 @@ class SiteRepository:
 
             from app.core.tasks import run_multi_variant_generation_task
 
-            run_multi_variant_generation_task.delay(  # type: ignore[attr-defined]
-                lead_id=site_id, job_id=job_id, generation_types=list(variant_types), generation_run_id=generation_run_id
+            run_multi_variant_generation_task.apply_async(  # type: ignore[attr-defined]
+                kwargs={"lead_id": site_id, "job_id": job_id, "generation_types": list(variant_types), "generation_run_id": generation_run_id},
+                task_id=job_id,
             )
             return
 
@@ -5101,8 +5103,9 @@ class SiteRepository:
         from app.core.tasks import run_site_generation_job_task
 
         payload = request.model_dump() if request else None
-        run_site_generation_job_task.delay(  # type: ignore[attr-defined]
-            site_id=site_id, job_id=job_id, request_payload=payload, generation_run_id=generation_run_id
+        run_site_generation_job_task.apply_async(  # type: ignore[attr-defined]
+            kwargs={"site_id": site_id, "job_id": job_id, "request_payload": payload, "generation_run_id": generation_run_id},
+            task_id=job_id,
         )
 
     async def run_republish_job(self, *, site_id: str, job_id: str) -> None:
@@ -5288,7 +5291,9 @@ class SiteRepository:
 
         from app.core.tasks import run_site_republish_task
 
-        run_site_republish_task.delay(site_id=site_id, job_id=job.id)  # type: ignore[attr-defined]
+        run_site_republish_task.apply_async(  # type: ignore[attr-defined]
+            kwargs={"site_id": site_id, "job_id": job.id}, task_id=job.id
+        )
         return job
 
     async def add_export_metadata(

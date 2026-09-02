@@ -2164,6 +2164,81 @@ class LeadRepository:
     ) -> LeadDetail | None:
         return await self.archive_lead(lead_id, user_id=user_id)
 
+    async def permanently_delete_lead(
+        self, lead_id: str, user_id: str | None = None
+    ) -> bool:
+        """Permanently remove a lead and every record owned by its pipeline."""
+        await self._maybe_ensure_indexes()
+        database = get_database()
+        if database is None:
+            async with self._memory_lock:
+                lead = self._memory.get(lead_id)
+                if lead is None or (user_id and lead.get("user_id") != user_id):
+                    return False
+                job_ids = [
+                    job_id for job_id, job in self._jobs.items()
+                    if lead_id in job.get("leadIds", []) or job.get("leadId") == lead_id
+                ]
+                self._memory.pop(lead_id, None)
+                self._extractions.pop(lead_id, None)
+                self._briefs.pop(lead_id, None)
+                self._memory.get("master_briefs", {}).pop(lead_id, None)
+                for job_id in job_ids:
+                    self._jobs.pop(job_id, None)
+            from app.core.sites import site_repository
+
+            async with site_repository._memory_lock:  # noqa: SLF001
+                site_ids = [
+                    site_id for site_id, site in site_repository._sites.items()  # noqa: SLF001
+                    if site.get("leadId") == lead_id
+                ]
+                for site_id in site_ids:
+                    site_repository._sites.pop(site_id, None)  # noqa: SLF001
+                    site_repository._versions.pop(site_id, None)  # noqa: SLF001
+                    site_repository._overrides.pop(site_id, None)  # noqa: SLF001
+                    site_repository._exports.pop(site_id, None)  # noqa: SLF001
+                    site_repository._reviews.pop(site_id, None)  # noqa: SLF001
+                    site_repository._handoffs.pop(site_id, None)  # noqa: SLF001
+                site_repository._generation_runs = {  # noqa: SLF001
+                    run_id: run for run_id, run in site_repository._generation_runs.items()  # noqa: SLF001
+                    if run.get("leadId") != lead_id
+                }
+            return True
+
+        query: dict[str, Any] = {"id": lead_id}
+        if user_id:
+            query["user_id"] = user_id
+        if await database["leads"].find_one(query, {"id": 1}) is None:
+            return False
+
+        job_filter = {"$or": [{"leadId": lead_id}, {"leadIds": lead_id}]}
+        job_docs = await database["jobs"].find(job_filter, {"id": 1}).to_list(length=None)
+        job_ids = [str(job["id"]) for job in job_docs if job.get("id")]
+        if job_ids:
+            from app.core.celery_app import celery_app
+
+            for job_id in job_ids:
+                try:
+                    # Tasks are dispatched with their job ID as Celery task ID.
+                    celery_app.control.revoke(job_id, terminate=True)
+                except Exception:  # pragma: no cover - broker may be unavailable
+                    logger.warning("Could not revoke task for deleted job %s", job_id, exc_info=True)
+
+        await database["jobs"].delete_many(job_filter)
+        for collection in (
+            "site_extractions", "site_briefs", "master_briefs",
+            "generated_sites", "generation_runs", "generation_input_claims",
+            "message_drafts", "analytics_events", "asset_metadata",
+        ):
+            await database[collection].delete_many({"leadId": lead_id})
+        if job_ids:
+            await database["task_checkpoints"].delete_many({"taskId": {"$in": job_ids}})
+        await database["audit_logs"].delete_many(
+            {"$or": [{"entityId": lead_id}, {"metadata.leadId": lead_id}]}
+        )
+        result = await database["leads"].delete_one(query)
+        return result.deleted_count == 1
+
     async def search_jobs_for_lead(self, lead_id: str) -> list[JobSummary]:
         await self._maybe_ensure_indexes()
         database = get_database()
@@ -2457,6 +2532,7 @@ class LeadRepository:
         celery_app.send_task(
             "lenquant.jobs.run_analysis_refresh",
             args=[lead_id, job_id],
+            task_id=job_id,
         )
 
     async def run_analysis_refresh_job(self, *, lead_id: str, job_id: str) -> None:
@@ -3139,7 +3215,10 @@ class LeadRepository:
 
         from app.core.tasks import run_extraction_job_task
 
-        run_extraction_job_task.delay(lead_id=lead_id, job_id=job_id, refresh=refresh)  # type: ignore[attr-defined]
+        run_extraction_job_task.apply_async(  # type: ignore[attr-defined]
+            kwargs={"lead_id": lead_id, "job_id": job_id, "refresh": refresh},
+            task_id=job_id,
+        )
 
     @staticmethod
     def log_inline_error(label: str, task: asyncio.Task[None]) -> None:

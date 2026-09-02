@@ -102,6 +102,10 @@ export async function archiveLead(id: string): Promise<LeadDetail> {
   return request(`/api/leads/${id}`, { method: "DELETE" });
 }
 
+export async function permanentlyDeleteLead(id: string): Promise<{ deleted: boolean }> {
+  return request(`/api/leads/${id}/permanent`, { method: "DELETE" });
+}
+
 export async function importLeads(file: File, mode?: string): Promise<LeadImportResponse> {
   const formData = new FormData();
   formData.append("file", file);

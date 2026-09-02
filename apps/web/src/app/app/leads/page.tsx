@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, Plus, Upload, RefreshCw, Lock } from "lucide-react";
+import { Archive, Plus, Upload, RefreshCw, Lock, Trash2 } from "lucide-react";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -14,7 +14,7 @@ import { LoadingState } from "@/components/state/loading-state";
 import { PageFrame } from "@/components/shell/page-frame";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { archiveLead, createLead, importLeads, listLeads } from "@/lib/api/leads";
+import { archiveLead, createLead, importLeads, listLeads, permanentlyDeleteLead } from "@/lib/api/leads";
 import type { LeadImportResponse, LeadListItem, LeadListResponse, PipelineMode, PipelineStage, GenerationType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -503,6 +503,7 @@ export default function LeadsPage() {
   const [showImport, setShowImport] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!actionMessage) return;
@@ -597,6 +598,20 @@ export default function LeadsPage() {
     }
   }
 
+  async function handleDeleteConfirmed() {
+    if (!confirmDeleteId) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
+    setActionMessage(null);
+    try {
+      await permanentlyDeleteLead(id);
+      setActionMessage("Lead permanently deleted.");
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not permanently delete lead.");
+    }
+  }
+
   const items = data.items;
 
   const summary = data.pipelineSummary;
@@ -639,6 +654,19 @@ export default function LeadsPage() {
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirmArchiveId(null)}>Cancel</Button>
             <Button variant="secondary" onClick={() => void handleArchiveConfirmed()}>Archive</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!confirmDeleteId} onOpenChange={(o) => !o && setConfirmDeleteId(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Permanently delete lead?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted">This permanently removes the lead, its generations, queued work, briefs, messages, and related data. This cannot be undone.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void handleDeleteConfirmed()}>Delete permanently</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -772,7 +800,7 @@ export default function LeadsPage() {
               {/* Rows */}
               <div className="divide-y divide-line">
                 {items.map((lead: LeadListItem) => (
-                  <LeadRow key={lead.id} lead={lead} onArchive={(id) => setConfirmArchiveId(id)} />
+                  <LeadRow key={lead.id} lead={lead} onArchive={(id) => setConfirmArchiveId(id)} onDelete={(id) => setConfirmDeleteId(id)} />
                 ))}
               </div>
             </div>
@@ -809,7 +837,7 @@ export default function LeadsPage() {
 
 // ── Lead row ──────────────────────────────────────────────────────────────
 
-function LeadRow({ lead, onArchive }: { lead: LeadListItem; onArchive: (id: string) => void }) {
+function LeadRow({ lead, onArchive, onDelete }: { lead: LeadListItem; onArchive: (id: string) => void; onDelete: (id: string) => void }) {
   const statusDetail = lead.pipelineStatusDetail ?? lead.latestJob?.step ?? null;
 
   return (
@@ -846,6 +874,14 @@ function LeadRow({ lead, onArchive }: { lead: LeadListItem; onArchive: (id: stri
           title="Archive"
         >
           <Archive className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => onDelete(lead.id)}
+          title="Delete permanently"
+          className="text-red-400 hover:text-red-300"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
     </div>

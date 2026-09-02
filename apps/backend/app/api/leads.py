@@ -178,6 +178,18 @@ async def delete_lead(
     return success_response(lead, meta=response_meta(http_request))
 
 
+@router.delete("/{lead_id}/permanent", response_model=ResponseEnvelope[dict[str, bool]])
+async def permanently_delete_lead(
+    lead_id: str,
+    user_id: CurrentUserId,
+    http_request: Request,
+) -> ResponseEnvelope[dict[str, bool]]:
+    deleted = await lead_repository.permanently_delete_lead(lead_id, user_id=user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+    return success_response({"deleted": True}, meta=response_meta(http_request))
+
+
 @router.post(
     "/{lead_id}/extraction/start",
     response_model=ResponseEnvelope[ExtractionJobResponse],
