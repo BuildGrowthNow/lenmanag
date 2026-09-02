@@ -8,12 +8,14 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getVariantsForLead, recaptureScreenshot } from "@/lib/api/sites";
-import type { GeneratedSite, SiteReadinessStatus, VariantType } from "@/lib/types";
+import { getVariantsForLead, isPreviewUsable, previewPath, recaptureScreenshot } from "@/lib/api/sites";
+import type { GeneratedSite, PipelineEvent, SiteReadinessStatus, VariantType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type VariantsViewProps = {
   leadId: string;
+  pipelineEvents?: PipelineEvent[];
+  requestedVariants?: VariantType[];
 };
 
 const VARIANT_LABELS: Record<VariantType, { name: string; description: string }> = {
@@ -66,8 +68,7 @@ function ReadinessBadge({ status }: { status: SiteReadinessStatus }) {
 function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () => void }) {
   const variantType = site.variantType || "nextjs";
   const variantInfo = VARIANT_LABELS[variantType];
-  // All variants (HTML and Next.js) now use /st/{slug}
-  const previewUrl = `/st/${site.previewSlug}`;
+  const previewUrl = previewPath(site);
   const screenshotUrl = site.screenshotRefs?.[0]?.url ?? null;
   const [refreshing, setRefreshing] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -94,10 +95,11 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
     }
   }
 
+  const usable = isPreviewUsable(site);
   return (
     <Card className="group relative overflow-hidden border-line bg-panel hover:border-white/20 transition-colors">
       {/* Thumbnail */}
-      <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="block relative h-36 w-full overflow-hidden bg-panel-2">
+      {usable ? <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="block relative h-36 w-full overflow-hidden bg-panel-2">
         {screenshotUrl ? (
           <Image
             src={screenshotUrl}
@@ -111,7 +113,7 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
             <ExternalLink className="h-5 w-5" />
           </div>
         )}
-      </a>
+      </a> : <div className="flex h-36 items-center justify-center bg-panel-2 px-4 text-center text-sm text-rose-300">Preview unavailable — this variant was not published.</div>}
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
@@ -130,7 +132,7 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
           <ReadinessBadge status={site.readinessStatus} />
         </div>
 
-        {site.qualityScore !== undefined && site.qualityScore !== null && (
+        {usable && site.qualityScoreSource === "visual" && site.qualityScore !== undefined && site.qualityScore !== null && (
           <div className="flex items-center gap-2 text-sm">
             <span className="text-muted">Quality Score:</span>
             <span className={cn(
@@ -144,7 +146,7 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
         )}
 
         <div className="flex flex-col gap-2 pt-2 border-t border-line">
-          <a
+          {usable ? <a
             href={previewUrl}
             target="_blank"
             rel="noopener noreferrer"
@@ -155,8 +157,8 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
           >
             <ExternalLink className="h-4 w-4" />
             Preview
-          </a>
-          <button
+          </a> : <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-center text-sm text-rose-300">No Preview or client link is available.</div>}
+          {usable && <button
             onClick={() => void handleRefreshScreenshot()}
             disabled={refreshing}
             className={cn(
@@ -168,14 +170,14 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
           >
             <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
             {refreshing ? `Refreshing... ${countdown}s` : "Refresh Screenshot"}
-          </button>
+          </button>}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-export function LeadVariantsView({ leadId }: VariantsViewProps) {
+export function LeadVariantsView({ leadId, pipelineEvents = [], requestedVariants = [] }: VariantsViewProps) {
   const [variants, setVariants] = useState<GeneratedSite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -257,8 +259,17 @@ export function LeadVariantsView({ leadId }: VariantsViewProps) {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col items-center justify-center py-8 text-center text-muted">
-            <p>No site variants generated yet.</p>
-            <p className="text-xs mt-1">Variants will appear here once generation completes.</p>
+            {requestedVariants.some((variant) => pipelineEvents.some((event) => event.variantType === variant && event.eventType === "site_generation_failed")) ? (
+              <>
+                <p className="text-rose-300">Generation failed — no website was published.</p>
+                <p className="mt-1 max-w-xl text-xs">{pipelineEvents.find((event) => event.eventType === "site_generation_failed" && event.variantType)?.detail ?? "Review the pipeline activity for the actionable failure."}</p>
+              </>
+            ) : (
+              <>
+                <p>No site variants generated yet.</p>
+                <p className="text-xs mt-1">Variants will appear here once generation completes.</p>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>

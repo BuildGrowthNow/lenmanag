@@ -937,7 +937,24 @@ class LeadRepository:
     async def advance_pipeline_after_generation(
         self, lead_id: str, quality_score: int
     ) -> None:
-        """Called after site generation completes — QA check and advance."""
+        """Legacy advancement hook; never report completion without an artifact."""
+        from app.core.sites import is_usable_generated_site, site_repository
+
+        sites = await site_repository.list_sites_by_lead(lead_id)
+        if not sites or not all(is_usable_generated_site(site) for site in sites):
+            await self.log_pipeline_event(
+                lead_id,
+                event_type="site_generation_failed",
+                status="error",
+                message="Site generation requires attention",
+                detail="No complete, usable preview artifact is available.",
+            )
+            await self._set_pipeline_stage(
+                lead_id,
+                "needs_attention",
+                detail="No complete, usable preview artifact is available.",
+            )
+            return
         await self.log_pipeline_event(
             lead_id,
             event_type="site_generation_completed",
@@ -1581,7 +1598,7 @@ class LeadRepository:
         booking_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Persist the operator's ordered optional client-share selection."""
-        from app.core.sites import site_repository
+        from app.core.sites import is_usable_generated_site, site_repository
 
         unique_ids = list(dict.fromkeys(site_ids))
         if len(unique_ids) > 0 and any(not isinstance(site_id, str) or not site_id.strip() for site_id in unique_ids):
@@ -1594,16 +1611,7 @@ class LeadRepository:
         selected = [by_id.get(site_id) for site_id in unique_ids]
         if any(site is None for site in selected):
             raise ValueError("Every selected website must belong to this lead.")
-        if any(
-            (
-                site.compilationStatus not in {"success", "completed"}
-                and not site.staticHtml
-            )
-            or not (site.previewUrl or site.previewSlug)
-            or site.readinessStatus == "blocked"
-            for site in selected
-            if site is not None
-        ):
+        if any(not is_usable_generated_site(site) for site in selected if site is not None):
             raise ValueError("Only available, non-blocked websites with a preview can be shared.")
 
         # Keep the booking URL when older clients update only the gallery

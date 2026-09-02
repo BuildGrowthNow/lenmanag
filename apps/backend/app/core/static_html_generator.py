@@ -26,6 +26,23 @@ from app.schemas.extraction import ExtractionSnapshot
 logger = logging.getLogger(__name__)
 
 
+class StaticGenerationError(ValueError):
+    """Safe, structured failure raised before a static site is published."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        variant_type: str,
+        stage: str,
+        code: str,
+    ) -> None:
+        super().__init__(message)
+        self.variant_type = variant_type
+        self.stage = stage
+        self.code = code
+
+
 async def generate_static_html(
     *,
     master_brief: MasterBrief,
@@ -52,11 +69,18 @@ async def generate_static_html(
         html_content, css_content, js_content = await _generate_split_assets(
             llm, master_brief, extraction, variant_type
         )
+    except StaticGenerationError:
+        raise
     except Exception as exc:
         # Provider/model failures must fail the generation, never publish a
         # generic substitute website.
         logger.exception("Split asset generation failed for %s", variant_type)
-        raise ValueError(f"{variant_type} generation failed before publication") from exc
+        raise StaticGenerationError(
+            f"{variant_type} generation failed before publication",
+            variant_type=variant_type,
+            stage="html",
+            code="asset_generation_failed",
+        ) from exc
 
     logger.info(
         f"[DEBUG] Split assets received for {variant_type}: "
@@ -68,7 +92,12 @@ async def generate_static_html(
         _validate_generated_document(html_content, css_content, js_content, master_brief)
     except ValueError as exc:
         logger.error("Rejecting invalid generated document for %s: %s", variant_type, exc)
-        raise ValueError(f"{variant_type} generated invalid document") from exc
+        raise StaticGenerationError(
+            f"{variant_type} generated invalid document: {exc}",
+            variant_type=variant_type,
+            stage="validation",
+            code="document_validation_failed",
+        ) from exc
     if not _javascript_is_valid(js_content):
         try:
             js_content = await _repair_javascript(llm, html_content, js_content, variant_type)
@@ -77,7 +106,12 @@ async def generate_static_html(
                 raise ValueError("Generated JavaScript remains invalid after repair")
         except Exception as exc:
             logger.error("Rejecting invalid JavaScript for %s: %s", variant_type, exc)
-            raise ValueError(f"{variant_type} generated invalid JavaScript") from exc
+            raise StaticGenerationError(
+                f"{variant_type} generated invalid JavaScript: {exc}",
+                variant_type=variant_type,
+                stage="js",
+                code="javascript_validation_failed",
+            ) from exc
 
     # The model never owns delivery URLs. Remove any relative/generated asset
     # references before the backend deterministically injects the final URLs.
@@ -89,20 +123,36 @@ async def generate_static_html(
         f"[DEBUG] S3 config: bucket={settings.asset_s3_bucket}, "
         f"prefix={settings.asset_s3_prefix}, region={settings.asset_s3_region}"
     )
-    css_url = _upload_to_s3(
-        content=css_content,
-        filename=f"{site_id}/styles.css",
-        content_type="text/css",
-        bucket=settings.asset_s3_bucket,
-        prefix=settings.asset_s3_prefix,
-    )
-    js_url = _upload_to_s3(
-        content=js_content,
-        filename=f"{site_id}/script.js",
-        content_type="application/javascript",
-        bucket=settings.asset_s3_bucket,
-        prefix=settings.asset_s3_prefix,
-    )
+    try:
+        css_url = _upload_to_s3(
+            content=css_content,
+            filename=f"{site_id}/styles.css",
+            content_type="text/css",
+            bucket=settings.asset_s3_bucket,
+            prefix=settings.asset_s3_prefix,
+        )
+        js_url = _upload_to_s3(
+            content=js_content,
+            filename=f"{site_id}/script.js",
+            content_type="application/javascript",
+            bucket=settings.asset_s3_bucket,
+            prefix=settings.asset_s3_prefix,
+        )
+    except Exception as exc:
+        logger.exception("Static asset upload failed for %s", variant_type)
+        raise StaticGenerationError(
+            f"{variant_type} static asset upload failed",
+            variant_type=variant_type,
+            stage="upload",
+            code="asset_upload_failed",
+        ) from exc
+    if settings.asset_s3_bucket and (not css_url or not js_url):
+        raise StaticGenerationError(
+            f"{variant_type} static asset upload did not return both public URLs",
+            variant_type=variant_type,
+            stage="upload",
+            code="asset_upload_incomplete",
+        )
     logger.info(f"[DEBUG] S3 upload results: css_url={css_url}, js_url={js_url}")
 
     # Inject CSS/JS URLs into HTML
@@ -211,6 +261,7 @@ def _split_generation_context(
         if item.url
     ) or "- No approved images; use a typography/shape-led design."
     contact = extraction.contactInfo
+    required_logo_url = _approved_logo_url(brief)
     return f"""VARIANT: {variant_type}
 COMPANY: {extraction.summary.companyName}
 BUSINESS GOAL: {brief.businessGoal}
@@ -227,6 +278,8 @@ APPROVED SECTIONS:
 {sections}
 APPROVED IMAGES (use only these URLs):
 {images}
+REQUIRED HEADER LOGO URL: {required_logo_url or 'NONE'}
+LOGO CONTRACT: If the required URL is non-empty, the HTML MUST contain an <img> inside <header> whose src equals that exact URL. Do not substitute, rewrite, omit, or use another logo variant. If it is NONE, do not invent or substitute a logo.
 """
 
 
@@ -253,6 +306,7 @@ async def _generate_split_assets(
         prompt=f"""Create only the semantic HTML for a production-ready static landing page.
 Return exactly one closed ```html code block and no commentary.
 Use the approved facts and images below. Include <!doctype html>, head, body, accessible semantic sections, and stable class/id selectors for styling and JavaScript. Do not include CSS or JavaScript. Do not invent contact details.
+The required header logo contract below is exact and mandatory. If the URL is non-empty, place an <img> inside <header> with src set to that exact URL. Do not omit, rewrite, substitute, or use a different logo URL. If it is NONE, no logo is required.
 
 {context}""",
         temperature=0.7,
@@ -379,9 +433,10 @@ REQUIREMENTS:
 2. HTML Structure:
    - Semantic tags (<header>, <main>, <section>, <footer>)
    - Proper meta tags (viewport, description, title)
-   - Accessibility: ARIA labels, alt text, semantic structure
-   - Include all sections from the master brief
-   - Use brand logo if available (as img src)
+    - Accessibility: ARIA labels, alt text, semantic structure
+    - Include all sections from the master brief
+    - REQUIRED HEADER LOGO URL: {logo_url}
+    - If this URL is not None, the <header> MUST contain an <img> whose src equals this exact URL. Do not omit, rewrite, substitute, or use a different logo variant. If it is None, no logo is required.
    - Map approved assets to header, hero, service/about, and footer before writing markup. If an approved logo exists, the header MUST contain it. If approved photography exists, use at least one <img> unless this specific concept is explicitly typography-only.
    - Use only the verified contact data above. Never invent phone numbers, emails, addresses, metrics, or placeholder contacts. Use the current server year in the copyright footer.
    - NO inline styles or scripts
@@ -498,11 +553,39 @@ def _validate_generated_document(html: str, css: str, js: str, brief: MasterBrie
         current_year = str(datetime.now(timezone.utc).year)
         if re.search(r"(?:copyright|©|&copy;)[^<]{0,80}\b20\d{2}\b", html, re.I) and current_year not in html:
             raise ValueError("Generated footer uses a stale year")
-        valid_logos = [url for url in [brief.brandAssets.logoUrl, brief.brandAssets.logoLightUrl, brief.brandAssets.logoDarkUrl, *brief.brandAssets.logoVariants] if url]
-        if valid_logos and not any(re.search(r"<img\b[^>]*\bsrc\s*=\s*['\"]" + re.escape(url), html, re.I) for url in valid_logos):
+        required_logo_url = _approved_logo_url(brief)
+        if required_logo_url and not _header_contains_exact_logo(html, required_logo_url):
             raise ValueError("Generated HTML omitted the approved header logo")
         if brief.brandAssets.imageUrls and "<img" not in html:
             raise ValueError("Generated HTML omitted approved photography")
+
+
+def _approved_logo_url(brief: MasterBrief) -> str | None:
+    assets = getattr(brief, "brandAssets", None)
+    if assets is None:
+        return None
+    for value in (
+        getattr(assets, "logoUrl", None),
+        getattr(assets, "logoLightUrl", None),
+        getattr(assets, "logoDarkUrl", None),
+        *(getattr(assets, "logoVariants", None) or []),
+    ):
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _header_contains_exact_logo(html: str, required_url: str) -> bool:
+    """Check the strict logo contract without accepting a logo elsewhere."""
+    header_match = re.search(r"<header\b[^>]*>(.*?)</header\s*>", html, re.I | re.S)
+    if not header_match:
+        return False
+    header = header_match.group(1)
+    for image in re.finditer(r"<img\b[^>]*>", header, re.I | re.S):
+        src_match = re.search(r"\bsrc\s*=\s*(['\"])(.*?)\1", image.group(0), re.I | re.S)
+        if src_match and src_match.group(2).strip() == required_url:
+            return True
+    return False
 
 
 def _javascript_is_valid(script: str) -> bool:

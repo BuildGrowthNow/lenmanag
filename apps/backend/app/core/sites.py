@@ -29,7 +29,6 @@ from app.schemas.brief import (
 )
 from app.schemas.extraction import ExtractionSnapshot
 from app.schemas.lead import JobSummary
-from app.schemas.generation_run import GenerationRun, GenerationRunSnapshot
 from app.schemas.site import (
     BrandTokens,
     CtaAction,
@@ -75,6 +74,23 @@ CLIENT_VARIANT_COPY: dict[str, tuple[str, str]] = {
     "html_v3": ("The Counsel Atelier", "A warmer, more distinctive expression with memorable detail."),
     "nextjs": ("The Interactive Brief", "A polished interactive direction with room for richer product moments."),
 }
+
+
+def is_usable_generated_site(site: GeneratedSite) -> bool:
+    """Return true only when the persisted artifact can actually be previewed."""
+    if site.readinessStatus == "blocked" or not (site.previewUrl or site.previewSlug):
+        return False
+    if site.variantType in {"html_v1", "html_v2", "html_v3"}:
+        return bool(
+            site.staticHtml
+            and site.staticHtml.strip()
+            and site.compilationStatus in {"success", "completed"}
+        )
+    return bool(
+        site.compiledBundleUrl
+        and site.compiledBundleUrl.strip()
+        and site.compilationStatus in {"success", "completed"}
+    )
 
 
 def _client_variant_copy(variant_strategy: dict[str, Any]) -> tuple[str, str]:
@@ -3044,16 +3060,16 @@ class SiteRepository:
         else:
             # Generate static HTML
             logger.info(f"Generating static HTML for {variant_type} (site {site_id})")
-            try:
-                html_result = await generate_static_html(
-                    master_brief=master_brief,
-                    extraction=extraction,
-                    variant_type=variant_type,
-                    site_id=site_id,
-                )
-            except Exception as e:
-                logger.error(f"Static HTML generation failed: {e}")
-                html_result = {"html": "", "cssUrl": None, "jsUrl": None}
+            # A failed generator call must abort before a GeneratedSite is
+            # built or persisted. The caller records the structured failure.
+            html_result = await generate_static_html(
+                master_brief=master_brief,
+                extraction=extraction,
+                variant_type=variant_type,
+                site_id=site_id,
+            )
+            if not html_result.get("html", "").strip():
+                raise ValueError("static_html_empty_after_generation")
 
             site = self._build_static_html_site(
                 site_id=site_id,
@@ -3887,8 +3903,6 @@ class SiteRepository:
         self, *, lead: Any, extraction: ExtractionSnapshot, brief: Any,
         request: SiteGenerateRequest | None, job_id: str, requested_by: str | None = None,
     ) -> dict[str, Any]:
-        from app.core.generation_run import canonical_json
-
         generation_types = list((request.variantTypes if request and request.variantTypes else ["nextjs"]))
         assets = brief.brandAssets.model_dump(mode="json") if getattr(brief, "brandAssets", None) else {}
         instructions = None
@@ -4754,27 +4768,6 @@ class SiteRepository:
             "layout": theme.get("heroFamily", "stacked-panel"),
             "visualTreatment": master_brief.visualStyle or "modern",
             "evidence": default_evidence,
-        }
-
-        cta_strategy = {
-            "primary": {
-                "label": _ensure_client_safe_cta("Get started"),
-                "href": "#",
-                "rationale": "Primary conversion action",
-                "evidence": default_evidence,
-            },
-            "secondary": {
-                "label": _ensure_client_safe_cta("Learn more"),
-                "href": "#",
-                "rationale": "Secondary engagement action",
-                "evidence": default_evidence,
-            },
-            "footer": {
-                "label": _ensure_client_safe_cta("Get started"),
-                "href": "#",
-                "rationale": "Footer conversion action",
-                "evidence": default_evidence,
-            },
         }
 
         # Generate or reuse preview slug

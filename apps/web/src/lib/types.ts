@@ -88,7 +88,7 @@ export type PipelineEvent = {
   jobId: string | null;
   variantType: string | null;
   durationMs: number | null;
-  metadata: Record<string, string | number | boolean | null>;
+  metadata: Record<string, unknown>;
   timestamp: string;
 };
 
@@ -610,6 +610,7 @@ export type GeneratedSiteVersion = {
   sectionStack: SiteSection[];
   ctaStrategy: CtaStrategy;
   qualityScore: number;
+  qualityScoreSource?: "visual" | "fallback";
   readinessStatus: SiteReadinessStatus;
   qaStatus: SiteQaStatus;
   reviewRubric: SiteQualityCheck[];
@@ -679,6 +680,7 @@ export type GeneratedSite = {
   sectionStack: SiteSection[];
   ctaStrategy: CtaStrategy;
   qualityScore: number;
+  qualityScoreSource?: "visual" | "fallback";
   readinessStatus: SiteReadinessStatus;
   qaStatus: SiteQaStatus;
   reviewRubric: SiteQualityCheck[];
@@ -1272,6 +1274,7 @@ export type LeadDetail = {
   pipelineStage: PipelineStage;
   pipelineMode: PipelineMode;
   pipelineStatusDetail: string | null;
+  generationTypes: GenerationType[];
   industry: string | null;
   notes: string | null;
   missingFields: string[];

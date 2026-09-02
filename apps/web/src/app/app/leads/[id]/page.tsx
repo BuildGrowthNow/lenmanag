@@ -15,7 +15,7 @@ import { LeadVariantsView } from "@/components/lead-variants-view";
 import { ClientLinkManager } from "@/components/client-link-manager";
 import { PipelineActivityLog } from "@/components/pipeline-activity-log";
 import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages, getLeadAnalysis } from "@/lib/api/leads";
-import { getSite } from "@/lib/api/sites";
+import { getSite, isPreviewUsable, previewPath } from "@/lib/api/sites";
 import { evaluateExtractionHealth } from "@/lib/extraction-health";
 import type { LeadDetail, ExtractionSnapshot, MasterBrief, GeneratedSite, PipelineStage, ExtractionAnalysisResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -175,6 +175,7 @@ function StageWorkspace({
   if (stage === "qa") {
     const score = site?.qualityScore ?? 0;
     const hasScreenshotQa = (site?.screenshotRefs?.length ?? 0) > 0;
+    const hasVisualScore = site?.qualityScoreSource === "visual" && hasScreenshotQa;
     return (
       <WorkspaceCard title="Quality review">
         <div className="space-y-4">
@@ -182,12 +183,12 @@ function StageWorkspace({
             <div>
               <div className="text-xs uppercase tracking-[0.18em] text-muted">Quality score</div>
               <div className={cn("mt-1 text-3xl font-semibold", score >= 90 ? "text-emerald-300" : score >= 75 ? "text-yellow-300" : "text-rose-300")}>
-                {hasScreenshotQa ? `${score}` : `~${score}`}
-                <span className="text-base font-normal text-muted"> / 100{!hasScreenshotQa ? " (no visual QA)" : ""}</span>
+                {hasVisualScore ? `${score}` : "Pending"}
+                <span className="text-base font-normal text-muted">{hasVisualScore ? " / 100" : " — runtime QA pending"}</span>
               </div>
             </div>
-            {site && site.previewSlug ? (
-              <Link href={site.previewUrl || `/st/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
+            {site && isPreviewUsable(site) ? (
+              <Link href={previewPath(site)} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
             ) : (
               <Button variant="secondary" disabled>Preview (loading...)</Button>
             )}
@@ -220,16 +221,18 @@ function StageWorkspace({
 
   if (stage === "ready") {
     const score = site?.qualityScore ?? 0;
+    const hasVisualScore = site?.qualityScoreSource === "visual";
     return (
       <WorkspaceCard title="Ready to publish">
         <div className="space-y-4">
-          <p className="text-sm text-text">
-            Site passed QA with a score of{" "}
-            <span className="font-semibold text-emerald-300">{score}/100</span>.
-          </p>
+          {hasVisualScore ? (
+            <p className="text-sm text-text">Site passed runtime and visual QA with a score of <span className="font-semibold text-emerald-300">{score}/100</span>.</p>
+          ) : (
+            <p className="text-sm text-text">Site passed runtime QA and has a usable preview. Visual quality scoring is still pending.</p>
+          )}
           <div className="flex flex-wrap gap-2">
-            {site && site.previewSlug ? (
-              <Link href={site.previewUrl || `/st/${site.previewSlug}`} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
+            {site && isPreviewUsable(site) ? (
+              <Link href={previewPath(site)} target="_blank" className={buttonVariants({ variant: "secondary" })}>Preview ↗</Link>
             ) : (
               <Button variant="secondary" disabled>Preview (loading...)</Button>
             )}
@@ -244,9 +247,9 @@ function StageWorkspace({
     return (
       <WorkspaceCard title="Published">
         <div className="space-y-4">
-          {site && site.previewUrl ? (
-            <a href={site.previewUrl} target="_blank" rel="noreferrer" className="text-accent hover:underline break-all text-sm">
-              {site.previewUrl} ↗
+          {site && isPreviewUsable(site) ? (
+            <a href={previewPath(site)} target="_blank" rel="noreferrer" className="text-accent hover:underline break-all text-sm">
+              {previewPath(site)} ↗
             </a>
           ) : (
             <p className="text-sm text-muted">Site preview URL not available yet</p>
@@ -584,7 +587,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           <StageWorkspace lead={lead} extraction={extraction} brief={brief} site={site} />
 
           {/* Variants section */}
-          <LeadVariantsView leadId={lead.id} />
+          <LeadVariantsView leadId={lead.id} pipelineEvents={lead.pipelineEvents} requestedVariants={lead.generationTypes} />
           <ClientLinkManager leadId={lead.id} />
 
           {/* Extraction evidence (always accessible, collapsed) */}

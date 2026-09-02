@@ -25,6 +25,18 @@ export async function getVariantsForLead(leadId: string): Promise<GeneratedSite[
   return safeRequest<GeneratedSite[]>(`/api/sites/variants/${leadId}`, []);
 }
 
+export function isPreviewUsable(site: GeneratedSite | null | undefined): boolean {
+  if (!site || site.readinessStatus === "blocked") return false;
+  if (site.variantType === "html_v1" || site.variantType === "html_v2" || site.variantType === "html_v3") {
+    return Boolean(site.staticHtml?.trim()) && ["success", "completed"].includes(site.compilationStatus ?? "");
+  }
+  return Boolean(site.compiledBundleUrl?.trim()) && ["success", "completed"].includes(site.compilationStatus ?? "");
+}
+
+export function previewPath(site: GeneratedSite): string {
+  return `/st/${encodeURIComponent(site.previewSlug)}`;
+}
+
 export type ClientShare = {
   id: string;
   leadId: string;

@@ -7,6 +7,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { PreviewRenderer } from './preview-renderer';
+import { isPreviewUsable } from '@/lib/api/sites';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -41,7 +42,9 @@ export default async function PreviewPage({ params }: PageProps) {
   const strippedSource = rawSource.replace(/^['"]use client['"];\s*/s, '').trimStart();
   const htmlContent = strippedSource.startsWith('<') ? strippedSource : null;
 
-  if (htmlContent) {
+  const isStaticVariant = site.variantType === 'html_v1' || site.variantType === 'html_v2' || site.variantType === 'html_v3';
+
+  if (isStaticVariant && htmlContent && isPreviewUsable(site)) {
     return (
       <iframe
         title={`Generated preview for ${slug}`}
@@ -53,15 +56,15 @@ export default async function PreviewPage({ params }: PageProps) {
   }
 
   // Check if this is a compiled Next.js bundle
-  const isCompiledBundle = !!site.compiledBundleUrl;
+  const isCompiledBundle = isPreviewUsable(site) && !!site.compiledBundleUrl;
 
   if (!isCompiledBundle) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-50">
         <div className="text-center space-y-4">
-          <h1 className="text-2xl font-semibold">Not compiled yet</h1>
+          <h1 className="text-2xl font-semibold">Preview unavailable</h1>
           <p className="text-zinc-400">
-            This site is still being processed. Check back shortly.
+            This variant did not produce a usable published artifact. No website was published.
           </p>
           <p className="text-sm text-zinc-500">Slug: {slug}</p>
         </div>

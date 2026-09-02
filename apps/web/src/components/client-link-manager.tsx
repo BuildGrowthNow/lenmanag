@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Check, Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getClientShare, getVariantsForLead, saveClientShare } from "@/lib/api/sites";
+import { getClientShare, getVariantsForLead, isPreviewUsable, previewPath, saveClientShare } from "@/lib/api/sites";
 import type { GeneratedSite } from "@/lib/types";
 
 function eligible(site: GeneratedSite) {
-  return site.compilationStatus !== "failed" && site.readinessStatus !== "blocked" && Boolean(site.previewUrl || site.previewSlug);
+  return isPreviewUsable(site);
 }
 
 export function ClientLinkManager({ leadId }: { leadId: string }) {
@@ -67,12 +67,12 @@ export function ClientLinkManager({ leadId }: { leadId: string }) {
   return <Card>
     <CardHeader><CardTitle>Client link</CardTitle></CardHeader>
     <CardContent className="space-y-4">
-      <p className="text-sm text-muted">Choose any options and arrange their order. Clear the selection to show every available variant in the client gallery.</p>
-      {sites.length === 0 ? <p className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3 text-sm text-yellow-200">No compiled website is available yet. This action will become available after generation succeeds.</p> : <>
+      <p className="text-sm text-muted">Choose any usable options and arrange their order. Clear the selection to show every available variant in the client gallery.</p>
+      {sites.length === 0 ? <p className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3 text-sm text-yellow-200">No usable website preview is available yet. This action will become available after generation and runtime QA succeed.</p> : <>
         <div className="space-y-2">{sites.map((site) => <label key={site.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 p-3 hover:bg-white/5">
           <input type="checkbox" checked={selected.includes(site.id)} onChange={() => toggle(site.id)} />
           <span className="flex-1 text-sm"><span className="block">{site.variantTitle || site.variantLabel || "Website option"}</span>{site.variantDescription && <span className="mt-0.5 block text-xs text-muted">{site.variantDescription}</span>}<span className="text-xs text-muted">v{site.version}</span></span>
-          <a href={site.previewUrl || `/st/${site.previewSlug}`} target="_blank" rel="noreferrer" className="text-muted hover:text-text" onClick={(event) => event.stopPropagation()}><ExternalLink className="h-4 w-4" /></a>
+          <a href={previewPath(site)} target="_blank" rel="noreferrer" className="text-muted hover:text-text" onClick={(event) => event.stopPropagation()}><ExternalLink className="h-4 w-4" /></a>
         </label>)}</div>
         {selectedSites.length > 0 && <div className="space-y-2 rounded-lg bg-white/5 p-3"><div className="text-xs uppercase tracking-wider text-muted">Gallery order</div>{selectedSites.map((site, index) => <div key={site.id} className="flex items-center gap-2 text-sm"><span className="w-16 text-muted">Option {index + 1}</span><span className="flex-1 truncate">{site.variantTitle || site.variantLabel}</span><Button size="icon" variant="ghost" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp className="h-4 w-4" /></Button><Button size="icon" variant="ghost" disabled={index === selectedSites.length - 1} onClick={() => move(index, 1)}><ArrowDown className="h-4 w-4" /></Button></div>)}</div>}
         <div className="flex flex-wrap gap-2"><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : selected.length ? "Save selection & URL" : "Save all variants & URL"}</Button>{savedUrl && <><Button variant="secondary" onClick={() => void copy()}><Copy className="mr-2 h-4 w-4" />Copy link</Button><a href={savedUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md border border-white/10 px-3 text-sm text-muted hover:text-text">Preview gallery</a></>}</div>

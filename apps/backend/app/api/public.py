@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.core.config import get_settings
 from app.core.leads import lead_repository
-from app.core.sites import CLIENT_VARIANT_COPY
+from app.core.sites import CLIENT_VARIANT_COPY, is_usable_generated_site
 from app.core.mongo import get_database
 from app.core.sites import site_repository
 from app.core.versioning import response_meta
@@ -37,11 +37,7 @@ def _public_image_url(value: object) -> str | None:
 
 
 def _publicly_eligible(site: GeneratedSite) -> bool:
-    return (
-        site.readinessStatus != "blocked"
-        and bool(site.previewUrl or site.previewSlug)
-        and (site.compilationStatus in {"success", "completed"} or bool(site.staticHtml))
-    )
+    return is_usable_generated_site(site)
 
 
 def _all_public_variants(sites: list[GeneratedSite]) -> list[GeneratedSite]:
@@ -83,12 +79,17 @@ async def preview_site_variant(slug: str) -> Response:
     site = await site_repository.get_site_by_slug(_normalize_preview_slug(slug))
     if site is None:
         raise HTTPException(status_code=404, detail="Site preview not found")
+    if not _publicly_eligible(site):
+        raise HTTPException(status_code=409, detail="Site preview is not available yet")
 
     if site.variantType in ["html_v1", "html_v2", "html_v3"]:
-        if not site.staticHtml:
-            raise HTTPException(status_code=500, detail="Static HTML not generated")
-
-        return HTMLResponse(content=site.staticHtml)
+        return HTMLResponse(
+            content=site.staticHtml or "",
+            headers={
+                "Cache-Control": "no-store",
+                "X-LenManag-Preview-Type": "static-html",
+            },
+        )
 
     settings = get_settings()
     preview_base = settings.preview_base_url.rstrip("/")

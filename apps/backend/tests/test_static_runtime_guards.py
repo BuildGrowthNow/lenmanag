@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,10 +12,12 @@ from app.core.static_html_generator import (
     _remove_generated_asset_references,
     _validate_generated_document,
     _verified_contact_data,
+    _split_generation_context,
 )
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
 from app.core.extraction import _extract_contact_info
+from app.core.sites import is_usable_generated_site
 from datetime import datetime, timezone
 
 
@@ -46,6 +49,75 @@ def test_fatal_runtime_health_blocks_readiness() -> None:
 def test_document_requires_closed_structure() -> None:
     with pytest.raises(ValueError):
         _validate_generated_document("<!DOCTYPE html><html><head></head><body>", "a{}", "const a = 1;")
+
+
+def _brief_with_logo(logo: str | None):
+    return SimpleNamespace(
+        brandAssets=SimpleNamespace(
+            logoUrl=logo,
+            logoLightUrl=None,
+            logoDarkUrl=None,
+            logoVariants=[],
+            imageUrls=[],
+        ),
+        sections=[],
+    )
+
+
+def _valid_document(logo: str | None = None) -> str:
+    logo_markup = f'<img src="{logo}" alt="Logo">' if logo else ""
+    return f"<!doctype html><html><head><title>Test</title></head><body><header>{logo_markup}<h1>Service</h1></header><main><p>Content</p></main></body></html>"
+
+
+def test_exact_header_logo_is_required() -> None:
+    logo = "https://cdn.example.test/logo.svg"
+    _validate_generated_document(_valid_document(logo), "body { color: black; }", "const ready = true;", _brief_with_logo(logo))
+
+
+def test_omitted_or_wrong_header_logo_is_rejected() -> None:
+    logo = "https://cdn.example.test/logo.svg"
+    with pytest.raises(ValueError, match="approved header logo"):
+        _validate_generated_document(_valid_document(), "body {}", "const ready = true;", _brief_with_logo(logo))
+    with pytest.raises(ValueError, match="approved header logo"):
+        _validate_generated_document(_valid_document("https://cdn.example.test/other.svg"), "body {}", "const ready = true;", _brief_with_logo(logo))
+
+
+def test_no_logo_available_does_not_require_a_logo() -> None:
+    _validate_generated_document(_valid_document(), "body {}", "const ready = true;", _brief_with_logo(None))
+
+
+def test_static_preview_eligibility_does_not_require_compiled_bundle() -> None:
+    site = SimpleNamespace(
+        variantType="html_v1", staticHtml=_valid_document(), compilationStatus="success",
+        compiledBundleUrl=None, readinessStatus="ready_for_review", previewUrl="https://sites.example/st/demo", previewSlug="demo",
+    )
+    assert is_usable_generated_site(site)
+    site.staticHtml = ""
+    assert not is_usable_generated_site(site)
+
+
+def test_compiled_preview_still_requires_bundle() -> None:
+    site = SimpleNamespace(
+        variantType="nextjs", staticHtml=None, compilationStatus="success",
+        compiledBundleUrl="https://cdn.example/bundle.js", readinessStatus="ready_for_review", previewUrl="https://sites.example/st/demo", previewSlug="demo",
+    )
+    assert is_usable_generated_site(site)
+    site.compiledBundleUrl = None
+    assert not is_usable_generated_site(site)
+
+
+def test_split_html_context_contains_exact_logo_contract() -> None:
+    logo = "https://cdn.example.test/logo.svg"
+    brief = _brief_with_logo(logo)
+    brief.businessGoal = brief.primaryAudience = brief.valueProposition = brief.headline = brief.subheadline = brief.toneAndVoice = brief.ctaStrategy = brief.conversionAction = ""
+    extraction = SimpleNamespace(
+        summary=SimpleNamespace(companyName="Example"),
+        contactInfo=SimpleNamespace(officePhone="", emergencyPhone="", hours="", contactUrl=""),
+        extractedImages=[],
+    )
+    context = _split_generation_context(brief, extraction, "html_v1")
+    assert f"REQUIRED HEADER LOGO URL: {logo}" in context
+    assert "src equals that exact URL" in context
 
 
 def test_footer_year_is_current_but_historic_year_is_preserved() -> None:

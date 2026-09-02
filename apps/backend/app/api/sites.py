@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from app.core.audit import write_audit_log
 from app.core.auth_dependencies import CurrentUserId, OptionalUserId
 from app.core.leads import _job_doc_to_summary, lead_repository
-from app.core.sites import site_repository, validate_operator_prompt
+from app.core.sites import is_usable_generated_site, site_repository, validate_operator_prompt
 from app.core.versioning import response_meta
 from app.schemas.job import JobResponse
 from app.schemas.response import ResponseEnvelope, success_response
@@ -68,7 +68,11 @@ async def list_sites(
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
         success_response(
-            await site_repository.list_sites(limit=limit, offset=offset, user_id=user_id),
+            [
+                site
+                for site in await site_repository.list_sites(limit=limit, offset=offset, user_id=user_id)
+                if is_usable_generated_site(site)
+            ],
             meta=response_meta(request),
         ),
     )
@@ -106,7 +110,11 @@ async def list_variants_for_lead(
     _user_id: OptionalUserId,
 ) -> ResponseEnvelope[list[GeneratedSite]]:
     """Get all site variants for a lead. Public — used by compare and redesign pages."""
-    sites = await site_repository.list_sites_by_lead(lead_id, user_id=_user_id)
+    sites = [
+        site
+        for site in await site_repository.list_sites_by_lead(lead_id, user_id=_user_id)
+        if is_usable_generated_site(site)
+    ]
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
         success_response(sites, meta=response_meta(request)),
