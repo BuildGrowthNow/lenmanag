@@ -225,7 +225,7 @@ def _deterministic_fallback_document(
     cta_text = brief.ctaStrategy or "Contact us today"
     if re.search(r"xxx|placeholder|example\\.com", cta_text, re.IGNORECASE):
         cta_text = "Request a free estimate"
-    mode = {"html_v1": ("Regional Trust", "#f4efe6", "#0d1b2a"), "html_v2": ("Field Precision", "#111827", "#c8860a"), "html_v3": ("Clean Water, Close to Home", "#eef7f2", "#4a6741")}.get(variant_type, ("Trusted Service", "#f4efe6", "#0d1b2a"))
+    mode = {"html_v1": ("Editorial Clarity", "#f4efe6", "#0d1b2a"), "html_v2": ("Confident Momentum", "#111827", "#c8860a"), "html_v3": ("Distinctive Warmth", "#eef7f2", "#4a6741")}.get(variant_type, ("Trusted Service", "#f4efe6", "#0d1b2a"))
     sections = list(brief.sections or [])[:6]
     section_html = "".join(
         f'<article><p class="eyebrow">{escape(s.purpose)}</p><h2>{escape(s.headline)}</h2><p>{escape(s.contentSummary)}</p></article>'

@@ -93,15 +93,17 @@ def is_usable_generated_site(site: GeneratedSite) -> bool:
     )
 
 
-def _client_variant_copy(variant_strategy: dict[str, Any]) -> tuple[str, str]:
+def _client_variant_copy(
+    variant_strategy: dict[str, Any], company_name: str | None = None
+) -> tuple[str, str]:
     variant_type = str(variant_strategy.get("variantType") or "nextjs")
     default_title, default_description = CLIENT_VARIANT_COPY.get(
         variant_type, ("A New Direction", "A distinct visual direction shaped around the approved brief.")
     )
-    return (
-        str(variant_strategy.get("variantTitle") or default_title),
-        str(variant_strategy.get("variantDescription") or default_description),
-    )
+    title = str(variant_strategy.get("variantTitle") or default_title)
+    if company_name and company_name.strip():
+        title = f"{company_name.strip()} — {title}"
+    return title, str(variant_strategy.get("variantDescription") or default_description)
 
 THEME_LIBRARY: list[dict[str, Any]] = [
     {
@@ -2985,11 +2987,14 @@ class SiteRepository:
             logger.info(f"Generating master brief for {variant_type} (legacy path)")
             master_brief = await generate_master_brief(lead_id=lead_id, extraction=extraction, variant_type=variant_type, industry=industry)
         else:
-            variant_copy = {
-                "html_v1": ("Trusted water. Proven locally.", "An editorial trust-and-heritage story with a calm service path.", "Request service or call the office."),
-                "html_v2": ("Precision below the surface.", "A cinematic equipment-and-response story for urgent water systems work.", "Call emergency service when water cannot wait."),
-                "html_v3": ("Good water starts close to home.", "A warm, community-focused clean-water story built around people and place.", "Talk with our local team."),
-            }.get(str(variant_type), (approved_brief.headline, approved_brief.subheadline, approved_brief.ctaStrategy))
+            # Keep hero copy source-backed. Variant diversity comes from the
+            # strategy and art direction, never from industry-specific copy
+            # accidentally applied to an unrelated lead.
+            variant_copy = (
+                approved_brief.headline,
+                approved_brief.subheadline,
+                approved_brief.ctaStrategy,
+            )
             ordered_sections = list(approved_brief.sections)
             if variant_type == "html_v2":
                 ordered_sections = sorted(ordered_sections, key=lambda section: 0 if section.purpose in {"services", "process"} else 1)
@@ -3002,10 +3007,10 @@ class SiteRepository:
                 "headline": variant_copy[0], "subheadline": variant_copy[1], "ctaStrategy": variant_copy[2], "sections": ordered_sections,
                 "creativeDirection": approved_brief.creativeDirection.model_copy(update={
                     "designConcept": variant_strategy.get("creativeBriefGuidance", approved_brief.creativeDirection.designConcept),
-                    "heroTreatment": {"html_v1": "Editorial regional authority with a real field image", "html_v2": "Cinematic equipment image with operational carousel", "html_v3": "Warm community image collage"}.get(str(variant_type), approved_brief.creativeDirection.heroTreatment),
-                    "signatureTechnique": {"html_v1": "Measured editorial reveal", "html_v2": "Equipment/service carousel with controls", "html_v3": "Layered local-water story scroll"}.get(str(variant_type), approved_brief.creativeDirection.signatureTechnique),
+                    "heroTreatment": {"html_v1": "Editorial authority with a source-backed hero image", "html_v2": "Cinematic service hero with an operational carousel", "html_v3": "Warm layered storytelling with a source-backed image collage"}.get(str(variant_type), approved_brief.creativeDirection.heroTreatment),
+                    "signatureTechnique": {"html_v1": "Measured editorial reveal", "html_v2": "Service carousel with controls", "html_v3": "Layered storytelling scroll"}.get(str(variant_type), approved_brief.creativeDirection.signatureTechnique),
                     "layoutStrategy": {"html_v1": "Asymmetric editorial columns", "html_v2": "Full-bleed cinematic panels", "html_v3": "Warm staggered storytelling blocks"}.get(str(variant_type), approved_brief.creativeDirection.layoutStrategy),
-                    "colorMood": {"html_v1": "Bright, grounded brand neutrals", "html_v2": "Deep mineral contrast with brand accent", "html_v3": "Light water-and-earth warmth"}.get(str(variant_type), approved_brief.creativeDirection.colorMood),
+                    "colorMood": {"html_v1": "Bright, grounded brand neutrals", "html_v2": "Deep contrast with a focused brand accent", "html_v3": "Warm, tactile brand colors"}.get(str(variant_type), approved_brief.creativeDirection.colorMood),
                     "typographyPersonality": {"html_v1": "Authority-led editorial display", "html_v2": "Condensed technical display and humanist body", "html_v3": "Warm expressive display and clear body"}.get(str(variant_type), approved_brief.creativeDirection.typographyPersonality),
                     "inspirationKeywords": variant_strategy.get("inspirationKeywords", approved_brief.creativeDirection.inspirationKeywords),
                     "avoidPatterns": variant_strategy.get("avoidPatterns", approved_brief.creativeDirection.avoidPatterns),
@@ -3187,7 +3192,9 @@ class SiteRepository:
 
         sections = self._master_section_stack(master_brief, extraction)
         cta_strategy = self._master_cta_strategy(master_brief)
-        variant_title, variant_description = _client_variant_copy(variant_strategy)
+        variant_title, variant_description = _client_variant_copy(
+            variant_strategy, extraction.summary.companyName
+        )
         return GeneratedSite(
             id=site_id,
             leadId=lead_id,
@@ -3247,7 +3254,9 @@ class SiteRepository:
 
         sections = self._master_section_stack(master_brief, extraction)
         cta_strategy = self._master_cta_strategy(master_brief)
-        variant_title, variant_description = _client_variant_copy(variant_strategy)
+        variant_title, variant_description = _client_variant_copy(
+            variant_strategy, extraction.summary.companyName
+        )
         return GeneratedSite(
             id=site_id,
             leadId=lead_id,

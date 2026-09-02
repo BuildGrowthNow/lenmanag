@@ -16,6 +16,7 @@ from app.core.variant_strategy import (
     get_variant_strategies,
     get_variant_strategy,
 )
+from app.core.sites import _client_variant_copy
 from app.schemas.site import VariantType
 
 
@@ -128,6 +129,26 @@ class TestVariantStrategies:
         for variant_type, strategy in strategies.items():
             keywords = strategy["inspirationKeywords"]
             assert len(keywords) >= 5, f"{variant_type} needs at least 5 keywords"
+
+    def test_home_service_strategy_does_not_assume_water(self) -> None:
+        strategies = get_variant_strategies("home service")
+        direction = " ".join(
+            f"{strategy['variantLabel']} {strategy['creativeBriefGuidance']}"
+            for strategy in strategies.values()
+        ).lower()
+
+        assert "water" not in direction
+        assert "well" not in direction
+
+    def test_variant_titles_are_scoped_to_the_company(self) -> None:
+        strategy = {"variantType": "html_v1"}
+
+        get_it_done_title, _ = _client_variant_copy(strategy, "Get It Done")
+        bug_killers_title, _ = _client_variant_copy(strategy, "New Jersey Bug Killers")
+
+        assert get_it_done_title != bug_killers_title
+        assert get_it_done_title.startswith("Get It Done —")
+        assert bug_killers_title.startswith("New Jersey Bug Killers —")
 
     def test_avoid_patterns_not_empty(self) -> None:
         """Test that avoid patterns are provided."""
