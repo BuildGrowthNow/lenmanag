@@ -4108,6 +4108,27 @@ class SiteRepository:
             job_id=provisional_job_id,
         )
         run = await self._create_generation_run(lead=lead, extraction=extraction, brief=master_brief, request=request, job_id=job.id, requested_by=requested_by)
+        # Pin the run before dispatch so runtime QA can advance the lead only
+        # when this is still the latest generation attempt.
+        if database is None:
+            async with lead_repository._memory_lock:
+                if site_id in lead_repository._memory:
+                    lead_repository._memory[site_id].update({
+                        "latestGenerationRunId": run["id"],
+                        "pipelineStage": "generating",
+                        "pipelineStatusDetail": "Generation in progress",
+                        "updatedAt": _now(),
+                    })
+        else:
+            await database["leads"].update_one(
+                {"id": site_id},
+                {"$set": {
+                    "latestGenerationRunId": run["id"],
+                    "pipelineStage": "generating",
+                    "pipelineStatusDetail": "Generation in progress",
+                    "updatedAt": _now(),
+                }},
+            )
         # Supersede older queued runs with different inputs. Running runs remain
         # historical and are allowed to finish without becoming the latest state.
         if database is not None:
