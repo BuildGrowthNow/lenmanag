@@ -105,6 +105,72 @@ def _client_variant_copy(
         title = f"{company_name.strip()} — {title}"
     return title, str(variant_strategy.get("variantDescription") or default_description)
 
+
+async def _generate_client_variant_copy(
+    *,
+    master_brief: Any,
+    variant_strategy: dict[str, Any],
+    extraction: ExtractionSnapshot,
+) -> tuple[str, str]:
+    """Generate the client-facing variant name and description from the brief.
+
+    Variant labels are internal strategy metadata. The preview card should have
+    editorial copy that reflects the actual company, approved positioning, and
+    the variant's creative direction, so it must not use a fixed global label.
+    """
+    from app.core.llm import get_llm_client
+
+    company_name = _text(getattr(extraction.summary, "companyName", None)) or "the company"
+    creative_direction = getattr(master_brief, "creativeDirection", None)
+    direction = creative_direction.model_dump(mode="json") if creative_direction else {}
+    prompt = f"""
+Create the client-facing name and one-sentence description for one website design
+direction. Use only the approved brief and design direction below.
+
+Company: {company_name}
+Approved brief:
+- Value proposition: {_text(getattr(master_brief, "valueProposition", ""))}
+- Audience: {_text(getattr(master_brief, "primaryAudience", ""))}
+- Hero headline: {_text(getattr(master_brief, "headline", ""))}
+- Supporting line: {_text(getattr(master_brief, "subheadline", ""))}
+- Tone: {_text(getattr(master_brief, "toneAndVoice", ""))}
+
+Design direction:
+{json.dumps(direction, ensure_ascii=False)}
+
+Variant strategy:
+- Design mode: {_text(variant_strategy.get("designMode"))}
+- Creative guidance: {_text(variant_strategy.get("creativeBriefGuidance"))}
+
+Return JSON only with exactly these keys:
+{{"title": "a distinctive 2-6 word design name", "description": "one concise 10-22 word sentence describing this design direction"}}
+
+The title must be specific to this company's approved brief and this design
+direction. Do not use generic fixed labels such as "The Authority Edit",
+"Signal & Structure", or "The Counsel Atelier". Do not introduce claims,
+services, locations, or industry terms that are absent from the brief. Do not
+mention water or wells unless the approved brief explicitly does.
+""".strip()
+
+    try:
+        llm = get_llm_client()
+        response = await llm.generate_text(prompt=prompt, temperature=0.7, max_tokens=500)
+        data = llm.extract_json_from_response(response)
+        title = _text(data.get("title")).strip().strip('"')
+        description = _text(data.get("description")).strip().strip('"')
+        if title and description:
+            return title[:120], description[:240]
+        logger.warning("LLM returned incomplete client variant copy; using brief fallback")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Client variant copy generation failed: %s", exc)
+
+    # This fallback is still brief-backed and company-scoped for providers that
+    # are temporarily unavailable; normal production generation uses the LLM.
+    fallback_title, fallback_description = _client_variant_copy(
+        variant_strategy, company_name
+    )
+    return fallback_title, fallback_description
+
 THEME_LIBRARY: list[dict[str, Any]] = [
     {
         "id": "editorial-frame",
@@ -3053,7 +3119,7 @@ class SiteRepository:
                 logger.error(f"Next.js generation failed: {e}")
                 code_result = {}
 
-            site = self._build_nextjs_site(
+            site = await self._build_nextjs_site(
                 site_id=site_id,
                 lead_id=lead_id,
                 master_brief=master_brief,
@@ -3076,7 +3142,7 @@ class SiteRepository:
             if not html_result.get("html", "").strip():
                 raise ValueError("static_html_empty_after_generation")
 
-            site = self._build_static_html_site(
+            site = await self._build_static_html_site(
                 site_id=site_id,
                 lead_id=lead_id,
                 master_brief=master_brief,
@@ -3175,7 +3241,7 @@ class SiteRepository:
         docs = await cursor.to_list(length=10000)
         return {doc.get("previewSlug", "") for doc in docs}
 
-    def _build_nextjs_site(
+    async def _build_nextjs_site(
         self,
         *,
         site_id: str,
@@ -3192,8 +3258,10 @@ class SiteRepository:
 
         sections = self._master_section_stack(master_brief, extraction)
         cta_strategy = self._master_cta_strategy(master_brief)
-        variant_title, variant_description = _client_variant_copy(
-            variant_strategy, extraction.summary.companyName
+        variant_title, variant_description = await _generate_client_variant_copy(
+            master_brief=master_brief,
+            variant_strategy=variant_strategy,
+            extraction=extraction,
         )
         return GeneratedSite(
             id=site_id,
@@ -3237,7 +3305,7 @@ class SiteRepository:
             updatedAt=_now(),
         )
 
-    def _build_static_html_site(
+    async def _build_static_html_site(
         self,
         *,
         site_id: str,
@@ -3254,8 +3322,10 @@ class SiteRepository:
 
         sections = self._master_section_stack(master_brief, extraction)
         cta_strategy = self._master_cta_strategy(master_brief)
-        variant_title, variant_description = _client_variant_copy(
-            variant_strategy, extraction.summary.companyName
+        variant_title, variant_description = await _generate_client_variant_copy(
+            master_brief=master_brief,
+            variant_strategy=variant_strategy,
+            extraction=extraction,
         )
         return GeneratedSite(
             id=site_id,
