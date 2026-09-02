@@ -17,6 +17,22 @@ def test_cloudflare_empty_or_null_content_is_rejected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cloudflare_disables_reasoning_for_artifact_output() -> None:
+    client = CloudflareClient.__new__(CloudflareClient)
+    client.models = ["@cf/deepseek-ai/deepseek-v4-flash-0731"]
+    client._model_failures = {}
+    client._post = AsyncMock(
+        return_value={"choices": [{"message": {"content": "artifact"}}]}
+    )
+    client._chat_url = MagicMock(return_value="https://example.test/chat")
+
+    assert await client.generate_text("make an artifact") == "artifact"
+    assert client._post.await_args.args[1]["chat_template_kwargs"] == {
+        "enable_thinking": False
+    }
+
+
+@pytest.mark.asyncio
 async def test_split_generation_uses_three_bounded_calls() -> None:
     llm = MagicMock()
     llm.generate_text = AsyncMock(

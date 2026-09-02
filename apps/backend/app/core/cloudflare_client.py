@@ -87,6 +87,10 @@ class CloudflareClient:
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": temperature,
                     "max_tokens": max_tokens,
+                    # DeepSeek Flash otherwise spends the completion budget on
+                    # hidden reasoning and can finish with content=null. These
+                    # calls need a complete artifact, not a chain of thought.
+                    "chat_template_kwargs": {"enable_thinking": False},
                 })
                 result = self._extract_text(payload)
                 self._record_success(model)
