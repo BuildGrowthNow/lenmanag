@@ -3235,9 +3235,15 @@ class SiteRepository:
         database = get_database()
         if database is None:
             async with self._memory_lock:
-                return {doc.get("previewSlug", "") for doc in self._sites.values()}
+                return {
+                    doc.get("previewSlug", "")
+                    for doc in self._sites.values()
+                    if doc.get("archived") is not True
+                }
 
-        cursor = database["generated_sites"].find({}, {"previewSlug": 1})
+        cursor = database["generated_sites"].find(
+            {"archived": {"$ne": True}}, {"previewSlug": 1}
+        )
         docs = await cursor.to_list(length=10000)
         return {doc.get("previewSlug", "") for doc in docs}
 
