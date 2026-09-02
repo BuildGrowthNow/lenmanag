@@ -395,8 +395,8 @@ def run_multi_variant_generation_task(
     """
     Generate multiple site variants for a lead.
 
-    Uses distributed lock to ensure sequential execution globally.
-    Each variant generation is atomic and sequential.
+    Uses a distributed per-lead lock to ensure variants for one lead remain
+    sequential while independent leads can generate concurrently.
     """
     try:
         _run(_run_multi_variant_generation_async(lead_id, job_id, generation_types, generation_run_id))
@@ -512,8 +512,9 @@ async def _run_multi_variant_generation_async(
                 # Track lock wait time
                 lock_start = time.monotonic()
 
-                # Acquire global lock and generate
-                async with generation_lock(timeout_seconds=600):  # 10 min timeout
+                # Serialize variants for this lead while allowing other leads
+                # to generate on separate workers.
+                async with generation_lock(timeout_seconds=600, scope=lead_id):  # 10 min timeout
                     metrics.lock_wait_seconds = time.monotonic() - lock_start
 
                     logger.info(

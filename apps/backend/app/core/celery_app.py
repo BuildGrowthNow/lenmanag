@@ -26,7 +26,7 @@ celery_app.conf.update(
     # The default 'prefork' pool causes RuntimeError: Event loop is closed
     # when tasks use asyncio (via _run helper in tasks.py)
     worker_pool="solo",
-    worker_concurrency=1,
+    worker_concurrency=settings.celery_worker_concurrency,
 )
 
 

@@ -33,6 +33,7 @@ from app.schemas.extraction import (
     PageInventoryResponse,
 )
 from app.schemas.job import JobQueueHealthItem, JobQueueHealthResponse
+from app.schemas.site import SiteGenerateRequest
 from app.schemas.lead import (
     ImportRowResult,
     JobRetryRequest,
@@ -872,9 +873,6 @@ class LeadRepository:
         try:
             lead = await self.get_lead(lead_id)
             generation_types = lead.generationTypes if lead else ["nextjs"]
-            has_html_variants = any(
-                t in generation_types for t in ["html_v1", "html_v2", "html_v3"]
-            )
 
             await self.log_pipeline_event(
                 lead_id,
@@ -888,38 +886,30 @@ class LeadRepository:
                 },
             )
 
-            if len(generation_types) > 1 or has_html_variants:
-                from app.core.tasks import run_multi_variant_generation_task
+            from app.core.sites import site_repository
 
-                job = await self._create_job(
-                    lead_ids=[lead_id],
-                    job_type="site_generate",
-                    status="queued",
-                    progress=0,
-                    step=f"Queued: generating {len(generation_types)} variants",
-                    metadata={"generationTypes": generation_types},
+            # Always use the normal generation-run builder so the selected
+            # HTML variant strategies are pinned into the run snapshot. The
+            # legacy direct dispatch dropped those strategies and caused every
+            # html_v1/html_v2/html_v3 variant to be rejected as unknown.
+            generation_request = SiteGenerateRequest.model_validate(
+                {"variantTypes": generation_types}
+            )
+            job = await site_repository.queue_generation_job(
+                lead_id, request=generation_request
+            )
+            if job is None:
+                await self.log_pipeline_event(
+                    lead_id,
+                    event_type="site_generation_failed",
+                    status="error",
+                    message="Site generation could not be queued",
                 )
-                run_multi_variant_generation_task.delay(  # type: ignore[attr-defined]
-                    lead_id=lead_id,
-                    job_id=job.id,
-                    generation_types=generation_types,
+                await self._set_pipeline_stage(
+                    lead_id,
+                    "needs_attention",
+                    detail="Site generation could not be queued.",
                 )
-            else:
-                from app.core.sites import site_repository
-
-                job = await site_repository.queue_generation_job(lead_id)
-                if job is None:
-                    await self.log_pipeline_event(
-                        lead_id,
-                        event_type="site_generation_failed",
-                        status="error",
-                        message="Site generation could not be queued",
-                    )
-                    await self._set_pipeline_stage(
-                        lead_id,
-                        "needs_attention",
-                        detail="Site generation could not be queued.",
-                    )
         except Exception as exc:
             import traceback
 
@@ -2016,8 +2006,19 @@ class LeadRepository:
                     site_repository,
                 )  # avoid circular at module level
 
+                source_metadata = dict(source.get("metadata", {}))
+                request_payload = source_metadata.get("request") or {}
+                retry_request = (
+                    SiteGenerateRequest.model_validate(request_payload)
+                    if request_payload
+                    else None
+                )
+
                 await site_repository._dispatch_generation_job(  # type: ignore[attr-defined]
-                    site_id=lead_id, job_id=job.id, request=None
+                    site_id=lead_id,
+                    job_id=job.id,
+                    request=retry_request,
+                    generation_run_id=source_metadata.get("generationRunId"),
                 )
 
         if database is None:

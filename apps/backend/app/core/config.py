@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     celery_result_backend: str | None = None
     celery_default_queue: str = "lenquant"
     celery_task_always_eager: bool = True
+    # Keep the default conservative; production can raise this after checking
+    # provider rate limits and compiler capacity.
+    celery_worker_concurrency: int = 1
 
     # LLM Provider: cloudflare, gemini, or bedrock
     llm_provider: str = "cloudflare"

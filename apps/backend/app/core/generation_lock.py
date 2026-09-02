@@ -1,7 +1,8 @@
 """
-Distributed lock for ensuring sequential site generation across all workers.
+Distributed locks for site generation.
 
-Uses Redis to enforce global sequential execution, preventing rate limits.
+Generation is serialized per lead so variants for one lead cannot race each
+other, while independent leads can use separate workers concurrently.
 """
 
 from __future__ import annotations
@@ -32,15 +33,18 @@ class GenerationLockTimeout(Exception):
 @asynccontextmanager
 async def generation_lock(
     timeout_seconds: int = 300,
+    scope: str | None = None,
 ) -> AsyncGenerator[None, None]:
     """
     Distributed lock for site generation.
 
-    Ensures only ONE generation task runs globally at any time,
-    even across multiple workers/processes.
+    Ensures only ONE generation task runs for the requested scope at a time,
+    even across multiple workers/processes. When no scope is supplied, the
+    legacy global lock is used for callers that still need global serialization.
 
     Args:
         timeout_seconds: How long to wait for lock acquisition
+        scope: Independent lock namespace, normally the lead ID.
 
     Raises:
         GenerationLockTimeout: If lock not acquired within timeout
@@ -56,6 +60,7 @@ async def generation_lock(
     redis_url = settings.celery_broker_url
 
     redis_client = redis.from_url(redis_url, decode_responses=True)
+    lock_key = GENERATION_LOCK_KEY if scope is None else f"{GENERATION_LOCK_KEY}:{scope}"
 
     lock_acquired = False
     lock_id = f"{time.time()}-{id(redis_client)}"  # Unique lock ID
@@ -66,7 +71,7 @@ async def generation_lock(
         while True:
             # SET with NX (only if not exists) and EX (expiry)
             acquired = await redis_client.set(
-                GENERATION_LOCK_KEY,
+                lock_key,
                 lock_id,
                 nx=True,
                 ex=LOCK_TIMEOUT_SECONDS,
@@ -86,7 +91,7 @@ async def generation_lock(
             if elapsed > timeout_seconds:
                 logger.error(
                     f"Generation lock timeout after {timeout_seconds}s - "
-                    "another generation may be stuck"
+                    f"another generation may be stuck (key={lock_key})"
                 )
                 raise GenerationLockTimeout(
                     f"Could not acquire generation lock after {timeout_seconds}s"
@@ -114,7 +119,7 @@ async def generation_lock(
                 "return redis.call('del', KEYS[1]) "
                 "else return 0 end"
             )
-            await redis_client.eval(release_script, 1, GENERATION_LOCK_KEY, lock_id)  # type: ignore[arg-type]
+            await redis_client.eval(release_script, 1, lock_key, lock_id)  # type: ignore[arg-type]
             logger.info("Generation lock released")
 
         await redis_client.aclose()
