@@ -231,8 +231,7 @@ async def capture_screenshot(
     This is deliberately an async function so workerless deployments never try
     to run a Celery eager task inside the event loop that generated the site.
     """
-    # Keep screenshot capture in a single guarded asynchronous scope.
-    if True:
+    async def _async_runner() -> None:
         from app.core.config import get_settings
         from app.core.mongo import get_database
         from app.core.site_screenshot import capture_site_screenshot
@@ -319,6 +318,8 @@ async def capture_screenshot(
         )
         if generation_run_id:
             await _record_runtime_qa_result(generation_run_id, site_id, "failed" if _metadata_has_fatal_runtime_failure(metadata) else "completed")
+
+    await _async_runner()
 
 
 @celery_app.task(
