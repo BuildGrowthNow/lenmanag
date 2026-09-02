@@ -16,6 +16,12 @@ def test_cloudflare_empty_or_null_content_is_rejected() -> None:
             CloudflareClient._extract_text(payload)
 
 
+def test_cloudflare_text_completion_shape_is_supported() -> None:
+    payload = {"result": {"choices": [{"text": "A visual description"}]}}
+
+    assert CloudflareClient._extract_text(payload) == "A visual description"
+
+
 @pytest.mark.asyncio
 async def test_cloudflare_disables_reasoning_for_artifact_output() -> None:
     client = CloudflareClient.__new__(CloudflareClient)

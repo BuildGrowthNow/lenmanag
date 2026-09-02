@@ -55,6 +55,9 @@ class CloudflareClient:
                 content = message.get("content") if isinstance(message, dict) else None
                 if isinstance(content, str) and content.strip():
                     return content
+                text = choices[0].get("text")
+                if isinstance(text, str) and text.strip():
+                    return text
             response = result.get("response")
             if isinstance(response, str) and response.strip():
                 return response

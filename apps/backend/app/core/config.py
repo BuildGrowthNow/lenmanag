@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     cloudflare_api_token: Optional[str] = None
     cloudflare_model: str = "@cf/deepseek-ai/deepseek-v4-flash-0731"
     cloudflare_fallback_models: str = "@cf/zai-org/glm-5.3-flash"
-    cloudflare_vision_model: str = "@cf/zai-org/glm-5.3-flash"
+    cloudflare_vision_model: str = "@cf/qwen/qwen3.8-27b"
     cloudflare_timeout_seconds: int = 300
 
     # Final fallback for Cloudflare Workers AI: Amazon Bedrock Mantle.
