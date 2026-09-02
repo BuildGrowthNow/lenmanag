@@ -122,8 +122,12 @@ async def get_redesign_page(
     if selected_ids:
         by_id = {site.id: site for site in all_eligible}
         eligible = [by_id[site_id] for site_id in selected_ids if site_id in by_id]
-        if len(eligible) != len(selected_ids):
-            raise HTTPException(status_code=404, detail="Redesign page not found")
+        # A client link must remain useful when an operator removes or
+        # invalidates one of the variants that was selected earlier. Keep the
+        # saved order for still-available variants and fall back to every
+        # current usable variant if the saved selection is fully stale.
+        if not eligible:
+            eligible = all_eligible
     else:
         eligible = all_eligible
 
