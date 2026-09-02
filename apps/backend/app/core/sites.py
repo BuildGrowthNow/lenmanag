@@ -3988,7 +3988,7 @@ class SiteRepository:
         self, *, lead: Any, extraction: ExtractionSnapshot, brief: Any,
         request: SiteGenerateRequest | None, job_id: str, requested_by: str | None = None,
     ) -> dict[str, Any]:
-        generation_types = list((request.variantTypes if request and request.variantTypes else ["nextjs"]))
+        generation_types = list((request.variantTypes if request and request.variantTypes else ["html_v1", "html_v2", "html_v3"]))
         assets = brief.brandAssets.model_dump(mode="json") if getattr(brief, "brandAssets", None) else {}
         instructions = None
         if request and request.refinementPromptId:
@@ -4064,7 +4064,7 @@ class SiteRepository:
                        "briefId": master_brief.id, "briefVersion": master_brief.version,
                        "extractionId": extraction.id, "extractionVersion": extraction.version,
                        "analysisId": extraction.id, "analysisVersion": extraction.version,
-                       "generationTypes": list(request.variantTypes if request and request.variantTypes else ["nextjs"]),
+                       "generationTypes": list(request.variantTypes if request and request.variantTypes else ["html_v1", "html_v2", "html_v3"]),
                        "operatorInstructions": f"refinement_prompt:{request.refinementPromptId}" if request and request.refinementPromptId else None,
                        "brandSnapshotHash": brand_snapshot_hash(assets_for_hash), "brandSnapshot": assets_for_hash,
                        "approvedImageInventory": list(assets_for_hash.get("imageInventory") or []), "rejectedImages": list(assets_for_hash.get("rejectedImages") or []),

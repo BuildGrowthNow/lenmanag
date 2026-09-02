@@ -176,7 +176,7 @@ class LeadDetail(BaseModel):
     pipelineStatusDetail: Optional[str] = None
     industry: Optional[str] = None
     notes: Optional[str] = None
-    generationTypes: list[GenerationType] = Field(default=["nextjs"])
+    generationTypes: list[GenerationType] = Field(default=["html_v1", "html_v2", "html_v3"])
     missingFields: list[str] = Field(default_factory=list)
     version: int
     latestJob: Optional[JobSummary] = None
@@ -198,7 +198,7 @@ class LeadUpsertRequest(BaseModel):
     pipelineMode: PipelineMode = "auto"
 
     generationTypes: list[GenerationType] = Field(
-        default=["nextjs"],
+        default=["html_v1", "html_v2", "html_v3"],
         description="Types of sites to generate. Can select 1-4 options.",
         min_length=1,
         max_length=4,

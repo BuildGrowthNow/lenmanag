@@ -266,7 +266,7 @@ def _lead_doc_to_detail(
         pipelineStatusDetail=doc.get("pipelineStatusDetail"),
         industry=doc.get("industry"),
         notes=doc.get("notes"),
-        generationTypes=doc.get("generationTypes", ["nextjs"]),
+        generationTypes=doc.get("generationTypes", ["html_v1", "html_v2", "html_v3"]),
         missingFields=list(doc.get("missingFields", [])),
         version=int(doc.get("version", 1)),
         latestJob=latest_job,
@@ -872,7 +872,7 @@ class LeadRepository:
         await self._set_pipeline_stage(lead_id, "generating")
         try:
             lead = await self.get_lead(lead_id)
-            generation_types = lead.generationTypes if lead else ["nextjs"]
+            generation_types = lead.generationTypes if lead else ["html_v1", "html_v2", "html_v3"]
 
             await self.log_pipeline_event(
                 lead_id,

@@ -62,19 +62,50 @@ async def generate_static_html(
     """
     llm = get_llm_client()
 
-    # Generate each asset separately. A single response containing a full page,
-    # stylesheet, and script is frequently truncated by reasoning models.
+    # One prompt produces the page, stylesheet, and behavior as one design
+    # system. Splitting these into independent requests loses the brief's art
+    # direction and leads to unrelated, template-like assets.
+    prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
     logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
     try:
-        html_content, css_content, js_content = await _generate_split_assets(
-            llm, master_brief, extraction, variant_type
+        response = await llm.generate_text(
+            prompt=prompt,
+            temperature=0.7,
+            max_tokens=32_768,
         )
+        try:
+            html_content, css_content, js_content = _parse_llm_response(response)
+        except ValueError:
+            # A retry must preserve the one-pass creative concept. Never
+            # degrade to independent HTML/CSS/JS prompts after truncation.
+            retry_prompt = (
+                prompt
+                + "\n\nYour previous response was truncated or malformed. Return the "
+                "complete artifact now: exactly three CLOSED code blocks, in this order: "
+                "```html, ```css, ```javascript. Include no commentary and do not omit "
+                "or abbreviate any block."
+            )
+            logger.warning("Incomplete single-pass response for %s; retrying once", variant_type)
+            response = await llm.generate_text(
+                prompt=retry_prompt,
+                temperature=0.7,
+                max_tokens=32_768,
+            )
+            try:
+                html_content, css_content, js_content = _parse_llm_response(response)
+            except ValueError as retry_error:
+                raise StaticGenerationError(
+                    f"{variant_type} generation returned incomplete artifacts",
+                    variant_type=variant_type,
+                    stage="parse",
+                    code="incomplete_artifact_response",
+                ) from retry_error
     except StaticGenerationError:
         raise
     except Exception as exc:
         # Provider/model failures must fail the generation, never publish a
         # generic substitute website.
-        logger.exception("Split asset generation failed for %s", variant_type)
+        logger.exception("Single-pass artifact generation failed for %s", variant_type)
         raise StaticGenerationError(
             f"{variant_type} generation failed before publication",
             variant_type=variant_type,
@@ -83,7 +114,7 @@ async def generate_static_html(
         ) from exc
 
     logger.info(
-        f"[DEBUG] Split assets received for {variant_type}: "
+        f"[DEBUG] Single-pass assets received for {variant_type}: "
         f"html_len={len(html_content)}, css_len={len(css_content)}, js_len={len(js_content)}"
     )
 
@@ -247,106 +278,6 @@ def _deterministic_fallback_document(
     return {"html": html, "cssUrl": None, "jsUrl": None}
 
 
-def _split_generation_context(
-    brief: MasterBrief, extraction: ExtractionSnapshot, variant_type: str
-) -> str:
-    """Keep each asset prompt focused while retaining approved source facts."""
-    sections = "\n".join(
-        f"- {s.headline}: {s.contentSummary}"
-        for s in list(brief.sections or [])[:8]
-    ) or "- Use the approved value proposition and business goal."
-    images = "\n".join(
-        f"- {item.url} ({item.category})"
-        for item in list(extraction.extractedImages or [])[:8]
-        if item.url
-    ) or "- No approved images; use a typography/shape-led design."
-    contact = extraction.contactInfo
-    required_logo_url = _approved_logo_url(brief)
-    return f"""VARIANT: {variant_type}
-COMPANY: {extraction.summary.companyName}
-BUSINESS GOAL: {brief.businessGoal}
-AUDIENCE: {brief.primaryAudience}
-VALUE PROPOSITION: {brief.valueProposition}
-HEADLINE: {brief.headline}
-SUBHEADLINE: {brief.subheadline}
-TONE: {brief.toneAndVoice}
-CTA: {brief.ctaStrategy or brief.conversionAction}
-PHONE: {contact.officePhone or contact.emergencyPhone}
-HOURS: {contact.hours}
-CONTACT URL: {contact.contactUrl}
-APPROVED SECTIONS:
-{sections}
-APPROVED IMAGES (use only these URLs):
-{images}
-REQUIRED HEADER LOGO URL: {required_logo_url or 'NONE'}
-LOGO CONTRACT: If the required URL is non-empty, the HTML MUST contain an <img> inside <header> whose src equals that exact URL. Do not substitute, rewrite, omit, or use another logo variant. If it is NONE, do not invent or substitute a logo.
-"""
-
-
-def _extract_single_code_block(response: str, languages: tuple[str, ...]) -> str:
-    language_pattern = "|".join(re.escape(language) for language in languages)
-    match = re.search(
-        rf"```(?:{language_pattern})[ \t]*\r?\n(.*?)\r?\n```",
-        response,
-        re.DOTALL | re.IGNORECASE,
-    )
-    if not match or not match.group(1).strip():
-        raise ValueError(f"Model did not return a closed {'/'.join(languages)} code block")
-    return match.group(1).strip()
-
-
-async def _generate_split_assets(
-    llm: Any,
-    brief: MasterBrief,
-    extraction: ExtractionSnapshot,
-    variant_type: str,
-) -> tuple[str, str, str]:
-    context = _split_generation_context(brief, extraction, variant_type)
-    html_response = await llm.generate_text(
-        prompt=f"""Create only the semantic HTML for a production-ready static landing page.
-Return exactly one closed ```html code block and no commentary.
-Use the approved facts and images below. Include <!doctype html>, head, body, accessible semantic sections, and stable class/id selectors for styling and JavaScript. Do not include CSS or JavaScript. Do not invent contact details.
-The required header logo contract below is exact and mandatory. If the URL is non-empty, place an <img> inside <header> with src set to that exact URL. Do not omit, rewrite, substitute, or use a different logo URL. If it is NONE, no logo is required.
-
-{context}""",
-        temperature=0.7,
-        max_tokens=16_000,
-    )
-    html = _extract_single_code_block(html_response, ("html",))
-
-    css_response = await llm.generate_text(
-        prompt=f"""Create only the CSS for the static landing page below.
-Return exactly one closed ```css code block and no commentary. Make it polished, responsive, accessible, and visually distinct for this variant. Use modern CSS, custom properties, grid/flex layouts, hover/focus states, and do not add HTML or JavaScript.
-
-DESIGN CONTEXT:
-{context}
-
-HTML TO STYLE:
-{html}""",
-        temperature=0.6,
-        max_tokens=12_000,
-    )
-    css = _extract_single_code_block(css_response, ("css",))
-
-    js_response = await llm.generate_text(
-        prompt=f"""Create only the vanilla JavaScript for the static landing page below.
-Return exactly one closed ```javascript code block and no commentary. Bind interactions only to selectors that exist in the HTML, keep content visible if JavaScript fails, use no libraries, and call window.__LENMANAG_RUNTIME__.markInitialized() after setup when that function exists.
-
-DESIGN CONTEXT:
-{context}
-
-HTML:
-{html}
-
-CSS:
-{css}""",
-        temperature=0.3,
-        max_tokens=8_000,
-    )
-    js = _extract_single_code_block(js_response, ("javascript", "js"))
-    return html, css, js
-
-
 def _build_static_html_prompt(
     brief: MasterBrief,
     extraction: ExtractionSnapshot,
@@ -399,8 +330,12 @@ CREATIVE DIRECTION:
 - Hero Treatment: {brief.creativeDirection.heroTreatment}
 - Signature Technique: {brief.creativeDirection.signatureTechnique}
 - Layout Strategy: {brief.creativeDirection.layoutStrategy}
+- Scroll Behavior: {brief.creativeDirection.scrollBehavior}
 - Color Mood: {brief.creativeDirection.colorMood}
 - Typography: {brief.creativeDirection.typographyPersonality}
+- Micro-interactions: {', '.join(brief.creativeDirection.microInteractions) or 'None specified'}
+- Inspiration Keywords: {', '.join(brief.creativeDirection.inspirationKeywords) or 'None specified'}
+- Avoid Patterns: {', '.join(brief.creativeDirection.avoidPatterns) or 'None specified'}
 
 CONTENT BLUEPRINT:
 - Hero Headline: {brief.headline}
@@ -460,11 +395,25 @@ REQUIREMENTS:
    - Call window.__LENMANAG_RUNTIME__.markInitialized() only after every required interaction has been bound and animation setup has completed. This call is mandatory.
 
 5. Design Quality:
-   - Match the visual style and creative direction
-   - Implement the design concept prominently
-   - Use the specified color strategy
-   - Typography should reflect the personality described
-   - Professional, polished appearance
+   - Produce an Awwwards-quality experience, not a conventional business template.
+   - Carry one coherent visual concept through the whole page. Make the design concept,
+     hero treatment, layout strategy, palette behavior, and signature technique visibly
+     consequential rather than decorative labels.
+   - Create strong typography, intentional composition, varied section layouts, depth,
+     and excellent spacing. Use the approved signature technique prominently.
+   - Implement purposeful motion and the specified micro-interactions in vanilla
+     JavaScript/CSS; its motion language must match the stated motion level and scroll behavior.
+   - Do not repeat rows, cards, or section treatments. Avoid spreadsheet-like layouts,
+     generic service grids, excessive empty space, simple document styling, and every
+     pattern listed in Avoid Patterns.
+   - If approved photography is unavailable, create intentional art direction with
+     typography, SVG, gradients, textures, canvas, geometry, and layered composition;
+     never leave an empty or generic page.
+   - Keep factual accuracy: use only approved client assets and verified facts. Never
+     invent testimonials, reviews, phone numbers, emails, addresses, metrics, awards,
+     or claims. Include testimonials only when supplied in the approved content.
+   - Use only browser-native HTML, CSS, SVG, canvas, and vanilla JavaScript. Do not
+     import, claim, or rely on Three.js, GSAP, Lenis, or any other unprovided library.
 
 OUTPUT FORMAT:
 Return your response in this exact format (three code blocks):

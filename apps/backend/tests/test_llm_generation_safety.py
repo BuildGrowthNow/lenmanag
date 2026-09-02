@@ -3,7 +3,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.cloudflare_client import CloudflareClient
-from app.core.static_html_generator import _generate_split_assets, generate_static_html
+from types import SimpleNamespace
+
+from app.core.static_html_generator import _build_static_html_prompt, generate_static_html
 
 
 def test_cloudflare_empty_or_null_content_is_rejected() -> None:
@@ -58,26 +60,100 @@ async def test_cloudflare_vision_uses_multimodal_chat_for_verified_models() -> N
 
 
 @pytest.mark.asyncio
-async def test_split_generation_uses_three_bounded_calls() -> None:
-    llm = MagicMock()
-    llm.generate_text = AsyncMock(
-        side_effect=[
-            "```html\n<!doctype html><html><head></head><body><main></main></body></html>\n```",
-            "```css\nbody { color: black; }\n```",
-            "```javascript\nwindow.__LENMANAG_RUNTIME__?.markInitialized?.();\n```",
-        ]
+def _brief() -> SimpleNamespace:
+    return SimpleNamespace(
+        businessGoal="Book qualified service calls", primaryAudience="Homeowners",
+        valueProposition="Reliable local service", toneAndVoice="Clear and assured",
+        visualStyle="Editorial", colorStrategy="Warm neutrals with a bold accent",
+        motionLevel="moderate", headline="Service, made certain", subheadline="Source-backed help.",
+        ctaStrategy="Call today", conversionAction="Call today", contactInfo={},
+        sections=[SimpleNamespace(purpose="services", headline="What we do", contentSummary="Approved services.", contentPoints=["Repair"], suggestedApproach="Editorial columns")],
+        creativeDirection=SimpleNamespace(
+            designConcept="Tactile field journal", heroTreatment="Layered editorial hero",
+            signatureTechnique="Measured editorial reveal", layoutStrategy="Asymmetric columns",
+            scrollBehavior="parallax-layers", colorMood="Grounded warmth",
+            typographyPersonality="Expressive serif display", microInteractions=["Magnetic CTA"],
+            inspirationKeywords=["editorial", "field notes"], avoidPatterns=["generic service grid"],
+        ),
+        brandAssets=SimpleNamespace(
+            logoUrl="https://cdn.test/logo.svg", logoLightUrl=None, logoDarkUrl=None,
+            logoVariants=[], primaryColor="#123456", secondaryColor="#fedcba",
+            fontFamily="Inter", fontUrl=None, imageInventory=[], imageUrls=[],
+        ),
     )
-    brief = MagicMock()
-    brief.sections = []
-    extraction = MagicMock()
-    extraction.extractedImages = []
 
-    html, css, js = await _generate_split_assets(llm, brief, extraction, "html_v1")
 
-    assert "<html>" in html and "color" in css and "markInitialized" in js
-    assert llm.generate_text.await_count == 3
-    assert [call.kwargs["max_tokens"] for call in llm.generate_text.await_args_list] == [16_000, 12_000, 8_000]
-    assert sum(call.kwargs["max_tokens"] for call in llm.generate_text.await_args_list) == 36_000
+def _extraction() -> SimpleNamespace:
+    return SimpleNamespace(
+        summary=SimpleNamespace(companyName="Example Service"),
+        contactInfo=SimpleNamespace(model_dump=lambda **_kwargs: {"officePhone": "+1 555 123 4567"}),
+    )
+
+
+def _complete_response() -> str:
+    return """```html
+<!doctype html><html><head><title>Example</title></head><body><header><img src="https://cdn.test/logo.svg" alt="Example Service"></header><main><h1>Service</h1></main><footer>© Example Service 2026</footer></body></html>
+```
+```css
+body { color: #123456; }
+```
+```javascript
+document.addEventListener('DOMContentLoaded', function () { window.__LENMANAG_RUNTIME__?.markInitialized?.(); });
+```"""
+
+
+def test_single_pass_prompt_contains_full_creative_direction() -> None:
+    prompt = _build_static_html_prompt(_brief(), _extraction(), "html_v2")
+
+    for value in (
+        "Visual Style", "Color Strategy", "Motion Level", "Design Concept", "Hero Treatment",
+        "Signature Technique", "Layout Strategy", "Scroll Behavior", "Color Mood", "Typography",
+        "Micro-interactions", "Inspiration Keywords", "Avoid Patterns", "Awwwards-quality",
+        "generic service grids", "Never\n     invent testimonials", "https://cdn.test/logo.svg",
+    ):
+        assert value in prompt
+
+
+@pytest.mark.asyncio
+async def test_generation_uses_one_coherent_artifact_request() -> None:
+    llm = MagicMock()
+    llm.generate_text = AsyncMock(return_value=_complete_response())
+    settings = SimpleNamespace(asset_s3_bucket=None, asset_s3_prefix="", asset_s3_region="us-east-1")
+    brief = _brief()
+    extraction = _extraction()
+
+    with (
+        patch("app.core.static_html_generator.get_llm_client", return_value=llm),
+        patch("app.core.static_html_generator.get_settings", return_value=settings),
+        patch("app.core.static_html_generator._build_static_html_prompt", return_value="FULL MASTER BRIEF PROMPT") as build_prompt,
+    ):
+        result = await generate_static_html(master_brief=brief, extraction=extraction, variant_type="html_v1", site_id="site-1")
+
+    build_prompt.assert_called_once_with(brief, extraction, "html_v1")
+    assert llm.generate_text.await_count == 1
+    assert llm.generate_text.await_args.kwargs["prompt"] == "FULL MASTER BRIEF PROMPT"
+    assert llm.generate_text.await_args.kwargs["max_tokens"] == 32_768
+    assert "data-generated-site-css" in result["html"]
+    assert "data-generated-site-js" in result["html"]
+
+
+@pytest.mark.asyncio
+async def test_incomplete_single_pass_response_retries_without_split_generation() -> None:
+    llm = MagicMock()
+    llm.generate_text = AsyncMock(side_effect=["```html\n<!doctype html>", _complete_response()])
+    settings = SimpleNamespace(asset_s3_bucket=None, asset_s3_prefix="", asset_s3_region="us-east-1")
+    brief = _brief()
+    extraction = _extraction()
+
+    with (
+        patch("app.core.static_html_generator.get_llm_client", return_value=llm),
+        patch("app.core.static_html_generator.get_settings", return_value=settings),
+    ):
+        result = await generate_static_html(master_brief=brief, extraction=extraction, variant_type="html_v3", site_id="site-3")
+
+    assert result["html"]
+    assert llm.generate_text.await_count == 2
+    assert "exactly three CLOSED code blocks" in llm.generate_text.await_args_list[1].kwargs["prompt"]
 
 
 @pytest.mark.asyncio

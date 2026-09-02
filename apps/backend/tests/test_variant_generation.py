@@ -214,6 +214,16 @@ class TestGenerationLock:
 class TestStaticHtmlGenerator:
     """Tests for static HTML generation."""
 
+    def test_static_variants_are_default_and_nextjs_is_optional(self) -> None:
+        """Default generation remains the three static creative variants."""
+        from app.schemas.lead import LeadUpsertRequest
+        from app.schemas.site import SiteGenerateRequest
+
+        assert LeadUpsertRequest(websiteUrl="https://example.test").generationTypes == [
+            "html_v1", "html_v2", "html_v3"
+        ]
+        assert SiteGenerateRequest(variantTypes=["nextjs"]).variantTypes == ["nextjs"]
+
     def test_parse_llm_response_valid(self) -> None:
         """Test parsing valid LLM response with all code blocks."""
         from app.core.static_html_generator import _parse_llm_response

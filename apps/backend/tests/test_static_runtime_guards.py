@@ -1,4 +1,3 @@
-import json
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +11,7 @@ from app.core.static_html_generator import (
     _remove_generated_asset_references,
     _validate_generated_document,
     _verified_contact_data,
-    _split_generation_context,
+    _build_static_html_prompt,
 )
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
@@ -61,6 +60,7 @@ def _brief_with_logo(logo: str | None):
             imageUrls=[],
         ),
         sections=[],
+        contactInfo={},
     )
 
 
@@ -106,18 +106,25 @@ def test_compiled_preview_still_requires_bundle() -> None:
     assert not is_usable_generated_site(site)
 
 
-def test_split_html_context_contains_exact_logo_contract() -> None:
+def test_single_pass_prompt_contains_exact_logo_contract() -> None:
     logo = "https://cdn.example.test/logo.svg"
     brief = _brief_with_logo(logo)
     brief.businessGoal = brief.primaryAudience = brief.valueProposition = brief.headline = brief.subheadline = brief.toneAndVoice = brief.ctaStrategy = brief.conversionAction = ""
     extraction = SimpleNamespace(
         summary=SimpleNamespace(companyName="Example"),
-        contactInfo=SimpleNamespace(officePhone="", emergencyPhone="", hours="", contactUrl=""),
+        contactInfo=SimpleNamespace(model_dump=lambda **_kwargs: {}),
         extractedImages=[],
     )
-    context = _split_generation_context(brief, extraction, "html_v1")
+    brief.visualStyle = brief.colorStrategy = brief.motionLevel = ""
+    brief.creativeDirection = SimpleNamespace(
+        designConcept="", heroTreatment="", signatureTechnique="", layoutStrategy="", scrollBehavior="",
+        colorMood="", typographyPersonality="", microInteractions=[], inspirationKeywords=[], avoidPatterns=[],
+    )
+    brief.brandAssets.primaryColor = brief.brandAssets.secondaryColor = brief.brandAssets.fontFamily = brief.brandAssets.fontUrl = None
+    brief.brandAssets.imageInventory = []
+    context = _build_static_html_prompt(brief, extraction, "html_v1")
     assert f"REQUIRED HEADER LOGO URL: {logo}" in context
-    assert "src equals that exact URL" in context
+    assert "src equals this exact URL" in context
 
 
 def test_footer_year_is_current_but_historic_year_is_preserved() -> None:
