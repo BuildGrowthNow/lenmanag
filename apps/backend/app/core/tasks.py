@@ -130,10 +130,10 @@ def run_site_generation_job_task(
         site = await site_repository.get_site(site_id)
         if site and site.previewUrl:
             try:
-                run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
+                await capture_screenshot(site_id=site.id, preview_url=site.previewUrl)
             except Exception as exc:
                 logging.warning(
-                    "Could not queue screenshot task for site %s: %s", site.id, exc
+                    "Could not capture screenshot for site %s: %s", site.id, exc
                 )
 
     try:
@@ -169,10 +169,10 @@ def run_site_republish_task(self, site_id: str, job_id: str) -> None:
         site = await site_repository.get_site(site_id)
         if site and site.previewUrl:
             try:
-                run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
+                await capture_screenshot(site_id=site.id, preview_url=site.previewUrl)
             except Exception as exc:
                 logging.warning(
-                    "Could not queue screenshot task for site %s: %s", site.id, exc
+                    "Could not capture screenshot for site %s: %s", site.id, exc
                 )
 
     try:
@@ -223,17 +223,16 @@ def purge_expired_assets_task() -> dict:
     }
 
 
-@celery_app.task(
-    name="lenquant.jobs.run_screenshot",
-    bind=True,
-    max_retries=2,
-    retry_backoff=True,
-    retry_backoff_max=120,
-)
-def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id: str | None = None) -> None:
-    """Capture a viewport screenshot for a generated site and persist it to MongoDB."""
+async def capture_screenshot(
+    site_id: str, preview_url: str, generation_run_id: str | None = None
+) -> None:
+    """Capture a viewport screenshot and persist its runtime QA result.
 
-    async def _async_runner() -> None:
+    This is deliberately an async function so workerless deployments never try
+    to run a Celery eager task inside the event loop that generated the site.
+    """
+    # Keep screenshot capture in a single guarded asynchronous scope.
+    if True:
         from app.core.config import get_settings
         from app.core.mongo import get_database
         from app.core.site_screenshot import capture_site_screenshot
@@ -321,8 +320,19 @@ def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id:
         if generation_run_id:
             await _record_runtime_qa_result(generation_run_id, site_id, "failed" if _metadata_has_fatal_runtime_failure(metadata) else "completed")
 
+
+@celery_app.task(
+    name="lenquant.jobs.run_screenshot",
+    bind=True,
+    max_retries=2,
+    retry_backoff=True,
+    retry_backoff_max=120,
+)
+def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id: str | None = None) -> None:
+    """Legacy Celery entrypoint retained for compatibility with existing jobs."""
+
     try:
-        _run(_async_runner())
+        _run(capture_screenshot(site_id, preview_url, generation_run_id))
     except Exception as exc:
         logger.error(
             "run_screenshot_task: failed for site %s: %s",
@@ -679,14 +689,14 @@ async def _run_multi_variant_generation_async(
         await site_repository._release_generation_input(lead_id=lead_id, input_hash=run["generationInputHash"], job_id=run["jobId"])
         await lead_repository.update_generation_stage_if_latest(lead_id, generation_run_id, "needs_attention")
 
-    # Best-effort: queue a screenshot task for each successfully generated site.
-    # Failures here must never block or fail the generation job.
+    # Run screenshot/runtime QA in-process. Production intentionally has no
+    # worker or broker, and completion must not leave background work behind.
     for site in generated_sites:
         try:
-            run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl, generation_run_id=generation_run_id)  # type: ignore[attr-defined]
+            await capture_screenshot(site_id=site.id, preview_url=site.previewUrl, generation_run_id=generation_run_id)
         except Exception as exc:
             logger.warning(
-                "Could not queue screenshot task for site %s: %s", site.id, exc
+                "Could not capture screenshot for site %s: %s", site.id, exc
             )
             if generation_run_id:
                 await _record_runtime_qa_result(generation_run_id, site.id, "failed")
@@ -721,10 +731,10 @@ def run_site_refinement_job_task(
         site = await site_repository.get_site(site_id)
         if site and site.previewUrl:
             try:
-                run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
+                await capture_screenshot(site_id=site.id, preview_url=site.previewUrl)
             except Exception as exc:
                 logging.warning(
-                    "Could not queue screenshot task for site %s: %s", site.id, exc
+                    "Could not capture screenshot for site %s: %s", site.id, exc
                 )
 
     try:

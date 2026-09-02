@@ -508,7 +508,7 @@ async def recapture_screenshot(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[dict[str, str]]:
     """Manually trigger screenshot recapture for a site."""
-    from app.core.tasks import run_screenshot_task
+    from app.core.tasks import capture_screenshot
 
     site = await site_repository.get_site(site_id, user_id=user_id)
     if site is None:
@@ -519,12 +519,12 @@ async def recapture_screenshot(
             status_code=400, detail="Site has no preview URL to capture."
         )
 
-    # Queue screenshot capture task
+    # Capture in-process; production deliberately has no task queue.
     try:
-        run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
+        await capture_screenshot(site_id=site.id, preview_url=site.previewUrl)
     except Exception as exc:
         raise HTTPException(
-            status_code=500, detail=f"Failed to queue screenshot task: {exc}"
+            status_code=500, detail=f"Failed to start screenshot capture: {exc}"
         ) from exc
 
     await write_audit_log(
