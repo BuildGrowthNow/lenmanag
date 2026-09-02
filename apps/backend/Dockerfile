@@ -7,6 +7,7 @@ ENV BUILD_VERSION=${BUILD_VERSION}
 # Install system dependencies including Chromium and its required libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    nodejs \
     curl \
     ca-certificates \
     fonts-liberation \
