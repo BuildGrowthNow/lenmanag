@@ -117,9 +117,24 @@ class CloudflareClient:
 
     async def analyze_image(self, prompt: str, image_data: bytes, image_mime_type: str = "image/png", temperature: float = 0.7, max_tokens: int = 2048) -> str:
         image = f"data:{image_mime_type};base64,{base64.b64encode(image_data).decode()}"
-        payload = await self._post(self._run_url(self.vision_model), {
-            "prompt": prompt, "image": image, "temperature": temperature, "max_tokens": max_tokens,
-        })
+        if self.vision_model in {"@cf/qwen/qwen3.8-27b", "@cf/zai-org/glm-5.3-flash"}:
+            payload = await self._post(self._chat_url(), {
+                "model": self.vision_model,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image}},
+                    ],
+                }],
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "chat_template_kwargs": {"enable_thinking": False},
+            })
+        else:
+            payload = await self._post(self._run_url(self.vision_model), {
+                "prompt": prompt, "image": image, "temperature": temperature, "max_tokens": max_tokens,
+            })
         return self._extract_text(payload)
 
     async def batch_generate_text(self, prompts: list[str], temperature: float = 0.7, max_tokens: int = 2048) -> list[str]:

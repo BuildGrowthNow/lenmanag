@@ -39,6 +39,25 @@ async def test_cloudflare_disables_reasoning_for_artifact_output() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cloudflare_vision_uses_multimodal_chat_for_verified_models() -> None:
+    client = CloudflareClient.__new__(CloudflareClient)
+    client.vision_model = "@cf/qwen/qwen3.8-27b"
+    client._post = AsyncMock(
+        return_value={"choices": [{"message": {"content": "visual QA"}}]}
+    )
+    client._chat_url = MagicMock(return_value="https://example.test/chat")
+    client._run_url = MagicMock(return_value="https://example.test/run")
+
+    assert await client.analyze_image("Inspect this", b"png") == "visual QA"
+    url, body = client._post.await_args.args
+    assert url == "https://example.test/chat"
+    assert body["model"] == "@cf/qwen/qwen3.8-27b"
+    assert body["messages"][0]["content"][1]["type"] == "image_url"
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}
+    client._run_url.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_split_generation_uses_three_bounded_calls() -> None:
     llm = MagicMock()
     llm.generate_text = AsyncMock(
