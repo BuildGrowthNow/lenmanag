@@ -27,6 +27,9 @@ services:
       # Jobs run in-process; Redis remains only for the cross-process
       # generation lock, not as a Celery broker/queue.
       CELERY_TASK_ALWAYS_EAGER: "true"
+      # Keep production on the verified multimodal Workers AI model even if
+      # an older deployment env file still contains the previous model.
+      CLOUDFLARE_VISION_MODEL: "@cf/qwen/qwen3.8-27b"
     depends_on:
       redis:
         condition: service_healthy
