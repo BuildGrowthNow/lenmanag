@@ -12,6 +12,7 @@ from app.core.static_html_generator import (
     _validate_generated_document,
     _verified_contact_data,
     _build_static_html_prompt,
+    _apply_static_safety_layer,
 )
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
@@ -84,6 +85,15 @@ def test_omitted_or_wrong_header_logo_is_rejected() -> None:
 
 def test_no_logo_available_does_not_require_a_logo() -> None:
     _validate_generated_document(_valid_document(), "body {}", "const ready = true;", _brief_with_logo(None))
+
+
+def test_dark_logo_is_inverted_for_dark_variant() -> None:
+    logo = "https://cdn.example.test/logo-dark.svg"
+    brief = _brief_with_logo(logo)
+    brief.brandAssets.logoDarkUrl = logo
+    html, css, _js = _apply_static_safety_layer(_valid_document(logo), "body {}", "const ready = true;", brief, "html_v2")
+    assert "lq-logo-light-on-dark" in html
+    assert ".lq-logo-light-on-dark { filter: brightness(0) invert(1); }" in css
 
 
 def test_generated_document_rejects_em_dash_and_prohibited_fonts() -> None:

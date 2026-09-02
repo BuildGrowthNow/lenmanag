@@ -741,12 +741,26 @@ def _apply_static_safety_layer(
     """Guarantee readable layout and progressive enhancement for every variant."""
     required_logo = _approved_logo_url(brief)
     light_logo = _secure_asset_url(getattr(brief.brandAssets, "logoLightUrl", None))
-    if required_logo and light_logo and required_logo == light_logo:
+    dark_logo = _secure_asset_url(getattr(brief.brandAssets, "logoDarkUrl", None))
+    logo_contrast_class = None
+    if required_logo and light_logo and required_logo == light_logo and variant_type != "html_v2":
+        logo_contrast_class = "lq-logo-dark-on-light"
+    elif required_logo and dark_logo and required_logo == dark_logo and variant_type == "html_v2":
+        logo_contrast_class = "lq-logo-light-on-dark"
+    if required_logo and logo_contrast_class:
         header_match = re.search(r"<header\b[^>]*>(.*?)</header\s*>", html, re.I | re.S)
         if header_match:
+            def add_logo_class(match: re.Match[str]) -> str:
+                tag = match.group(0)
+                class_match = re.search(r"\bclass\s*=\s*(['\"])(.*?)\1", tag, re.I | re.S)
+                if class_match:
+                    classes = f"{class_match.group(2)} {logo_contrast_class}".strip()
+                    return tag[:class_match.start(2)] + classes + tag[class_match.end(2):]
+                return tag[:-1] + f' class="{logo_contrast_class}">'
+
             header = re.sub(
-                r"(<img\b[^>]*\bsrc\s*=\s*['\"]" + re.escape(required_logo) + r"['\"][^>]*)",
-                r'\1 class="lq-logo-dark-on-light"',
+                r"<img\b[^>]*\bsrc\s*=\s*['\"]" + re.escape(required_logo) + r"['\"][^>]*>",
+                add_logo_class,
                 header_match.group(1), count=1, flags=re.I | re.S,
             )
             html = html[:header_match.start(1)] + header + html[header_match.end(1):]
@@ -768,6 +782,7 @@ h1, h2, h3, h4, p, a, button, li { overflow-wrap: anywhere; }
 .lq-motion-ready [data-lq-reveal] { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
 .lq-motion-ready [data-lq-reveal].lq-revealed { opacity: 1; transform: none; }
 .lq-logo-dark-on-light { filter: brightness(0) saturate(100%); }
+.lq-logo-light-on-dark { filter: brightness(0) invert(1); }
 [data-lq-float] { animation: lq-float 8s ease-in-out infinite; }
 @keyframes lq-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) {
