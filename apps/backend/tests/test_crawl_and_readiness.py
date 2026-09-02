@@ -238,10 +238,10 @@ def test_crawl_website_no_sitemap_falls_back_to_internal_links():
     assert len(internal_entries) > 0
 
 
-def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only(
+def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_all_pages(
     monkeypatch,
 ):
-    """Brand asset cues come from all pages but downloads only triggered from homepage-derived cues."""
+    """Brand asset cues and cached asset downloads include all crawled pages."""
 
     homepage_html = "<html><body>HOME</body></html>"
 
@@ -388,12 +388,12 @@ def test_crawl_website_brand_asset_cues_aggregated_and_assets_from_homepage_only
         "https://brand.com/about" in sources or "https://brand.com/contact" in sources
     )
 
-    # Exactly one batch download call, and only homepage-derived asset URLs are downloaded
+    # Exactly one batch download call containing every discovered page asset.
     assert len(download_calls) == 1
     downloaded = set(download_calls[0])
     assert "https://cdn.brand.com/logo-home.png" in downloaded
-    assert "https://cdn.brand.com/logo-about.png" not in downloaded
-    assert "https://cdn.brand.com/logo-contact.png" not in downloaded
+    assert "https://cdn.brand.com/logo-about.png" in downloaded
+    assert "https://cdn.brand.com/logo-contact.png" in downloaded
 
 
 def _make_brief(approval_state: BriefApprovalState = "approved") -> SiteBrief:

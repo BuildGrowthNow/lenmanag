@@ -14,8 +14,8 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.asset_utils import (
-    get_best_asset_url,
-    get_best_asset_urls,
+    get_cached_asset_url,
+    get_cached_asset_urls,
     log_asset_cache_stats,
 )
 from app.core.llm import get_llm_client
@@ -182,7 +182,7 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
 
             logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
             if logos:
-                logo_url = get_best_asset_url(logos[0])
+                logo_url = get_cached_asset_url(logos[0])
                 if logo_url:
                     summary_parts.append(f"Logo: {logo_url}")
 
@@ -494,17 +494,17 @@ def _build_master_brief_from_response(
             ranked_logos = sorted(
                 logos,
                 key=lambda item: (
-                    bool(get_best_asset_url(item)),
+                    bool(get_cached_asset_url(item)),
                     -any(token in f"{item.label} {item.value}".lower() for token in ("water.svg", "settings", "valve", "favicon", "icon")),
                     item.confidence,
                 ),
                 reverse=True,
             )
-            usable_logos = [item for item in ranked_logos if get_best_asset_url(item)]
-            brand_assets.logoUrl = get_best_asset_url(usable_logos[0]) if usable_logos else None
-            brand_assets.logoVariants = list(dict.fromkeys(url for url in (get_best_asset_url(item) for item in usable_logos) if url))
+            usable_logos = [item for item in ranked_logos if get_cached_asset_url(item)]
+            brand_assets.logoUrl = get_cached_asset_url(usable_logos[0]) if usable_logos else None
+            brand_assets.logoVariants = list(dict.fromkeys(url for url in (get_cached_asset_url(item) for item in usable_logos) if url))
             for logo in usable_logos:
-                url = get_best_asset_url(logo)
+                url = get_cached_asset_url(logo)
                 hint = f"{logo.label} {logo.note or ''} {url or ''}".lower()
                 if url and not brand_assets.logoLightUrl and any(token in hint for token in ("light", "white", "inverse")):
                     brand_assets.logoLightUrl = url
@@ -520,27 +520,43 @@ def _build_master_brief_from_response(
         if fonts:
             font = fonts[0]
             brand_assets.fontFamily = font.fontFamily
-            brand_assets.fontUrl = font.fontUrl
+            font_items = [
+                item.model_dump() if hasattr(item, "model_dump") else dict(item)
+                for item in extraction.extractedFonts
+            ]
+            font_cues = [c for c in extraction.brandAssetCues if c.assetType == "typography"]
+            brand_assets.fontUrl = next((get_cached_asset_url(item) for item in font_cues if get_cached_asset_url(item)), None)
+            if not brand_assets.fontUrl:
+                brand_assets.fontUrl = next((get_cached_asset_url(item) for item in font_items if get_cached_asset_url(item)), None)
             brand_assets.fontWeight = font.fontWeight
             brand_assets.fontStyle = font.fontStyle
         else:
             typography = [c for c in extraction.brandAssetCues if c.assetType == "typography"]
             if typography:
                 brand_assets.fontFamily = typography[0].value
-                brand_assets.fontUrl = typography[0].assetUrl or typography[0].cachedUri
+                brand_assets.fontUrl = get_cached_asset_url(typography[0])
 
         images = sorted(
             extraction.extractedImages,
             key=lambda item: (item.confidence, item.category != "unknown", item.width or 0),
             reverse=True,
         )
-        brand_assets.imageInventory = [image.model_dump() for image in images[:50]]
-        brand_assets.imageUrls = [image.url for image in images if image.url][:5]
-        if not images:
-            cue_images = [c for c in extraction.brandAssetCues if c.assetType == "image"]
-            brand_assets.imageUrls = get_best_asset_urls(cue_images, max_count=5)
-        if images:
-            log_asset_cache_stats([c for c in extraction.brandAssetCues if c.assetType == "image"], "image", lead_id)
+        cue_images = [c for c in extraction.brandAssetCues if c.assetType == "image"]
+        cached_image_urls = get_cached_asset_urls(cue_images, max_count=50)
+        cached_image_set = set(cached_image_urls)
+        image_inventory: list[dict[str, Any]] = []
+        for image in images[:50]:
+            item = image.model_dump()
+            cached_item_url = get_cached_asset_url(item)
+            if cached_item_url:
+                item["url"] = cached_item_url
+            if item.get("url") in cached_image_set or str(item.get("url", "")).startswith(("data:", "/api/internal/assets/")):
+                image_inventory.append(item)
+        brand_assets.imageInventory = image_inventory
+        brand_assets.imageUrls = [item["url"] for item in image_inventory if item.get("url")][:5]
+        if not brand_assets.imageUrls:
+            brand_assets.imageUrls = cached_image_urls[:5]
+        log_asset_cache_stats(cue_images, "image", lead_id)
 
     # Extract content - prefer analyzed data, fall back to keywords
     extracted_content: dict[str, list[str]] = {}

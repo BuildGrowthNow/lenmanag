@@ -88,6 +88,7 @@ async def preview_site_variant(slug: str) -> Response:
             headers={
                 "Cache-Control": "no-store",
                 "X-LenManag-Preview-Type": "static-html",
+                "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
             },
         )
 

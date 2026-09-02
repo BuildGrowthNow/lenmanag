@@ -16,6 +16,7 @@ const body = Manrope({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://sites.lenquant.com"),
   title: "Master Design - Premium Websites in 3 Days | Lenquant",
   description: "Premium, custom-crafted websites delivered in 3 days for just $1,000. Master design, fast delivery, no compromises. Get your masterpiece today.",
   icons: {

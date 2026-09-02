@@ -5,6 +5,15 @@ const nextConfig = {
     return 'build-' + Date.now();
   },
   reactStrictMode: true,
+  async headers() {
+    return [{
+      source: "/(.*)",
+      headers: [{
+        key: "Permissions-Policy",
+        value: "camera=(), microphone=(), geolocation=()",
+      }],
+    }];
+  },
   // Temporarily ignore TypeScript errors during build due to React version conflicts
   typescript: {
     ignoreBuildErrors: true,

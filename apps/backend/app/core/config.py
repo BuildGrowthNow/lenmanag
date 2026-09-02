@@ -94,7 +94,10 @@ class Settings(BaseSettings):
     compiler_service_url: str = "http://localhost:3001"
 
     # Asset download / caching settings
-    asset_download_enabled: bool = False
+    # Production generation must cache source assets before rendering. An
+    # explicit ASSET_DOWNLOAD_ENABLED=false still opts out and omits uncached
+    # assets rather than leaking original-site URLs into generated markup.
+    asset_download_enabled: bool = True
     asset_storage_backend: str = "local"  # local | s3 | gcp
     asset_max_file_bytes: int = 1_500_000
     asset_max_aggregate_bytes: int = 12_000_000

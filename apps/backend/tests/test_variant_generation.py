@@ -72,7 +72,7 @@ class TestVariantStrategies:
 
         assert v3_consulting["variantLabel"] == "Minimal Luxe"
         assert v3_consulting["designMode"] == "minimalist"
-        assert v3_default["variantLabel"] == "Creative Alternative"
+        assert v3_default["variantLabel"] == "Contrasting Creative Direction"
         assert v3_default["designMode"] == "playful"
 
     def test_industry_specific_strategies_legal(self) -> None:
@@ -95,7 +95,7 @@ class TestVariantStrategies:
         strategy = get_variant_strategy("html_v1")
 
         assert strategy["variantType"] == "html_v1"
-        assert strategy["variantLabel"] == "Professional Standard"
+        assert strategy["variantLabel"] == "Editorial Authority"
         assert strategy["variantPosition"] == 1
 
     def test_get_variant_strategy_unknown_type(self) -> None:
@@ -109,9 +109,9 @@ class TestVariantStrategies:
 
         labels = {s["variantLabel"] for s in strategies.values()}
 
-        assert "Professional Standard" in labels
-        assert "Bold Startup" in labels
-        assert "Creative Alternative" in labels
+        assert "Editorial Authority" in labels
+        assert "Immersive Signature" in labels
+        assert "Contrasting Creative Direction" in labels
 
     def test_creative_brief_guidance_is_substantial(self) -> None:
         """Test that creative brief guidance has meaningful content."""

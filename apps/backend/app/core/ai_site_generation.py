@@ -8,12 +8,15 @@ that produces complete landing page TSX code from the approved master brief.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import boto3
 from app.core.compiler_client import CompilerError, get_compiler_client
 from app.core.config import get_settings
 from app.core.llm import get_llm_client
+from app.core.variant_strategy import get_variant_strategies
+from app.core.visual_adapter import build_visual_adapter
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
 
@@ -230,6 +233,8 @@ def _build_generation_prompt(
     """Build the main generation prompt — leads with inspiration, not restrictions."""
     # Extract brand tokens
     brand_section = _build_brand_tokens_section(master_brief, extraction)
+    visual_adapter = build_visual_adapter(extraction, master_brief)
+    visual_plan = get_variant_strategies(adapter=visual_adapter)["html_v2"].get("artDirectionPlan", {})
 
     # Extract content sections
     sections_list = "\n".join(
@@ -381,6 +386,13 @@ Import from '@/components/ui/*':
 {design_mode_guidance}
 
 ## MASTER BRIEF
+
+## INDUSTRY VISUAL ADAPTER
+{visual_adapter}
+
+## ART-DIRECTION PLAN
+Implement this structured plan. Do not invent a different generic theme while coding:
+{visual_plan}
 
 **Business Goal**: {master_brief.businessGoal}
 **Target Audience**: {master_brief.primaryAudience}
@@ -782,6 +794,15 @@ def _validate_tsx_source(source_code: str) -> list[str]:
     Returns list of validation errors, empty list if valid.
     """
     errors = []
+
+    if "—" in source_code:
+        errors.append("Visible content must not contain an em dash")
+    if re.search(r"\b(?:arial|comic\s+sans(?:\s+ms)?)\b", source_code, re.I):
+        errors.append("Prohibited basic Windows font detected")
+    if re.search(r"\b(?:lorem ipsum|example\.com|todo|xxx|coming soon|contact us for details|image placeholder)\b", source_code, re.I):
+        errors.append("Placeholder content detected")
+    if re.search(r"(?:src|href)\s*=\s*['\"]http://|url\(\s*['\"]?http://", source_code, re.I):
+        errors.append("Insecure HTTP asset URL detected")
 
     # Check for dangerous Node.js imports/patterns
     dangerous_patterns = [

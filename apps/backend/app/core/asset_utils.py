@@ -8,6 +8,7 @@ versions over original source URLs) with validation and telemetry.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urljoin, urlparse
@@ -45,6 +46,54 @@ def validate_asset_url(url: str | None) -> str | None:
     return url
 
 
+def _cached_render_url(value: object) -> str | None:
+    """Resolve a cached asset reference to a URL safe for generated markup."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    value = value.strip()
+    if value.startswith("data:"):
+        return value
+    if value.startswith("/api/internal/assets/"):
+        base = (os.getenv("BACKEND_PUBLIC_URL") or "").rstrip("/")
+        return f"{base}{value}" if base else value
+    if value.startswith(("https://", "http://")):
+        return value.replace("http://", "https://", 1) if value.startswith("http://") else value
+    if value.startswith(("local://", "s3://", "gs://")):
+        try:
+            from app.core.asset_urls import get_asset_signed_url
+
+            signed = get_asset_signed_url(value)
+            if signed.startswith("/"):
+                base = (os.getenv("BACKEND_PUBLIC_URL") or "").rstrip("/")
+                return f"{base}{signed}" if base else signed
+            return signed if signed.startswith(("https://", "http://")) else None
+        except Exception as exc:
+            logger.warning("Unable to sign cached asset reference: %s", exc)
+    return None
+
+
+def get_cached_asset_url(cue: BrandAssetCue | dict[str, Any]) -> str | None:
+    """Return only a cached asset URL; never fall back to the source website."""
+    if isinstance(cue, dict):
+        cached = cue.get("cachedUrl") or cue.get("cachedUri")
+    else:
+        cached = getattr(cue, "cachedUrl", None) or getattr(cue, "cachedUri", None)
+    return _cached_render_url(cached)
+
+
+def get_cached_asset_urls(
+    cues: Sequence[BrandAssetCue | dict[str, Any]], max_count: int = 5
+) -> list[str]:
+    urls: list[str] = []
+    for cue in cues:
+        url = get_cached_asset_url(cue)
+        if url and url not in urls:
+            urls.append(url)
+        if len(urls) >= max_count:
+            break
+    return urls
+
+
 def get_best_asset_url(cue: BrandAssetCue | dict[str, Any]) -> str | None:
     """
     Get the best available URL for an asset cue.
@@ -64,6 +113,10 @@ def get_best_asset_url(cue: BrandAssetCue | dict[str, Any]) -> str | None:
     else:
         cached = getattr(cue, "cachedUrl", None) or cue.cachedUri
         asset, value, page, legacy = getattr(cue, "assetUrl", None), cue.value, getattr(cue, "pageUrl", None), cue.sourceUrl
+
+    cached_render_url = get_cached_asset_url(cue)
+    if cached_render_url:
+        return cached_render_url
 
     # Prefer the cached URL when it is valid, then fall back to the source URL.
     # A malformed cached/relative value must not prevent a valid source asset
@@ -155,7 +208,7 @@ def log_asset_cache_stats(
             cached_uri = cue.cachedUri
             source_url = cue.sourceUrl
 
-        if validate_asset_url(cached_uri):
+        if get_cached_asset_url(cue):
             cached += 1
         elif validate_asset_url(source_url):
             source_only += 1

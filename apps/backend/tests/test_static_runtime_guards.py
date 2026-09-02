@@ -86,6 +86,22 @@ def test_no_logo_available_does_not_require_a_logo() -> None:
     _validate_generated_document(_valid_document(), "body {}", "const ready = true;", _brief_with_logo(None))
 
 
+def test_generated_document_rejects_em_dash_and_prohibited_fonts() -> None:
+    with pytest.raises(ValueError, match="em dash"):
+        _validate_generated_document(_valid_document().replace("Service", "Service — trusted"), "body {}", "const ready = true;")
+    with pytest.raises(ValueError, match="Windows font"):
+        _validate_generated_document(_valid_document(), "body { font-family: Arial; }", "const ready = true;")
+
+
+def test_generated_document_requires_an_approved_image_url() -> None:
+    brief = _brief_with_logo(None)
+    brief.brandAssets.imageUrls = ["http://cdn.example.test/work.jpg"]
+    with pytest.raises(ValueError, match="approved photography"):
+        _validate_generated_document(_valid_document(), "body {}", "const ready = true;", brief)
+    html = _valid_document().replace("</main>", '<img src="https://cdn.example.test/work.jpg" alt="Work"></main>')
+    _validate_generated_document(html, "body {}", "const ready = true;", brief)
+
+
 def test_static_preview_eligibility_does_not_require_compiled_bundle() -> None:
     site = SimpleNamespace(
         variantType="html_v1", staticHtml=_valid_document(), compilationStatus="success",

@@ -68,6 +68,42 @@ from app.schemas.site import (
 logger = logging.getLogger(__name__)
 
 
+def _variant_blueprint_similarity(previous: dict[str, Any], current: dict[str, Any]) -> tuple[float, float, float]:
+    """Compare content and creative contracts separately.
+
+    Variants are expected to reuse approved facts and copy. They should only
+    fail the diversity gate when both the content blueprint and the visual
+    strategy are duplicates.
+    """
+    prior_content = previous.get("contentStrategy") or {}
+    current_content = current.get("contentStrategy") or {}
+    prior_sections = [str(value).strip().lower() for value in prior_content.get("sections") or []]
+    current_sections = [str(value).strip().lower() for value in current_content.get("sections") or []]
+    section_similarity = (
+        1.0 if prior_sections == current_sections
+        else len(set(prior_sections) & set(current_sections)) / max(1, len(set(prior_sections) | set(current_sections)))
+    )
+    prior_headline = str(prior_content.get("headline") or "").strip().lower()
+    current_headline = str(current_content.get("headline") or "").strip().lower()
+    prior_cta = str(prior_content.get("cta") or "").strip().lower()
+    current_cta = str(current_content.get("cta") or "").strip().lower()
+    content_similarity = (section_similarity * 0.7) + (float(prior_headline == current_headline) * 0.2) + (float(prior_cta == current_cta) * 0.1)
+
+    prior_creative = previous.get("creativeStrategy") or {}
+    current_creative = current.get("creativeStrategy") or {}
+    creative_keys = (
+        "variantType", "variantLabel", "designMode", "paletteMode", "heroComposition",
+        "layoutSystem", "sectionRhythm", "signatureTechnique", "creativeBriefGuidance",
+    )
+    compared = [key for key in creative_keys if key in prior_creative or key in current_creative]
+    creative_similarity = (
+        sum(prior_creative.get(key) == current_creative.get(key) for key in compared) / len(compared)
+        if compared else float(prior_creative == current_creative)
+    )
+    combined = (content_similarity * 0.45) + (creative_similarity * 0.55)
+    return content_similarity, creative_similarity, combined
+
+
 CLIENT_VARIANT_COPY: dict[str, tuple[str, str]] = {
     "html_v1": ("The Authority Edit", "Editorial clarity with a composed, high-trust presentation."),
     "html_v2": ("Signal & Structure", "A confident, energetic direction built for momentum and action."),
@@ -3169,21 +3205,24 @@ class SiteRepository:
                 site.extractionVersion = run["snapshot"].get("extractionVersion")
                 site.generatorVersion = run["snapshot"].get("generatorVersion")
                 site.promptVersion = run["snapshot"].get("promptVersion")
-                await self._update_generation_run(generation_run_id, {"variantBriefs": [*(run.get("variantBriefs") or []), {"id": master_brief.id, "variantType": variant_type, "version": master_brief.version, "contentStrategy": {"headline": master_brief.headline, "sections": [s.purpose for s in master_brief.sections], "cta": master_brief.ctaStrategy}, "creativeStrategy": variant_strategy}]})
                 previous = list(run.get("variantBriefs") or [])
-                current_sections = [section.purpose for section in master_brief.sections]
+                current_blueprint = {"contentStrategy": {"headline": master_brief.headline, "sections": [s.purpose for s in master_brief.sections], "cta": master_brief.ctaStrategy}, "creativeStrategy": variant_strategy}
                 similarities: list[float] = []
+                content_similarities: list[float] = []
+                creative_similarities: list[float] = []
                 for item in previous:
-                    content = item.get("contentStrategy") or {}
-                    prior_sections = content.get("sections") or []
-                    section_similarity = 1.0 if prior_sections == current_sections else len(set(prior_sections) & set(current_sections)) / max(1, len(set(prior_sections) | set(current_sections)))
-                    headline_similarity = 1.0 if str(content.get("headline", "")).strip().lower() == master_brief.headline.strip().lower() else 0.0
-                    similarities.append((section_similarity * 0.7) + (headline_similarity * 0.3))
+                    content_similarity, creative_similarity, combined = _variant_blueprint_similarity(item, current_blueprint)
+                    content_similarities.append(content_similarity)
+                    creative_similarities.append(creative_similarity)
+                    similarities.append(combined)
                 max_similarity = max(similarities, default=0.0)
                 site.diversityScore = max(0, round((1 - max_similarity) * 100))
-                site.diversityNotes = [f"Compared with {len(previous)} prior variants; maximum structural/content similarity {max_similarity:.2f}."]
-                if max_similarity >= 0.95:
+                max_content = max(content_similarities, default=0.0)
+                max_creative = max(creative_similarities, default=0.0)
+                site.diversityNotes = [f"Compared with {len(previous)} prior variants; content similarity {max_content:.2f}, creative similarity {max_creative:.2f}."]
+                if any(content >= 0.95 and creative >= 0.95 for content, creative in zip(content_similarities, creative_similarities)):
                     raise ValueError("diversity_gate_failed: identical section/copy blueprint")
+                await self._update_generation_run(generation_run_id, {"variantBriefs": [*previous, {"id": master_brief.id, "variantType": variant_type, "version": master_brief.version, **current_blueprint}]})
         site.sourceAttribution = SiteSourceAttribution.model_validate(
             _site_source_attribution(
                 lead=await lead_repository.get_lead(lead_id),

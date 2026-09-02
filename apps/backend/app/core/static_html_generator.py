@@ -20,6 +20,7 @@ from botocore.exceptions import ClientError
 
 from app.core.config import get_settings
 from app.core.llm import get_llm_client
+from app.core.visual_adapter import build_visual_adapter
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
 
@@ -66,6 +67,9 @@ async def generate_static_html(
     # system. Splitting these into independent requests loses the brief's art
     # direction and leads to unrelated, template-like assets.
     prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
+    adapter = build_visual_adapter(extraction, master_brief)
+    from app.core.variant_strategy import get_variant_strategies
+    art_direction_plan = get_variant_strategies(adapter=adapter)[variant_type].get("artDirectionPlan", {})
     logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
     try:
         response = await llm.generate_text(
@@ -120,19 +124,36 @@ async def generate_static_html(
 
     html_content = _enforce_footer_year(html_content, extraction=extraction, company_name=extraction.summary.companyName)
     try:
-        _validate_generated_document(html_content, css_content, js_content, master_brief)
+        _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
     except ValueError as exc:
-        logger.error("Rejecting invalid generated document for %s: %s", variant_type, exc)
-        raise StaticGenerationError(
-            f"{variant_type} generated invalid document: {exc}",
-            variant_type=variant_type,
-            stage="validation",
-            code="document_validation_failed",
-        ) from exc
+        # Models occasionally leak a comment such as "placeholder" or use an
+        # insecure source URL. Give the same coherent artifact one corrective
+        # pass before rejecting the variant.
+        logger.warning("Correcting invalid generated document for %s: %s", variant_type, exc)
+        try:
+            response = await llm.generate_text(
+                prompt=_build_static_html_correction_prompt(
+                    variant_type, html_content, css_content, js_content, str(exc), art_direction_plan,
+                    _approved_render_asset_urls(master_brief),
+                ),
+                temperature=0.2,
+                max_tokens=32_768,
+            )
+            html_content, css_content, js_content = _parse_llm_response(response)
+            html_content = _enforce_footer_year(html_content, extraction=extraction, company_name=extraction.summary.companyName)
+            _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
+        except Exception as correction_error:
+            logger.error("Rejecting invalid generated document for %s: %s", variant_type, correction_error)
+            raise StaticGenerationError(
+                f"{variant_type} generated invalid document: {correction_error}",
+                variant_type=variant_type,
+                stage="validation",
+                code="document_validation_failed",
+            ) from correction_error
     if not _javascript_is_valid(js_content):
         try:
             js_content = await _repair_javascript(llm, html_content, js_content, variant_type)
-            _validate_generated_document(html_content, css_content, js_content, master_brief)
+            _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
             if not _javascript_is_valid(js_content):
                 raise ValueError("Generated JavaScript remains invalid after repair")
         except Exception as exc:
@@ -143,6 +164,10 @@ async def generate_static_html(
                 stage="js",
                 code="javascript_validation_failed",
             ) from exc
+
+    html_content, css_content, js_content = _apply_static_safety_layer(
+        html_content, css_content, js_content, master_brief, variant_type
+    )
 
     # The model never owns delivery URLs. Remove any relative/generated asset
     # references before the backend deterministically injects the final URLs.
@@ -249,10 +274,15 @@ def _deterministic_fallback_document(
     contact = extraction.contactInfo
     office = escape(contact.officePhone or contact.emergencyPhone or "")
     emergency = escape(contact.emergencyPhone or contact.officePhone or "")
-    hours = escape(contact.hours or "Call for service hours")
-    images = [item.url for item in extraction.extractedImages if item.url][:6]
+    hours = escape(contact.hours or "")
+    approved_images = list(getattr(brief.brandAssets, "imageUrls", None) or [])
+    approved_images.extend(
+        item.get("url") for item in list(getattr(brief.brandAssets, "imageInventory", None) or [])
+        if isinstance(item, dict) and item.get("url")
+    )
+    images = list(dict.fromkeys(_secure_asset_url(url) for url in approved_images if _secure_asset_url(url)))[:6]
     hero_image = escape(images[0] if images else "")
-    logo_url = next((item.url for item in extraction.extractedImages if item.category == "client_logo"), "")
+    logo_url = _approved_logo_url(brief) or ""
     cta_text = brief.ctaStrategy or "Contact us today"
     if re.search(r"xxx|placeholder|example\\.com", cta_text, re.IGNORECASE):
         cta_text = "Request a free estimate"
@@ -268,7 +298,7 @@ def _deterministic_fallback_document(
     subheadline = escape(brief.subheadline or brief.businessGoal or f"A clear, dependable experience from {company_name}.")
     primary_href = f"tel:{office}" if office else "#contact"
     contact_heading = escape(brief.ctaStrategy or f"Start a conversation with {company_name}")
-    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{company} — {mode[0]}</title><style>:root{{--bg:{mode[1]};--ink:{mode[2]};--accent:#c8860a}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}}main{{max-width:1180px;margin:auto;padding:28px}}header{{min-height:72vh;display:grid;align-content:center;gap:24px;background:linear-gradient(90deg,var(--bg) 35%,transparent),url('{hero_image}') center/cover;border-radius:24px;padding:clamp(28px,8vw,110px)}}.logo{{max-width:150px;max-height:70px;object-fit:contain;object-position:left}}h1{{font-size:clamp(3rem,9vw,8rem);line-height:.9;max-width:850px;margin:0}}h2{{font-size:clamp(1.8rem,4vw,3.5rem);line-height:1.05}}.eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:.75rem;font-weight:700;color:var(--accent)}}.cta{{display:inline-block;background:var(--accent);color:#fff;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700;width:max-content}}section{{padding:90px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}article{{padding:26px;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:18px}}.gallery{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}.gallery img{{width:100%;height:220px;object-fit:cover;border-radius:14px}}footer{{border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);padding:30px 0}}@media(max-width:700px){{main{{padding:16px}}header{{min-height:78vh;padding:28px 20px}}.grid,.gallery{{grid-template-columns:1fr}}.gallery img{{height:180px}}}}</style></head><body><main><header>{logo}<p class="eyebrow">{escape(mode[0])}</p><h1>{headline}</h1><p>{subheadline}</p><a class="cta" href="{primary_href}">{escape(cta_text)}</a></header><section><p class="eyebrow">What we do</p><div class="grid">{section_html}</div></section><section><p class="eyebrow">Highlights</p><div class="gallery">{gallery}</div></section><section id="contact"><p class="eyebrow">Contact</p><h2>{contact_heading}</h2><p>Office: <a href="tel:{office}">{office or "Contact us for details"}</a><br>Emergency: <a href="tel:{emergency}">{emergency or "Contact us for details"}</a><br>{hours}</p><a class="cta" href="{escape(contact.contactUrl or '#contact')}">Contact the team</a></section><footer><span class="site-copyright">© {company} {datetime.now(timezone.utc).year}</span></footer></main><script>window.__LENMANAG_RUNTIME__={{initialized:true,animationSetupComplete:true,errors:[],jsLoaded:true}};window.__LENMANAG_STATIC_READY__=true;</script></body></html>'''
+    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{company} - {mode[0]}</title><style>:root{{--bg:{mode[1]};--ink:{mode[2]};--accent:#c8860a}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}}main{{max-width:1180px;margin:auto;padding:28px}}header{{min-height:72vh;display:grid;align-content:center;gap:24px;background:linear-gradient(90deg,var(--bg) 35%,transparent),url('{hero_image}') center/cover;border-radius:24px;padding:clamp(28px,8vw,110px)}}.logo{{max-width:150px;max-height:70px;object-fit:contain;object-position:left}}h1{{font-size:clamp(3rem,9vw,8rem);line-height:.9;max-width:850px;margin:0}}h2{{font-size:clamp(1.8rem,4vw,3.5rem);line-height:1.05}}.eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:.75rem;font-weight:700;color:var(--accent)}}.cta{{display:inline-block;background:var(--accent);color:#fff;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700;width:max-content}}section{{padding:90px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}article{{padding:26px;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:18px}}.gallery{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}.gallery img{{width:100%;height:220px;object-fit:cover;border-radius:14px}}footer{{border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);padding:30px 0}}@media(max-width:700px){{main{{padding:16px}}header{{min-height:78vh;padding:28px 20px}}.grid,.gallery{{grid-template-columns:1fr}}.gallery img{{height:180px}}}}</style></head><body><main><header>{logo}<p class="eyebrow">{escape(mode[0])}</p><h1>{headline}</h1><p>{subheadline}</p><a class="cta" href="{primary_href}">{escape(cta_text)}</a></header><section><p class="eyebrow">What we do</p><div class="grid">{section_html}</div></section><section><p class="eyebrow">Highlights</p><div class="gallery">{gallery}</div></section><section id="contact"><p class="eyebrow">Contact</p><h2>{contact_heading}</h2><p>{('Office: <a href="tel:' + office + '">' + office + '</a><br>') if office else ''}{('Emergency: <a href="tel:' + emergency + '">' + emergency + '</a><br>') if emergency else ''}{hours}</p><a class="cta" href="{escape(contact.contactUrl or '#contact')}">Contact the team</a></section><footer><span class="site-copyright">© {company} {datetime.now(timezone.utc).year}</span></footer></main><script>window.__LENMANAG_RUNTIME__={{initialized:true,animationSetupComplete:true,errors:[],jsLoaded:true}};window.__LENMANAG_STATIC_READY__=true;</script></body></html>'''
     formatted_office = office
     if len(re.sub(r"\\D", "", office)) == 11:
         digits = re.sub(r"\\D", "", office)[1:]
@@ -284,6 +314,10 @@ def _build_static_html_prompt(
     variant_type: str,
 ) -> str:
     """Build LLM prompt for static HTML generation."""
+    adapter = build_visual_adapter(extraction, brief)
+    from app.core.variant_strategy import get_variant_strategies
+    strategy = get_variant_strategies(adapter=adapter)[variant_type]
+    plan = strategy.get("artDirectionPlan") or {}
     # Build sections summary
     sections_summary = "\n".join(
         f"  - {s.purpose}: {s.headline}\n    Purpose: {s.contentSummary}\n    Approved points: {', '.join(s.contentPoints)}\n    Approach: {s.suggestedApproach}"
@@ -291,15 +325,20 @@ def _build_static_html_prompt(
     ) or "  - No approved sections; create visual interest without inventing facts."
 
     # Get brand info
-    logo_url = brief.brandAssets.logoUrl or "None"
+    logo_url = _secure_asset_url(brief.brandAssets.logoUrl) or "None"
     primary_color = brief.brandAssets.primaryColor or "#000000"
     secondary_color = brief.brandAssets.secondaryColor or "#666666"
-    font_family = brief.brandAssets.fontFamily or "system-ui, sans-serif"
-    font_url = brief.brandAssets.fontUrl or "None"
+    font_family = _safe_font_family(brief.brandAssets.fontFamily) or "Roboto, Nunito, Inter, system-ui, sans-serif"
+    font_url = _secure_asset_url(brief.brandAssets.fontUrl) or "None"
     year = datetime.now(timezone.utc).year
     contacts = _verified_contact_data(brief, extraction)
     image_inventory = [item for item in brief.brandAssets.imageInventory if item.get("url")][:12]
-    asset_inventory = "\n".join(f"- {item.get('category', 'image')}: {item.get('url')} | alt={item.get('altText') or ''} | source={item.get('sourceUrl') or ''} | dimensions={item.get('width') or '?'}x{item.get('height') or '?'} | confidence={item.get('confidence') or 0}" for item in image_inventory) or "- No approved photography available"
+    if not image_inventory:
+        image_inventory = [{"category": "image", "url": url} for url in (brief.brandAssets.imageUrls or []) if url][:12]
+    asset_inventory = "\n".join(f"- {item.get('category', 'image')}: {_secure_asset_url(item.get('url')) or ''} | alt={item.get('altText') or ''} | dimensions={item.get('width') or '?'}x{item.get('height') or '?'} | confidence={item.get('confidence') or 0}" for item in image_inventory if _secure_asset_url(item.get('url'))) or "- No approved photography is available; omit photography and use art direction"
+
+    approved_testimonials = _approved_testimonial_quotes(extraction)
+    testimonials_context = "\n".join(f'- "{quote}"' for quote in approved_testimonials) or "- None approved. Do not render testimonials, reviews, star ratings, or customer quotes."
 
     # Get company name
     company_name = extraction.summary.companyName or "Company"
@@ -346,18 +385,36 @@ CONTENT BLUEPRINT:
 
 BRAND ASSETS:
 - Company Name: {company_name}
-- Logo URL: {logo_url}
+- Logo URL: {_secure_asset_url(logo_url) or logo_url}
 - Primary Color: {primary_color}
 - Secondary Color: {secondary_color}
 - Font Family: {font_family}
 - Font File URL: {font_url}
-- Logo variants: {', '.join(brief.brandAssets.logoVariants) or 'None'}
+    - Logo variants: {', '.join(_secure_asset_url(url) for url in brief.brandAssets.logoVariants if _secure_asset_url(url)) or 'None'}
 - Approved image inventory (use these URLs, never random stock):
 {asset_inventory}
+- Approved testimonials (use verbatim or omit the entire proof/testimonial section):
+{testimonials_context}
 - Verified contact data: {contacts or 'None; omit rather than invent'}
 - Current server year for footer copyright: {year}
 
 VARIANT TYPE: {variant_type}
+
+INDUSTRY AND AUDIENCE VISUAL ADAPTER:
+- Industry: {adapter['industry']} / {adapter['subcategory']}
+- Audience and buying context: {adapter['audience']}
+- Trust signals: {', '.join(adapter['trust'])}
+- Appropriate imagery: {', '.join(adapter['imagery'])}
+- Visual metaphors: {', '.join(adapter['metaphors'])}
+- Interaction patterns: {', '.join(adapter['interaction'])}
+- Motion language: {adapter['motion']}
+- Typography personality: {adapter['type']}
+- Color behavior: {adapter['color']}
+- Patterns to avoid: {', '.join(adapter['avoid'])}
+- Conceptual imagery useful: {adapter['conceptual']}
+
+ART-DIRECTION IMPLEMENTATION PLAN (implement this plan, do not invent a competing design):
+{plan}
 
 REQUIREMENTS:
 1. Generate THREE separate code blocks:
@@ -373,15 +430,18 @@ REQUIREMENTS:
     - REQUIRED HEADER LOGO URL: {logo_url}
     - If this URL is not None, the <header> MUST contain an <img> whose src equals this exact URL. Do not omit, rewrite, substitute, or use a different logo variant. If it is None, no logo is required.
    - Map approved assets to header, hero, service/about, and footer before writing markup. If an approved logo exists, the header MUST contain it. If approved photography exists, use at least one <img> unless this specific concept is explicitly typography-only.
-   - Use only the verified contact data above. Never invent phone numbers, emails, addresses, metrics, or placeholder contacts. Use the current server year in the copyright footer.
+    - Use only the verified contact data above. Never invent phone numbers, emails, addresses, metrics, or placeholder contacts. Use the current server year in the copyright footer.
+    - Every image, logo, font, and CSS background asset must use one of the cached URLs listed above, a data: URL, or no asset at all. Never request, copy, upgrade, or mention a URL from the original website.
    - NO inline styles or scripts
    - Use approved extracted client images first. If none are suitable, prefer typographic, geometric, textured, or diagrammatic art direction. Use external imagery only when genuinely necessary and contextually relevant; never use random stock photography.
    - If a font file URL is provided, load it with @font-face; never use placeholder family names such as "Preloaded Font" as literal CSS.
+   - Never use Arial, Comic Sans, or other basic Windows font families. Prefer an approved font, or use Roboto, Nunito, Inter, system-ui, sans-serif, or a comparable web-safe alternative.
 
 3. CSS Requirements:
    - Use CSS custom properties for colors/spacing
    - Responsive design (mobile-first with media queries)
-   - Smooth animations matching motion level
+    - Smooth animations matching motion level, with a visible signature transition or hover treatment and a prefers-reduced-motion fallback
+    - Include min-width: 0 on grid/flex children, max-width: 100% on media, overflow-wrap: anywhere on long copy, and responsive gaps. No text may escape a card, button, or section.
    - Follow the creative direction's color mood and typography
    - Include hover states for interactive elements
    - Modern CSS (flexbox, grid)
@@ -409,9 +469,13 @@ REQUIREMENTS:
    - If approved photography is unavailable, create intentional art direction with
      typography, SVG, gradients, textures, canvas, geometry, and layered composition;
      never leave an empty or generic page.
-   - Keep factual accuracy: use only approved client assets and verified facts. Never
+    - Keep factual accuracy: use only approved client assets and verified facts. Never
      invent testimonials, reviews, phone numbers, emails, addresses, metrics, awards,
-     or claims. Include testimonials only when supplied in the approved content.
+     or claims. Include a testimonial only when its exact quote appears in the approved
+     testimonial list above; otherwise omit testimonials entirely.
+   - Hard copy rules: never use an em dash (—) anywhere. Use a hyphen or rewrite the sentence.
+    - Never output placeholder language, including lorem ipsum, example.com, TODO, XXX, "your email", "contact us for details", "coming soon", or "image placeholder". If source data is missing, omit that element.
+    - Keep copy compact: hero headline <= 12 words, paragraph copy <= 45 words, card titles <= 8 words, card copy <= 24 words. Split or omit content rather than overflowing a component.
    - Use only browser-native HTML, CSS, SVG, canvas, and vanilla JavaScript. Do not
      import, claim, or rely on Three.js, GSAP, Lenis, or any other unprovided library.
 
@@ -481,7 +545,13 @@ class _DocumentStructureParser(HTMLParser):
         self.stack.pop()
 
 
-def _validate_generated_document(html: str, css: str, js: str, brief: MasterBrief | None = None) -> None:
+def _validate_generated_document(
+    html: str,
+    css: str,
+    js: str,
+    brief: MasterBrief | None = None,
+    extraction: ExtractionSnapshot | None = None,
+) -> None:
     if "```" in html or "```" in css or "```" in js:
         raise ValueError("Markdown fence leaked into generated asset")
     if not html.lstrip().lower().startswith("<!doctype html"):
@@ -495,9 +565,19 @@ def _validate_generated_document(html: str, css: str, js: str, brief: MasterBrie
         raise ValueError("Generated CSS is structurally incomplete")
     if not js.strip():
         raise ValueError("Generated JavaScript is empty")
-    prohibited = (r"\b(?:xxx|xxxx|000-0000|555[- )]?\d{3,4}|lorem ipsum|example\.com|your@email\.com|todo)\b")
+    prohibited = (r"\b(?:xxx|xxxx|000-0000|555[- )]?\d{3,4}|lorem ipsum|example\.com|your@email\.com|todo|coming soon|contact us for details|image placeholder)\b")
     if re.search(prohibited, "\n".join((html, css, js)), re.I):
         raise ValueError("Generated output contains prohibited placeholder content")
+    if "—" in "\n".join((html, css, js)):
+        raise ValueError("Generated output contains an em dash; use a hyphen instead")
+    if re.search(r"\b(?:arial|comic\s+sans(?:\s+ms)?)\b", "\n".join((html, css, js)), re.I):
+        raise ValueError("Generated output uses a prohibited basic Windows font")
+    if re.search(r"\b(?:eval|Function)\s*\(", js) or re.search(r"\b(?:setTimeout|setInterval)\s*\(\s*['\"]", js):
+        raise ValueError("Generated JavaScript uses prohibited dynamic code evaluation")
+    if re.search(r"(?:src|href)\s*=\s*['\"]http://|url\(\s*['\"]?http://", "\n".join((html, css)), re.I):
+        raise ValueError("Generated document contains an insecure HTTP resource URL")
+    if extraction is not None and _has_testimonial_markup_without_approved_quote(html, extraction):
+        raise ValueError("Generated output contains an unapproved testimonial or review")
     if brief:
         current_year = str(datetime.now(timezone.utc).year)
         if re.search(r"(?:copyright|©|&copy;)[^<]{0,80}\b20\d{2}\b", html, re.I) and current_year not in html:
@@ -505,7 +585,20 @@ def _validate_generated_document(html: str, css: str, js: str, brief: MasterBrie
         required_logo_url = _approved_logo_url(brief)
         if required_logo_url and not _header_contains_exact_logo(html, required_logo_url):
             raise ValueError("Generated HTML omitted the approved header logo")
-        if brief.brandAssets.imageUrls and "<img" not in html:
+    if _has_unapproved_render_asset(html, css, brief):
+        raise ValueError("Generated document contains an uncached or unapproved asset URL")
+    if brief:
+        approved_images = [
+            _secure_asset_url(url)
+            for url in list(getattr(brief.brandAssets, "imageUrls", None) or [])
+        ]
+        approved_images.extend(
+            _secure_asset_url(item.get("url"))
+            for item in list(getattr(brief.brandAssets, "imageInventory", None) or [])
+            if isinstance(item, dict)
+        )
+        approved_images = [url for url in approved_images if url]
+        if approved_images and not any(url in html for url in approved_images):
             raise ValueError("Generated HTML omitted approved photography")
 
 
@@ -520,8 +613,200 @@ def _approved_logo_url(brief: MasterBrief) -> str | None:
         *(getattr(assets, "logoVariants", None) or []),
     ):
         if isinstance(value, str) and value.strip():
-            return value.strip()
+            return _secure_asset_url(value) or value.strip()
     return None
+
+
+def _secure_asset_url(value: object) -> str | None:
+    """Normalize public asset URLs so hosted previews do not trigger mixed content."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    value = value.strip()
+    if value.lower().startswith("http://"):
+        return "https://" + value[7:]
+    return value if value.lower().startswith(("https://", "data:", "/api/internal/assets/")) else None
+
+
+def _approved_render_asset_urls(brief: MasterBrief | None) -> set[str]:
+    if brief is None:
+        return set()
+    assets = getattr(brief, "brandAssets", None)
+    if assets is None:
+        return set()
+    values = [
+        getattr(assets, "logoUrl", None), getattr(assets, "logoLightUrl", None),
+        getattr(assets, "logoDarkUrl", None), getattr(assets, "fontUrl", None),
+        *(getattr(assets, "logoVariants", None) or []),
+        *(getattr(assets, "imageUrls", None) or []),
+        *[
+            item.get("url") for item in (getattr(assets, "imageInventory", None) or [])
+            if isinstance(item, dict)
+        ],
+    ]
+    return {url for value in values if (url := _secure_asset_url(value))}
+
+
+def _has_unapproved_render_asset(html: str, css: str, brief: MasterBrief | None) -> bool:
+    """Reject source-site assets while allowing normal navigation links."""
+    if brief is None:
+        return False
+    approved = _approved_render_asset_urls(brief)
+    asset_values: list[str] = []
+    for match in re.finditer(r"<img\b[^>]*\bsrc\s*=\s*(['\"])(.*?)\1", html, re.I | re.S):
+        asset_values.append(match.group(2).strip())
+    for match in re.finditer(r"\b(?:src|poster)\s*=\s*(['\"])(.*?)\1", html, re.I | re.S):
+        asset_values.append(match.group(2).strip())
+    for match in re.finditer(r"<link\b[^>]*\bhref\s*=\s*(['\"])(.*?)\1", html, re.I | re.S):
+        asset_values.append(match.group(2).strip())
+    asset_values.extend(match.group(2).strip() for match in re.finditer(r"url\(\s*(['\"]?)(.*?)\1\s*\)", css, re.I | re.S))
+    return any(
+        value.startswith(("http://", "https://", "/api/internal/assets/"))
+        and not value.startswith("data:")
+        and value not in approved
+        for value in asset_values
+    )
+
+
+def _safe_font_family(value: object) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    if re.search(r"\b(?:arial|comic\s+sans(?:\s+ms)?)\b", value, re.I):
+        return None
+    return value.strip()
+
+
+def _upgrade_insecure_resource_urls(html: str) -> str:
+    """Upgrade generated resource attributes to HTTPS."""
+    html = re.sub(
+        r"(?P<prefix>\b(?:src|href)\s*=\s*['\"])http://",
+        r"\g<prefix>https://",
+        html,
+        flags=re.I,
+    )
+    return re.sub(r"(url\(\s*['\"]?)http://", r"\1https://", html, flags=re.I)
+
+
+def _approved_testimonial_quotes(extraction: ExtractionSnapshot) -> list[str]:
+    quotes: list[str] = []
+    analysis = getattr(extraction, "analysis", None)
+    items = list(getattr(analysis, "testimonials", None) or []) + list(getattr(extraction, "extractedTestimonials", None) or [])
+    for item in items:
+        quote = getattr(item, "quote", None) if not isinstance(item, dict) else item.get("quote")
+        if isinstance(quote, str) and quote.strip() and quote.strip() not in quotes:
+            quotes.append(quote.strip())
+    return quotes[:12]
+
+
+def _has_testimonial_markup_without_approved_quote(html: str, extraction: ExtractionSnapshot) -> bool:
+    lowered = html.lower()
+    markers = ("testimonial", "review", "customer quote", "what clients say", "said by")
+    if not any(marker in lowered for marker in markers):
+        return False
+    return not any(quote.lower() in lowered for quote in _approved_testimonial_quotes(extraction))
+
+
+def _build_static_html_correction_prompt(
+    variant_type: str, html: str, css: str, js: str, error: str,
+    plan: dict[str, Any] | None = None,
+    approved_asset_urls: set[str] | None = None,
+) -> str:
+    return f"""Repair the generated static site artifact for {variant_type}. Return ONLY three closed code blocks in this order: html, css, javascript. Preserve the design and all source-backed content, but fix this validation error: {error}
+
+Preserve and implement the original art-direction plan; do not replace it with a generic fallback:
+{plan or 'Preserve the existing concept, composition, imagery, and interaction intent.'}
+
+Hard rules:
+- Never use an em dash. Use a hyphen.
+- Never use placeholder content or invented testimonials, reviews, claims, metrics, contacts, or images.
+    - Use only these approved cached asset URLs, data: assets, or no asset at all: {', '.join(sorted(approved_asset_urls or set())) or 'none'}.
+    - Never use an original-site URL, even if it can be upgraded to HTTPS. Remove any uncached image or logo.
+- Never use Arial or Comic Sans.
+- JavaScript must be vanilla and must not use eval(), new Function(), or string-based timers.
+- Keep the required runtime call: window.__LENMANAG_RUNTIME__.markInitialized().
+
+```html
+{html}
+```
+```css
+{css}
+```
+```javascript
+    {js}
+    ```"""
+
+
+def _apply_static_safety_layer(
+    html: str, css: str, js: str, brief: MasterBrief, variant_type: str
+) -> tuple[str, str, str]:
+    """Guarantee readable layout and progressive enhancement for every variant."""
+    required_logo = _approved_logo_url(brief)
+    light_logo = _secure_asset_url(getattr(brief.brandAssets, "logoLightUrl", None))
+    if required_logo and light_logo and required_logo == light_logo:
+        header_match = re.search(r"<header\b[^>]*>(.*?)</header\s*>", html, re.I | re.S)
+        if header_match:
+            header = re.sub(
+                r"(<img\b[^>]*\bsrc\s*=\s*['\"]" + re.escape(required_logo) + r"['\"][^>]*)",
+                r'\1 class="lq-logo-dark-on-light"',
+                header_match.group(1), count=1, flags=re.I | re.S,
+            )
+            html = html[:header_match.start(1)] + header + html[header_match.end(1):]
+
+    html = re.sub(
+        r"<((?:section|article|figure|footer)\b(?![^>]*\bdata-lq-reveal\b)(?![^>]*\bclass=['\"][^'\"]*(?:hero|header)[^'\"]*['\"])[^>]*)>",
+        r'<\1 data-lq-reveal>', html, flags=re.I,
+    )
+    css += """
+
+/* LenQuant reliability layer: readable by default, enhanced when JS is ready. */
+*, *::before, *::after { box-sizing: border-box; }
+html { overflow-x: hidden; }
+body, main, header, section, article, footer, div, li { min-width: 0; }
+body { overflow-wrap: anywhere; }
+img, svg, video, canvas { display: block; max-width: 100%; height: auto; }
+h1, h2, h3, h4, p, a, button, li { overflow-wrap: anywhere; }
+[data-lq-reveal] { opacity: 1; transform: none; }
+.lq-motion-ready [data-lq-reveal] { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+.lq-motion-ready [data-lq-reveal].lq-revealed { opacity: 1; transform: none; }
+.lq-logo-dark-on-light { filter: brightness(0) saturate(100%); }
+[data-lq-float] { animation: lq-float 8s ease-in-out infinite; }
+@keyframes lq-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .lq-motion-ready [data-lq-reveal] { opacity: 1; transform: none; }
+}
+@media (max-width: 720px) {
+  [class*="grid"], [class*="columns"] { grid-template-columns: minmax(0, 1fr) !important; }
+}
+"""
+    js += """
+
+// LenQuant progressive motion layer. Content stays visible if this script fails.
+(function () {
+  function setupLenQuantMotion() {
+    var root = document.documentElement;
+    var items = Array.prototype.slice.call(document.querySelectorAll('[data-lq-reveal]'));
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || !('IntersectionObserver' in window)) {
+      items.forEach(function (item) { item.classList.add('lq-revealed'); });
+      if (window.__LENMANAG_RUNTIME__ && window.__LENMANAG_RUNTIME__.markInitialized) window.__LENMANAG_RUNTIME__.markInitialized();
+      return;
+    }
+    root.classList.add('lq-motion-ready');
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) { entry.target.classList.add('lq-revealed'); observer.unobserve(entry.target); }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    items.forEach(function (item) { observer.observe(item); });
+    var floatTarget = document.querySelector('.hero-visual, [data-hero-visual]');
+    if (floatTarget) floatTarget.setAttribute('data-lq-float', 'true');
+    if (window.__LENMANAG_RUNTIME__ && window.__LENMANAG_RUNTIME__.markInitialized) window.__LENMANAG_RUNTIME__.markInitialized();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupLenQuantMotion);
+  else setupLenQuantMotion();
+}());
+"""
+    return html, css, js
 
 
 def _header_contains_exact_logo(html: str, required_url: str) -> bool:

@@ -63,6 +63,22 @@ export function validateTsxSource(source: string): ValidationResult {
     errors.push('Inline <script> tags are not allowed');
   }
 
+  // Keep browser artifacts aligned with the static generator's content and
+  // security contract.  These checks are intentionally deterministic so a
+  // provider cannot bypass them by changing its prompt.
+  if (source.includes('—')) {
+    errors.push('Visible content must not contain an em dash');
+  }
+  if (/\b(?:Arial|Comic\s+Sans(?:\s+MS)?)\b/i.test(source)) {
+    errors.push('Prohibited basic Windows font detected');
+  }
+  if (/\b(?:lorem ipsum|example\.com|TODO|XXX|coming soon|contact us for details|image placeholder)\b/i.test(source)) {
+    errors.push('Placeholder content detected');
+  }
+  if (/(?:src|href)\s*=\s*['"]http:\/\//i.test(source) || /url\(\s*['"]?http:\/\//i.test(source)) {
+    errors.push('Insecure HTTP asset URL detected');
+  }
+
   // Check for default export (required)
   if (!/export\s+default\s+/.test(source)) {
     errors.push('Component must have a default export');

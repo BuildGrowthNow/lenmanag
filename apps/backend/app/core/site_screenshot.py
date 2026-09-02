@@ -208,4 +208,5 @@ def _fatal_runtime_failures(qa: dict[str, object]) -> list[str]:
     if qa.get("mainContentRendered") is not True: failures.append("main_content_not_rendered")
     if qa.get("mobileMenu") == "failed": failures.append("mobile_menu_failed")
     if qa.get("hiddenAfterScroll"): failures.append("content_hidden_after_scroll")
+    if qa.get("horizontalOverflow"): failures.append("horizontal_overflow")
     return failures
