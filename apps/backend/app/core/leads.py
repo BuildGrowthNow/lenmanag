@@ -1577,6 +1577,10 @@ class LeadRepository:
         self, lead_id: str, generation_run_id: str, stage: str
     ) -> bool:
         """Update pipeline stage only while this run is still the lead's latest run."""
+        stage_detail = {
+            "ready": "All requested previews passed runtime QA.",
+            "needs_attention": "Generation or runtime QA requires attention.",
+        }.get(stage)
         database = get_database()
         if database is None:
             async with self._memory_lock:
@@ -1584,12 +1588,13 @@ class LeadRepository:
                 if not doc or doc.get("latestGenerationRunId") != generation_run_id:
                     return False
                 doc["pipelineStage"] = stage
+                doc["pipelineStatusDetail"] = stage_detail
                 doc["version"] = int(doc.get("version", 1)) + 1
                 doc["updatedAt"] = _now()
                 return True
         result = await database["leads"].update_one(
             {"id": lead_id, "latestGenerationRunId": generation_run_id},
-            {"$set": {"pipelineStage": stage, "updatedAt": _now()}, "$inc": {"version": 1}},
+            {"$set": {"pipelineStage": stage, "pipelineStatusDetail": stage_detail, "updatedAt": _now()}, "$inc": {"version": 1}},
         )
         return result.modified_count == 1
 
