@@ -36,6 +36,23 @@ def _encrypt(value: bytes) -> bytes:
     return nonce + AESGCM(_key()).encrypt(nonce, value, None)
 
 
+def _storage_root() -> Path:
+    """Return a writable private directory for rejected artifacts.
+
+    Production containers run as a non-root user. Older deployments used the
+    host-style /var/lib path without mounting or provisioning it, which caused
+    the diagnostic write to mask the actual generation failure.
+    """
+    configured = Path(get_settings().rejected_artifact_path)
+    try:
+        configured.mkdir(parents=True, exist_ok=True)
+        return configured
+    except OSError:
+        fallback = Path("/tmp/lenquant/rejected-artifacts")
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
 async def persist_rejected_artifact(
     *,
     lead_id: str,
@@ -48,8 +65,7 @@ async def persist_rejected_artifact(
 ) -> str:
     """Persist an encrypted rejected artifact and return its private ID."""
     settings = get_settings()
-    root = Path(settings.rejected_artifact_path)
-    root.mkdir(parents=True, exist_ok=True)
+    root = _storage_root()
     artifact_id = hashlib.sha256(
         f"{lead_id}:{site_id}:{variant_type}:{datetime.now(timezone.utc).isoformat()}".encode()
     ).hexdigest()[:24]
@@ -80,7 +96,7 @@ async def persist_rejected_artifact(
 def purge_rejected_artifacts() -> int:
     """Remove expired private artifacts; return the number removed."""
     settings = get_settings()
-    root = Path(settings.rejected_artifact_path)
+    root = _storage_root()
     if not root.exists():
         return 0
     cutoff = datetime.now(timezone.utc) - timedelta(

@@ -4,6 +4,7 @@ export const API_VERSION = "1";
 export const VERSION_HEADER_NAME = "X-API-Version";
 const VERSIONED_PATH_PREFIX = `/api/v${API_VERSION}`;
 export const VENDOR_MEDIA_TYPE = `application/vnd.lenmanag.v${API_VERSION}+json`;
+const REQUEST_TIMEOUT_MS = 20_000;
 
 type RequestOptions = {
   method?: string;
@@ -89,23 +90,35 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     authToken = localStorage.getItem("access_token");
   }
 
-  const response = await fetch(`${API_BASE_URL}${normalizedPath}`, {
-    method: options.method || "GET",
-    headers: {
-      Accept: VENDOR_MEDIA_TYPE,
-      [VERSION_HEADER_NAME]: API_VERSION,
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      ...(options.headers || {})
-    },
-    body:
-      options.body === undefined
-        ? undefined
-        : isFormData
-          ? (options.body as BodyInit)
-          : JSON.stringify(options.body)
-  });
-  return parseResponse<T>(response);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${API_BASE_URL}${normalizedPath}`, {
+      method: options.method || "GET",
+      headers: {
+        Accept: VENDOR_MEDIA_TYPE,
+        [VERSION_HEADER_NAME]: API_VERSION,
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        ...(options.headers || {})
+      },
+      body:
+        options.body === undefined
+          ? undefined
+          : isFormData
+            ? (options.body as BodyInit)
+            : JSON.stringify(options.body),
+      signal: controller.signal,
+    });
+    return parseResponse<T>(response);
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`The API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function safeRequest<T>(path: string, fallback: T, options: RequestOptions = {}): Promise<T> {
