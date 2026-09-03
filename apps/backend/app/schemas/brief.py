@@ -251,6 +251,10 @@ class MasterBrief(BaseModel):
     motionLevel: Literal["none", "subtle", "moderate", "dramatic"] = Field(
         ..., description="Animation intensity"
     )
+    heroMode: Literal["image_led", "typography_only"] = Field(
+        default="typography_only",
+        description="Explicit media contract for the hero; typography-only has no fake media shell.",
+    )
     specialEffects: list[str] = Field(
         default_factory=list, description="3d-hero, parallax-scroll, particle-bg, etc"
     )

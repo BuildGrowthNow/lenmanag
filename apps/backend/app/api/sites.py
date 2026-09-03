@@ -276,7 +276,10 @@ async def patch_review(
 async def approve_review(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteHandoffRecord]:
-    handoff = await site_repository.publish_handoff(site_id)
+    try:
+        handoff = await site_repository.publish_handoff(site_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if handoff is None:
         raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(

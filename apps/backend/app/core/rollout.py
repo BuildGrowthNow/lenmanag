@@ -59,3 +59,8 @@ def rollout_decision(
         "rollback": rollback,
         "reasons": reasons,
     }
+
+
+def publish_allowed(decision: dict[str, Any], *, shadow_mode: bool) -> bool:
+    """Shadow execution may collect artifacts/QA but can never publish them."""
+    return bool(decision.get("enabled")) and not shadow_mode

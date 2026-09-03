@@ -289,6 +289,8 @@ async def get_generation_preflight(
     ]
     settings = get_settings()
     variants = getattr(lead, "generationTypes", []) or []
+    from app.core.generation_contracts import generation_preflight
+    contract = generation_preflight(brief, asset_download_enabled=settings.asset_download_enabled) if brief else None
     return success_response(
         {
             "leadId": lead_id,
@@ -300,18 +302,16 @@ async def get_generation_preflight(
             "selectedLogo": assets.get("logoUrl"),
             "logoVariants": assets.get("logoVariants", []),
             "heroCandidates": assets.get("imageInventory", [])[:8],
+            "heroMode": contract.hero_mode if contract else None,
             "projectAssets": assets.get("imageInventory", []),
-            "rejectedAssets": rejected,
+            "rejectedAssets": rejected + (contract.rejected_assets if contract else []),
             "sourceOnlyAssets": source_only,
             "proofEvidence": (
                 brief.extractedContent.get("testimonials", []) if brief else []
             ),
-            "missingRequirements": list(
-                brief.missingRequirements if brief else ["extraction_required"]
-            ),
-            "intentionalFallbacks": ["typography_only"]
-            if brief and "approved_hero_or_project_images" in brief.missingRequirements
-            else [],
+            "missingRequirements": list(brief.missingRequirements if brief else ["extraction_required"]),
+            "intentionalFallbacks": ["typography_only"] if contract and contract.hero_mode == "typography_only" else [],
+            "blocks": [block.__dict__ for block in (contract.blocks if contract else [])],
             "runtimeModes": {
                 variant: "enhanced_html"
                 for variant in variants

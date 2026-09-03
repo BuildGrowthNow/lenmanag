@@ -136,12 +136,6 @@ async def generate_static_html(
     # system. Splitting these into independent requests loses the brief's art
     # direction and leads to unrelated, template-like assets.
     prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
-    adapter = build_visual_adapter(extraction, master_brief)
-    from app.core.variant_strategy import get_variant_strategies
-
-    art_direction_plan = get_variant_strategies(adapter=adapter)[variant_type].get(
-        "artDirectionPlan", {}
-    )
     logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
     try:
         response = await llm.generate_text(

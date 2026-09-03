@@ -39,7 +39,7 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
   // Validate source code first
   const validation = jsEntry
     ? validateDeclaredImports(entrySource, capabilityManifest?.dependencies)
-    : validateTsxSource(entrySource);
+    : validateTsxSource(entrySource, capabilityManifest?.dependencies);
   if (capabilityManifest && validation.valid) {
     validation.errors.push(...validateDeclaredCapabilityUsage(entrySource, capabilityManifest?.dependencies).errors);
     validation.errors.push(...validateCapabilityFallback(capabilityManifest?.dependencies, capabilityManifest?.webglFallback).errors);

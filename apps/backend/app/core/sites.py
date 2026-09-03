@@ -4032,6 +4032,11 @@ class SiteRepository:
         site = await self.get_site(site_id)
         if site is None:
             return None
+        if site.generationRunId:
+            run = await self._get_generation_run(site.generationRunId)
+            snapshot = (run or {}).get("snapshot") or {}
+            if snapshot.get("enhancedHtmlShadowMode"):
+                raise ValueError("shadow_mode_artifacts_cannot_be_published")
         review = await self._get_review_doc(site_id)
         record = self._handoff_doc_for_site(site, review)
         now = _now()
@@ -4417,6 +4422,16 @@ class SiteRepository:
         extraction = await lead_repository.get_extraction(site_id)
         if extraction is None or extraction.version <= 0:
             raise ValueError("extraction_required")
+        # Provider calls are expensive and must never be used to discover an
+        # asset/hero contradiction which preflight can determine exactly.
+        from app.core.generation_contracts import generation_preflight
+
+        preflight = generation_preflight(
+            master_brief, asset_download_enabled=get_settings().asset_download_enabled
+        )
+        if not preflight.allowed:
+            block = preflight.blocks[0]
+            raise ValueError(f"preflight_blocked:{block.rule_id}:{block.message}")
         database = get_database()
 
         # Use source evidence when an imported lead did not carry an industry;

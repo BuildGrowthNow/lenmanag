@@ -42,4 +42,24 @@ const webglWithoutFallback = await compileTsx({
 assert.equal(webglWithoutFallback.success, false);
 assert.ok(webglWithoutFallback.validationErrors?.some((error) => error.includes('2D fallback')));
 
+const undeclared = await compileTsx({
+  sourceCode: '',
+  jsEntry: "import gsap from 'gsap'; console.log(gsap);",
+  componentName: 'Undeclared',
+  siteId: 'contract-negative',
+  capabilityManifest: { dependencies: [] },
+});
+assert.equal(undeclared.success, false);
+assert.ok(undeclared.validationErrors?.some((error) => error.includes('Import is not declared')));
+
+const arbitrary = await compileTsx({
+  sourceCode: '',
+  jsEntry: "console.log('safe');",
+  componentName: 'Arbitrary',
+  siteId: 'contract-negative',
+  capabilityManifest: { dependencies: ['left-pad'] },
+});
+assert.equal(arbitrary.success, false);
+assert.ok(arbitrary.validationErrors?.some((error) => error.includes('not allowlisted')));
+
 console.log('compiler contract verified');

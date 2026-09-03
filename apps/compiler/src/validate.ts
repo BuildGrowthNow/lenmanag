@@ -19,11 +19,17 @@ export const APPROVED_IMPORTS = new Set([
 
 export function validateDeclaredImports(source: string, declared: string[] = []): ValidationResult {
   const errors: string[] = [];
-  const allowed = new Set([...APPROVED_IMPORTS, ...declared]);
+  const allowed = new Set(declared.filter((dependency) => APPROVED_IMPORTS.has(dependency)));
+  for (const dependency of declared) {
+    if (!APPROVED_IMPORTS.has(dependency) && !dependency.startsWith('@/')) {
+      errors.push(`Capability is not allowlisted: ${dependency}`);
+    }
+  }
   for (const match of source.matchAll(/(?:import|from)\s+['"]([^'"]+)['"]/g)) {
     const name = match[1];
     if (name.startsWith('@/components/ui/') || name === '@/lib/utils') continue;
-    if (!allowed.has(name)) errors.push(`Undeclared import: ${name}`);
+    if (!APPROVED_IMPORTS.has(name)) errors.push(`Import is not allowlisted: ${name}`);
+    else if (!allowed.has(name)) errors.push(`Import is not declared: ${name}`);
   }
   return { valid: errors.length === 0, errors };
 }
@@ -62,9 +68,9 @@ export function validateCapabilityFallback(
  * Validate TSX source code for safety and correctness.
  * Checks for dangerous imports, forbidden APIs, and structural issues.
  */
-export function validateTsxSource(source: string): ValidationResult {
+export function validateTsxSource(source: string, declared: string[] = []): ValidationResult {
   const errors: string[] = [];
-  errors.push(...validateDeclaredImports(source).errors);
+  errors.push(...validateDeclaredImports(source, declared).errors);
 
   // Check for dangerous imports
   const dangerousImports = [

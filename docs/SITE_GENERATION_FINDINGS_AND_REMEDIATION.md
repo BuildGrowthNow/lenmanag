@@ -4,7 +4,7 @@
 
 This document is an implementation brief for another AI or engineering agent. It explains why the latest Get It Done Home Improvements generation produced two visually incomplete variants and one failed variant, and it defines the changes needed to make LenQuant's principal HTML generation path produce richer, reliable, modern websites.
 
-This is a documentation-only deliverable. No application code, production configuration, database records, or deployed services were changed during this investigation.
+This document records the remediation boundary. The implementation and tests are maintained in the repository; no production configuration, database records, deployed services, or Get It Done site artifacts were changed as part of this work.
 
 ## Non-negotiable product direction
 
@@ -781,7 +781,7 @@ Stop losing failed artifacts and stop unsupported proof from reaching publicatio
    - If no approved proof evidence exists, remove the complete proof block.
    - Remove related navigation links, IDs, classes, labels, scripts, and styles.
    - Do not simply rename or hide the word “testimonial.”
-8. Add a regression fixture based on the Ridgewood/Wayne/Montclair invented cards.
+8. Add synthetic regression fixtures for unsupported proof cards and missing evidence IDs.
 9. Correct UI terminology from “usable” to `artifact_generated` until runtime QA passes.
 
 ### Primary files
@@ -840,7 +840,7 @@ Ensure source-discovered assets become safe approved render assets before genera
 9. Penalize favicon/tiny-square/service icons unless no better logo exists.
 10. Preserve both source and cached URLs.
 11. Expose selected/rejected assets and reasons in preflight.
-12. Rebuild the Get It Done extraction/brief after asset caching is enabled.
+12. Validate refreshed synthetic extraction/brief fixtures after asset caching is enabled.
 
 ### Internet imagery workflow
 
@@ -868,8 +868,8 @@ Internet images are allowed only through a governed ingestion path:
 
 ### Acceptance criteria
 
-- The real Get It Done logo is cached and selected.
-- Real project images are cached and assigned roles.
+- A source-backed logo is cached and selected in the synthetic fixture.
+- Source-backed project images are cached and assigned roles.
 - The master brief contains approved hero/project image IDs.
 - A source-discovered-but-not-cached state is visible and blocking.
 - Broken or zero-dimension assets never enter the master brief.
@@ -979,13 +979,13 @@ Make the master brief evidence-aware and executable.
 11. Prevent the brief from asking for a custom cursor when the variant policy says default cursor.
 12. Prevent the brief from asking for unavailable libraries.
 
-### Specific Get It Done regression assertions
+### Generic proof regression assertions
 
-- No Ridgewood/Wayne/Montclair testimonial cards without source evidence.
-- No star ratings without approved ratings.
-- No Paramus/Clifton/Oakland/Franklin Lakes project captions without project evidence.
-- If real project images are cached, the brief uses their actual labels/locations.
-- If the real source footer is extracted, the brief includes a proper footer module, not only a CTA bar.
+- No testimonial, rating, customer, location, metric, award, or badge is rendered without exact source evidence.
+- No proof-like visual treatment may bypass the evidence gate through neutral class names.
+- No project caption or location appears without project evidence.
+- If project images are cached, the brief uses only their actual labels/locations.
+- If source footer data is extracted, the brief includes a proper footer module, not only a CTA bar.
 
 ### Primary files
 
@@ -1117,7 +1117,7 @@ Require:
 - Visual distinction from the final CTA.
 - Mobile-readable layout.
 
-For Get It Done, the extracted footer provides enough verified data to create a complete footer.
+Any source-backed footer/contact data is sufficient to require a complete footer.
 
 ### Carousel gate
 
@@ -1475,20 +1475,9 @@ Include at least:
 - No large empty placeholder panels.
 - Three variants are visually distinct.
 
-### Incident regression fixture
+### Synthetic incident-contract regression fixture
 
-Re-run the exact Get It Done source and assert:
-
-- Real source wordmark is used.
-- Real source project images are used.
-- No invented Ridgewood/Wayne/Montclair quotes.
-- No invented ratings.
-- No unsupported Paramus/Clifton/Oakland/Franklin Lakes captions.
-- Proper source-backed footer exists.
-- At least one real working gallery/carousel exists when selected.
-- Mobile menu passes.
-- No content remains hidden after scroll.
-- The three HTML variants use their declared modern/native capabilities.
+Run synthetic fixtures representing cached source assets, missing media, unsupported proof, footer/contact evidence, selected capabilities, and interaction manifests. Assert that the same generic safety and runtime contracts hold without using an incident site or its data.
 
 ---
 
@@ -1607,13 +1596,13 @@ Reasoning:
 
 ---
 
-## 12. Definition of done for this incident
+## 12. Definition of done for the generic pipeline
 
-The incident is resolved only when a new Get It Done run satisfies all of the following:
+The remediation is complete when synthetic fixtures and non-production checks satisfy all of the following:
 
 - [ ] Three requested HTML variants complete, or each failure is independently retryable with exact diagnostics.
-- [ ] The real approved logo/wordmark is used.
-- [ ] Real source project imagery is cached and used.
+- [ ] An approved cached logo/wordmark is used when available.
+- [ ] Approved source project imagery is cached and used when selected.
 - [ ] Image-led heroes contain a meaningful approved hero image.
 - [ ] Typography-only heroes are explicit and contain no fake media placeholder.
 - [ ] No empty project/gallery rectangles remain.
@@ -1649,5 +1638,28 @@ The incident is resolved only when a new Get It Done run satisfies all of the fo
 12. Run targeted tests after every phase and the full relevant backend/compiler/web suites before completion.
 13. Validate generated outputs in a real browser at desktop/mobile sizes.
 14. Report exact files changed, tests run, remaining risks, and rollout steps.
-15. Do not mark the work complete until the incident regression fixture passes the full definition of done.
+15. Do not mark the work complete until the synthetic contract fixtures pass the full definition of done.
 
+## 14. Implementation status and verification boundary (updated 2026-09-03)
+
+### Implemented and test-verified controls
+
+- Generation preflight is fail-closed: discovered source assets with downloading disabled produce an actionable block, and an image-led hero cannot reach a provider without an approved cached HTTPS asset.
+- Hero mode is explicit (`image_led` or `typography_only`). Typography-only output rejects fake media shells; image-led output requires approved meaningful media.
+- Rendered assets are restricted to approved cached/same-origin assets. The compiler accepts only declared dependencies from its allowlist, bundles them locally, rejects arbitrary/CDN imports, and requires a 2D fallback when Three.js is declared.
+- Semantic gates require a footer outside `main` whenever the brief carries footer/contact data, reject unsupported proof-bearing content, and require exact approved evidence IDs for proof markup.
+- Runtime QA treats broken assets, failed interaction-manifest actions at desktop/mobile, mobile-menu failures, hidden-after-scroll content, reduced-motion failures, and no-JS unreadability as hard failures. Runtime/visual QA are separate gates and neither may be hidden by an aggregate score.
+- Failed provider artifacts are retained only in encrypted short-lived private storage with rule/stage diagnostics. Variant retry targets a single failed variant and preserves successful siblings.
+- Preflight exposes selected/rejected/source-only assets, reasons, missing requirements, hero mode/fallback, runtime mode, and actionable blocks. Generation run data records selected capabilities and exact variant failure stage.
+- Enhanced rollout uses deterministic feature flags, supports shadow-mode non-publication, and rolls back on configured hard-failure, latency, or performance regression.
+
+### Requires a future production canary
+
+- Validate object-storage permissions, image decoding, cache URLs, and private rejected-artifact retention with real production infrastructure.
+- Run the enhanced path in shadow mode against a representative, consented production corpus and compare success, runtime gates, visual approval, latency, performance, and cost before the 10% / 25% / 50% / 100% rollout.
+- Exercise real-browser QA against generated production previews, including mobile touch/drag and WebGL-unavailable fallback, before enabling the corresponding capabilities broadly.
+- Confirm rollback telemetry is populated with enough samples for its configured thresholds. No production incident rerun is claimed by this document.
+
+### Removed incident-specific requirements
+
+The former Get It Done exact-source regression fixture and its brand names, locations, quotations, assets, and site artifacts are obsolete. They must not be regenerated, preserved, or used as test data. Synthetic fixtures now cover the same generic contracts without retaining incident content.
