@@ -24,6 +24,7 @@ from app.core.llm import get_llm_client
 from app.core.visual_adapter import build_visual_adapter
 from app.core.artifact_recovery import persist_rejected_artifact
 from app.core.semantic_validation import sanitize_unsupported_proof, validate_semantics
+from app.core.generation_contracts import generation_preflight
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
 
@@ -117,6 +118,19 @@ async def generate_static_html(
         }
     """
     llm = get_llm_client()
+    preflight = generation_preflight(
+        master_brief, asset_download_enabled=bool(getattr(get_settings(), "asset_download_enabled", True))
+    )
+    if not preflight.allowed:
+        block = preflight.blocks[0]
+        raise StaticGenerationError(
+            block.message,
+            variant_type=variant_type,
+            stage=block.stage,
+            code="preflight_blocked",
+            rule_id=block.rule_id,
+            context={"heroMode": preflight.hero_mode, "missingRequirements": preflight.missing_requirements},
+        )
 
     # One prompt produces the page, stylesheet, and behavior as one design
     # system. Splitting these into independent requests loses the brief's art
@@ -145,7 +159,8 @@ async def generate_static_html(
                 + "\n\nYour previous response was truncated or malformed. Return the "
                 "complete artifact now: exactly three CLOSED code blocks, in this order: "
                 "```html, ```css, ```javascript. Include no commentary and do not omit "
-                "or abbreviate any block."
+                "or abbreviate any block. Keep the artifact concise: HTML under 4500 "
+                "words, CSS under 2500 words, and JavaScript under 1200 words."
             )
             logger.warning(
                 "Incomplete single-pass response for %s; retrying once", variant_type
@@ -153,7 +168,7 @@ async def generate_static_html(
             response = await llm.generate_text(
                 prompt=retry_prompt,
                 temperature=0.7,
-                max_tokens=32_768,
+                max_tokens=24_576,
             )
             try:
                 html_content, css_content, js_content = _parse_llm_response(response)
@@ -876,6 +891,10 @@ def _validate_generated_document(
             approved_proof=_approved_testimonial_quotes(extraction)
             if extraction is not None
             else [],
+            approved_evidence_ids=_approved_evidence_ids(extraction)
+            if extraction is not None
+            else set(),
+            hero_mode=getattr(brief, "heroMode", None),
         )
         if semantic.issues:
             issue = semantic.issues[0]
@@ -1001,6 +1020,17 @@ def _approved_testimonial_quotes(extraction: ExtractionSnapshot) -> list[str]:
         if isinstance(quote, str) and quote.strip() and quote.strip() not in quotes:
             quotes.append(quote.strip())
     return quotes[:12]
+
+
+def _approved_evidence_ids(extraction: ExtractionSnapshot) -> set[str]:
+    """Only explicit extraction IDs can authorize proof-bearing markup."""
+    items = list(getattr(getattr(extraction, "analysis", None), "testimonials", None) or []) + list(getattr(extraction, "extractedTestimonials", None) or [])
+    ids: set[str] = set()
+    for item in items:
+        value = getattr(item, "id", None) if not isinstance(item, dict) else item.get("id")
+        if isinstance(value, str) and value.strip():
+            ids.add(value.strip())
+    return ids
 
 
 def _has_testimonial_markup_without_approved_quote(
