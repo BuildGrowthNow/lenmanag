@@ -173,7 +173,10 @@ def is_usable_generated_site(site: GeneratedSite) -> bool:
     """Return true only after the artifact and runtime QA both pass."""
     if not is_artifact_generated_site(site):
         return False
-    return getattr(site, "qaStatus", None) in {None, "pass"}
+    # A missing QA result is unmeasured, not a pass. This keeps generated
+    # artifacts out of public/client surfaces until runtime QA explicitly
+    # succeeds.
+    return getattr(site, "qaStatus", None) == "pass"
 
 
 def _client_variant_copy(

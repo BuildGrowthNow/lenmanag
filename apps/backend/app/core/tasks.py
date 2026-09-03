@@ -840,14 +840,15 @@ async def _run_multi_variant_generation_async(
     )
 
     # Keep the job open while generated previews undergo in-process runtime QA.
-    # A job is completed only after every requested variant has a usable artifact
+    # A job is completed only after every requested variant has a generated
+    # artifact and runtime QA has completed.
     # and every runtime check has passed.
     if run and generated_sites:
         await lead_repository._update_job(
             job_id=job_id,
             status="running",
             progress=90,
-            step=f"Runtime QA for {len(generated_sites)}/{total_variants} usable variants",
+            step=f"Runtime QA for {len(generated_sites)}/{total_variants} generated variants",
             error_message=failure_summary,
         )
     else:
@@ -876,7 +877,7 @@ async def _run_multi_variant_generation_async(
             lead_id,
             event_type="site_generation_progress",
             status="info",
-            message=f"Generated {len(generated_sites)} usable variant(s); runtime QA pending",
+            message=f"Generated {len(generated_sites)} artifact(s); runtime QA pending",
             detail=f"Average source score: {avg_quality}%. Runtime QA is still required before completion.",
             job_id=job_id,
             duration_ms=total_time_ms,
@@ -891,8 +892,8 @@ async def _run_multi_variant_generation_async(
             lead_id,
             event_type="site_generation_failed",
             status="error",
-            message=f"Generated {len(generated_sites)} usable variant(s); {failed_variants} failed",
-            detail="The failed variants were not published. Runtime QA is required for the usable variants.",
+            message=f"Generated {len(generated_sites)} artifact(s); {failed_variants} failed",
+            detail="The failed variants were not published. Runtime QA is required before any artifact is usable.",
             job_id=job_id,
             duration_ms=total_time_ms,
             metadata={

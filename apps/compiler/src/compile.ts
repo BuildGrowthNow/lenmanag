@@ -73,24 +73,8 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
       write: false,
       minify: true,
       sourcemap: false,
-      // External: only React runtime (loaded via CDN in preview shell)
-      // All other libraries (framer-motion, lucide-react, gsap, etc.) will be bundled
-      external: [
-        'react',
-        'react-dom',
-        'react/jsx-runtime',
-        'react/jsx-dev-runtime',
-      ],
-      banner: {
-        js: [
-          `var React = window.React;`,
-          `var ReactDOM = window.ReactDOM;`,
-          `var require = (function() {`,
-          `  var m = {'react': window.React, 'react-dom': window.ReactDOM, 'react/jsx-runtime': window.__reactJsxRuntime, 'react/jsx-dev-runtime': window.__reactJsxRuntime};`,
-          `  return function(id) { if (m[id]) return m[id]; throw new Error('Module not found: ' + id); };`,
-          `})();`,
-        ].join(' '),
-      },
+      // React and ReactDOM are bundled too. Generated artifacts must be
+      // self-contained and must not depend on preview-only CDN/global runtimes.
       footer: {
         js: `if (typeof LandingPageBundle !== 'undefined') { window.LandingPageBundle = LandingPageBundle; }`,
       },

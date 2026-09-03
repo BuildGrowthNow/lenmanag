@@ -332,6 +332,9 @@ async def update_preflight_asset(
     http_request: Request,
 ) -> ResponseEnvelope[MasterBrief]:
     """Approve, reject, or re-role a cached asset before generation."""
+    lead = await lead_repository.get_lead(lead_id, user_id=user_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found.")
     brief = await lead_repository.get_master_brief(lead_id)
     if brief is None:
         raise HTTPException(status_code=404, detail="Brief not found.")

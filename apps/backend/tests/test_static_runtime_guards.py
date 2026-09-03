@@ -116,6 +116,7 @@ def test_static_preview_eligibility_does_not_require_compiled_bundle() -> None:
     site = SimpleNamespace(
         variantType="html_v1", staticHtml=_valid_document(), compilationStatus="success",
         compiledBundleUrl=None, readinessStatus="ready_for_review", previewUrl="https://sites.example/st/demo", previewSlug="demo",
+        qaStatus="pass",
     )
     assert is_usable_generated_site(site)
     site.staticHtml = ""
@@ -126,9 +127,19 @@ def test_compiled_preview_still_requires_bundle() -> None:
     site = SimpleNamespace(
         variantType="nextjs", staticHtml=None, compilationStatus="success",
         compiledBundleUrl="https://cdn.example/bundle.js", readinessStatus="ready_for_review", previewUrl="https://sites.example/st/demo", previewSlug="demo",
+        qaStatus="pass",
     )
     assert is_usable_generated_site(site)
     site.compiledBundleUrl = None
+    assert not is_usable_generated_site(site)
+
+
+def test_preview_without_runtime_qa_is_not_usable() -> None:
+    site = SimpleNamespace(
+        variantType="html_v1", staticHtml=_valid_document(), compilationStatus="success",
+        compiledBundleUrl=None, readinessStatus="ready_for_review", previewUrl="https://sites.example/st/demo", previewSlug="demo",
+        qaStatus=None,
+    )
     assert not is_usable_generated_site(site)
 
 
