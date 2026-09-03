@@ -240,7 +240,7 @@ async def generate_static_html(
                     _approved_render_asset_urls(master_brief),
                 ),
                 temperature=0.2,
-                max_tokens=32_768,
+                max_tokens=24_576,
             )
             html_content, css_content, js_content = _parse_llm_response(response)
             html_content = _enforce_footer_year(
@@ -255,20 +255,54 @@ async def generate_static_html(
                 html_content, css_content, js_content, master_brief, extraction
             )
         except Exception as correction_error:
-            logger.error(
+            # If the correction prompt itself was too large, request a fresh
+            # concise artifact from the original design prompt once.
+            if "closed html" in str(correction_error).lower() or "structur" in str(
+                correction_error
+            ).lower():
+                try:
+                    response = await llm.generate_text(
+                        prompt=(
+                            prompt
+                            + "\n\nGenerate a fresh complete artifact with exactly three CLOSED code blocks. "
+                            "Keep it concise: HTML under 4500 words, CSS under 2500 words, "
+                            "and JavaScript under 1200 words."
+                        ),
+                        temperature=0.5,
+                        max_tokens=24_576,
+                    )
+                    html_content, css_content, js_content = _parse_llm_response(response)
+                    html_content = _enforce_footer_year(
+                        html_content,
+                        extraction=extraction,
+                        company_name=extraction.summary.companyName,
+                    )
+                    html_content = sanitize_unsupported_proof(
+                        html_content, approved_proof=_approved_testimonial_quotes(extraction)
+                    )
+                    _validate_generated_document(
+                        html_content, css_content, js_content, master_brief, extraction
+                    )
+                    correction_error = None
+                except Exception as concise_error:
+                    correction_error = concise_error
+            if correction_error is None:
+                pass
+            else:
+                logger.error(
                 "Rejecting invalid generated document for %s: %s",
                 variant_type,
                 correction_error,
-            )
-            error = StaticGenerationError(
+                )
+                error = StaticGenerationError(
                 f"{variant_type} generated invalid document: {correction_error}",
                 variant_type=variant_type,
                 stage="validation",
                 code="document_validation_failed",
                 rule_id=_validation_rule_id(str(correction_error)),
                 context={"validationError": str(correction_error)},
-            )
-            await _record_rejected_artifact(
+                )
+                await _record_rejected_artifact(
                 lead_id=str(getattr(master_brief, "leadId", site_id)),
                 site_id=site_id,
                 variant_type=variant_type,
@@ -280,8 +314,8 @@ async def generate_static_html(
                     "stage": error.stage,
                     "message": str(correction_error),
                 },
-            )
-            raise error from correction_error
+                )
+                raise error from correction_error
     if not _javascript_is_valid(js_content):
         try:
             js_content = await _repair_javascript(
