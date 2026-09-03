@@ -829,8 +829,35 @@ class LeadRepository:
                     metadata={"briefVersion": master_brief.version},
                 )
 
-                # Auto-approve the master brief.
-                # approve_master_brief already calls advance_pipeline_after_brief internally.
+                # Auto mode must not turn an expected review gate into a failed
+                # generation job. A generated brief can be valid but still need
+                # operator decisions about evidence/assets before it is approved.
+                from app.core.brief_requirements import validate_master_brief_requirements
+
+                blockers = validate_master_brief_requirements(master_brief)
+                if blockers:
+                    await self.log_pipeline_event(
+                        lead_id,
+                        event_type="brief_approval_blocked",
+                        status="warning",
+                        message="Brief generated and needs review",
+                        detail="Resolve the following requirements before approval: "
+                        + ", ".join(blockers),
+                        metadata={
+                            "briefVersion": master_brief.version,
+                            "blockers": blockers,
+                        },
+                    )
+                    await self._set_pipeline_stage(
+                        lead_id,
+                        "needs_attention",
+                        detail="Brief generated; operator review required for: "
+                        + ", ".join(blockers),
+                    )
+                    return
+
+                # Auto-approve only when all hard requirements are already met.
+                # approve_master_brief advances the pipeline after approval.
                 await self.approve_master_brief(
                     lead_id=lead_id,
                     approved_by="auto",
@@ -2796,6 +2823,20 @@ class LeadRepository:
         brief = await self.get_master_brief(lead_id)
         if brief is None:
             raise ValueError("no_existing_brief")
+
+        # Approval is intentionally stricter than brief generation. Do not
+        # approve a brief built from a failed/partial extraction, since that can
+        # make unsupported claims look source-backed downstream.
+        extraction = await self.get_extraction(lead_id)
+        non_critical_gaps = {"sitemap_unavailable", "llm_enriched", "brand_assets_missing"}
+        critical_gaps = (
+            [gap for gap in (extraction.gapItems if extraction else []) if gap not in non_critical_gaps]
+            if extraction
+            else ["extraction_missing"]
+        )
+        if critical_gaps or (extraction and extraction.crawlStatus == "failed"):
+            raise ValueError("brief_requires_critical_gaps_resolved")
+
         from app.core.brief_requirements import validate_master_brief_requirements
 
         blockers = validate_master_brief_requirements(brief)
