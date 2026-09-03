@@ -829,9 +829,9 @@ class LeadRepository:
                     metadata={"briefVersion": master_brief.version},
                 )
 
-                # Auto mode may use safe, explicit fallbacks for optional assets
-                # and evidence. Critical extraction gaps are still rejected by
-                # approve_master_brief.
+                # Auto mode may recover from a completed partial crawl using
+                # evidence-safe fallbacks. A truly failed/no-data extraction is
+                # still rejected by approve_master_brief.
                 await self.approve_master_brief(
                     lead_id=lead_id,
                     approved_by="auto",
@@ -2810,7 +2810,8 @@ class LeadRepository:
             if extraction
             else ["extraction_missing"]
         )
-        if critical_gaps or (extraction and extraction.crawlStatus == "failed"):
+        extraction_failed = extraction is None or extraction.crawlStatus == "failed"
+        if extraction_failed or (critical_gaps and not allow_intentional_fallbacks):
             raise ValueError("brief_requires_critical_gaps_resolved")
 
         from app.core.brief_requirements import (
