@@ -178,6 +178,69 @@ export const Separator = React.forwardRef(
 Separator.displayName = 'Separator';
 `;
 
+const SHADCN_INTERACTIVE = `
+import * as React from 'react';
+
+const passthrough = (tag, extra = {}) => React.forwardRef(({ children, ...props }, ref) => React.createElement(tag, { ...extra, ...props, ref }, children));
+
+export const Carousel = React.forwardRef(({ children, className, ...props }, ref) => <div ref={ref} role="region" aria-roledescription="carousel" data-carousel className={className} {...props}>{children}</div>);
+Carousel.displayName = 'Carousel';
+export const CarouselContent = React.forwardRef(({ children, className, ...props }, ref) => <div ref={ref} className={className} data-carousel-content {...props}>{children}</div>);
+export const CarouselItem = React.forwardRef(({ children, className, ...props }, ref) => <div ref={ref} role="group" aria-roledescription="slide" className={className} data-carousel-item {...props}>{children}</div>);
+export const CarouselPrevious = (props) => <button type="button" aria-label="Previous slide" {...props}>Previous</button>;
+export const CarouselNext = (props) => <button type="button" aria-label="Next slide" {...props}>Next</button>;
+
+export const Dialog = ({ children, ...props }) => <div data-dialog {...props}>{children}</div>;
+Dialog.Root = Dialog;
+Dialog.Trigger = ({ children, ...props }) => <button type="button" {...props}>{children}</button>;
+Dialog.Content = ({ children, ...props }) => <div role="dialog" aria-modal="true" {...props}>{children}</div>;
+Dialog.Title = ({ children, ...props }) => <h2 {...props}>{children}</h2>;
+Dialog.Description = ({ children, ...props }) => <p {...props}>{children}</p>;
+Dialog.Close = ({ children = 'Close', ...props }) => <button type="button" {...props}>{children}</button>;
+export const DialogTrigger = Dialog.Trigger;
+export const DialogContent = Dialog.Content;
+export const DialogTitle = Dialog.Title;
+export const DialogDescription = Dialog.Description;
+export const DialogClose = Dialog.Close;
+
+export const Sheet = Dialog;
+export const Accordion = ({ children, ...props }) => <div data-accordion {...props}>{children}</div>;
+Accordion.Root = Accordion;
+Accordion.Item = ({ children, ...props }) => <section {...props}>{children}</section>;
+Accordion.Trigger = ({ children, ...props }) => <button type="button" {...props}>{children}</button>;
+Accordion.Content = ({ children, ...props }) => <div {...props}>{children}</div>;
+
+export const Tabs = ({ children, ...props }) => <div data-tabs {...props}>{children}</div>;
+Tabs.Root = Tabs;
+Tabs.List = ({ children, ...props }) => <div role="tablist" {...props}>{children}</div>;
+Tabs.Trigger = ({ children, ...props }) => <button type="button" role="tab" {...props}>{children}</button>;
+Tabs.Content = ({ children, ...props }) => <div role="tabpanel" {...props}>{children}</div>;
+export const TabsList = Tabs.List;
+export const TabsTrigger = Tabs.Trigger;
+export const TabsContent = Tabs.Content;
+export const NavigationMenu = ({ children, ...props }) => <nav {...props}>{children}</nav>;
+NavigationMenu.List = ({ children, ...props }) => <ul {...props}>{children}</ul>;
+NavigationMenu.Item = ({ children, ...props }) => <li {...props}>{children}</li>;
+NavigationMenu.Link = ({ children, ...props }) => <a {...props}>{children}</a>;
+export const DropdownMenu = ({ children, ...props }) => <div data-dropdown-menu {...props}>{children}</div>;
+DropdownMenu.Root = DropdownMenu;
+DropdownMenu.Trigger = ({ children, ...props }) => <button type="button" {...props}>{children}</button>;
+DropdownMenu.Content = ({ children, ...props }) => <div role="menu" {...props}>{children}</div>;
+DropdownMenu.Item = ({ children, ...props }) => <button type="button" role="menuitem" {...props}>{children}</button>;
+export const Tooltip = ({ children, ...props }) => <span data-tooltip {...props}>{children}</span>;
+Tooltip.Provider = ({ children }) => <>{children}</>;
+Tooltip.Root = Tooltip;
+Tooltip.Trigger = ({ children, ...props }) => <span tabIndex="0" {...props}>{children}</span>;
+Tooltip.Content = ({ children, ...props }) => <span role="tooltip" {...props}>{children}</span>;
+export const Form = ({ children, ...props }) => <form {...props}>{children}</form>;
+export const FormField = ({ children, ...props }) => <div data-form-field {...props}>{children}</div>;
+export const FormItem = FormField;
+export const FormLabel = ({ children, ...props }) => <label {...props}>{children}</label>;
+export const FormControl = ({ children }) => <>{children}</>;
+export const FormDescription = ({ children, ...props }) => <p {...props}>{children}</p>;
+export const FormMessage = ({ children, ...props }) => <p role="alert" {...props}>{children}</p>;
+`;
+
 /**
  * Virtual module content for shadcn components.
  */
@@ -187,6 +250,15 @@ export function createVirtualModulesPlugin(): Plugin {
     card: SHADCN_CARD,
     badge: SHADCN_BADGE,
     separator: SHADCN_SEPARATOR,
+    carousel: SHADCN_INTERACTIVE,
+    dialog: SHADCN_INTERACTIVE,
+    sheet: SHADCN_INTERACTIVE,
+    accordion: SHADCN_INTERACTIVE,
+    tabs: SHADCN_INTERACTIVE,
+    'navigation-menu': SHADCN_INTERACTIVE,
+    'dropdown-menu': SHADCN_INTERACTIVE,
+    tooltip: SHADCN_INTERACTIVE,
+    form: SHADCN_INTERACTIVE,
   };
 
   return {

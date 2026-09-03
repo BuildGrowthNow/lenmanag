@@ -21,6 +21,7 @@ from app.core.asset_utils import (
 from app.core.llm import get_llm_client
 from app.core.color_system import build_brand_palette
 from app.core.variant_strategy import get_variant_strategy
+from app.core.brief_requirements import validate_master_brief_requirements
 from app.schemas.brief import (
     BrandAssets,
     CreativeDirection,
@@ -483,7 +484,11 @@ def _build_master_brief_from_response(
             palette = build_brand_palette([c.value for c in colors])
             brand_assets.primaryColor = str(palette["primary"])
             brand_assets.secondaryColor = str(palette["secondary"])
-            brand_assets.palette = {k: str(v) for k, v in palette.items() if k in {"primary", "secondary", "accent"}}
+            brand_assets.palette = {
+                k: str(v)
+                for k, v in palette.items()
+                if k in {"primary", "secondary", "accent"}
+            }
             brand_assets.derivedColors = [str(v) for v in palette["derived"]]
 
         logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
@@ -495,20 +500,45 @@ def _build_master_brief_from_response(
                 logos,
                 key=lambda item: (
                     bool(get_cached_asset_url(item)),
-                    -any(token in f"{item.label} {item.value}".lower() for token in ("water.svg", "settings", "valve", "favicon", "icon")),
+                    -any(
+                        token in f"{item.label} {item.value}".lower()
+                        for token in (
+                            "water.svg",
+                            "settings",
+                            "valve",
+                            "favicon",
+                            "icon",
+                        )
+                    ),
                     item.confidence,
                 ),
                 reverse=True,
             )
             usable_logos = [item for item in ranked_logos if get_cached_asset_url(item)]
-            brand_assets.logoUrl = get_cached_asset_url(usable_logos[0]) if usable_logos else None
-            brand_assets.logoVariants = list(dict.fromkeys(url for url in (get_cached_asset_url(item) for item in usable_logos) if url))
+            brand_assets.logoUrl = (
+                get_cached_asset_url(usable_logos[0]) if usable_logos else None
+            )
+            brand_assets.logoVariants = list(
+                dict.fromkeys(
+                    url
+                    for url in (get_cached_asset_url(item) for item in usable_logos)
+                    if url
+                )
+            )
             for logo in usable_logos:
                 url = get_cached_asset_url(logo)
                 hint = f"{logo.label} {logo.note or ''} {url or ''}".lower()
-                if url and not brand_assets.logoLightUrl and any(token in hint for token in ("light", "white", "inverse")):
+                if (
+                    url
+                    and not brand_assets.logoLightUrl
+                    and any(token in hint for token in ("light", "white", "inverse"))
+                ):
                     brand_assets.logoLightUrl = url
-                if url and not brand_assets.logoDarkUrl and any(token in hint for token in ("dark", "black", "primary")):
+                if (
+                    url
+                    and not brand_assets.logoDarkUrl
+                    and any(token in hint for token in ("dark", "black", "primary"))
+                ):
                     brand_assets.logoDarkUrl = url
             log_asset_cache_stats(logos, "logo", lead_id)
 
@@ -524,21 +554,43 @@ def _build_master_brief_from_response(
                 item.model_dump() if hasattr(item, "model_dump") else dict(item)
                 for item in extraction.extractedFonts
             ]
-            font_cues = [c for c in extraction.brandAssetCues if c.assetType == "typography"]
-            brand_assets.fontUrl = next((get_cached_asset_url(item) for item in font_cues if get_cached_asset_url(item)), None)
+            font_cues = [
+                c for c in extraction.brandAssetCues if c.assetType == "typography"
+            ]
+            brand_assets.fontUrl = next(
+                (
+                    get_cached_asset_url(item)
+                    for item in font_cues
+                    if get_cached_asset_url(item)
+                ),
+                None,
+            )
             if not brand_assets.fontUrl:
-                brand_assets.fontUrl = next((get_cached_asset_url(item) for item in font_items if get_cached_asset_url(item)), None)
+                brand_assets.fontUrl = next(
+                    (
+                        get_cached_asset_url(item)
+                        for item in font_items
+                        if get_cached_asset_url(item)
+                    ),
+                    None,
+                )
             brand_assets.fontWeight = font.fontWeight
             brand_assets.fontStyle = font.fontStyle
         else:
-            typography = [c for c in extraction.brandAssetCues if c.assetType == "typography"]
+            typography = [
+                c for c in extraction.brandAssetCues if c.assetType == "typography"
+            ]
             if typography:
                 brand_assets.fontFamily = typography[0].value
                 brand_assets.fontUrl = get_cached_asset_url(typography[0])
 
         images = sorted(
             extraction.extractedImages,
-            key=lambda item: (item.confidence, item.category != "unknown", item.width or 0),
+            key=lambda item: (
+                item.confidence,
+                item.category != "unknown",
+                item.width or 0,
+            ),
             reverse=True,
         )
         cue_images = [c for c in extraction.brandAssetCues if c.assetType == "image"]
@@ -550,10 +602,14 @@ def _build_master_brief_from_response(
             cached_item_url = get_cached_asset_url(item)
             if cached_item_url:
                 item["url"] = cached_item_url
-            if item.get("url") in cached_image_set or str(item.get("url", "")).startswith(("data:", "/api/internal/assets/")):
+            if item.get("url") in cached_image_set or str(
+                item.get("url", "")
+            ).startswith(("data:", "/api/internal/assets/")):
                 image_inventory.append(item)
         brand_assets.imageInventory = image_inventory
-        brand_assets.imageUrls = [item["url"] for item in image_inventory if item.get("url")][:5]
+        brand_assets.imageUrls = [
+            item["url"] for item in image_inventory if item.get("url")
+        ][:5]
         if not brand_assets.imageUrls:
             brand_assets.imageUrls = cached_image_urls[:5]
         log_asset_cache_stats(cue_images, "image", lead_id)
@@ -584,6 +640,12 @@ def _build_master_brief_from_response(
         extracted_content["valueProposition"] = [extraction.analysis.valueProposition]
     if extraction.analysis and extraction.analysis.positioning:
         extracted_content["positioning"] = [extraction.analysis.positioning]
+    if extraction.analysis and extraction.analysis.testimonials:
+        extracted_content["testimonials"] = [
+            testimonial.quote
+            for testimonial in extraction.analysis.testimonials
+            if testimonial.quote
+        ]
 
     # Build sections
     sections = []
@@ -676,7 +738,11 @@ def _build_master_brief_from_response(
             "ctaStrategy", "Primary CTA: Contact, Secondary: Learn More"
         ),
         extractedContent=extracted_content,
-        contactInfo={key: str(value) for key, value in extraction.contactInfo.model_dump().items() if value and key not in {"confidence", "sourceUrl"}},
+        contactInfo={
+            key: str(value)
+            for key, value in extraction.contactInfo.model_dump().items()
+            if value and key not in {"confidence", "sourceUrl"}
+        },
         brandAssets=brand_assets,
         competitorInsights="",
         confidenceScore=min(100, max(0, brief_data.get("confidenceScore", 75))),
@@ -687,4 +753,5 @@ def _build_master_brief_from_response(
         updatedAt=_now(),
     )
 
+    master_brief.missingRequirements = validate_master_brief_requirements(master_brief)
     return master_brief

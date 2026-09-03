@@ -75,6 +75,9 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - ASSET_STORAGE_BACKEND=${ASSET_STORAGE_BACKEND:-s3}
       - ASSET_DOWNLOAD_ENABLED=${ASSET_DOWNLOAD_ENABLED:-true}
+      - REJECTED_ARTIFACT_PATH=${REJECTED_ARTIFACT_PATH:-/var/lib/lenquant/rejected-artifacts}
+      - REJECTED_ARTIFACT_RETENTION_DAYS=${REJECTED_ARTIFACT_RETENTION_DAYS:-14}
+      - REJECTED_ARTIFACT_ENCRYPTION_KEY=${REJECTED_ARTIFACT_ENCRYPTION_KEY}
       - BACKEND_PUBLIC_URL=${BACKEND_PUBLIC_URL:-https://sites-api.lenquant.com}
       - COMPILER_SERVICE_URL=http://compiler:3001
       - LOG_LEVEL=warning
@@ -91,6 +94,8 @@ services:
       - redis
       - mongodb
       - compiler
+    volumes:
+      - rejected_artifacts:/var/lib/lenquant/rejected-artifacts
     labels:
       - "app=lenquant-backend"
       - "version=1.0.0"
@@ -179,4 +184,6 @@ volumes:
   mongodb_data:
     driver: local
   mongodb_config:
+    driver: local
+  rejected_artifacts:
     driver: local

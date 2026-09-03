@@ -273,7 +273,9 @@ def _lead_doc_to_detail(
         jobs=[_job_doc_to_summary(job) for job in (jobs or [])],
         pipelineEvents=pipeline_events,
         redesignSlug=doc.get("redesignSlug"),
-        clientShareSiteIds=list((doc.get("clientShare") or {}).get("selectedSiteIds", [])),
+        clientShareSiteIds=list(
+            (doc.get("clientShare") or {}).get("selectedSiteIds", [])
+        ),
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
         archivedAt=_serialize_datetime(doc.get("archivedAt")),
@@ -302,7 +304,9 @@ def _lead_doc_to_list_item(
         version=int(doc.get("version", 1)),
         latestJob=_job_doc_to_summary(latest_job) if latest_job else None,
         redesignSlug=doc.get("redesignSlug"),
-        clientShareSiteIds=list((doc.get("clientShare") or {}).get("selectedSiteIds", [])),
+        clientShareSiteIds=list(
+            (doc.get("clientShare") or {}).get("selectedSiteIds", [])
+        ),
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
     )
@@ -872,7 +876,9 @@ class LeadRepository:
         await self._set_pipeline_stage(lead_id, "generating")
         try:
             lead = await self.get_lead(lead_id)
-            generation_types = lead.generationTypes if lead else ["html_v1", "html_v2", "html_v3"]
+            generation_types = (
+                lead.generationTypes if lead else ["html_v1", "html_v2", "html_v3"]
+            )
 
             await self.log_pipeline_event(
                 lead_id,
@@ -1570,7 +1576,9 @@ class LeadRepository:
             {"id": lead_id, "version": doc.get("version", 1)}, updated
         )
         if result.matched_count == 0:
-            raise ValueError("Concurrent modification detected. Please refresh and try again.")
+            raise ValueError(
+                "Concurrent modification detected. Please refresh and try again."
+            )
         return await self.get_lead(lead_id, user_id=user_id)
 
     async def update_generation_stage_if_latest(
@@ -1594,19 +1602,32 @@ class LeadRepository:
                 return True
         result = await database["leads"].update_one(
             {"id": lead_id, "latestGenerationRunId": generation_run_id},
-            {"$set": {"pipelineStage": stage, "pipelineStatusDetail": stage_detail, "updatedAt": _now()}, "$inc": {"version": 1}},
+            {
+                "$set": {
+                    "pipelineStage": stage,
+                    "pipelineStatusDetail": stage_detail,
+                    "updatedAt": _now(),
+                },
+                "$inc": {"version": 1},
+            },
         )
         return result.modified_count == 1
 
     async def save_client_share(
-        self, lead_id: str, site_ids: list[str], user_id: str,
+        self,
+        lead_id: str,
+        site_ids: list[str],
+        user_id: str,
         booking_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Persist the operator's ordered optional client-share selection."""
         from app.core.sites import is_usable_generated_site, site_repository
 
         unique_ids = list(dict.fromkeys(site_ids))
-        if len(unique_ids) > 0 and any(not isinstance(site_id, str) or not site_id.strip() for site_id in unique_ids):
+        if len(unique_ids) > 0 and any(
+            not isinstance(site_id, str) or not site_id.strip()
+            for site_id in unique_ids
+        ):
             raise ValueError("Selected website IDs must be non-empty strings.")
         lead = await self.get_lead(lead_id, user_id=user_id)
         if lead is None:
@@ -1616,8 +1637,12 @@ class LeadRepository:
         selected = [by_id.get(site_id) for site_id in unique_ids]
         if any(site is None for site in selected):
             raise ValueError("Every selected website must belong to this lead.")
-        if any(not is_usable_generated_site(site) for site in selected if site is not None):
-            raise ValueError("Only available, non-blocked websites with a preview can be shared.")
+        if any(
+            not is_usable_generated_site(site) for site in selected if site is not None
+        ):
+            raise ValueError(
+                "Only available, non-blocked websites with a preview can be shared."
+            )
 
         # Keep the booking URL when older clients update only the gallery
         # selection. Otherwise a legacy save silently turns a previously
@@ -1694,7 +1719,8 @@ class LeadRepository:
             "slug": share.get("slug", lead.redesignSlug),
             "siteIds": list(share.get("selectedSiteIds", [])),
             "url": f"{os.getenv('FRONTEND_PUBLIC_URL', 'https://sites.lenquant.com').rstrip('/')}/redesign/{share.get('slug', lead.redesignSlug)}",
-            "bookingUrl": share.get("bookingUrl") or "https://calendly.com/lenquant/sites",
+            "bookingUrl": share.get("bookingUrl")
+            or "https://calendly.com/lenquant/sites",
             "updatedAt": _utc(share.get("updatedAt")) or _now(),
         }
 
@@ -2176,7 +2202,8 @@ class LeadRepository:
                 if lead is None or (user_id and lead.get("user_id") != user_id):
                     return False
                 job_ids = [
-                    job_id for job_id, job in self._jobs.items()
+                    job_id
+                    for job_id, job in self._jobs.items()
                     if lead_id in job.get("leadIds", []) or job.get("leadId") == lead_id
                 ]
                 self._memory.pop(lead_id, None)
@@ -2189,7 +2216,8 @@ class LeadRepository:
 
             async with site_repository._memory_lock:  # noqa: SLF001
                 site_ids = [
-                    site_id for site_id, site in site_repository._sites.items()  # noqa: SLF001
+                    site_id
+                    for site_id, site in site_repository._sites.items()  # noqa: SLF001
                     if site.get("leadId") == lead_id
                 ]
                 for site_id in site_ids:
@@ -2200,7 +2228,8 @@ class LeadRepository:
                     site_repository._reviews.pop(site_id, None)  # noqa: SLF001
                     site_repository._handoffs.pop(site_id, None)  # noqa: SLF001
                 site_repository._generation_runs = {  # noqa: SLF001
-                    run_id: run for run_id, run in site_repository._generation_runs.items()  # noqa: SLF001
+                    run_id: run
+                    for run_id, run in site_repository._generation_runs.items()  # noqa: SLF001
                     if run.get("leadId") != lead_id
                 }
             return True
@@ -2212,7 +2241,9 @@ class LeadRepository:
             return False
 
         job_filter = {"$or": [{"leadId": lead_id}, {"leadIds": lead_id}]}
-        job_docs = await database["jobs"].find(job_filter, {"id": 1}).to_list(length=None)
+        job_docs = (
+            await database["jobs"].find(job_filter, {"id": 1}).to_list(length=None)
+        )
         job_ids = [str(job["id"]) for job in job_docs if job.get("id")]
         if job_ids:
             from app.core.celery_app import celery_app
@@ -2222,13 +2253,23 @@ class LeadRepository:
                     # Tasks are dispatched with their job ID as Celery task ID.
                     celery_app.control.revoke(job_id, terminate=True)
                 except Exception:  # pragma: no cover - broker may be unavailable
-                    logger.warning("Could not revoke task for deleted job %s", job_id, exc_info=True)
+                    logger.warning(
+                        "Could not revoke task for deleted job %s",
+                        job_id,
+                        exc_info=True,
+                    )
 
         await database["jobs"].delete_many(job_filter)
         for collection in (
-            "site_extractions", "site_briefs", "master_briefs",
-            "generated_sites", "generation_runs", "generation_input_claims",
-            "message_drafts", "analytics_events", "asset_metadata",
+            "site_extractions",
+            "site_briefs",
+            "master_briefs",
+            "generated_sites",
+            "generation_runs",
+            "generation_input_claims",
+            "message_drafts",
+            "analytics_events",
+            "asset_metadata",
         ):
             await database[collection].delete_many({"leadId": lead_id})
         if job_ids:
@@ -2373,9 +2414,19 @@ class LeadRepository:
         if database is None:
             async with self._memory_lock:
                 docs = self._extractions.get(lead_id, [])
-                doc = next((d for d in docs if str(d.get("id")) == extraction_id and int(d.get("version", 0)) == version), None)
+                doc = next(
+                    (
+                        d
+                        for d in docs
+                        if str(d.get("id")) == extraction_id
+                        and int(d.get("version", 0)) == version
+                    ),
+                    None,
+                )
         else:
-            doc = await database["site_extractions"].find_one({"id": extraction_id, "leadId": lead_id, "version": version})
+            doc = await database["site_extractions"].find_one(
+                {"id": extraction_id, "leadId": lead_id, "version": version}
+            )
         return self._extraction_doc_to_snapshot(doc) if doc else None
 
     async def list_pages(
@@ -2448,9 +2499,19 @@ class LeadRepository:
         if database is None:
             async with self._memory_lock:
                 docs = self._extractions.get(lead_id, [])
-                doc = next((d for d in docs if str(d.get("id")) == extraction_id and int(d.get("version", 0)) == version), None)
+                doc = next(
+                    (
+                        d
+                        for d in docs
+                        if str(d.get("id")) == extraction_id
+                        and int(d.get("version", 0)) == version
+                    ),
+                    None,
+                )
         else:
-            doc = await database["site_extractions"].find_one({"id": extraction_id, "leadId": lead_id, "version": version})
+            doc = await database["site_extractions"].find_one(
+                {"id": extraction_id, "leadId": lead_id, "version": version}
+            )
         if not doc or not doc.get("analysis"):
             return None
         return ExtractionAnalysisResponse(
@@ -2735,6 +2796,11 @@ class LeadRepository:
         brief = await self.get_master_brief(lead_id)
         if brief is None:
             raise ValueError("no_existing_brief")
+        from app.core.brief_requirements import validate_master_brief_requirements
+
+        blockers = validate_master_brief_requirements(brief)
+        if blockers:
+            raise ValueError("brief_requirements_unresolved:" + ",".join(blockers))
 
         # Create new version with approved state
         doc = brief.model_dump()
@@ -2802,9 +2868,19 @@ class LeadRepository:
         if database is None:
             async with self._memory_lock:
                 docs = self._memory.get("master_briefs", {}).get(lead_id, [])
-                doc = next((d for d in docs if str(d.get("id")) == brief_id and int(d.get("version", 0)) == version), None)
+                doc = next(
+                    (
+                        d
+                        for d in docs
+                        if str(d.get("id")) == brief_id
+                        and int(d.get("version", 0)) == version
+                    ),
+                    None,
+                )
         else:
-            doc = await database["master_briefs"].find_one({"id": brief_id, "leadId": lead_id, "version": version})
+            doc = await database["master_briefs"].find_one(
+                {"id": brief_id, "leadId": lead_id, "version": version}
+            )
         return MasterBrief.model_validate(doc) if doc else None
 
     async def update_master_brief_assets(
@@ -2817,7 +2893,9 @@ class LeadRepository:
         if brief is None:
             return None
         merged = brief.brandAssets.model_dump()
-        merged.update({key: value for key, value in assets.items() if value is not None})
+        merged.update(
+            {key: value for key, value in assets.items() if value is not None}
+        )
         database = get_database()
         now = _now()
         if database is None:
@@ -3065,6 +3143,7 @@ class LeadRepository:
         # boundary as a defense against enrichment/checkpoint code dropping
         # enhanced fields. This remains source-backed and never invents data.
         from app.core.extraction import _extract_contact_info
+
         persisted_contact_info = crawl_data.get("contactInfo") or {}
         if not any(
             persisted_contact_info.get(key)
@@ -3078,17 +3157,40 @@ class LeadRepository:
         # industry context. Never overwrite a manually supplied industry.
         if not getattr(lead, "industry", None):
             from app.core.industry_detection import detect_industry
+
             inferred_industry, industry_confidence = detect_industry(
-                company_name=str(crawl_data.get("summary", {}).get("companyName") or lead.companyName or ""),
-                services=list((crawl_data.get("analysis") or {}).get("services") or crawl_data.get("summary", {}).get("serviceClues") or []),
-                content_snippets=[str(crawl_data.get("summary", {}).get("positioningSummary") or ""), *list(crawl_data.get("summary", {}).get("serviceClues") or [])],
+                company_name=str(
+                    crawl_data.get("summary", {}).get("companyName")
+                    or lead.companyName
+                    or ""
+                ),
+                services=list(
+                    (crawl_data.get("analysis") or {}).get("services")
+                    or crawl_data.get("summary", {}).get("serviceClues")
+                    or []
+                ),
+                content_snippets=[
+                    str(crawl_data.get("summary", {}).get("positioningSummary") or ""),
+                    *list(crawl_data.get("summary", {}).get("serviceClues") or []),
+                ],
             )
             lead.industry = inferred_industry
             database = get_database()
             if database is not None:
                 await database["leads"].update_one(
                     {"id": lead_id, "industry": {"$in": [None, ""]}},
-                    {"$set": {"industry": inferred_industry, "inferredIndustry": {"value": inferred_industry, "confidence": industry_confidence, "extractionId": extraction_id, "source": "extraction"}, "updatedAt": now}},
+                    {
+                        "$set": {
+                            "industry": inferred_industry,
+                            "inferredIndustry": {
+                                "value": inferred_industry,
+                                "confidence": industry_confidence,
+                                "extractionId": extraction_id,
+                                "source": "extraction",
+                            },
+                            "updatedAt": now,
+                        }
+                    },
                 )
         doc = {
             "id": extraction_id,

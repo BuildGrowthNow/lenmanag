@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     password_reset_token_expiry_hours: int = 24
     require_email_verification: bool = True
     frontend_url: str = "http://localhost:3000"
+    backend_public_url: str = "http://localhost:8000"
     auth_allowlist_emails: str = "operator@example.com"
     auth_allowlist_domains: str = ""
     resend_api_key: str = ""
@@ -54,7 +55,11 @@ class Settings(BaseSettings):
 
     @property
     def cloudflare_fallback_model_list(self) -> list[str]:
-        return [model.strip() for model in self.cloudflare_fallback_models.split(",") if model.strip()]
+        return [
+            model.strip()
+            for model in self.cloudflare_fallback_models.split(",")
+            if model.strip()
+        ]
 
     # Gemini Configuration (used when llm_provider=gemini)
     gemini_api_key: Optional[str] = None
@@ -119,6 +124,13 @@ class Settings(BaseSettings):
     asset_upload_chunk_size: int = 8 * 1024 * 1024
     # Retry attempts for network/storage ops
     asset_retry_max_attempts: int = 5
+    enhanced_html_rollout_percent: int = 100
+    enhanced_html_shadow_mode: bool = False
+    enhanced_html_failure_threshold: float = 0.05
+    enhanced_html_latency_budget_seconds: float = 120.0
+    rejected_artifact_path: str = "/var/lib/lenquant/rejected-artifacts"
+    rejected_artifact_retention_days: int = 3
+    rejected_artifact_encryption_key: str | None = None
 
     # Crawl budget / limits
     crawl_max_pages: int = 10

@@ -202,10 +202,8 @@ def log_asset_cache_stats(
 
     for cue in cues:
         if isinstance(cue, dict):
-            cached_uri = cue.get("cachedUri")
             source_url = cue.get("sourceUrl")
         else:
-            cached_uri = cue.cachedUri
             source_url = cue.sourceUrl
 
         if get_cached_asset_url(cue):

@@ -17,7 +17,8 @@ import type {
   SiteReviewRecord,
   SiteReviewResponse,
   SiteHandoffRecord,
-  RefinementPromptRecord
+  RefinementPromptRecord,
+  VariantType
 } from "@/lib/types";
 import { API_BASE_URL } from "@/lib/constants";
 
@@ -145,6 +146,10 @@ export async function getThemes(): Promise<ThemeLibraryResponse> {
 
 export async function generateSite(id: string, payload: SiteGeneratePayload = {}): Promise<JobResponse> {
   return request(`/api/sites/${id}/generate`, { method: "POST", body: payload });
+}
+
+export async function retrySiteVariant(siteId: string, variantType: VariantType): Promise<JobResponse> {
+  return request<JobResponse>(`/api/sites/${siteId}/generate/${variantType}/retry`, { method: 'POST' });
 }
 
 export async function republishSite(id: string): Promise<JobResponse> {

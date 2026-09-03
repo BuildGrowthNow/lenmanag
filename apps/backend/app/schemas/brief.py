@@ -196,6 +196,12 @@ class MasterBriefBrandAssetsPatch(BaseModel):
     derivedColors: Optional[list[str]] = None
 
 
+class PreflightAssetAction(BaseModel):
+    sourceUrl: str
+    action: Literal["approve", "reject", "role"]
+    role: Optional[Literal["logo", "hero", "project", "gallery", "decorative"]] = None
+
+
 class MasterBriefSection(BaseModel):
     """Section definition in master brief"""
 

@@ -4,11 +4,14 @@
  * Client component for master brief review and approval
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   type MasterBrief,
+  type GenerationPreflight,
   approveMasterBrief,
+  getGenerationPreflight,
+  updatePreflightAsset,
   refineMasterBrief,
   updateMasterBriefAssets,
 } from '@/lib/api/master-brief';
@@ -27,6 +30,24 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
   const [showFeedback, setShowFeedback] = useState(false);
   const [assets, setAssets] = useState(initialBrief.brandAssets);
   const [isSavingAssets, setIsSavingAssets] = useState(false);
+  const [preflight, setPreflight] = useState<GenerationPreflight | null>(null);
+
+  useEffect(() => {
+    void getGenerationPreflight(leadId).then(setPreflight).catch(() => setPreflight(null));
+  }, [leadId]);
+
+  const approveHeroCandidate = async () => {
+    const candidate = preflight?.heroCandidates[0];
+    if (!candidate) return;
+    try {
+      const updated = await updatePreflightAsset(leadId, candidate.url, 'approve', 'hero');
+      setBrief(updated);
+      setAssets(updated.brandAssets);
+      setPreflight(await getGenerationPreflight(leadId));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to approve asset');
+    }
+  };
 
   const saveAssets = async () => {
     setIsSavingAssets(true);
@@ -448,6 +469,22 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {preflight && (
+              <div className="bg-sky-950/20 border border-sky-900/40 rounded-lg p-4 space-y-2">
+                <h3 className="text-sm font-medium text-sky-300">Generation preflight</h3>
+                <p className="text-xs text-zinc-400">Asset ingestion: {preflight.assetDownload.healthy ? 'healthy' : 'blocked'} · {preflight.assetDownload.backend}</p>
+                <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-3">
+                  <span>Logo: {preflight.selectedLogo ? 'selected' : 'missing'}</span>
+                  <span>Project assets: {preflight.projectAssets.length}</span>
+                  <span>Proof evidence: {preflight.proofEvidence.length}</span>
+                </div>
+                {preflight.rejectedAssets.length > 0 && <p className="text-xs text-amber-300">Rejected assets: {preflight.rejectedAssets.length}.</p>}
+                {preflight.sourceOnlyAssets.length > 0 && <p className="text-xs text-amber-300">Source-only assets: {preflight.sourceOnlyAssets.length} require caching.</p>}
+                {preflight.intentionalFallbacks.length > 0 && <p className="text-xs text-zinc-400">Fallback: typography-only concept.</p>}
+                {preflight.heroCandidates[0] && <button type="button" onClick={() => void approveHeroCandidate()} className="rounded border border-sky-500/30 px-2 py-1 text-xs text-sky-200 hover:bg-sky-500/10">Approve first cached hero candidate</button>}
               </div>
             )}
 

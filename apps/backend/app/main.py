@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        settings.validate_asset_settings()
+        logger.info(
+            "Asset ingestion configuration: enabled=%s backend=%s retention_days=%s",
+            settings.asset_download_enabled,
+            settings.asset_storage_backend,
+            settings.asset_retention_days,
+        )
+    except RuntimeError as exc:
+        logger.error("Asset ingestion configuration is unhealthy: %s", exc)
     client = get_mongo_client()
     if client is not None:
         try:

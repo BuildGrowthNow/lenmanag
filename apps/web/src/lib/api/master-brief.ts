@@ -117,3 +117,29 @@ export async function updateMasterBriefAssets(
     body: assets,
   });
 }
+
+export type GenerationPreflight = {
+  leadId: string;
+  assetDownload: { enabled: boolean; backend: string; healthy: boolean };
+  selectedLogo?: string;
+  logoVariants: string[];
+  heroCandidates: Array<{ url: string; altText?: string; category?: string }>;
+  projectAssets: Array<{ url: string; altText?: string; category?: string }>;
+  rejectedAssets: Array<{ value?: string; note?: string }>;
+  sourceOnlyAssets: Array<{ value?: string; note?: string }>;
+  proofEvidence: string[];
+  missingRequirements: string[];
+  intentionalFallbacks: string[];
+  runtimeModes: Record<string, string>;
+};
+
+export async function getGenerationPreflight(leadId: string): Promise<GenerationPreflight> {
+  return request<GenerationPreflight>(`/api/leads/${leadId}/preflight`);
+}
+
+export async function updatePreflightAsset(leadId: string, sourceUrl: string, action: 'approve' | 'reject' | 'role', role?: string): Promise<MasterBrief> {
+  return request<MasterBrief>(`/api/leads/${leadId}/preflight/assets`, {
+    method: 'POST',
+    body: { sourceUrl, action, role },
+  });
+}

@@ -508,6 +508,41 @@ async def republish_site(
 
 
 @router.post(
+    "/{site_id}/generate/{variant_type}/retry",
+    response_model=ResponseEnvelope[JobResponse],
+    status_code=202,
+)
+async def retry_site_variant(
+    site_id: str,
+    variant_type: str,
+    request: Request,
+    user_id: CurrentUserId,
+) -> ResponseEnvelope[JobResponse]:
+    """Retry one failed variant while preserving successful siblings."""
+    if variant_type not in {"html_v1", "html_v2", "html_v3", "nextjs"}:
+        raise HTTPException(status_code=422, detail="Unsupported variant type.")
+    site = await site_repository.get_site(site_id, user_id=user_id)
+    if site is not None and site.variantType == variant_type and is_usable_generated_site(site):
+        raise HTTPException(status_code=409, detail="Variant already passed runtime QA.")
+    try:
+        job = await site_repository.queue_generation_job(
+            site_id, request=SiteGenerateRequest(force=True, variantTypes=[variant_type])
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if job is None:
+        raise HTTPException(status_code=404, detail="Site or lead not found.")
+    await write_audit_log(
+        user_id,
+        "site",
+        site_id,
+        "site_variant_retry",
+        after={"variantType": variant_type, "jobId": job.id},
+    )
+    return success_response(await _job_response(job), meta=response_meta(request))
+
+
+@router.post(
     "/{site_id}/screenshot",
     response_model=ResponseEnvelope[dict[str, str]],
     status_code=202,

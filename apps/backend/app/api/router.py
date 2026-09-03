@@ -9,6 +9,7 @@ from app.api.leads import router as leads_router
 from app.api.health import router as health_router
 from app.api.public import router as public_router
 from app.api.screenshots import router as screenshots_router
+from app.api.static_assets import router as static_assets_router
 from app.api.sites import router as sites_router, themes_router
 from app.api.users import router as users_router
 from app.core.versioning import enforce_api_version
@@ -33,6 +34,7 @@ api_v1_router.include_router(messages_router)
 api_v1_router.include_router(analytics_router)
 api_v1_router.include_router(public_router)
 api_v1_router.include_router(screenshots_router)
+api_v1_router.include_router(static_assets_router)
 api_v1_router.include_router(bundles_router)
 api_v1_router.include_router(assets_router)
 api_v1_router.include_router(metrics_router)

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "test:contract": "npm run build && node scripts/verify-contract.mjs",
     "start": "node dist/server.js",
     "compile": "node dist/compile.js"
   },
@@ -19,9 +20,12 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.5.2",
-    "esbuild": "^0.20.0",
+    "esbuild": "^0.28.2",
     "fastify": "^5.2.0",
     "framer-motion": "^12.42.2",
+    "three": "^0.179.1",
+    "@react-three/fiber": "^8.18.0",
+    "@react-three/drei": "^9.122.0",
     "gsap": "^3.12.5",
     "lenis": "^1.1.19",
     "lucide-react": "^1.25.0",

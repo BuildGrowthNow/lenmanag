@@ -203,6 +203,8 @@ class SiteReviewQueueItem(BaseModel):
     reviewRubric: list[SiteQualityCheck] = Field(default_factory=list)
     screenshotCount: int = 0
     screenshotRefs: list[SiteScreenshotMetadata] = Field(default_factory=list)
+    runtimeQA: Optional[dict[str, Any]] = None
+    qualityGateReport: Optional[dict[str, Any]] = None
     sourceAttribution: Optional[SiteSourceAttribution] = None
     isManuallyRefined: bool = False
     refinedCount: int = 0
@@ -335,6 +337,10 @@ class GeneratedSiteVersion(BaseModel):
     browserReviewState: ReviewWorkflowState = "not_reviewed"
     publishApprovalState: PublishApprovalState = "pending"
     screenshotRefs: list[SiteScreenshotMetadata] = Field(default_factory=list)
+    runtimeQA: Optional[dict[str, Any]] = None
+    qualityGateReport: Optional[dict[str, Any]] = None
+    capabilityManifest: Optional[dict[str, Any]] = None
+    dependencyInventory: list[str] = Field(default_factory=list)
     latestReviewId: Optional[str] = None
     handoffRecordId: Optional[str] = None
     diversityNotes: list[str] = Field(default_factory=list)
@@ -456,7 +462,9 @@ class GeneratedSite(BaseModel):
     compiledBundleUrl: Optional[str] = Field(
         default=None, description="URL to the compiled JavaScript bundle (Next.js only)"
     )
-    compiledCssUrl: Optional[str] = Field(default=None, description="URL to the generated per-site stylesheet")
+    compiledCssUrl: Optional[str] = Field(
+        default=None, description="URL to the generated per-site stylesheet"
+    )
     compilationStatus: Optional[str] = Field(
         default=None, description="Status of compilation: pending, success, failed"
     )

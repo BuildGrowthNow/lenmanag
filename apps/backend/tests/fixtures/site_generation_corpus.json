@@ -1,0 +1,8 @@
+[
+  {"id": "home-services-strong-imagery", "industry": "home_services", "approvedImages": 4, "approvedProof": 0, "assetProtocol": "http"},
+  {"id": "home-services-logo-only", "industry": "home_services", "approvedImages": 0, "approvedProof": 0, "assetProtocol": "https"},
+  {"id": "architecture-portfolio", "industry": "architecture", "approvedImages": 6, "approvedProof": 0, "assetProtocol": "https"},
+  {"id": "restaurant", "industry": "restaurant", "approvedImages": 5, "approvedProof": 2, "assetProtocol": "https"},
+  {"id": "clinic-no-proof", "industry": "clinic", "approvedImages": 3, "approvedProof": 0, "assetProtocol": "https"},
+  {"id": "creative-broken-duplicates", "industry": "creative", "approvedImages": 2, "approvedProof": 0, "assetProtocol": "https", "brokenImages": 2}
+]

@@ -55,6 +55,8 @@ class AssetDownloadResult:
     expires_at: Optional[datetime] = None
     checksum: Optional[str] = None
     error: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
 
 
 class AssetDownloader:
@@ -97,6 +99,25 @@ class AssetDownloader:
         if max_bytes is None:
             max_bytes = self.settings.asset_max_aggregate_bytes
         return total_bytes <= max_bytes
+
+    def validate_image_file(self, path: str, content_type: str) -> tuple[int, int]:
+        """Decode images and reject empty or zero-dimension files."""
+        if not content_type.lower().startswith("image/"):
+            return (0, 0)
+        if os.path.getsize(path) == 0:
+            raise ValueError("image is empty")
+        try:
+            from PIL import Image
+
+            with Image.open(path) as image:
+                image.verify()
+            with Image.open(path) as image:
+                width, height = image.size
+        except Exception as exc:
+            raise ValueError(f"image decode failed: {exc}") from exc
+        if width <= 0 or height <= 0:
+            raise ValueError("image has zero dimensions")
+        return width, height
 
     @retry(
         stop=stop_after_attempt(3),
@@ -180,6 +201,9 @@ class AssetDownloader:
                             return res
 
                         # compute checksum and open file for upload
+                        res.width, res.height = self.validate_image_file(
+                            temp_f, res.content_type or ""
+                        )
                         hasher = hashlib.sha256()
                         with open(temp_f, "rb") as fh:
                             while True:

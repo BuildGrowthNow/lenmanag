@@ -1601,7 +1601,11 @@ def _cache_crawled_assets(
     """
     runtime_settings = settings
     if not runtime_settings.asset_download_enabled:
-        logger.debug("Asset download is disabled; generated sites will omit uncached assets")
+        for cue in brand_asset_cues:
+            if cue.get("value") or cue.get("assetUrl"):
+                cue.setdefault("note", "")
+                cue["note"] = f"{cue.get('note') or ''};asset_download_disabled:preflight_blocked".strip(";")
+        logger.warning("Asset download is disabled; image-led generation preflight must block")
         return 0
 
     candidates: list[str] = []

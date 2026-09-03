@@ -9,8 +9,9 @@ import boto3
 
 from app.core.celery_app import celery_app
 from app.core.leads import lead_repository
-from app.core.sites import is_usable_generated_site, site_repository
+from app.core.sites import is_artifact_generated_site, site_repository
 from app.core.screenshot_analyzer import get_screenshot_analyzer
+from app.core.site_quality_metrics import QUALITY_GATES, build_quality_gate_report
 from app.schemas.site import SiteGenerateRequest
 from app.core.asset_retention import AssetRetentionManager
 
@@ -26,14 +27,20 @@ def _structured_generation_error(error: Exception, variant_type: str) -> dict[st
         stage = error.stage
         code = error.code
         message = str(error)
+        rule_id = error.rule_id
+        context = error.context
     else:
         stage = "generation"
         code = "variant_generation_failed"
         message = str(error).splitlines()[0] or type(error).__name__
+        rule_id = code
+        context = {}
     return {
         "variantType": variant_type,
         "stage": stage,
         "errorCode": code,
+        "ruleId": rule_id,
+        "context": context,
         "message": message[:500],
         "provider": (get_settings().llm_provider or "unknown").lower(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -127,7 +134,10 @@ def run_extraction_job_task(self, lead_id: str, job_id: str, refresh: bool) -> N
     max_retries=2,
 )
 def run_site_generation_job_task(
-    self, site_id: str, job_id: str, request_payload: dict | None = None,
+    self,
+    site_id: str,
+    job_id: str,
+    request_payload: dict | None = None,
     generation_run_id: str | None = None,
 ) -> None:
     """Run site generation job with automatic retry on failure.
@@ -142,7 +152,10 @@ def run_site_generation_job_task(
     async def runner() -> None:
         # Run the primary generation job
         await site_repository.run_generation_job(
-            site_id=site_id, job_id=job_id, request=request, generation_run_id=generation_run_id
+            site_id=site_id,
+            job_id=job_id,
+            request=request,
+            generation_run_id=generation_run_id,
         )
         # Best-effort scheduling of an automatic refinement pass when
         # screenshot QA fails the strict visual threshold.
@@ -254,6 +267,7 @@ async def capture_screenshot(
     This is deliberately an async function so workerless deployments never try
     to run a Celery eager task inside the event loop that generated the site.
     """
+
     async def _async_runner() -> None:
         from app.core.config import get_settings
         from app.core.mongo import get_database
@@ -281,7 +295,13 @@ async def capture_screenshot(
             if database is not None:
                 await database["generated_sites"].update_one(
                     {"id": site_id},
-                    {"$set": {"qaStatus": "fail", "readinessStatus": "blocked", "updatedAt": datetime.now(timezone.utc)}},
+                    {
+                        "$set": {
+                            "qaStatus": "fail",
+                            "readinessStatus": "blocked",
+                            "updatedAt": datetime.now(timezone.utc),
+                        }
+                    },
                 )
             return
 
@@ -295,6 +315,40 @@ async def capture_screenshot(
                 await _record_runtime_qa_result(generation_run_id, site_id, "failed")
             return
 
+        try:
+            runtime_qa = json.loads(metadata.notes or "{}")
+        except (TypeError, ValueError):
+            runtime_qa = {}
+        interactions = runtime_qa.get("interactions") or []
+        semantic_measured = (
+            "missingFooter" in runtime_qa or "emptyMediaRegions" in runtime_qa
+        )
+        mobile_menu = runtime_qa.get("mobileMenu")
+        performance_measured = "horizontalOverflow" in runtime_qa
+        runtime_gates = {name: None for name in QUALITY_GATES}
+        runtime_gates.update(
+            {
+                "semanticCompleteness": (
+                    not runtime_qa.get("missingFooter")
+                    and not runtime_qa.get("emptyMediaRegions"),
+                )
+                if semantic_measured
+                else None,
+                "interactionReliability": all(
+                    item.get("passed") for item in interactions
+                )
+                if interactions
+                else None,
+                "accessibility": mobile_menu != "failed"
+                if mobile_menu in {"passed", "failed"}
+                else None,
+                "performance": not runtime_qa.get("horizontalOverflow")
+                if performance_measured
+                else None,
+            }
+        )
+        quality_gate_report = build_quality_gate_report(runtime_gates)
+
         await database["generated_sites"].update_one(
             {"id": site_id},
             {
@@ -302,8 +356,14 @@ async def capture_screenshot(
                     "screenshotRefs": [metadata.model_dump()],
                     # Runtime health is authoritative. A captured screenshot is
                     # not evidence that the generated application works.
-                    "qaStatus": "fail" if _metadata_has_fatal_runtime_failure(metadata) else "warn",
-                    "readinessStatus": "blocked" if _metadata_has_fatal_runtime_failure(metadata) else "ready_for_review",
+                    "qaStatus": "fail"
+                    if _metadata_has_fatal_runtime_failure(metadata)
+                    else "warn",
+                    "readinessStatus": "blocked"
+                    if _metadata_has_fatal_runtime_failure(metadata)
+                    else "ready_for_review",
+                    "runtimeQA": runtime_qa,
+                    "qualityGateReport": quality_gate_report,
                     "updatedAt": datetime.now(timezone.utc),
                 }
             },
@@ -313,9 +373,11 @@ async def capture_screenshot(
         try:
             settings = get_settings()
             s3_key = f"{settings.asset_s3_prefix or 'lenmanag/'}screenshots/{site_id}/preview.jpg"
-            image = boto3.client(
-                "s3", region_name=settings.asset_s3_region or "us-east-1"
-            ).get_object(Bucket=settings.asset_s3_bucket, Key=s3_key)["Body"].read()
+            image = (
+                boto3.client("s3", region_name=settings.asset_s3_region or "us-east-1")
+                .get_object(Bucket=settings.asset_s3_bucket, Key=s3_key)["Body"]
+                .read()
+            )
             site = await site_repository.get_site(site_id)
             if site is not None:
                 qa = await get_screenshot_analyzer().perform_qa_analysis(
@@ -331,22 +393,35 @@ async def capture_screenshot(
                     except (TypeError, ValueError):
                         runtime_qa = {}
                     qa["runtimeQA"] = runtime_qa
+                    qa["qualityGateReport"] = quality_gate_report
                     await site_repository.persist_visual_quality(
                         site_id, int(qa["qualityScore"]), qa
                     )
                     logger.info(
                         "run_screenshot_task: visual quality %.0f persisted for %s",
-                        qa["qualityScore"], site_id,
+                        qa["qualityScore"],
+                        site_id,
                     )
                 else:
-                    logger.info("run_screenshot_task: visual QA unavailable for %s; retaining fallback", site_id)
+                    logger.info(
+                        "run_screenshot_task: visual QA unavailable for %s; retaining fallback",
+                        site_id,
+                    )
         except Exception as exc:
-            logger.warning("run_screenshot_task: visual QA unavailable for %s: %s", site_id, exc)
+            logger.warning(
+                "run_screenshot_task: visual QA unavailable for %s: %s", site_id, exc
+            )
         logger.info(
             "run_screenshot_task: screenshot captured and saved for site %s", site_id
         )
         if generation_run_id:
-            await _record_runtime_qa_result(generation_run_id, site_id, "failed" if _metadata_has_fatal_runtime_failure(metadata) else "completed")
+            await _record_runtime_qa_result(
+                generation_run_id,
+                site_id,
+                "failed"
+                if _metadata_has_fatal_runtime_failure(metadata)
+                else "completed",
+            )
 
     await _async_runner()
 
@@ -358,7 +433,9 @@ async def capture_screenshot(
     retry_backoff=True,
     retry_backoff_max=120,
 )
-def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id: str | None = None) -> None:
+def run_screenshot_task(
+    self, site_id: str, preview_url: str, generation_run_id: str | None = None
+) -> None:
     """Legacy Celery entrypoint retained for compatibility with existing jobs."""
 
     try:
@@ -381,7 +458,12 @@ def run_screenshot_task(self, site_id: str, preview_url: str, generation_run_id:
 async def _record_runtime_qa_result(run_id: str, site_id: str, status: str) -> None:
     """Record one variant QA result and close the run only after all QA completes."""
     run = await site_repository._get_generation_run(run_id)
-    if not run or run.get("status") in {"superseded", "cancelled", "completed", "failed"}:
+    if not run or run.get("status") in {
+        "superseded",
+        "cancelled",
+        "completed",
+        "failed",
+    }:
         return
     results = [dict(item) for item in run.get("variantResults", [])]
     for item in results:
@@ -392,8 +474,12 @@ async def _record_runtime_qa_result(run_id: str, site_id: str, status: str) -> N
     if not refreshed:
         return
     terminal = {"completed", "failed"}
-    if results and all(item.get("status") in terminal for item in refreshed.get("variantResults", [])):
-        failed = any(item.get("status") == "failed" for item in refreshed["variantResults"])
+    if results and all(
+        item.get("status") in terminal for item in refreshed.get("variantResults", [])
+    ):
+        failed = any(
+            item.get("status") == "failed" for item in refreshed["variantResults"]
+        )
         final_status = "completed" if not failed else "partial"
         await site_repository._update_generation_run(
             run_id,
@@ -403,21 +489,33 @@ async def _record_runtime_qa_result(run_id: str, site_id: str, status: str) -> N
             refreshed["jobId"],
             status=final_status,
             progress=100,
-            step="Runtime QA completed" if not failed else "Runtime QA found variant failures",
-            error_message=None if not failed else "One or more variants failed generation or runtime QA.",
+            step="Runtime QA completed"
+            if not failed
+            else "Runtime QA found variant failures",
+            error_message=None
+            if not failed
+            else "One or more variants failed generation or runtime QA.",
             finished=True,
         )
         await lead_repository.log_pipeline_event(
             refreshed["leadId"],
-            event_type="site_generation_completed" if final_status == "completed" else "site_generation_failed",
+            event_type="site_generation_completed"
+            if final_status == "completed"
+            else "site_generation_failed",
             status="success" if final_status == "completed" else "error",
-            message="Site generation completed" if final_status == "completed" else "Site generation requires attention",
-            detail="All requested previews passed runtime QA." if final_status == "completed" else "One or more requested previews failed generation or runtime QA.",
+            message="Site generation completed"
+            if final_status == "completed"
+            else "Site generation requires attention",
+            detail="All requested previews passed runtime QA."
+            if final_status == "completed"
+            else "One or more requested previews failed generation or runtime QA.",
             job_id=refreshed["jobId"],
             metadata={"status": final_status},
         )
         await site_repository._release_generation_input(
-            lead_id=refreshed["leadId"], input_hash=refreshed["generationInputHash"], job_id=refreshed["jobId"]
+            lead_id=refreshed["leadId"],
+            input_hash=refreshed["generationInputHash"],
+            job_id=refreshed["jobId"],
         )
         await lead_repository.update_generation_stage_if_latest(
             refreshed["leadId"], run_id, "ready" if not failed else "needs_attention"
@@ -429,7 +527,10 @@ def _metadata_has_fatal_runtime_failure(metadata: Any) -> bool:
         runtime = json.loads(metadata.notes or "{}")
     except (TypeError, ValueError):
         return True
-    return bool(runtime.get("fatalRuntimeFailures")) or runtime.get("runtimeStatus") == "failed"
+    return (
+        bool(runtime.get("fatalRuntimeFailures"))
+        or runtime.get("runtimeStatus") == "failed"
+    )
 
 
 @celery_app.task(
@@ -457,7 +558,11 @@ def run_multi_variant_generation_task(
     sequential while independent leads can generate concurrently.
     """
     try:
-        _run(_run_multi_variant_generation_async(lead_id, job_id, generation_types, generation_run_id))
+        _run(
+            _run_multi_variant_generation_async(
+                lead_id, job_id, generation_types, generation_run_id
+            )
+        )
     except Exception as exc:
         logger.error(
             f"Multi-variant generation failed for lead {lead_id}, job {job_id}. "
@@ -501,7 +606,11 @@ async def _run_multi_variant_generation_async(
     metrics_collector = GenerationMetricsCollector()
     generation_start_time = time.monotonic()
 
-    run = await site_repository._get_generation_run(generation_run_id) if generation_run_id else None
+    run = (
+        await site_repository._get_generation_run(generation_run_id)
+        if generation_run_id
+        else None
+    )
     if run and run.get("status") in {"superseded", "cancelled"}:
         logger.info("Skipping superseded multi-variant run %s", generation_run_id)
         return
@@ -511,12 +620,32 @@ async def _run_multi_variant_generation_async(
     if not lead:
         raise ValueError(f"Lead {lead_id} not found")
 
-    extraction = await (lead_repository.get_extraction_version(lead_id, run["snapshot"]["extractionId"], run["snapshot"]["extractionVersion"]) if run else lead_repository.get_extraction(lead_id))
+    extraction = await (
+        lead_repository.get_extraction_version(
+            lead_id,
+            run["snapshot"]["extractionId"],
+            run["snapshot"]["extractionVersion"],
+        )
+        if run
+        else lead_repository.get_extraction(lead_id)
+    )
     if not extraction or extraction.version <= 0:
         raise ValueError(f"Extraction not available for lead {lead_id}")
 
-    analysis = await (lead_repository.get_analysis_version(lead_id, run["snapshot"]["analysisId"], run["snapshot"]["analysisVersion"]) if run and run["snapshot"].get("analysisId") else lead_repository.get_analysis(lead_id))
-    approved_brief = await (lead_repository.get_master_brief_version(lead_id, run["snapshot"]["briefId"], run["snapshot"]["briefVersion"]) if run else lead_repository.get_master_brief(lead_id))
+    analysis = await (
+        lead_repository.get_analysis_version(
+            lead_id, run["snapshot"]["analysisId"], run["snapshot"]["analysisVersion"]
+        )
+        if run and run["snapshot"].get("analysisId")
+        else lead_repository.get_analysis(lead_id)
+    )
+    approved_brief = await (
+        lead_repository.get_master_brief_version(
+            lead_id, run["snapshot"]["briefId"], run["snapshot"]["briefVersion"]
+        )
+        if run
+        else lead_repository.get_master_brief(lead_id)
+    )
     if run and (not approved_brief or approved_brief.approvalState != "approved"):
         raise ValueError("pinned_brief_not_approved")
 
@@ -573,7 +702,9 @@ async def _run_multi_variant_generation_async(
 
                 # Serialize variants for this lead while allowing other leads
                 # to generate on separate workers.
-                async with generation_lock(timeout_seconds=600, scope=lead_id):  # 10 min timeout
+                async with generation_lock(
+                    timeout_seconds=600, scope=lead_id
+                ):  # 10 min timeout
                     metrics.lock_wait_seconds = time.monotonic() - lock_start
 
                     logger.info(
@@ -601,14 +732,16 @@ async def _run_multi_variant_generation_async(
                         metrics.success = False
                         metrics.error_message = "Unknown variant type"
                         failed_variants += 1
-                        variant_results.append({
-                            "variantType": variant_type_str,
-                            "status": "failed",
-                            "stage": "generation",
-                            "errorCode": "unknown_variant_type",
-                            "message": "Unknown variant type",
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                        })
+                        variant_results.append(
+                            {
+                                "variantType": variant_type_str,
+                                "status": "failed",
+                                "stage": "generation",
+                                "errorCode": "unknown_variant_type",
+                                "message": "Unknown variant type",
+                                "timestamp": datetime.now(timezone.utc).isoformat(),
+                            }
+                        )
                         continue
 
                     site = await site_repository.generate_site_variant(
@@ -621,11 +754,19 @@ async def _run_multi_variant_generation_async(
                         approved_brief=approved_brief,
                         generation_run_id=generation_run_id,
                     )
-                    if not is_usable_generated_site(site):
-                        raise ValueError("generated variant did not produce a usable preview artifact")
+                    if not is_artifact_generated_site(site):
+                        raise ValueError(
+                            "generated variant did not produce an artifact_generated preview"
+                        )
 
                     generated_sites.append(site)
-                    variant_results.append({"variantType": variant_type_str, "siteId": site.id, "status": "runtime_qa"})
+                    variant_results.append(
+                        {
+                            "variantType": variant_type_str,
+                            "siteId": site.id,
+                            "status": "runtime_qa",
+                        }
+                    )
                     metrics.success = True
                     metrics.model_used = "bedrock"  # TODO: Track actual model
 
@@ -690,7 +831,11 @@ async def _run_multi_variant_generation_async(
         total_seconds=total_time,
     )
     failure_summary = next(
-        (str(item.get("message")) for item in variant_results if item.get("status") == "failed" and item.get("message")),
+        (
+            str(item.get("message"))
+            for item in variant_results
+            if item.get("status") == "failed" and item.get("message")
+        ),
         None,
     )
 
@@ -706,13 +851,19 @@ async def _run_multi_variant_generation_async(
             error_message=failure_summary,
         )
     else:
-        final_status = "completed" if generated_sites and not failed_variants else ("partial" if generated_sites else "failed")
+        final_status = (
+            "completed"
+            if generated_sites and not failed_variants
+            else ("partial" if generated_sites else "failed")
+        )
         await lead_repository._update_job(
             job_id=job_id,
             status=final_status,
             progress=100,
             step=f"Generated {len(generated_sites)}/{total_variants} variants",
-            error_message=None if final_status == "completed" else (failure_summary or "One or more variants failed generation."),
+            error_message=None
+            if final_status == "completed"
+            else (failure_summary or "One or more variants failed generation."),
             finished=True,
         )
 
@@ -744,7 +895,10 @@ async def _run_multi_variant_generation_async(
             detail="The failed variants were not published. Runtime QA is required for the usable variants.",
             job_id=job_id,
             duration_ms=total_time_ms,
-            metadata={"successCount": len(generated_sites), "failedCount": failed_variants},
+            metadata={
+                "successCount": len(generated_sites),
+                "failedCount": failed_variants,
+            },
         )
     else:
         await lead_repository.log_pipeline_event(
@@ -759,26 +913,38 @@ async def _run_multi_variant_generation_async(
         )
 
     if run:
-        await site_repository._update_generation_run(generation_run_id, {
-            "status": "runtime_qa" if generated_sites else "failed",
-            "variantResults": variant_results,
-        })
+        await site_repository._update_generation_run(
+            generation_run_id,
+            {
+                "status": "runtime_qa" if generated_sites else "failed",
+                "variantResults": variant_results,
+            },
+        )
 
     # Do not mark the lead ready until runtime QA has completed for every variant.
     if run and not generated_sites:
-        await site_repository._update_generation_run(generation_run_id, {"status": "failed", "finishedAt": datetime.now(timezone.utc)})
-        await site_repository._release_generation_input(lead_id=lead_id, input_hash=run["generationInputHash"], job_id=run["jobId"])
-        await lead_repository.update_generation_stage_if_latest(lead_id, generation_run_id, "needs_attention")
+        await site_repository._update_generation_run(
+            generation_run_id,
+            {"status": "failed", "finishedAt": datetime.now(timezone.utc)},
+        )
+        await site_repository._release_generation_input(
+            lead_id=lead_id, input_hash=run["generationInputHash"], job_id=run["jobId"]
+        )
+        await lead_repository.update_generation_stage_if_latest(
+            lead_id, generation_run_id, "needs_attention"
+        )
 
     # Run screenshot/runtime QA in-process. Production intentionally has no
     # worker or broker, and completion must not leave background work behind.
     for site in generated_sites:
         try:
-            await capture_screenshot(site_id=site.id, preview_url=site.previewUrl, generation_run_id=generation_run_id)
-        except Exception as exc:
-            logger.warning(
-                "Could not capture screenshot for site %s: %s", site.id, exc
+            await capture_screenshot(
+                site_id=site.id,
+                preview_url=site.previewUrl,
+                generation_run_id=generation_run_id,
             )
+        except Exception as exc:
+            logger.warning("Could not capture screenshot for site %s: %s", site.id, exc)
             if generation_run_id:
                 await _record_runtime_qa_result(generation_run_id, site.id, "failed")
 

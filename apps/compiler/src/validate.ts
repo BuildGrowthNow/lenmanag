@@ -8,12 +8,63 @@ export interface ValidationResult {
   errors: string[];
 }
 
+export const APPROVED_IMPORTS = new Set([
+  'react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime',
+  'framer-motion', 'gsap', 'gsap/ScrollTrigger', 'lenis',
+  'embla-carousel-react', 'lucide-react', 'clsx', 'tailwind-merge',
+  'three', '@react-three/fiber', '@react-three/drei',
+  '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-separator',
+  '@radix-ui/react-slot', '@radix-ui/react-tabs', '@radix-ui/react-tooltip',
+]);
+
+export function validateDeclaredImports(source: string, declared: string[] = []): ValidationResult {
+  const errors: string[] = [];
+  const allowed = new Set([...APPROVED_IMPORTS, ...declared]);
+  for (const match of source.matchAll(/(?:import|from)\s+['"]([^'"]+)['"]/g)) {
+    const name = match[1];
+    if (name.startsWith('@/components/ui/') || name === '@/lib/utils') continue;
+    if (!allowed.has(name)) errors.push(`Undeclared import: ${name}`);
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+export function validateDeclaredCapabilityUsage(source: string, declared: string[] = []): ValidationResult {
+  const errors: string[] = [];
+  for (const dependency of declared) {
+    if (!dependency || dependency.startsWith('@/')) continue;
+    const escaped = dependency.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!new RegExp(`(?:import|from)\\s+['"]${escaped}['"]`).test(source)) {
+      errors.push(`Declared capability is unused: ${dependency}`);
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+export function extractImportedDependencies(source: string, candidates: string[] = []): string[] {
+  return candidates.filter((dependency) =>
+    new RegExp(`(?:import|from)\\s+['"]${dependency.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`).test(source)
+  );
+}
+
+export function validateCapabilityFallback(
+  dependencies: string[] = [],
+  webglFallback = false,
+): ValidationResult {
+  const usesWebgl = dependencies.some((dependency) =>
+    ['three', '@react-three/fiber', '@react-three/drei'].includes(dependency)
+  );
+  return usesWebgl && !webglFallback
+    ? { valid: false, errors: ['Three.js capability requires an explicit 2D fallback'] }
+    : { valid: true, errors: [] };
+}
+
 /**
  * Validate TSX source code for safety and correctness.
  * Checks for dangerous imports, forbidden APIs, and structural issues.
  */
 export function validateTsxSource(source: string): ValidationResult {
   const errors: string[] = [];
+  errors.push(...validateDeclaredImports(source).errors);
 
   // Check for dangerous imports
   const dangerousImports = [

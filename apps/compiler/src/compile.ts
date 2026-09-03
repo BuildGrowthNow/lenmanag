@@ -6,13 +6,15 @@
 import * as esbuild from 'esbuild';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
-import { validateTsxSource, sanitizeComponentName } from './validate.js';
+import { validateTsxSource, validateDeclaredImports, validateDeclaredCapabilityUsage, validateCapabilityFallback, extractImportedDependencies, sanitizeComponentName } from './validate.js';
 import { createVirtualModulesPlugin } from './virtual-modules-plugin.js';
 
 export interface CompileRequest {
   sourceCode: string;
   componentName: string;
   siteId: string;
+  jsEntry?: string;
+  capabilityManifest?: { dependencies?: string[]; interactionManifest?: unknown[]; runtimeMode?: string; webglFallback?: boolean };
 }
 
 export interface CompileResult {
@@ -21,6 +23,9 @@ export interface CompileResult {
   cssCode?: string;
   error?: string;
   validationErrors?: string[];
+  dependencyInventory?: string[];
+  bundleMetrics?: { bytes: number };
+  capabilityManifest?: CompileRequest['capabilityManifest'];
 }
 
 /**
@@ -28,10 +33,18 @@ export interface CompileResult {
  * Returns both JS bundle and extracted CSS.
  */
 export async function compileTsx(request: CompileRequest): Promise<CompileResult> {
-  const { sourceCode, componentName, siteId } = request;
+  const { sourceCode, componentName, siteId, jsEntry, capabilityManifest } = request;
+  const entrySource = jsEntry || sourceCode;
 
   // Validate source code first
-  const validation = validateTsxSource(sourceCode);
+  const validation = jsEntry
+    ? validateDeclaredImports(entrySource, capabilityManifest?.dependencies)
+    : validateTsxSource(entrySource);
+  if (capabilityManifest && validation.valid) {
+    validation.errors.push(...validateDeclaredCapabilityUsage(entrySource, capabilityManifest?.dependencies).errors);
+    validation.errors.push(...validateCapabilityFallback(capabilityManifest?.dependencies, capabilityManifest?.webglFallback).errors);
+    validation.valid = validation.errors.length === 0;
+  }
   if (!validation.valid) {
     return {
       success: false,
@@ -46,8 +59,8 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
     // Build with esbuild
     const result = await esbuild.build({
       stdin: {
-        contents: sourceCode,
-        loader: 'tsx',
+        contents: entrySource,
+        loader: jsEntry ? 'js' : 'tsx',
         resolveDir: process.cwd(),
         sourcefile: `${safeName}.tsx`,
       },
@@ -120,7 +133,7 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
     // and animation utilities are deterministic per site.
     const generatedCss = await postcss([
       tailwindcss({
-        content: [{ raw: sourceCode, extension: 'tsx' }],
+      content: [{ raw: sourceCode, extension: 'tsx' }],
         corePlugins: { preflight: true },
         theme: { extend: {} },
       }),
@@ -130,6 +143,9 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
       success: true,
       bundleCode,
       cssCode: `${generatedCss.css}\n${cssCode}`,
+      dependencyInventory: extractImportedDependencies(entrySource, capabilityManifest?.dependencies || []),
+      bundleMetrics: { bytes: new TextEncoder().encode(bundleCode).byteLength },
+      capabilityManifest,
     };
   } catch (err: any) {
     const errorMessage = err?.message || String(err);

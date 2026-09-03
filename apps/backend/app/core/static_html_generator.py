@@ -6,6 +6,7 @@ Generates standalone HTML/CSS/JS files (no React runtime) from master brief.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import subprocess
@@ -21,10 +22,60 @@ from botocore.exceptions import ClientError
 from app.core.config import get_settings
 from app.core.llm import get_llm_client
 from app.core.visual_adapter import build_visual_adapter
+from app.core.artifact_recovery import persist_rejected_artifact
+from app.core.semantic_validation import sanitize_unsupported_proof, validate_semantics
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
 
 logger = logging.getLogger(__name__)
+
+
+def _validation_rule_id(message: str) -> str:
+    rules = (
+        ("unapproved testimonial", "proof.evidence_required"),
+        ("approved header logo", "hero.logo_required"),
+        ("approved photography", "hero.asset_required"),
+        ("footer", "footer.required"),
+        ("insecure HTTP", "assets.https_only"),
+        ("placeholder", "content.no_placeholders"),
+        ("em dash", "content.no_em_dash"),
+    )
+    lowered = message.lower()
+    return next(
+        (rule for needle, rule in rules if needle in lowered), "document.structure"
+    )
+
+
+def _runtime_bundle_prefix() -> str:
+    return """window.__LENQUANT_RUNTIME__ = { initialized: false, animationSetupComplete: false, errors: [], jsLoaded: true };
+window.__LENQUANT_STATIC_READY__ = false;
+window.__LENQUANT_RUNTIME__.markInitialized = function () {
+  this.initialized = true;
+  this.animationSetupComplete = true;
+};
+window.addEventListener('error', function (event) {
+  window.__LENQUANT_RUNTIME__.errors.push(event.error?.message || event.message || 'Runtime error');
+});
+window.addEventListener('unhandledrejection', function (event) {
+  window.__LENQUANT_RUNTIME__.errors.push(event.reason?.message || String(event.reason || 'Unhandled rejection'));
+});
+"""
+
+
+def _runtime_bundle_suffix() -> str:
+    return """
+document.addEventListener('DOMContentLoaded', function () {
+  var runtime = window.__LENQUANT_RUNTIME__;
+  window.__LENQUANT_STATIC_READY__ = !!(runtime && runtime.jsLoaded && runtime.initialized && runtime.animationSetupComplete && runtime.errors.length === 0);
+});
+"""
+
+
+async def _record_rejected_artifact(**kwargs: Any) -> None:
+    try:
+        await persist_rejected_artifact(**kwargs)
+    except Exception:
+        logger.exception("Unable to persist rejected artifact")
 
 
 class StaticGenerationError(ValueError):
@@ -37,11 +88,15 @@ class StaticGenerationError(ValueError):
         variant_type: str,
         stage: str,
         code: str,
+        rule_id: str | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.variant_type = variant_type
         self.stage = stage
         self.code = code
+        self.rule_id = rule_id or code
+        self.context = context or {}
 
 
 async def generate_static_html(
@@ -69,7 +124,10 @@ async def generate_static_html(
     prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
     adapter = build_visual_adapter(extraction, master_brief)
     from app.core.variant_strategy import get_variant_strategies
-    art_direction_plan = get_variant_strategies(adapter=adapter)[variant_type].get("artDirectionPlan", {})
+
+    art_direction_plan = get_variant_strategies(adapter=adapter)[variant_type].get(
+        "artDirectionPlan", {}
+    )
     logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
     try:
         response = await llm.generate_text(
@@ -89,7 +147,9 @@ async def generate_static_html(
                 "```html, ```css, ```javascript. Include no commentary and do not omit "
                 "or abbreviate any block."
             )
-            logger.warning("Incomplete single-pass response for %s; retrying once", variant_type)
+            logger.warning(
+                "Incomplete single-pass response for %s; retrying once", variant_type
+            )
             response = await llm.generate_text(
                 prompt=retry_prompt,
                 temperature=0.7,
@@ -110,64 +170,143 @@ async def generate_static_html(
         # Provider/model failures must fail the generation, never publish a
         # generic substitute website.
         logger.exception("Single-pass artifact generation failed for %s", variant_type)
-        raise StaticGenerationError(
+        error = StaticGenerationError(
             f"{variant_type} generation failed before publication",
             variant_type=variant_type,
             stage="html",
             code="asset_generation_failed",
-        ) from exc
+        )
+        await _record_rejected_artifact(
+            lead_id=str(getattr(master_brief, "leadId", site_id)),
+            site_id=site_id,
+            variant_type=variant_type,
+            html=None,
+            css=None,
+            js=None,
+            failure={
+                "ruleId": error.rule_id,
+                "stage": error.stage,
+                "message": str(exc),
+            },
+        )
+        raise error from exc
 
     logger.info(
         f"[DEBUG] Single-pass assets received for {variant_type}: "
         f"html_len={len(html_content)}, css_len={len(css_content)}, js_len={len(js_content)}"
     )
 
-    html_content = _enforce_footer_year(html_content, extraction=extraction, company_name=extraction.summary.companyName)
+    html_content = _enforce_footer_year(
+        html_content, extraction=extraction, company_name=extraction.summary.companyName
+    )
+    html_content = sanitize_unsupported_proof(
+        html_content, approved_proof=_approved_testimonial_quotes(extraction)
+    )
     try:
-        _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
+        _validate_generated_document(
+            html_content, css_content, js_content, master_brief, extraction
+        )
     except ValueError as exc:
         # Models occasionally leak a comment such as "placeholder" or use an
         # insecure source URL. Give the same coherent artifact one corrective
         # pass before rejecting the variant.
-        logger.warning("Correcting invalid generated document for %s: %s", variant_type, exc)
+        logger.warning(
+            "Correcting invalid generated document for %s: %s", variant_type, exc
+        )
         try:
             response = await llm.generate_text(
                 prompt=_build_static_html_correction_prompt(
-                    variant_type, html_content, css_content, js_content, str(exc), art_direction_plan,
+                    variant_type,
+                    html_content,
+                    css_content,
+                    js_content,
+                    str(exc),
+                    art_direction_plan,
                     _approved_render_asset_urls(master_brief),
                 ),
                 temperature=0.2,
                 max_tokens=32_768,
             )
             html_content, css_content, js_content = _parse_llm_response(response)
-            html_content = _enforce_footer_year(html_content, extraction=extraction, company_name=extraction.summary.companyName)
-            _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
+            html_content = _enforce_footer_year(
+                html_content,
+                extraction=extraction,
+                company_name=extraction.summary.companyName,
+            )
+            html_content = sanitize_unsupported_proof(
+                html_content, approved_proof=_approved_testimonial_quotes(extraction)
+            )
+            _validate_generated_document(
+                html_content, css_content, js_content, master_brief, extraction
+            )
         except Exception as correction_error:
-            logger.error("Rejecting invalid generated document for %s: %s", variant_type, correction_error)
-            raise StaticGenerationError(
+            logger.error(
+                "Rejecting invalid generated document for %s: %s",
+                variant_type,
+                correction_error,
+            )
+            error = StaticGenerationError(
                 f"{variant_type} generated invalid document: {correction_error}",
                 variant_type=variant_type,
                 stage="validation",
                 code="document_validation_failed",
-            ) from correction_error
+                rule_id=_validation_rule_id(str(correction_error)),
+                context={"validationError": str(correction_error)},
+            )
+            await _record_rejected_artifact(
+                lead_id=str(getattr(master_brief, "leadId", site_id)),
+                site_id=site_id,
+                variant_type=variant_type,
+                html=html_content,
+                css=css_content,
+                js=js_content,
+                failure={
+                    "ruleId": error.rule_id,
+                    "stage": error.stage,
+                    "message": str(correction_error),
+                },
+            )
+            raise error from correction_error
     if not _javascript_is_valid(js_content):
         try:
-            js_content = await _repair_javascript(llm, html_content, js_content, variant_type)
-            _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
+            js_content = await _repair_javascript(
+                llm, html_content, js_content, variant_type
+            )
+            _validate_generated_document(
+                html_content, css_content, js_content, master_brief, extraction
+            )
             if not _javascript_is_valid(js_content):
                 raise ValueError("Generated JavaScript remains invalid after repair")
         except Exception as exc:
             logger.error("Rejecting invalid JavaScript for %s: %s", variant_type, exc)
-            raise StaticGenerationError(
+            error = StaticGenerationError(
                 f"{variant_type} generated invalid JavaScript: {exc}",
                 variant_type=variant_type,
                 stage="js",
                 code="javascript_validation_failed",
-            ) from exc
+                rule_id="js.syntax",
+                context={"validationError": str(exc)},
+            )
+            await _record_rejected_artifact(
+                lead_id=str(getattr(master_brief, "leadId", site_id)),
+                site_id=site_id,
+                variant_type=variant_type,
+                html=html_content,
+                css=css_content,
+                js=js_content,
+                failure={
+                    "ruleId": error.rule_id,
+                    "stage": error.stage,
+                    "message": str(exc),
+                },
+            )
+            raise error from exc
 
     html_content, css_content, js_content = _apply_static_safety_layer(
         html_content, css_content, js_content, master_brief, variant_type
     )
+    # Runtime state is bundled so production HTML stays CSP-compatible.
+    js_content = _runtime_bundle_prefix() + js_content + _runtime_bundle_suffix()
 
     # The model never owns delivery URLs. Remove any relative/generated asset
     # references before the backend deterministically injects the final URLs.
@@ -211,6 +350,26 @@ async def generate_static_html(
         )
     logger.info(f"[DEBUG] S3 upload results: css_url={css_url}, js_url={js_url}")
 
+    # Object-storage URLs are never embedded in the public document. The
+    # backend proxy keeps generated bundles LenQuant-hosted and gives CSP,
+    # cache headers, and future authorization one controlled boundary.
+    if css_url or js_url:
+        backend_url = (settings.backend_public_url or "http://localhost:8000").rstrip(
+            "/"
+        )
+        css_version = hashlib.sha256(css_content.encode("utf-8")).hexdigest()[:16]
+        js_version = hashlib.sha256(js_content.encode("utf-8")).hexdigest()[:16]
+        css_url = (
+            f"{backend_url}/api/v1/static-assets/{site_id}/css?v={css_version}"
+            if css_url
+            else None
+        )
+        js_url = (
+            f"{backend_url}/api/v1/static-assets/{site_id}/js?v={js_version}"
+            if js_url
+            else None
+        )
+
     # Inject CSS/JS URLs into HTML
     html_final = html_content
     if css_url:
@@ -231,9 +390,13 @@ window.addEventListener('unhandledrejection', function (event) {
   window.__LENMANAG_RUNTIME__.errors.push(event.reason?.message || String(event.reason || 'Unhandled rejection'));
 });
 </script>"""
+    runtime_bootstrap = ""
     html_final = html_final.replace("</head>", runtime_bootstrap + "\n</head>")
     if js_url:
-        html_final = html_final.replace("</body>", f'<script src="{js_url}" onload="window.__LENMANAG_RUNTIME__.jsLoaded=true" onerror="window.__LENMANAG_RUNTIME__.errors.push(\'Failed to load generated JavaScript\')"></script>\n</body>')
+        html_final = html_final.replace(
+            "</body>",
+            f'<script src="{js_url}" onload="window.__LENMANAG_RUNTIME__.jsLoaded=true" onerror="window.__LENMANAG_RUNTIME__.errors.push(\'Failed to load generated JavaScript\')"></script>\n</body>',
+        )
     # Keep local/test previews functional when object storage is unavailable.
     if not css_url:
         html_final = html_final.replace(
@@ -251,7 +414,10 @@ document.addEventListener('DOMContentLoaded', function () {
   window.__LENMANAG_STATIC_READY__ = !!(runtime && runtime.jsLoaded && runtime.initialized && runtime.animationSetupComplete && runtime.errors.length === 0);
 });
 </script>\n</body>"""
+    runtime_ready = ""
     html_final = html_final.replace("</body>", runtime_ready)
+    # Do not ship inline event handlers in the production document.
+    html_final = re.sub(r'\s+(?:onload|onerror)="[^"]*"', "", html_final)
 
     logger.info(
         f"[DEBUG] Final HTML length: {len(html_final)} (original: {len(html_content)})"
@@ -277,28 +443,56 @@ def _deterministic_fallback_document(
     hours = escape(contact.hours or "")
     approved_images = list(getattr(brief.brandAssets, "imageUrls", None) or [])
     approved_images.extend(
-        item.get("url") for item in list(getattr(brief.brandAssets, "imageInventory", None) or [])
+        item.get("url")
+        for item in list(getattr(brief.brandAssets, "imageInventory", None) or [])
         if isinstance(item, dict) and item.get("url")
     )
-    images = list(dict.fromkeys(_secure_asset_url(url) for url in approved_images if _secure_asset_url(url)))[:6]
+    images = list(
+        dict.fromkeys(
+            _secure_asset_url(url) for url in approved_images if _secure_asset_url(url)
+        )
+    )[:6]
     hero_image = escape(images[0] if images else "")
     logo_url = _approved_logo_url(brief) or ""
     cta_text = brief.ctaStrategy or "Contact us today"
     if re.search(r"xxx|placeholder|example\\.com", cta_text, re.IGNORECASE):
         cta_text = "Request a free estimate"
-    mode = {"html_v1": ("Editorial Clarity", "#f4efe6", "#0d1b2a"), "html_v2": ("Confident Momentum", "#111827", "#c8860a"), "html_v3": ("Distinctive Warmth", "#eef7f2", "#4a6741")}.get(variant_type, ("Trusted Service", "#f4efe6", "#0d1b2a"))
+    mode = {
+        "html_v1": ("Editorial Clarity", "#f4efe6", "#0d1b2a"),
+        "html_v2": ("Confident Momentum", "#111827", "#c8860a"),
+        "html_v3": ("Distinctive Warmth", "#eef7f2", "#4a6741"),
+    }.get(variant_type, ("Trusted Service", "#f4efe6", "#0d1b2a"))
     sections = list(brief.sections or [])[:6]
-    section_html = "".join(
-        f'<article><p class="eyebrow">{escape(s.purpose)}</p><h2>{escape(s.headline)}</h2><p>{escape(s.contentSummary)}</p></article>'
-        for s in sections
-    ) or f'<article><h2>How {company} helps</h2><p>{escape(brief.valueProposition or brief.businessGoal or f"Dependable service from {company}.")}</p></article>'
-    gallery = "".join(f'<img src="{escape(url)}" alt="{company} field work">' for url in images[1:])
-    logo = f'<img class="logo" src="{escape(logo_url)}" alt="{company} logo">' if logo_url else ''
-    headline = escape(brief.headline or brief.valueProposition or f"Trusted service from {company_name}")
-    subheadline = escape(brief.subheadline or brief.businessGoal or f"A clear, dependable experience from {company_name}.")
+    section_html = (
+        "".join(
+            f'<article><p class="eyebrow">{escape(s.purpose)}</p><h2>{escape(s.headline)}</h2><p>{escape(s.contentSummary)}</p></article>'
+            for s in sections
+        )
+        or f"<article><h2>How {company} helps</h2><p>{escape(brief.valueProposition or brief.businessGoal or f'Dependable service from {company}.')}</p></article>"
+    )
+    gallery = "".join(
+        f'<img src="{escape(url)}" alt="{company} field work">' for url in images[1:]
+    )
+    logo = (
+        f'<img class="logo" src="{escape(logo_url)}" alt="{company} logo">'
+        if logo_url
+        else ""
+    )
+    headline = escape(
+        brief.headline
+        or brief.valueProposition
+        or f"Trusted service from {company_name}"
+    )
+    subheadline = escape(
+        brief.subheadline
+        or brief.businessGoal
+        or f"A clear, dependable experience from {company_name}."
+    )
     primary_href = f"tel:{office}" if office else "#contact"
-    contact_heading = escape(brief.ctaStrategy or f"Start a conversation with {company_name}")
-    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{company} - {mode[0]}</title><style>:root{{--bg:{mode[1]};--ink:{mode[2]};--accent:#c8860a}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}}main{{max-width:1180px;margin:auto;padding:28px}}header{{min-height:72vh;display:grid;align-content:center;gap:24px;background:linear-gradient(90deg,var(--bg) 35%,transparent),url('{hero_image}') center/cover;border-radius:24px;padding:clamp(28px,8vw,110px)}}.logo{{max-width:150px;max-height:70px;object-fit:contain;object-position:left}}h1{{font-size:clamp(3rem,9vw,8rem);line-height:.9;max-width:850px;margin:0}}h2{{font-size:clamp(1.8rem,4vw,3.5rem);line-height:1.05}}.eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:.75rem;font-weight:700;color:var(--accent)}}.cta{{display:inline-block;background:var(--accent);color:#fff;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700;width:max-content}}section{{padding:90px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}article{{padding:26px;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:18px}}.gallery{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}.gallery img{{width:100%;height:220px;object-fit:cover;border-radius:14px}}footer{{border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);padding:30px 0}}@media(max-width:700px){{main{{padding:16px}}header{{min-height:78vh;padding:28px 20px}}.grid,.gallery{{grid-template-columns:1fr}}.gallery img{{height:180px}}}}</style></head><body><main><header>{logo}<p class="eyebrow">{escape(mode[0])}</p><h1>{headline}</h1><p>{subheadline}</p><a class="cta" href="{primary_href}">{escape(cta_text)}</a></header><section><p class="eyebrow">What we do</p><div class="grid">{section_html}</div></section><section><p class="eyebrow">Highlights</p><div class="gallery">{gallery}</div></section><section id="contact"><p class="eyebrow">Contact</p><h2>{contact_heading}</h2><p>{('Office: <a href="tel:' + office + '">' + office + '</a><br>') if office else ''}{('Emergency: <a href="tel:' + emergency + '">' + emergency + '</a><br>') if emergency else ''}{hours}</p><a class="cta" href="{escape(contact.contactUrl or '#contact')}">Contact the team</a></section><footer><span class="site-copyright">© {company} {datetime.now(timezone.utc).year}</span></footer></main><script>window.__LENMANAG_RUNTIME__={{initialized:true,animationSetupComplete:true,errors:[],jsLoaded:true}};window.__LENMANAG_STATIC_READY__=true;</script></body></html>'''
+    contact_heading = escape(
+        brief.ctaStrategy or f"Start a conversation with {company_name}"
+    )
+    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{company} - {mode[0]}</title><style>:root{{--bg:{mode[1]};--ink:{mode[2]};--accent:#c8860a}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}}main{{max-width:1180px;margin:auto;padding:28px}}header{{min-height:72vh;display:grid;align-content:center;gap:24px;background:linear-gradient(90deg,var(--bg) 35%,transparent),url('{hero_image}') center/cover;border-radius:24px;padding:clamp(28px,8vw,110px)}}.logo{{max-width:150px;max-height:70px;object-fit:contain;object-position:left}}h1{{font-size:clamp(3rem,9vw,8rem);line-height:.9;max-width:850px;margin:0}}h2{{font-size:clamp(1.8rem,4vw,3.5rem);line-height:1.05}}.eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:.75rem;font-weight:700;color:var(--accent)}}.cta{{display:inline-block;background:var(--accent);color:#fff;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700;width:max-content}}section{{padding:90px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}article{{padding:26px;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:18px}}.gallery{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}.gallery img{{width:100%;height:220px;object-fit:cover;border-radius:14px}}footer{{border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);padding:30px 0}}@media(max-width:700px){{main{{padding:16px}}header{{min-height:78vh;padding:28px 20px}}.grid,.gallery{{grid-template-columns:1fr}}.gallery img{{height:180px}}}}</style></head><body><main><header>{logo}<p class="eyebrow">{escape(mode[0])}</p><h1>{headline}</h1><p>{subheadline}</p><a class="cta" href="{primary_href}">{escape(cta_text)}</a></header><section><p class="eyebrow">What we do</p><div class="grid">{section_html}</div></section><section><p class="eyebrow">Highlights</p><div class="gallery">{gallery}</div></section><section id="contact"><p class="eyebrow">Contact</p><h2>{contact_heading}</h2><p>{('Office: <a href="tel:' + office + '">' + office + "</a><br>") if office else ""}{('Emergency: <a href="tel:' + emergency + '">' + emergency + "</a><br>") if emergency else ""}{hours}</p><a class="cta" href="{escape(contact.contactUrl or "#contact")}">Contact the team</a></section><footer><span class="site-copyright">© {company} {datetime.now(timezone.utc).year}</span></footer></main><script>window.__LENMANAG_RUNTIME__={{initialized:true,animationSetupComplete:true,errors:[],jsLoaded:true}};window.__LENMANAG_STATIC_READY__=true;</script></body></html>'''
     formatted_office = office
     if len(re.sub(r"\\D", "", office)) == 11:
         digits = re.sub(r"\\D", "", office)[1:]
@@ -316,29 +510,52 @@ def _build_static_html_prompt(
     """Build LLM prompt for static HTML generation."""
     adapter = build_visual_adapter(extraction, brief)
     from app.core.variant_strategy import get_variant_strategies
+
     strategy = get_variant_strategies(adapter=adapter)[variant_type]
     plan = strategy.get("artDirectionPlan") or {}
     # Build sections summary
-    sections_summary = "\n".join(
-        f"  - {s.purpose}: {s.headline}\n    Purpose: {s.contentSummary}\n    Approved points: {', '.join(s.contentPoints)}\n    Approach: {s.suggestedApproach}"
-        for s in brief.sections
-    ) or "  - No approved sections; create visual interest without inventing facts."
+    sections_summary = (
+        "\n".join(
+            f"  - {s.purpose}: {s.headline}\n    Purpose: {s.contentSummary}\n    Approved points: {', '.join(s.contentPoints)}\n    Approach: {s.suggestedApproach}"
+            for s in brief.sections
+        )
+        or "  - No approved sections; create visual interest without inventing facts."
+    )
 
     # Get brand info
     logo_url = _secure_asset_url(brief.brandAssets.logoUrl) or "None"
     primary_color = brief.brandAssets.primaryColor or "#000000"
     secondary_color = brief.brandAssets.secondaryColor or "#666666"
-    font_family = _safe_font_family(brief.brandAssets.fontFamily) or "Roboto, Nunito, Inter, system-ui, sans-serif"
+    font_family = (
+        _safe_font_family(brief.brandAssets.fontFamily)
+        or "Roboto, Nunito, Inter, system-ui, sans-serif"
+    )
     font_url = _secure_asset_url(brief.brandAssets.fontUrl) or "None"
     year = datetime.now(timezone.utc).year
     contacts = _verified_contact_data(brief, extraction)
-    image_inventory = [item for item in brief.brandAssets.imageInventory if item.get("url")][:12]
+    image_inventory = [
+        item for item in brief.brandAssets.imageInventory if item.get("url")
+    ][:12]
     if not image_inventory:
-        image_inventory = [{"category": "image", "url": url} for url in (brief.brandAssets.imageUrls or []) if url][:12]
-    asset_inventory = "\n".join(f"- {item.get('category', 'image')}: {_secure_asset_url(item.get('url')) or ''} | alt={item.get('altText') or ''} | dimensions={item.get('width') or '?'}x{item.get('height') or '?'} | confidence={item.get('confidence') or 0}" for item in image_inventory if _secure_asset_url(item.get('url'))) or "- No approved photography is available; omit photography and use art direction"
+        image_inventory = [
+            {"category": "image", "url": url}
+            for url in (brief.brandAssets.imageUrls or [])
+            if url
+        ][:12]
+    asset_inventory = (
+        "\n".join(
+            f"- {item.get('category', 'image')}: {_secure_asset_url(item.get('url')) or ''} | alt={item.get('altText') or ''} | dimensions={item.get('width') or '?'}x{item.get('height') or '?'} | confidence={item.get('confidence') or 0}"
+            for item in image_inventory
+            if _secure_asset_url(item.get("url"))
+        )
+        or "- No approved photography is available; omit photography and use art direction"
+    )
 
     approved_testimonials = _approved_testimonial_quotes(extraction)
-    testimonials_context = "\n".join(f'- "{quote}"' for quote in approved_testimonials) or "- None approved. Do not render testimonials, reviews, star ratings, or customer quotes."
+    testimonials_context = (
+        "\n".join(f'- "{quote}"' for quote in approved_testimonials)
+        or "- None approved. Do not render testimonials, reviews, star ratings, or customer quotes."
+    )
 
     # Get company name
     company_name = extraction.summary.companyName or "Company"
@@ -372,9 +589,9 @@ CREATIVE DIRECTION:
 - Scroll Behavior: {brief.creativeDirection.scrollBehavior}
 - Color Mood: {brief.creativeDirection.colorMood}
 - Typography: {brief.creativeDirection.typographyPersonality}
-- Micro-interactions: {', '.join(brief.creativeDirection.microInteractions) or 'None specified'}
-- Inspiration Keywords: {', '.join(brief.creativeDirection.inspirationKeywords) or 'None specified'}
-- Avoid Patterns: {', '.join(brief.creativeDirection.avoidPatterns) or 'None specified'}
+- Micro-interactions: {", ".join(brief.creativeDirection.microInteractions) or "None specified"}
+- Inspiration Keywords: {", ".join(brief.creativeDirection.inspirationKeywords) or "None specified"}
+- Avoid Patterns: {", ".join(brief.creativeDirection.avoidPatterns) or "None specified"}
 
 CONTENT BLUEPRINT:
 - Hero Headline: {brief.headline}
@@ -390,28 +607,28 @@ BRAND ASSETS:
 - Secondary Color: {secondary_color}
 - Font Family: {font_family}
 - Font File URL: {font_url}
-    - Logo variants: {', '.join(_secure_asset_url(url) for url in brief.brandAssets.logoVariants if _secure_asset_url(url)) or 'None'}
+    - Logo variants: {", ".join(_secure_asset_url(url) for url in brief.brandAssets.logoVariants if _secure_asset_url(url)) or "None"}
 - Approved image inventory (use these URLs, never random stock):
 {asset_inventory}
 - Approved testimonials (use verbatim or omit the entire proof/testimonial section):
 {testimonials_context}
-- Verified contact data: {contacts or 'None; omit rather than invent'}
+- Verified contact data: {contacts or "None; omit rather than invent"}
 - Current server year for footer copyright: {year}
 
 VARIANT TYPE: {variant_type}
 
 INDUSTRY AND AUDIENCE VISUAL ADAPTER:
-- Industry: {adapter['industry']} / {adapter['subcategory']}
-- Audience and buying context: {adapter['audience']}
-- Trust signals: {', '.join(adapter['trust'])}
-- Appropriate imagery: {', '.join(adapter['imagery'])}
-- Visual metaphors: {', '.join(adapter['metaphors'])}
-- Interaction patterns: {', '.join(adapter['interaction'])}
-- Motion language: {adapter['motion']}
-- Typography personality: {adapter['type']}
-- Color behavior: {adapter['color']}
-- Patterns to avoid: {', '.join(adapter['avoid'])}
-- Conceptual imagery useful: {adapter['conceptual']}
+- Industry: {adapter["industry"]} / {adapter["subcategory"]}
+- Audience and buying context: {adapter["audience"]}
+- Trust signals: {", ".join(adapter["trust"])}
+- Appropriate imagery: {", ".join(adapter["imagery"])}
+- Visual metaphors: {", ".join(adapter["metaphors"])}
+- Interaction patterns: {", ".join(adapter["interaction"])}
+- Motion language: {adapter["motion"]}
+- Typography personality: {adapter["type"]}
+- Color behavior: {adapter["color"]}
+- Patterns to avoid: {", ".join(adapter["avoid"])}
+- Conceptual imagery useful: {adapter["conceptual"]}
 
 ART-DIRECTION IMPLEMENTATION PLAN (implement this plan, do not invent a competing design):
 {plan}
@@ -453,6 +670,7 @@ REQUIREMENTS:
    - {_animation_notes}
    - Form validation if contact form present
    - Call window.__LENMANAG_RUNTIME__.markInitialized() only after every required interaction has been bound and animation setup has completed. This call is mandatory.
+   - Declare the required click and keyboard checks in window.__LENQUANT_INTERACTION_MANIFEST__ as an array of {{id, selector, action, key?, required?}}; selectors must point to real controls and each required interaction must produce an observable state change.
 
 5. Design Quality:
    - Produce an Awwwards-quality experience, not a conventional business template.
@@ -519,14 +737,18 @@ Generate high-quality, production-ready code that implements this brief faithful
 
 def _parse_llm_response(response: str) -> tuple[str, str, str]:
     """Parse HTML, CSS, JS from LLM response."""
-    blocks = re.findall(r"```([A-Za-z0-9_-]+)[ \t]*\r?\n(.*?)\r?\n```", response, re.DOTALL)
+    blocks = re.findall(
+        r"```([A-Za-z0-9_-]+)[ \t]*\r?\n(.*?)\r?\n```", response, re.DOTALL
+    )
     found = {language.lower(): content.strip() for language, content in blocks}
     html, css = found.get("html"), found.get("css")
     js = found.get("javascript") or found.get("js")
     if not html or not css or not js:
         # Any opening fence without a matching close is a hard failure, not a
         # permission to upload a partial page.
-        raise ValueError("Expected closed html, css, and javascript code blocks; response was truncated or malformed")
+        raise ValueError(
+            "Expected closed html, css, and javascript code blocks; response was truncated or malformed"
+        )
     return html, css, js
 
 
@@ -535,10 +757,26 @@ class _DocumentStructureParser(HTMLParser):
         super().__init__()
         self.stack: list[str] = []
         self.seen: set[str] = set()
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.seen.add(tag.lower())
-        if tag.lower() not in {"meta", "link", "img", "input", "br", "hr", "source", "area", "base", "embed", "param", "track", "wbr"}:
+        if tag.lower() not in {
+            "meta",
+            "link",
+            "img",
+            "input",
+            "br",
+            "hr",
+            "source",
+            "area",
+            "base",
+            "embed",
+            "param",
+            "track",
+            "wbr",
+        }:
             self.stack.append(tag.lower())
+
     def handle_endtag(self, tag: str) -> None:
         if not self.stack or self.stack[-1] != tag.lower():
             raise ValueError(f"Malformed HTML closing tag: </{tag}>")
@@ -559,34 +797,61 @@ def _validate_generated_document(
     parser = _DocumentStructureParser()
     parser.feed(html)
     parser.close()
-    if parser.stack or not {"html", "head", "body"}.issubset(parser.seen) or not re.search(r"</html>\s*$", html, re.I):
+    if (
+        parser.stack
+        or not {"html", "head", "body"}.issubset(parser.seen)
+        or not re.search(r"</html>\s*$", html, re.I)
+    ):
         raise ValueError("Generated HTML is structurally incomplete")
-    if not css.strip() or css.count("{") != css.count("}") or css.rstrip().endswith(("{", ",", ":")):
+    if (
+        not css.strip()
+        or css.count("{") != css.count("}")
+        or css.rstrip().endswith(("{", ",", ":"))
+    ):
         raise ValueError("Generated CSS is structurally incomplete")
     if not js.strip():
         raise ValueError("Generated JavaScript is empty")
-    prohibited = (r"\b(?:xxx|xxxx|000-0000|555[- )]?\d{3,4}|lorem ipsum|example\.com|your@email\.com|todo|coming soon|contact us for details|image placeholder)\b")
+    prohibited = r"\b(?:xxx|xxxx|000-0000|555[- )]?\d{3,4}|lorem ipsum|example\.com|your@email\.com|todo|coming soon|contact us for details|image placeholder)\b"
     if re.search(prohibited, "\n".join((html, css, js)), re.I):
         raise ValueError("Generated output contains prohibited placeholder content")
     if "—" in "\n".join((html, css, js)):
         raise ValueError("Generated output contains an em dash; use a hyphen instead")
-    if re.search(r"\b(?:arial|comic\s+sans(?:\s+ms)?)\b", "\n".join((html, css, js)), re.I):
+    if re.search(
+        r"\b(?:arial|comic\s+sans(?:\s+ms)?)\b", "\n".join((html, css, js)), re.I
+    ):
         raise ValueError("Generated output uses a prohibited basic Windows font")
-    if re.search(r"\b(?:eval|Function)\s*\(", js) or re.search(r"\b(?:setTimeout|setInterval)\s*\(\s*['\"]", js):
+    if re.search(r"\b(?:eval|Function)\s*\(", js) or re.search(
+        r"\b(?:setTimeout|setInterval)\s*\(\s*['\"]", js
+    ):
         raise ValueError("Generated JavaScript uses prohibited dynamic code evaluation")
-    if re.search(r"(?:src|href)\s*=\s*['\"]http://|url\(\s*['\"]?http://", "\n".join((html, css)), re.I):
+    if re.search(
+        r"(?:src|href)\s*=\s*['\"]http://|url\(\s*['\"]?http://",
+        "\n".join((html, css)),
+        re.I,
+    ):
         raise ValueError("Generated document contains an insecure HTTP resource URL")
-    if extraction is not None and _has_testimonial_markup_without_approved_quote(html, extraction):
-        raise ValueError("Generated output contains an unapproved testimonial or review")
+    if extraction is not None and _has_testimonial_markup_without_approved_quote(
+        html, extraction
+    ):
+        raise ValueError(
+            "Generated output contains an unapproved testimonial or review"
+        )
     if brief:
         current_year = str(datetime.now(timezone.utc).year)
-        if re.search(r"(?:copyright|©|&copy;)[^<]{0,80}\b20\d{2}\b", html, re.I) and current_year not in html:
+        if (
+            re.search(r"(?:copyright|©|&copy;)[^<]{0,80}\b20\d{2}\b", html, re.I)
+            and current_year not in html
+        ):
             raise ValueError("Generated footer uses a stale year")
         required_logo_url = _approved_logo_url(brief)
-        if required_logo_url and not _header_contains_exact_logo(html, required_logo_url):
+        if required_logo_url and not _header_contains_exact_logo(
+            html, required_logo_url
+        ):
             raise ValueError("Generated HTML omitted the approved header logo")
     if _has_unapproved_render_asset(html, css, brief):
-        raise ValueError("Generated document contains an uncached or unapproved asset URL")
+        raise ValueError(
+            "Generated document contains an uncached or unapproved asset URL"
+        )
     if brief:
         approved_images = [
             _secure_asset_url(url)
@@ -600,6 +865,23 @@ def _validate_generated_document(
         approved_images = [url for url in approved_images if url]
         if approved_images and not any(url in html for url in approved_images):
             raise ValueError("Generated HTML omitted approved photography")
+        semantic = validate_semantics(
+            html,
+            require_footer=bool(
+                getattr(brief, "contactInfo", None)
+                or any(s.purpose == "footer" for s in brief.sections)
+            ),
+            require_media=bool(approved_images),
+            approved_images=set(approved_images),
+            approved_proof=_approved_testimonial_quotes(extraction)
+            if extraction is not None
+            else [],
+        )
+        if semantic.issues:
+            issue = semantic.issues[0]
+            raise ValueError(
+                f"{issue.message} [{issue.rule_id}] selector={issue.selector}"
+            )
 
 
 def _approved_logo_url(brief: MasterBrief) -> str | None:
@@ -624,7 +906,11 @@ def _secure_asset_url(value: object) -> str | None:
     value = value.strip()
     if value.lower().startswith("http://"):
         return "https://" + value[7:]
-    return value if value.lower().startswith(("https://", "data:", "/api/internal/assets/")) else None
+    return (
+        value
+        if value.lower().startswith(("https://", "data:", "/api/internal/assets/"))
+        else None
+    )
 
 
 def _approved_render_asset_urls(brief: MasterBrief | None) -> set[str]:
@@ -634,31 +920,45 @@ def _approved_render_asset_urls(brief: MasterBrief | None) -> set[str]:
     if assets is None:
         return set()
     values = [
-        getattr(assets, "logoUrl", None), getattr(assets, "logoLightUrl", None),
-        getattr(assets, "logoDarkUrl", None), getattr(assets, "fontUrl", None),
+        getattr(assets, "logoUrl", None),
+        getattr(assets, "logoLightUrl", None),
+        getattr(assets, "logoDarkUrl", None),
+        getattr(assets, "fontUrl", None),
         *(getattr(assets, "logoVariants", None) or []),
         *(getattr(assets, "imageUrls", None) or []),
         *[
-            item.get("url") for item in (getattr(assets, "imageInventory", None) or [])
+            item.get("url")
+            for item in (getattr(assets, "imageInventory", None) or [])
             if isinstance(item, dict)
         ],
     ]
     return {url for value in values if (url := _secure_asset_url(value))}
 
 
-def _has_unapproved_render_asset(html: str, css: str, brief: MasterBrief | None) -> bool:
+def _has_unapproved_render_asset(
+    html: str, css: str, brief: MasterBrief | None
+) -> bool:
     """Reject source-site assets while allowing normal navigation links."""
     if brief is None:
         return False
     approved = _approved_render_asset_urls(brief)
     asset_values: list[str] = []
-    for match in re.finditer(r"<img\b[^>]*\bsrc\s*=\s*(['\"])(.*?)\1", html, re.I | re.S):
+    for match in re.finditer(
+        r"<img\b[^>]*\bsrc\s*=\s*(['\"])(.*?)\1", html, re.I | re.S
+    ):
         asset_values.append(match.group(2).strip())
-    for match in re.finditer(r"\b(?:src|poster)\s*=\s*(['\"])(.*?)\1", html, re.I | re.S):
+    for match in re.finditer(
+        r"\b(?:src|poster)\s*=\s*(['\"])(.*?)\1", html, re.I | re.S
+    ):
         asset_values.append(match.group(2).strip())
-    for match in re.finditer(r"<link\b[^>]*\bhref\s*=\s*(['\"])(.*?)\1", html, re.I | re.S):
+    for match in re.finditer(
+        r"<link\b[^>]*\bhref\s*=\s*(['\"])(.*?)\1", html, re.I | re.S
+    ):
         asset_values.append(match.group(2).strip())
-    asset_values.extend(match.group(2).strip() for match in re.finditer(r"url\(\s*(['\"]?)(.*?)\1\s*\)", css, re.I | re.S))
+    asset_values.extend(
+        match.group(2).strip()
+        for match in re.finditer(r"url\(\s*(['\"]?)(.*?)\1\s*\)", css, re.I | re.S)
+    )
     return any(
         value.startswith(("http://", "https://", "/api/internal/assets/"))
         and not value.startswith("data:")
@@ -689,36 +989,50 @@ def _upgrade_insecure_resource_urls(html: str) -> str:
 def _approved_testimonial_quotes(extraction: ExtractionSnapshot) -> list[str]:
     quotes: list[str] = []
     analysis = getattr(extraction, "analysis", None)
-    items = list(getattr(analysis, "testimonials", None) or []) + list(getattr(extraction, "extractedTestimonials", None) or [])
+    items = list(getattr(analysis, "testimonials", None) or []) + list(
+        getattr(extraction, "extractedTestimonials", None) or []
+    )
     for item in items:
-        quote = getattr(item, "quote", None) if not isinstance(item, dict) else item.get("quote")
+        quote = (
+            getattr(item, "quote", None)
+            if not isinstance(item, dict)
+            else item.get("quote")
+        )
         if isinstance(quote, str) and quote.strip() and quote.strip() not in quotes:
             quotes.append(quote.strip())
     return quotes[:12]
 
 
-def _has_testimonial_markup_without_approved_quote(html: str, extraction: ExtractionSnapshot) -> bool:
+def _has_testimonial_markup_without_approved_quote(
+    html: str, extraction: ExtractionSnapshot
+) -> bool:
     lowered = html.lower()
     markers = ("testimonial", "review", "customer quote", "what clients say", "said by")
     if not any(marker in lowered for marker in markers):
         return False
-    return not any(quote.lower() in lowered for quote in _approved_testimonial_quotes(extraction))
+    return not any(
+        quote.lower() in lowered for quote in _approved_testimonial_quotes(extraction)
+    )
 
 
 def _build_static_html_correction_prompt(
-    variant_type: str, html: str, css: str, js: str, error: str,
+    variant_type: str,
+    html: str,
+    css: str,
+    js: str,
+    error: str,
     plan: dict[str, Any] | None = None,
     approved_asset_urls: set[str] | None = None,
 ) -> str:
     return f"""Repair the generated static site artifact for {variant_type}. Return ONLY three closed code blocks in this order: html, css, javascript. Preserve the design and all source-backed content, but fix this validation error: {error}
 
 Preserve and implement the original art-direction plan; do not replace it with a generic fallback:
-{plan or 'Preserve the existing concept, composition, imagery, and interaction intent.'}
+{plan or "Preserve the existing concept, composition, imagery, and interaction intent."}
 
 Hard rules:
 - Never use an em dash. Use a hyphen.
 - Never use placeholder content or invented testimonials, reviews, claims, metrics, contacts, or images.
-    - Use only these approved cached asset URLs, data: assets, or no asset at all: {', '.join(sorted(approved_asset_urls or set())) or 'none'}.
+    - Use only these approved cached asset URLs, data: assets, or no asset at all: {", ".join(sorted(approved_asset_urls or set())) or "none"}.
     - Never use an original-site URL, even if it can be upgraded to HTTPS. Remove any uncached image or logo.
 - Never use Arial or Comic Sans.
 - JavaScript must be vanilla and must not use eval(), new Function(), or string-based timers.
@@ -743,31 +1057,54 @@ def _apply_static_safety_layer(
     light_logo = _secure_asset_url(getattr(brief.brandAssets, "logoLightUrl", None))
     dark_logo = _secure_asset_url(getattr(brief.brandAssets, "logoDarkUrl", None))
     logo_contrast_class = None
-    if required_logo and light_logo and required_logo == light_logo and variant_type != "html_v2":
+    if (
+        required_logo
+        and light_logo
+        and required_logo == light_logo
+        and variant_type != "html_v2"
+    ):
         logo_contrast_class = "lq-logo-dark-on-light"
-    elif required_logo and dark_logo and required_logo == dark_logo and variant_type == "html_v2":
+    elif (
+        required_logo
+        and dark_logo
+        and required_logo == dark_logo
+        and variant_type == "html_v2"
+    ):
         logo_contrast_class = "lq-logo-light-on-dark"
     if required_logo and logo_contrast_class:
         header_match = re.search(r"<header\b[^>]*>(.*?)</header\s*>", html, re.I | re.S)
         if header_match:
+
             def add_logo_class(match: re.Match[str]) -> str:
                 tag = match.group(0)
-                class_match = re.search(r"\bclass\s*=\s*(['\"])(.*?)\1", tag, re.I | re.S)
+                class_match = re.search(
+                    r"\bclass\s*=\s*(['\"])(.*?)\1", tag, re.I | re.S
+                )
                 if class_match:
                     classes = f"{class_match.group(2)} {logo_contrast_class}".strip()
-                    return tag[:class_match.start(2)] + classes + tag[class_match.end(2):]
+                    return (
+                        tag[: class_match.start(2)]
+                        + classes
+                        + tag[class_match.end(2) :]
+                    )
                 return tag[:-1] + f' class="{logo_contrast_class}">'
 
             header = re.sub(
-                r"<img\b[^>]*\bsrc\s*=\s*['\"]" + re.escape(required_logo) + r"['\"][^>]*>",
+                r"<img\b[^>]*\bsrc\s*=\s*['\"]"
+                + re.escape(required_logo)
+                + r"['\"][^>]*>",
                 add_logo_class,
-                header_match.group(1), count=1, flags=re.I | re.S,
+                header_match.group(1),
+                count=1,
+                flags=re.I | re.S,
             )
-            html = html[:header_match.start(1)] + header + html[header_match.end(1):]
+            html = html[: header_match.start(1)] + header + html[header_match.end(1) :]
 
     html = re.sub(
         r"<((?:section|article|figure|footer)\b(?![^>]*\bdata-lq-reveal\b)(?![^>]*\bclass=['\"][^'\"]*(?:hero|header)[^'\"]*['\"])[^>]*)>",
-        r'<\1 data-lq-reveal>', html, flags=re.I,
+        r"<\1 data-lq-reveal>",
+        html,
+        flags=re.I,
     )
     css += """
 
@@ -831,7 +1168,9 @@ def _header_contains_exact_logo(html: str, required_url: str) -> bool:
         return False
     header = header_match.group(1)
     for image in re.finditer(r"<img\b[^>]*>", header, re.I | re.S):
-        src_match = re.search(r"\bsrc\s*=\s*(['\"])(.*?)\1", image.group(0), re.I | re.S)
+        src_match = re.search(
+            r"\bsrc\s*=\s*(['\"])(.*?)\1", image.group(0), re.I | re.S
+        )
         if src_match and src_match.group(2).strip() == required_url:
             return True
     return False
@@ -839,11 +1178,20 @@ def _header_contains_exact_logo(html: str, required_url: str) -> bool:
 
 def _javascript_is_valid(script: str) -> bool:
     """Use Node's real parser; never infer JavaScript validity from regex."""
+    filename: str | None = None
     try:
-        with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as handle:
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".js", encoding="utf-8", delete=False
+        ) as handle:
             handle.write(script)
             filename = handle.name
-        result = subprocess.run(["node", "--check", filename], capture_output=True, text=True, timeout=10, check=False)
+        result = subprocess.run(
+            ["node", "--check", filename],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
         return result.returncode == 0
     except (OSError, subprocess.SubprocessError):
         logger.exception("JavaScript validator unavailable")
@@ -851,16 +1199,24 @@ def _javascript_is_valid(script: str) -> bool:
     finally:
         try:
             import os
-            os.unlink(filename)
-        except (UnboundLocalError, OSError):
+
+            if filename:
+                os.unlink(filename)
+        except OSError:
             pass
 
 
-async def _repair_javascript(llm: Any, html: str, invalid_js: str, variant_type: str) -> str:
+async def _repair_javascript(
+    llm: Any, html: str, invalid_js: str, variant_type: str
+) -> str:
     prompt = f"""Repair this invalid generated JavaScript for a {variant_type} static site. Return ONLY one closed ```javascript block. Preserve its interaction intent and selectors from the finalized HTML. Do not use libraries. Call window.__LENMANAG_RUNTIME__.markInitialized() after binding interactions.\n\nHTML:\n{html}\n\nINVALID SCRIPT:\n{invalid_js}"""
     for _ in range(2):
-        response = await llm.generate_text(prompt=prompt, temperature=0.2, max_tokens=8000)
-        match = re.search(r"```(?:javascript|js)[ \t]*\r?\n(.*?)\r?\n```", response, re.DOTALL)
+        response = await llm.generate_text(
+            prompt=prompt, temperature=0.2, max_tokens=8000
+        )
+        match = re.search(
+            r"```(?:javascript|js)[ \t]*\r?\n(.*?)\r?\n```", response, re.DOTALL
+        )
         if match and _javascript_is_valid(match.group(1).strip()):
             return match.group(1).strip()
     raise ValueError("JavaScript repair exhausted without a valid closed script")
@@ -869,11 +1225,23 @@ async def _repair_javascript(llm: Any, html: str, invalid_js: str, variant_type:
 def _remove_generated_asset_references(html: str) -> str:
     # Preserve absolute third-party assets (e.g. a verified font loader) but
     # remove all relative stylesheet/script delivery references.
-    html = re.sub(r"\s*<link\b(?=[^>]*\brel\s*=\s*['\"]?stylesheet)(?=[^>]*\bhref\s*=\s*['\"](?!https?://)[^'\"]+\.css(?:\?[^'\"]*)?['\"])[^>]*>", "", html, flags=re.I)
-    return re.sub(r"\s*<script\b(?=[^>]*\bsrc\s*=\s*['\"](?!https?://)[^'\"]+\.js(?:\?[^'\"]*)?['\"])[^>]*>\s*</script>", "", html, flags=re.I)
+    html = re.sub(
+        r"\s*<link\b(?=[^>]*\brel\s*=\s*['\"]?stylesheet)(?=[^>]*\bhref\s*=\s*['\"](?!https?://)[^'\"]+\.css(?:\?[^'\"]*)?['\"])[^>]*>",
+        "",
+        html,
+        flags=re.I,
+    )
+    return re.sub(
+        r"\s*<script\b(?=[^>]*\bsrc\s*=\s*['\"](?!https?://)[^'\"]+\.js(?:\?[^'\"]*)?['\"])[^>]*>\s*</script>",
+        "",
+        html,
+        flags=re.I,
+    )
 
 
-def _verified_contact_data(brief: MasterBrief, extraction: ExtractionSnapshot) -> dict[str, str]:
+def _verified_contact_data(
+    brief: MasterBrief, extraction: ExtractionSnapshot
+) -> dict[str, str]:
     """Merge only structured, source-derived contacts into the generation context."""
     result: dict[str, str] = {}
     for key, value in (brief.contactInfo or {}).items():
@@ -893,15 +1261,38 @@ def _verified_contact_data(brief: MasterBrief, extraction: ExtractionSnapshot) -
     return result
 
 
-def _enforce_footer_year(html: str, *, extraction: ExtractionSnapshot | None = None, company_name: str | None = None) -> str:
+def _enforce_footer_year(
+    html: str,
+    *,
+    extraction: ExtractionSnapshot | None = None,
+    company_name: str | None = None,
+) -> str:
     """Normalize copyright years and add a current-year footer when absent."""
     year = str(datetime.now(timezone.utc).year)
-    normalized = re.sub(r"((?:©|&copy;|copyright)[^<]{0,80}?)(?:20\d{2})", lambda match: match.group(1) + year, html, flags=re.I)
+    normalized = re.sub(
+        r"((?:©|&copy;|copyright)[^<]{0,80}?)(?:20\d{2})",
+        lambda match: match.group(1) + year,
+        html,
+        flags=re.I,
+    )
     footer_match = re.search(r"<footer\b[^>]*>(.*?)</footer>", normalized, re.I | re.S)
-    if footer_match and not re.search(r"(?:©|&copy;|copyright)\s*20\d{2}", footer_match.group(1), re.I):
-        label = company_name or (extraction.summary.companyName if extraction else None) or "Company"
-        footer = footer_match.group(1).rstrip() + f' <span class="site-copyright">© {re.sub(r"[^A-Za-z0-9 &.-]", "", label)} {year}</span>'
-        normalized = normalized[:footer_match.start(1)] + footer + normalized[footer_match.end(1):]
+    if footer_match and not re.search(
+        r"(?:©|&copy;|copyright)\s*20\d{2}", footer_match.group(1), re.I
+    ):
+        label = (
+            company_name
+            or (extraction.summary.companyName if extraction else None)
+            or "Company"
+        )
+        footer = (
+            footer_match.group(1).rstrip()
+            + f' <span class="site-copyright">© {re.sub(r"[^A-Za-z0-9 &.-]", "", label)} {year}</span>'
+        )
+        normalized = (
+            normalized[: footer_match.start(1)]
+            + footer
+            + normalized[footer_match.end(1) :]
+        )
     return normalized
 
 
@@ -923,7 +1314,9 @@ def _upload_to_s3(
     try:
         s3_client = boto3.client("s3", region_name=settings.asset_s3_region)
 
-        key = f"{prefix}static-sites/{filename}"
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+        site_id, extension = filename.split("/", 1)
+        key = f"{prefix}static-sites/{site_id}/{digest}/{extension}"
 
         s3_client.put_object(
             Bucket=bucket,

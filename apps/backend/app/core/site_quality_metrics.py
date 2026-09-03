@@ -13,6 +13,32 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+QUALITY_GATES = (
+    "evidenceSafety",
+    "brandFidelity",
+    "assetCompleteness",
+    "semanticCompleteness",
+    "interactionReliability",
+    "accessibility",
+    "performance",
+    "visualQuality",
+    "variantDiversity",
+)
+
+
+def build_quality_gate_report(
+    gates: dict[str, bool | int | float | None],
+) -> dict[str, Any]:
+    """Expose independent quality gates; hard failures cannot be hidden by an average."""
+    # None means not measured yet, not a passing value. Callers that support
+    # partial QA must pass explicit None; omitted gates remain hard failures.
+    normalized = {name: gates.get(name, False) for name in QUALITY_GATES}
+    failures = [
+        name for name, value in normalized.items() if value is False or value == 0
+    ]
+    return {"gates": normalized, "hardFailures": failures, "publishable": not failures}
+
+
 def calculate_visual_similarity_score(
     site_a: dict[str, Any], site_b: dict[str, Any]
 ) -> float:
