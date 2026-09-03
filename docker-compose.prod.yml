@@ -49,6 +49,8 @@ services:
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-unknown}
     container_name: lenquant-backend
     ports:
       - "8000:8000"
