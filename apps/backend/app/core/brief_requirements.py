@@ -5,6 +5,20 @@ from __future__ import annotations
 from app.schemas.brief import MasterBrief
 
 
+INTENTIONAL_FALLBACK_REQUIREMENTS = frozenset(
+    {
+        "approved_hero_or_project_images",
+        "approved_proof_evidence",
+        "approved_logo_or_wordmark",
+    }
+)
+
+
+def fallback_requirements(blockers: list[str]) -> list[str]:
+    """Return requirements that generation can satisfy with safe fallbacks."""
+    return [item for item in blockers if item in INTENTIONAL_FALLBACK_REQUIREMENTS]
+
+
 def _has_images(brief: MasterBrief) -> bool:
     assets = brief.brandAssets
     return bool(assets.imageUrls or assets.imageInventory)

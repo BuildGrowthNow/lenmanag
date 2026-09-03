@@ -829,39 +829,14 @@ class LeadRepository:
                     metadata={"briefVersion": master_brief.version},
                 )
 
-                # Auto mode must not turn an expected review gate into a failed
-                # generation job. A generated brief can be valid but still need
-                # operator decisions about evidence/assets before it is approved.
-                from app.core.brief_requirements import validate_master_brief_requirements
-
-                blockers = validate_master_brief_requirements(master_brief)
-                if blockers:
-                    await self.log_pipeline_event(
-                        lead_id,
-                        event_type="brief_approval_blocked",
-                        status="warning",
-                        message="Brief generated and needs review",
-                        detail="Resolve the following requirements before approval: "
-                        + ", ".join(blockers),
-                        metadata={
-                            "briefVersion": master_brief.version,
-                            "blockers": blockers,
-                        },
-                    )
-                    await self._set_pipeline_stage(
-                        lead_id,
-                        "needs_attention",
-                        detail="Brief generated; operator review required for: "
-                        + ", ".join(blockers),
-                    )
-                    return
-
-                # Auto-approve only when all hard requirements are already met.
-                # approve_master_brief advances the pipeline after approval.
+                # Auto mode may use safe, explicit fallbacks for optional assets
+                # and evidence. Critical extraction gaps are still rejected by
+                # approve_master_brief.
                 await self.approve_master_brief(
                     lead_id=lead_id,
                     approved_by="auto",
                     notes="Auto-approved in pipeline",
+                    allow_intentional_fallbacks=True,
                 )
 
             except Exception as exc:
@@ -2814,6 +2789,7 @@ class LeadRepository:
         approved_by: str,
         notes: str | None = None,
         user_id: str | None = None,
+        allow_intentional_fallbacks: bool = False,
     ) -> MasterBrief | None:
         """Approve the master brief to trigger site generation."""
         await self._maybe_ensure_indexes()
@@ -2837,14 +2813,28 @@ class LeadRepository:
         if critical_gaps or (extraction and extraction.crawlStatus == "failed"):
             raise ValueError("brief_requires_critical_gaps_resolved")
 
-        from app.core.brief_requirements import validate_master_brief_requirements
+        from app.core.brief_requirements import (
+            fallback_requirements,
+            validate_master_brief_requirements,
+        )
 
         blockers = validate_master_brief_requirements(brief)
+        if allow_intentional_fallbacks:
+            fallback_blockers = fallback_requirements(blockers)
+            blockers = [item for item in blockers if item not in fallback_blockers]
         if blockers:
             raise ValueError("brief_requirements_unresolved:" + ",".join(blockers))
 
         # Create new version with approved state
         doc = brief.model_dump()
+        if allow_intentional_fallbacks:
+            doc["missingRequirements"] = [
+                item
+                for item in doc.get("missingRequirements", [])
+                if item not in fallback_requirements(
+                    list(doc.get("missingRequirements", []))
+                )
+            ]
         doc["approvalState"] = "approved"
         doc["approvedAt"] = _now()
         doc["approvedBy"] = approved_by
@@ -2874,6 +2864,7 @@ class LeadRepository:
                         "approvedAt": doc["approvedAt"],
                         "approvedBy": approved_by,
                         "reviewNotes": notes,
+                        "missingRequirements": doc["missingRequirements"],
                         "updatedAt": doc["updatedAt"],
                     }
                 },
