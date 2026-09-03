@@ -147,7 +147,7 @@ async def generate_static_html(
         response = await llm.generate_text(
             prompt=prompt,
             temperature=0.7,
-            max_tokens=32_768,
+            max_tokens=16_384,
         )
         try:
             html_content, css_content, js_content = _parse_llm_response(response)
@@ -562,11 +562,30 @@ def _build_static_html_prompt(
 
     strategy = get_variant_strategies(adapter=adapter)[variant_type]
     plan = strategy.get("artDirectionPlan") or {}
-    # Build sections summary
+    approved_testimonials = _approved_testimonial_quotes(extraction)
+    approved_evidence_ids = _approved_evidence_ids(extraction)
+    proof_allowed = bool(approved_testimonials and approved_evidence_ids)
+    proof_terms = re.compile(
+        r"testimonial|review|rating|customer quote|what clients say|"
+        r"award|social proof|\b\d+(?:\.\d+)?\s*(?:stars?|reviews?)",
+        re.I,
+    )
+    eligible_sections = [
+        section
+        for section in brief.sections
+        if proof_allowed
+        or not proof_terms.search(
+            f"{section.purpose} {section.headline} {section.contentSummary} "
+            f"{section.suggestedApproach}"
+        )
+    ]
+
+    # Build sections summary. Unsupported proof sections are excluded before
+    # prompting, rather than asking the model to include and omit them at once.
     sections_summary = (
         "\n".join(
             f"  - {s.purpose}: {s.headline}\n    Purpose: {s.contentSummary}\n    Approved points: {', '.join(s.contentPoints)}\n    Approach: {s.suggestedApproach}"
-            for s in brief.sections
+            for s in eligible_sections
         )
         or "  - No approved sections; create visual interest without inventing facts."
     )
@@ -600,10 +619,13 @@ def _build_static_html_prompt(
         or "- No approved photography is available; omit photography and use art direction"
     )
 
-    approved_testimonials = _approved_testimonial_quotes(extraction)
     testimonials_context = (
-        "\n".join(f'- "{quote}"' for quote in approved_testimonials)
-        or "- None approved. Do not render testimonials, reviews, star ratings, or customer quotes."
+        "\n".join(
+            f'- evidence ID: {item_id}; quote: "{quote}"'
+            for item_id, quote in zip(sorted(approved_evidence_ids), approved_testimonials)
+        )
+        if proof_allowed
+        else "- None approved. Omit testimonials, reviews, ratings, awards, customer quotes, and proof-like badges entirely."
     )
 
     # Get company name
@@ -620,6 +642,11 @@ def _build_static_html_prompt(
     )
 
     return f"""Generate a complete, production-ready static HTML landing page.
+
+OUTPUT BUDGET AND FORMAT (non-negotiable):
+- Return exactly three closed fenced code blocks: html, css, javascript, in that order.
+- Keep HTML under 4500 words, CSS under 2500 words, and JavaScript under 1200 words.
+- Prefer concise, reusable CSS classes and short vanilla JavaScript. Never truncate a block.
 
 MASTER BRIEF:
 - Business Goal: {brief.businessGoal}
@@ -692,14 +719,15 @@ REQUIREMENTS:
    - Semantic tags (<header>, <main>, <section>, <footer>)
    - Proper meta tags (viewport, description, title)
     - Accessibility: ARIA labels, alt text, semantic structure
-    - Include all sections from the master brief
+   - Include all eligible sections from the master brief. Sections requiring unavailable proof evidence are intentionally omitted.
     - REQUIRED HEADER LOGO URL: {logo_url}
     - If this URL is not None, the <header> MUST contain an <img> whose src equals this exact URL. Do not omit, rewrite, substitute, or use a different logo variant. If it is None, no logo is required.
    - Map approved assets to header, hero, service/about, and footer before writing markup. If an approved logo exists, the header MUST contain it. If approved photography exists, use at least one <img> unless this specific concept is explicitly typography-only.
-    - Use only the verified contact data above. Never invent phone numbers, emails, addresses, metrics, or placeholder contacts. Use the current server year in the copyright footer.
+   - Use only the verified contact data above. Never invent phone numbers, emails, addresses, metrics, or placeholder contacts. Use the current server year in the copyright footer.
+   - No approved testimonial/evidence is available: omit testimonials, reviews, ratings, awards, customer quotes, social-proof claims, and proof-like badges entirely. Do not create an empty proof section.
     - Every image, logo, font, and CSS background asset must use one of the cached URLs listed above, a data: URL, or no asset at all. Never request, copy, upgrade, or mention a URL from the original website.
    - NO inline styles or scripts
-   - Use approved extracted client images first. If none are suitable, prefer typographic, geometric, textured, or diagrammatic art direction. Use external imagery only when genuinely necessary and contextually relevant; never use random stock photography.
+   - Use approved extracted client images first. If none are available, use typographic, geometric, textured, or diagrammatic art direction. Never use external or stock imagery.
    - If a font file URL is provided, load it with @font-face; never use placeholder family names such as "Preloaded Font" as literal CSS.
    - Never use Arial, Comic Sans, or other basic Windows font families. Prefer an approved font, or use Roboto, Nunito, Inter, system-ui, sans-serif, or a comparable web-safe alternative.
 

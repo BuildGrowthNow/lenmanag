@@ -5,6 +5,7 @@ import pytest
 from app.core.cloudflare_client import CloudflareClient
 from types import SimpleNamespace
 
+from app.core.ai_site_generation import _build_generation_prompt
 from app.core.static_html_generator import _build_static_html_prompt, generate_static_html
 
 
@@ -114,6 +115,28 @@ def test_single_pass_prompt_contains_full_creative_direction() -> None:
         assert value in prompt
 
 
+def test_nextjs_prompt_omits_unapproved_proof_and_sets_output_budget() -> None:
+    brief = _brief()
+    brief.extractedContent = {}
+    brief.specialEffects = []
+    brief.sections.append(
+        SimpleNamespace(
+            purpose="social-proof",
+            headline="What clients say",
+            contentSummary="Customer reviews and ratings.",
+            contentPoints=["5 stars"],
+            suggestedApproach="testimonial cards",
+        )
+    )
+
+    prompt = _build_generation_prompt(master_brief=brief, extraction=_extraction())
+
+    assert "None approved. Omit testimonials" in prompt
+    assert "What clients say" not in prompt
+    assert "under 3,500 lines and under 12,000 generated tokens" in prompt
+    assert "Trust badges, testimonials, social proof prominent" not in prompt
+
+
 @pytest.mark.asyncio
 async def test_generation_uses_one_coherent_artifact_request() -> None:
     llm = MagicMock()
@@ -132,7 +155,7 @@ async def test_generation_uses_one_coherent_artifact_request() -> None:
     build_prompt.assert_called_once_with(brief, extraction, "html_v1")
     assert llm.generate_text.await_count == 1
     assert llm.generate_text.await_args.kwargs["prompt"] == "FULL MASTER BRIEF PROMPT"
-    assert llm.generate_text.await_args.kwargs["max_tokens"] == 32_768
+    assert llm.generate_text.await_args.kwargs["max_tokens"] == 16_384
     assert "data-generated-site-css" in result["html"]
     assert "data-generated-site-js" in result["html"]
 

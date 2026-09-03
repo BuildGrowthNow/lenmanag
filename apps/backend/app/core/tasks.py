@@ -744,20 +744,40 @@ async def _run_multi_variant_generation_async(
                         )
                         continue
 
-                    site = await site_repository.generate_site_variant(
-                        lead_id=lead_id,
-                        variant_type=variant_type,
-                        variant_strategy=dict(strategy),
-                        extraction=extraction,
-                        analysis=analysis,
-                        user_id=lead.user_id,
-                        approved_brief=approved_brief,
-                        generation_run_id=generation_run_id,
-                    )
-                    if not is_artifact_generated_site(site):
-                        raise ValueError(
-                            "generated variant did not produce an artifact_generated preview"
-                        )
+                    # A provider can return a transiently truncated or malformed
+                    # artifact even when the prompt and validation contract are
+                    # correct. Retry the individual variant once before declaring
+                    # the whole multi-variant run partial. The generator itself
+                    # still fails closed and never publishes an invalid artifact.
+                    site = None
+                    for variant_attempt in range(2):
+                        try:
+                            site = await site_repository.generate_site_variant(
+                                lead_id=lead_id,
+                                variant_type=variant_type,
+                                variant_strategy=dict(strategy),
+                                extraction=extraction,
+                                analysis=analysis,
+                                user_id=lead.user_id,
+                                approved_brief=approved_brief,
+                                generation_run_id=generation_run_id,
+                            )
+                            if not is_artifact_generated_site(site):
+                                raise ValueError(
+                                    "generated variant did not produce an artifact_generated preview"
+                                )
+                            break
+                        except Exception:
+                            if variant_attempt == 1:
+                                raise
+                            logger.warning(
+                                "Variant %s failed on attempt 1; retrying once",
+                                variant_type,
+                                exc_info=True,
+                            )
+
+                    if site is None:
+                        raise ValueError("variant generation returned no site")
 
                     generated_sites.append(site)
                     variant_results.append(

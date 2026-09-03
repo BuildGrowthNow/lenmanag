@@ -132,7 +132,7 @@ async def generate_landing_page_code(
     response = await llm.generate_text(
         prompt=prompt,
         temperature=0.8,  # Higher creativity for unique designs
-        max_tokens=32768,  # Large limit to ensure complete landing pages (never truncate)
+        max_tokens=16_384,  # Bounded output keeps the model focused and avoids runaway truncation.
     )
 
     # Extract code from response
@@ -236,6 +236,36 @@ def _build_generation_prompt(
     visual_adapter = build_visual_adapter(extraction, master_brief)
     visual_plan = get_variant_strategies(adapter=visual_adapter)["html_v2"].get("artDirectionPlan", {})
 
+    # Proof is opt-in. Auto-approved briefs may intentionally have no verified
+    # testimonials, reviews, ratings, awards, or customer metrics. Keep those
+    # sections out of the generation context so the model is not encouraged to
+    # fill a content gap with plausible-looking fiction.
+    extracted_content = getattr(master_brief, "extractedContent", {}) or {}
+    approved_testimonials = [
+        str(value).strip()
+        for value in (extracted_content.get("testimonials", []) or [])
+        if str(value).strip()
+    ]
+    proof_allowed = bool(approved_testimonials)
+    proof_terms = re.compile(
+        r"testimonial|review|rating|social[- ]proof|customer quote|what clients say|award|badge|results?",
+        re.I,
+    )
+    eligible_sections = [
+        section
+        for section in master_brief.sections
+        if proof_allowed or not proof_terms.search(
+            " ".join(
+                (
+                    str(getattr(section, "purpose", "")),
+                    str(getattr(section, "headline", "")),
+                    str(getattr(section, "contentSummary", "")),
+                    str(getattr(section, "suggestedApproach", "")),
+                )
+            )
+        )
+    ]
+
     # Extract content sections
     sections_list = "\n".join(
         [
@@ -243,8 +273,15 @@ def _build_generation_prompt(
             f"     Approach: {section.suggestedApproach}\n"
             f"     Content: {section.contentSummary}\n"
             f"     Key points (all approved): {', '.join(section.contentPoints)}"
-            for i, section in enumerate(master_brief.sections)
+            for i, section in enumerate(eligible_sections)
         ]
+    )
+    if not sections_list:
+        sections_list = "  1. Use the hero and primary conversion action only."
+    proof_context = (
+        "\n".join(f'  - Approved testimonial: "{quote}"' for quote in approved_testimonials[:8])
+        if proof_allowed
+        else "  - None approved. Omit testimonials, reviews, ratings, awards, customer quotes, result metrics, and proof-like badges entirely."
     )
 
     # Build creative direction section if available
@@ -331,7 +368,7 @@ Vibrant colors. Unexpected layouts. Fun > formal.
 Subtle motion. Trust signals. Refined color usage.
 - Clean grid layouts but with visual interest
 - Subtle hover states and transitions
-- Trust badges, testimonials, social proof prominent
+- Establish trust with accurate service details, clear process, and source-backed claims; never invent proof
 - Motion should feel confident, not flashy""",
         }
         design_mode_guidance = mode_details.get(master_brief.designMode, "")
@@ -415,6 +452,11 @@ Implement this structured plan. Do not invent a different generic theme while co
 
 **CTA Strategy**: {master_brief.ctaStrategy}
 
+## PROOF AND CLAIMS CONTRACT (NON-NEGOTIABLE)
+{proof_context}
+- Use only the approved proof text above, verbatim, and do not add names, companies, ratings, awards, metrics, review counts, or trust badges that are not present there.
+- If the approved list says none, do not create an empty proof section or replace it with invented “results”, logos, stars, badges, or customer language. Omit it and strengthen the real service/process/content sections instead.
+
 {brand_section}
 
 ## DESIGN PATTERNS/EXAMPLES TO CONSIDER OR BE CREATIVE: Combining patterns in a unique way
@@ -464,6 +506,7 @@ Implement this structured plan. Do not invent a different generic theme while co
 7. Match the motion level: "{master_brief.motionLevel}"
 8. Responsive images: Always constrain images with max-width: 100%, object-fit: cover, and appropriate containers to prevent layout breaks
 9. **ANIMATION VISIBILITY RULE**: Every `motion.*` element with `initial={{{{ opacity: 0 }}}}` MUST become visible. Use `animate` (not `whileInView`) for above-fold/hero elements. Use `whileInView` with `viewport={{{{ once: true, amount: 0.1 }}}}` for below-fold elements. NEVER leave an element at opacity:0 permanently.
+10. Keep the complete component concise enough to finish in one response: target under 3,500 lines and under 12,000 generated tokens. Prefer reusable arrays, compact CSS classes, and a small number of polished sections over duplicated markup. Never stop mid-tag, mid-string, or mid-expression.
 
 ## BROWSER-ONLY CONSTRAINTS
 
@@ -766,7 +809,7 @@ Do NOT simplify or remove animations/effects just to fix validation errors.
         response = await llm.generate_text(
             prompt=feedback_prompt,
             temperature=0.5,
-            max_tokens=32768,  # Match increased limit for complete code
+            max_tokens=16_384,
         )
 
         fixed_code = _extract_tsx_code(response)
@@ -936,7 +979,7 @@ async def refine_landing_page_code(
     response = await llm.generate_text(
         prompt=prompt,
         temperature=0.3,
-        max_tokens=32768,
+        max_tokens=16_384,
     )
 
     source_code = (
