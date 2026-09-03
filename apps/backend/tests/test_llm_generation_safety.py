@@ -176,7 +176,9 @@ async def test_incomplete_single_pass_response_retries_without_split_generation(
 
     assert result["html"]
     assert llm.generate_text.await_count == 2
-    assert "exactly three CLOSED code blocks" in llm.generate_text.await_args_list[1].kwargs["prompt"]
+    retry_prompt = llm.generate_text.await_args_list[1].kwargs["prompt"]
+    assert "exactly three closed fenced code blocks" in retry_prompt
+    assert "Do not repeat, quote, repair, or discuss" in retry_prompt
 
 
 @pytest.mark.asyncio

@@ -48,17 +48,17 @@ def _validation_rule_id(message: str) -> str:
 
 
 def _runtime_bundle_prefix() -> str:
-    return """window.__LENQUANT_RUNTIME__ = { initialized: false, animationSetupComplete: false, errors: [], jsLoaded: true };
-window.__LENQUANT_STATIC_READY__ = false;
-window.__LENQUANT_RUNTIME__.markInitialized = function () {
+    return """window.__LENMANAG_RUNTIME__ = { initialized: false, animationSetupComplete: false, errors: [], jsLoaded: true };
+window.__LENMANAG_STATIC_READY__ = false;
+window.__LENMANAG_RUNTIME__.markInitialized = function () {
   this.initialized = true;
   this.animationSetupComplete = true;
 };
 window.addEventListener('error', function (event) {
-  window.__LENQUANT_RUNTIME__.errors.push(event.error?.message || event.message || 'Runtime error');
+  window.__LENMANAG_RUNTIME__.errors.push(event.error?.message || event.message || 'Runtime error');
 });
 window.addEventListener('unhandledrejection', function (event) {
-  window.__LENQUANT_RUNTIME__.errors.push(event.reason?.message || String(event.reason || 'Unhandled rejection'));
+  window.__LENMANAG_RUNTIME__.errors.push(event.reason?.message || String(event.reason || 'Unhandled rejection'));
 });
 """
 
@@ -66,8 +66,8 @@ window.addEventListener('unhandledrejection', function (event) {
 def _runtime_bundle_suffix() -> str:
     return """
 document.addEventListener('DOMContentLoaded', function () {
-  var runtime = window.__LENQUANT_RUNTIME__;
-  window.__LENQUANT_STATIC_READY__ = !!(runtime && runtime.jsLoaded && runtime.initialized && runtime.animationSetupComplete && runtime.errors.length === 0);
+  var runtime = window.__LENMANAG_RUNTIME__;
+  window.__LENMANAG_STATIC_READY__ = !!(runtime && runtime.jsLoaded && runtime.initialized && runtime.animationSetupComplete && runtime.errors.length === 0);
 });
 """
 
@@ -154,13 +154,9 @@ async def generate_static_html(
         except ValueError:
             # A retry must preserve the one-pass creative concept. Never
             # degrade to independent HTML/CSS/JS prompts after truncation.
-            retry_prompt = (
-                prompt
-                + "\n\nYour previous response was truncated or malformed. Return the "
-                "complete artifact now: exactly three CLOSED code blocks, in this order: "
-                "```html, ```css, ```javascript. Include no commentary and do not omit "
-                "or abbreviate any block. Keep the artifact concise: HTML under 4500 "
-                "words, CSS under 2500 words, and JavaScript under 1200 words."
+            retry_prompt = _build_static_html_retry_prompt(
+                prompt,
+                "The prior response was truncated or malformed.",
             )
             logger.warning(
                 "Incomplete single-pass response for %s; retrying once", variant_type
@@ -230,15 +226,10 @@ async def generate_static_html(
         )
         try:
             response = await llm.generate_text(
-                prompt=_build_static_html_correction_prompt(
-                    variant_type,
-                    html_content,
-                    css_content,
-                    js_content,
-                    str(exc),
-                    art_direction_plan,
-                    _approved_render_asset_urls(master_brief),
-                ),
+                # Do not feed a whole invalid artifact back into the model. It
+                # wastes the completion budget and encourages it to retain the
+                # very placeholder or malformed text the validator rejected.
+                prompt=_build_static_html_retry_prompt(prompt, str(exc)),
                 temperature=0.2,
                 max_tokens=24_576,
             )
@@ -263,10 +254,10 @@ async def generate_static_html(
                 try:
                     response = await llm.generate_text(
                         prompt=(
-                            prompt
-                            + "\n\nGenerate a fresh complete artifact with exactly three CLOSED code blocks. "
-                            "Keep it concise: HTML under 4500 words, CSS under 2500 words, "
-                            "and JavaScript under 1200 words."
+                            _build_static_html_retry_prompt(
+                                prompt,
+                                "The prior correction was malformed. Generate a fresh artifact.",
+                            )
                         ),
                         temperature=0.5,
                         max_tokens=24_576,
@@ -645,7 +636,7 @@ def _build_static_html_prompt(
 
 OUTPUT BUDGET AND FORMAT (non-negotiable):
 - Return exactly three closed fenced code blocks: html, css, javascript, in that order.
-- Keep HTML under 4500 words, CSS under 2500 words, and JavaScript under 1200 words.
+- Keep HTML under 1800 words, CSS under 1200 words, and JavaScript under 500 words.
 - Prefer concise, reusable CSS classes and short vanilla JavaScript. Never truncate a block.
 
 MASTER BRIEF:
@@ -775,41 +766,24 @@ REQUIREMENTS:
      import, claim, or rely on Three.js, GSAP, Lenis, or any other unprovided library.
 
 OUTPUT FORMAT:
-Return your response in this exact format (three code blocks):
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="...">
-    <title>...</title>
-</head>
-<body>
-    ...complete HTML here...
-</body>
-</html>
-```
-
-```css
-/* styles.css */
-:root {{
-  --primary-color: {primary_color};
-  --secondary-color: {secondary_color};
-}}
-...complete CSS here...
-```
-
-```javascript
-// script.js
-document.addEventListener('DOMContentLoaded', () => {{
-  ...complete JS here...
-}});
-```
+Return only the three complete fenced code blocks. Do not include an example,
+commentary, ellipses, TODOs, or any placeholder text outside or inside a block.
 
 Generate high-quality, production-ready code that implements this brief faithfully.
 """
+
+
+def _build_static_html_retry_prompt(prompt: str, error: str) -> str:
+    """Request a new compact artifact without echoing an invalid prior response."""
+    return f"""{prompt}
+
+REGENERATION REQUIRED:
+{error}
+Generate a fresh, complete artifact. Do not repeat, quote, repair, or discuss
+the previous response. Return only exactly three closed fenced code blocks in
+this order: html, css, javascript. Keep HTML under 1800 words, CSS under 1200
+words, and JavaScript under 500 words. Omit unavailable information instead of
+using filler, TODOs, ellipses, sample values, or placeholder text."""
 
 
 def _parse_llm_response(response: str) -> tuple[str, str, str]:

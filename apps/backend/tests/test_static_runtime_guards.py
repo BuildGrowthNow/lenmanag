@@ -13,6 +13,8 @@ from app.core.static_html_generator import (
     _verified_contact_data,
     _build_static_html_prompt,
     _apply_static_safety_layer,
+    _runtime_bundle_prefix,
+    _runtime_bundle_suffix,
 )
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
@@ -28,6 +30,13 @@ def test_truncated_javascript_is_rejected() -> None:
 
 def test_invalid_javascript_never_validates_for_upload() -> None:
     assert not _javascript_is_valid("document.addEventListener('x', () => {")
+
+
+def test_runtime_bundle_uses_the_runtime_namespace_required_by_generated_js() -> None:
+    bundle = _runtime_bundle_prefix() + _runtime_bundle_suffix()
+    assert "__LENMANAG_RUNTIME__" in bundle
+    assert "__LENMANAG_STATIC_READY__" in bundle
+    assert "__LENQUANT_RUNTIME__" not in bundle
 
 
 def test_relative_generated_asset_references_are_removed() -> None:
