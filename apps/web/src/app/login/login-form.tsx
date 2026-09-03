@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { login } from "@/lib/api/users";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +22,9 @@ export function LoginForm() {
     setError(null);
     try {
       await login({ email, password });
-      router.push("/app");
+      const next = searchParams.get("next");
+      const destination = next && next.startsWith("/app") ? next : "/app";
+      router.push(destination);
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to reach auth service.");
