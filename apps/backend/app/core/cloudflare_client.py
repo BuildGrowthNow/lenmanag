@@ -85,9 +85,18 @@ class CloudflareClient:
         last_error: Exception | None = None
         for model in models:
             try:
+                messages = [{"role": "user", "content": prompt}]
+                if "CLOUDFLARE_ARTIFACT_MODE" in prompt:
+                    messages.insert(
+                        0,
+                        {
+                            "role": "system",
+                            "content": "You are a senior frontend designer and implementation engineer. Follow the user's visual direction literally and return only the requested artifact format.",
+                        },
+                    )
                 payload = await self._post(self._chat_url(), {
                     "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     # DeepSeek Flash otherwise spends the completion budget on

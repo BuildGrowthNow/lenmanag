@@ -131,16 +131,20 @@ async def generate_static_html(
             context={"heroMode": preflight.hero_mode, "missingRequirements": preflight.missing_requirements},
         )
 
+    settings = get_settings()
+    provider = (getattr(settings, "llm_provider", "bedrock") or "bedrock").lower()
+
     # One prompt produces the page, stylesheet, and behavior as one design
     # system. Splitting these into independent requests loses the brief's art
     # direction and leads to unrelated, template-like assets.
     prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
+    if provider == "cloudflare":
+        prompt = _build_cloudflare_static_html_prompt(prompt, variant_type)
     logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
     try:
         # The page, stylesheet, and interactions are one creative artifact.
         # Bedrock receives the historical full completion budget; Cloudflare
         # stays selectable but uses its supported completion ceiling.
-        provider = (getattr(get_settings(), "llm_provider", "bedrock") or "bedrock").lower()
         max_tokens = 32_768 if provider == "bedrock" else 12_288
         response = await llm.generate_text(
             prompt=prompt,
@@ -515,6 +519,30 @@ def _deterministic_fallback_document(
     html = html.replace("(574) XXX-XXXX", formatted_office)
     html = html.replace("XXX-XXXX", formatted_office)
     return {"html": html, "cssUrl": None, "jsUrl": None}
+
+
+def _build_cloudflare_static_html_prompt(base_prompt: str, variant_type: str) -> str:
+    """Add a Cloudflare-specific artifact contract without changing the brief."""
+    dark = variant_type == "html_v2"
+    palette = (
+        "Use a genuinely dark page: set body/background surfaces to #0b1020 or darker, use light text, and use electric blue/purple accents."
+        if dark
+        else "Use the requested variant palette consistently across body, sections, cards, and controls."
+    )
+    return f"""{base_prompt}
+
+CLOUDFLARE_ARTIFACT_MODE (mandatory compatibility contract):
+- This is a visual design task, not a summary task. Do not return a generic starter template.
+- Preserve the requested variant direction in the rendered result. {palette}
+- Produce substantial content: at least 6 meaningful sections, a detailed hero, and 6 service/content cards.
+- Use responsive CSS with clamp() typography, generous spacing, layered surfaces, borders, gradients, and hover/focus states.
+- The CSS must visibly change the page; do not rely on browser defaults or a tiny reset-only stylesheet.
+- Use only semantic HTML and CSS/JS. Do not create fake media shells, empty media placeholders, data-media-required regions, or .hero-media elements when no approved image exists.
+- Do not reference any external image, font, stylesheet, script, or HTTP URL. Use no image at all if the approved inventory is empty.
+- Never place explanations, Markdown headings, or prose outside the three fenced blocks.
+- Return exactly three closed fenced blocks in this order: ```html, ```css, ```javascript.
+- Keep each block complete and closed; prioritize complete CSS and JavaScript over commentary.
+""".strip()
 
 
 def _build_static_html_prompt(
