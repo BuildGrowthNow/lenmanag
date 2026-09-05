@@ -56,7 +56,7 @@ def get_variant_strategies(
     base_strategies: dict[VariantType, VariantStrategy] = {
         "html_v1": {
             "variantType": "html_v1",
-            "variantLabel": "Editorial Authority",
+            "variantLabel": "Professional Standard",
             "variantPosition": 1,
             "designMode": "corporate",
             "paletteMode": "zinc",
@@ -91,7 +91,7 @@ def get_variant_strategies(
         },
         "html_v2": {
             "variantType": "html_v2",
-            "variantLabel": "Immersive Signature",
+            "variantLabel": "Bold Startup",
             "variantPosition": 2,
             "designMode": "interactive",
             "paletteMode": "colorful",
@@ -129,7 +129,7 @@ def get_variant_strategies(
         },
         "html_v3": {
             "variantType": "html_v3",
-            "variantLabel": "Contrasting Creative Direction",
+            "variantLabel": "Creative Alternative",
             "variantPosition": 3,
             "designMode": "playful",
             "paletteMode": "colorful",
