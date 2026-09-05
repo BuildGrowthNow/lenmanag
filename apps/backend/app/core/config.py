@@ -37,8 +37,9 @@ class Settings(BaseSettings):
     # provider rate limits and compiler capacity.
     celery_worker_concurrency: int = 1
 
-    # LLM Provider: cloudflare, gemini, or bedrock
-    llm_provider: str = "cloudflare"
+    # Bedrock is the default design-generation provider. Cloudflare remains an
+    # explicit opt-in via LLM_PROVIDER=cloudflare.
+    llm_provider: str = "bedrock"
 
     # Cloudflare Workers AI Configuration
     cloudflare_account_id: Optional[str] = None
@@ -67,7 +68,7 @@ class Settings(BaseSettings):
     gemini_vision_model: str = "gemini-2.0-flash"
 
     # Amazon Bedrock Configuration (used when llm_provider=bedrock)
-    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-6"
+    bedrock_model_id: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     bedrock_region: str = "us-east-1"
     bedrock_max_tokens: int = 32768  # Increased for full page code generation
     bedrock_timeout_seconds: int = (

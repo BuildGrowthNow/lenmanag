@@ -138,39 +138,15 @@ async def generate_static_html(
     prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
     logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
     try:
+        # The page, stylesheet, and interactions are one creative artifact.
+        # Bedrock receives the historical full completion budget; Cloudflare
+        # stays selectable but uses its supported completion ceiling.
+        provider = (getattr(get_settings(), "llm_provider", "bedrock") or "bedrock").lower()
+        max_tokens = 32_768 if provider == "bedrock" else 16_384
         response = await llm.generate_text(
-            prompt=prompt,
-            temperature=0.7,
-            max_tokens=16_384,
+            prompt=prompt, temperature=0.7, max_tokens=max_tokens
         )
-        try:
-            html_content, css_content, js_content = _parse_llm_response(response)
-        except ValueError:
-            # A retry must preserve the one-pass creative concept. Never
-            # degrade to independent HTML/CSS/JS prompts after truncation.
-            retry_prompt = _build_static_html_retry_prompt(
-                prompt,
-                "The prior response was truncated or malformed.",
-            )
-            logger.warning(
-                "Incomplete single-pass response for %s; retrying once", variant_type
-            )
-            response = await llm.generate_text(
-                prompt=retry_prompt,
-                temperature=0.7,
-                max_tokens=24_576,
-            )
-            try:
-                html_content, css_content, js_content = _parse_llm_response(response)
-            except ValueError as retry_error:
-                raise StaticGenerationError(
-                    f"{variant_type} generation returned incomplete artifacts",
-                    variant_type=variant_type,
-                    stage="parse",
-                    code="incomplete_artifact_response",
-                ) from retry_error
-    except StaticGenerationError:
-        raise
+        html_content, css_content, js_content = _parse_llm_response(response)
     except Exception as exc:
         # Provider/model failures must fail the generation, never publish a
         # generic substitute website.

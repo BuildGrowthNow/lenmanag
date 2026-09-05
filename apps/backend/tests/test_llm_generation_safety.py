@@ -6,7 +6,11 @@ from app.core.cloudflare_client import CloudflareClient
 from types import SimpleNamespace
 
 from app.core.ai_site_generation import _build_generation_prompt
-from app.core.static_html_generator import _build_static_html_prompt, generate_static_html
+from app.core.static_html_generator import (
+    StaticGenerationError,
+    _build_static_html_prompt,
+    generate_static_html,
+)
 
 
 def test_cloudflare_empty_or_null_content_is_rejected() -> None:
@@ -103,6 +107,12 @@ document.addEventListener('DOMContentLoaded', function () { window.__LENMANAG_RU
 ```"""
 
 
+def _html_only_response() -> str:
+    return """```html
+<!doctype html><html><head><title>Example</title></head><body><header><img src="https://cdn.test/logo.svg" alt="Example Service"></header><main><h1>Service</h1></main><footer>© Example Service 2026</footer></body></html>
+```"""
+
+
 def test_single_pass_prompt_contains_full_creative_direction() -> None:
     prompt = _build_static_html_prompt(_brief(), _extraction(), "html_v2")
 
@@ -155,15 +165,15 @@ async def test_generation_uses_one_coherent_artifact_request() -> None:
     build_prompt.assert_called_once_with(brief, extraction, "html_v1")
     assert llm.generate_text.await_count == 1
     assert llm.generate_text.await_args.kwargs["prompt"] == "FULL MASTER BRIEF PROMPT"
-    assert llm.generate_text.await_args.kwargs["max_tokens"] == 16_384
+    assert llm.generate_text.await_args.kwargs["max_tokens"] == 32_768
     assert "data-generated-site-css" in result["html"]
     assert "data-generated-site-js" in result["html"]
 
 
 @pytest.mark.asyncio
-async def test_incomplete_single_pass_response_retries_without_split_generation() -> None:
+async def test_incomplete_single_pass_response_reports_generation_failure() -> None:
     llm = MagicMock()
-    llm.generate_text = AsyncMock(side_effect=["```html\n<!doctype html>", _complete_response()])
+    llm.generate_text = AsyncMock(return_value="```html\n<!doctype html>")
     settings = SimpleNamespace(asset_s3_bucket=None, asset_s3_prefix="", asset_s3_region="us-east-1")
     brief = _brief()
     extraction = _extraction()
@@ -172,25 +182,49 @@ async def test_incomplete_single_pass_response_retries_without_split_generation(
         patch("app.core.static_html_generator.get_llm_client", return_value=llm),
         patch("app.core.static_html_generator.get_settings", return_value=settings),
     ):
-        result = await generate_static_html(master_brief=brief, extraction=extraction, variant_type="html_v3", site_id="site-3")
+        with pytest.raises(StaticGenerationError):
+            await generate_static_html(master_brief=brief, extraction=extraction, variant_type="html_v3", site_id="site-3")
 
-    assert result["html"]
-    assert llm.generate_text.await_count == 2
-    retry_prompt = llm.generate_text.await_args_list[1].kwargs["prompt"]
-    assert "exactly three closed fenced code blocks" in retry_prompt
-    assert "Do not repeat, quote, repair, or discuss" in retry_prompt
+    assert llm.generate_text.await_count == 1
 
 
 @pytest.mark.asyncio
-async def test_generation_failure_never_returns_a_fallback_site() -> None:
+async def test_complete_html_only_response_reports_generation_failure() -> None:
+    llm = MagicMock()
+    llm.generate_text = AsyncMock(return_value=_html_only_response())
+    settings = SimpleNamespace(asset_s3_bucket=None, asset_s3_prefix="", asset_s3_region="us-east-1")
+
+    with (
+        patch("app.core.static_html_generator.get_llm_client", return_value=llm),
+        patch("app.core.static_html_generator.get_settings", return_value=settings),
+    ):
+        with pytest.raises(StaticGenerationError):
+            await generate_static_html(
+                master_brief=_brief(), extraction=_extraction(), variant_type="html_v1", site_id="site-1"
+            )
+
+    assert llm.generate_text.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_generation_failure_reports_generation_failure() -> None:
     failing_llm = MagicMock()
     failing_llm.generate_text = AsyncMock(side_effect=RuntimeError("provider unavailable"))
+    settings = SimpleNamespace(
+        asset_s3_bucket=None,
+        asset_s3_prefix="",
+        asset_s3_region="us-east-1",
+        asset_download_enabled=True,
+    )
 
-    with patch("app.core.static_html_generator.get_llm_client", return_value=failing_llm):
-        with pytest.raises(ValueError, match="generation failed before publication"):
+    with (
+        patch("app.core.static_html_generator.get_llm_client", return_value=failing_llm),
+        patch("app.core.static_html_generator.get_settings", return_value=settings),
+    ):
+        with pytest.raises(StaticGenerationError):
             await generate_static_html(
-                master_brief=MagicMock(),
-                extraction=MagicMock(),
+                master_brief=_brief(),
+                extraction=_extraction(),
                 variant_type="html_v1",
                 site_id="site-1",
             )
