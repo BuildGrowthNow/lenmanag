@@ -65,13 +65,20 @@ class S3AssetStorage(AssetStorage):
         data = stream.read()
         bytes_written = len(data)
 
-        self.client.put_object(
-            Bucket=self.bucket,
-            Key=key,
-            Body=data,
-            ContentType=content_type,
-            ChecksumSHA256=checksum if len(checksum) == 44 else None,
-        )
+        put_params = {
+            "Bucket": self.bucket,
+            "Key": key,
+            "Body": data,
+            "ContentType": content_type,
+        }
+        # boto3 rejects ChecksumSHA256=None.  The downloader currently keeps
+        # a hexadecimal SHA-256 digest (64 chars), while S3's optional
+        # ChecksumSHA256 field requires a base64 digest (44 chars).  Omit the
+        # optional header for the hex form; the digest is still persisted in
+        # asset metadata and the object remains content-addressed by record.
+        if len(checksum) == 44:
+            put_params["ChecksumSHA256"] = checksum
+        self.client.put_object(**put_params)
 
         self._stats["stored_files"] += 1
         self._stats["stored_bytes"] += bytes_written

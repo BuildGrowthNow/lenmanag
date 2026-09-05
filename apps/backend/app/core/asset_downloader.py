@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -33,6 +34,8 @@ from prometheus_client import Counter, Histogram
 # Metrics
 from .config import get_settings
 from .audit import write_asset_audit_log
+
+logger = logging.getLogger(__name__)
 
 DOWNLOAD_COUNTER = Counter("asset_download_total", "Total asset download attempts")
 DOWNLOAD_FAILURES = Counter(
@@ -236,37 +239,47 @@ class AssetDownloader:
                         DOWNLOAD_BYTES.inc(int(res.bytes or 0))
                         DOWNLOAD_LATENCY.observe(__import__("time").time() - start)
 
-                        # Audit log successful download
-                        await write_asset_audit_log(
-                            actor_user_id=actor_user_id,
-                            lead_id=lead_id,
-                            asset_url=url,
-                            action="asset_download",
-                            metadata={
-                                "bytes": stored_bytes,
-                                "contentType": res.content_type,
-                                "checksum": checksum,
-                                "storageUri": uri,
-                                "success": True,
-                            },
-                        )
+                        # Audit logging must never turn a successful asset
+                        # download into a failed one. Crawls run in a worker
+                        # thread and an audit client can be bound to another
+                        # event loop; retain the cached object regardless.
+                        try:
+                            await write_asset_audit_log(
+                                actor_user_id=actor_user_id,
+                                lead_id=lead_id,
+                                asset_url=url,
+                                action="asset_download",
+                                metadata={
+                                    "bytes": stored_bytes,
+                                    "contentType": res.content_type,
+                                    "checksum": checksum,
+                                    "storageUri": uri,
+                                    "success": True,
+                                },
+                            )
+                        except Exception as audit_exc:
+                            logger.warning("Asset audit log skipped for %s: %s", url, audit_exc)
 
                         return res
             except Exception as ex:
                 DOWNLOAD_FAILURES.inc()
                 res.error = str(ex)
 
-                # Audit log failed download
-                await write_asset_audit_log(
-                    actor_user_id=actor_user_id,
-                    lead_id=lead_id,
-                    asset_url=url,
-                    action="asset_download_failed",
-                    metadata={
-                        "error": str(ex),
-                        "success": False,
-                    },
-                )
+                # Audit logging is best effort and must not mask the original
+                # download error (or create a second event-loop failure).
+                try:
+                    await write_asset_audit_log(
+                        actor_user_id=actor_user_id,
+                        lead_id=lead_id,
+                        asset_url=url,
+                        action="asset_download_failed",
+                        metadata={
+                            "error": str(ex),
+                            "success": False,
+                        },
+                    )
+                except Exception as audit_exc:
+                    logger.warning("Asset failure audit skipped for %s: %s", url, audit_exc)
 
                 return res
             finally:
