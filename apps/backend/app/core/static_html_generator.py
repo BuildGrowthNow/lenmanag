@@ -185,9 +185,10 @@ async def generate_static_html(
         html_content, approved_proof=_approved_testimonial_quotes(extraction)
     )
     try:
-        _validate_generated_document(
-            html_content, css_content, js_content, master_brief, extraction
-        )
+        html_content = _normalize_secure_resource_urls(html_content)
+        css_content = _normalize_secure_resource_urls(css_content)
+        js_content = _normalize_secure_resource_urls(js_content)
+        _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
     except ValueError as exc:
         # Models occasionally leak a comment such as "placeholder" or use an
         # insecure source URL. Give the same coherent artifact one corrective
@@ -213,9 +214,10 @@ async def generate_static_html(
             html_content = sanitize_unsupported_proof(
                 html_content, approved_proof=_approved_testimonial_quotes(extraction)
             )
-            _validate_generated_document(
-                html_content, css_content, js_content, master_brief, extraction
-            )
+            html_content = _normalize_secure_resource_urls(html_content)
+            css_content = _normalize_secure_resource_urls(css_content)
+            js_content = _normalize_secure_resource_urls(js_content)
+            _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
         except Exception as correction_error:
             # If the correction prompt itself was too large, request a fresh
             # concise artifact from the original design prompt once.
@@ -242,9 +244,10 @@ async def generate_static_html(
                     html_content = sanitize_unsupported_proof(
                         html_content, approved_proof=_approved_testimonial_quotes(extraction)
                     )
-                    _validate_generated_document(
-                        html_content, css_content, js_content, master_brief, extraction
-                    )
+                    html_content = _normalize_secure_resource_urls(html_content)
+                    css_content = _normalize_secure_resource_urls(css_content)
+                    js_content = _normalize_secure_resource_urls(js_content)
+                    _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
                     correction_error = None
                 except Exception as concise_error:
                     correction_error = concise_error
@@ -283,9 +286,10 @@ async def generate_static_html(
             js_content = await _repair_javascript(
                 llm, html_content, js_content, variant_type
             )
-            _validate_generated_document(
-                html_content, css_content, js_content, master_brief, extraction
-            )
+            html_content = _normalize_secure_resource_urls(html_content)
+            css_content = _normalize_secure_resource_urls(css_content)
+            js_content = _normalize_secure_resource_urls(js_content)
+            _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
             if not _javascript_is_valid(js_content):
                 raise ValueError("Generated JavaScript remains invalid after repair")
         except Exception as exc:
@@ -1316,6 +1320,11 @@ def _enforce_footer_year(
             + normalized[footer_match.end(1) :]
         )
     return normalized
+
+
+def _normalize_secure_resource_urls(value: str) -> str:
+    """Upgrade model-emitted insecure resource URLs before validation."""
+    return value.replace("http://", "https://")
 
 
 def _upload_to_s3(
