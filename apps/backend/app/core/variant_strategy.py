@@ -7,11 +7,10 @@ design parameters to ensure meaningfully different outputs.
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from app.schemas.brief import DesignMode
 from app.schemas.site import PaletteMode, VariantType
-from app.core.visual_adapter import build_art_direction_plan, build_visual_adapter, select_capabilities
 
 
 class VariantStrategy(TypedDict):
@@ -25,19 +24,10 @@ class VariantStrategy(TypedDict):
     creativeBriefGuidance: str
     inspirationKeywords: list[str]
     avoidPatterns: list[str]
-    heroComposition: str
-    layoutSystem: str
-    sectionRhythm: str
-    capabilities: dict[str, Any]
-    artDirectionPlan: dict[str, Any]
 
 
 def get_variant_strategies(
     industry: str | None = None,
-    *,
-    adapter: dict[str, Any] | None = None,
-    extraction: Any = None,
-    brief: Any = None,
 ) -> dict[VariantType, VariantStrategy]:
     """
     Return variant strategies based on industry context.
@@ -213,33 +203,10 @@ def get_variant_strategies(
             ],
         }
 
-    if any(keyword in industry_lower for keyword in ("well", "water", "drilling")):
+    if any(keyword in industry_lower for keyword in ("well", "water", "drilling", "trades", "home service")):
         base_strategies["html_v1"].update({"variantLabel": "Regional Trust", "paletteMode": "light", "creativeBriefGuidance": "Premium editorial direction built on real regional field imagery, heritage, trust and source-backed service information. Use a bright, grounded palette and a quiet reveal system.", "inspirationKeywords": ["regional", "editorial", "trust", "field photography", "heritage"], "avoidPatterns": ["startup", "neon", "generic svg art", "legal language"]})
         base_strategies["html_v2"].update({"variantLabel": "Field Precision", "paletteMode": "zinc", "creativeBriefGuidance": "Cinematic industrial direction: equipment and drilling photography, high-contrast but brand-grounded palette, technical precision and emergency response. Use one operational carousel or progress interaction.", "inspirationKeywords": ["cinematic", "industrial", "precision", "equipment", "water"], "avoidPatterns": ["purple gradient", "SaaS", "bento template", "random stock"]})
         base_strategies["html_v3"].update({"variantLabel": "Clean Water, Close to Home", "paletteMode": "light", "creativeBriefGuidance": "Warm community and clean-water direction with real people/location imagery, friendly but premium typography, a service-area story and gentle tactile motion.", "inspirationKeywords": ["community", "clean water", "warm", "craft", "local"], "avoidPatterns": ["playful blobs", "legal terminology", "fake metrics", "generic icons"]})
-    elif any(keyword in industry_lower for keyword in ("trades", "home service")):
-        base_strategies["html_v1"].update({"variantLabel": "Local Trust", "paletteMode": "light", "creativeBriefGuidance": "Premium editorial direction built on the approved service positioning, local credibility and clear customer guidance. Use a bright, grounded palette and a quiet reveal system.", "inspirationKeywords": ["local", "editorial", "trust", "service", "clear"], "avoidPatterns": ["startup", "neon", "generic svg art", "unverified claims"]})
-        base_strategies["html_v2"].update({"variantLabel": "Service Precision", "paletteMode": "zinc", "creativeBriefGuidance": "Confident service direction with crisp hierarchy, practical proof and deliberate motion. Use high contrast and one useful operational interaction without inventing technical claims.", "inspirationKeywords": ["service", "precision", "confident", "structured", "action"], "avoidPatterns": ["purple gradient", "SaaS", "bento template", "random stock"]})
-        base_strategies["html_v3"].update({"variantLabel": "Community Care", "paletteMode": "light", "creativeBriefGuidance": "Warm, human service direction with real source-backed imagery, friendly premium typography and a clear path to contact. Use gentle tactile motion and an approachable rhythm.", "inspirationKeywords": ["community", "warm", "service", "human", "local"], "avoidPatterns": ["playful blobs", "legal terminology", "fake metrics", "generic icons"]})
-
-    resolved_adapter = adapter or build_visual_adapter(extraction, brief, industry)
-    hero_compositions = {
-        "html_v1": "Editorial hero with the strongest approved evidence and a clear next step",
-        "html_v2": "Full-bleed or layered hero that expresses the business process, space, or craft",
-        "html_v3": "Contrasting typographic, tactile, or sequenced hero using the brand's own evidence",
-    }
-    for variant_type, strategy in base_strategies.items():
-        strategy["heroComposition"] = hero_compositions[variant_type]
-        strategy["layoutSystem"] = ", ".join(resolved_adapter.get("metaphors", ["structured composition"]))
-        strategy["sectionRhythm"] = "; ".join(resolved_adapter.get("interaction", ["progressive disclosure"]))
-        strategy["capabilities"] = select_capabilities(resolved_adapter, variant_type)
-        strategy["creativeBriefGuidance"] += (
-            f"\nIndustry adapter: {resolved_adapter['industry']} ({resolved_adapter['subcategory']}). "
-            f"Audience context: {resolved_adapter['audience']}. "
-            f"Use trust signals: {', '.join(resolved_adapter['trust'])}. "
-            f"Avoid: {', '.join(resolved_adapter['avoid'])}."
-        )
-        strategy["artDirectionPlan"] = build_art_direction_plan(resolved_adapter, strategy, brief, extraction)
     return base_strategies
 
 

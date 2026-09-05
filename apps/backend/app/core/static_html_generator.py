@@ -21,7 +21,6 @@ from botocore.exceptions import ClientError
 
 from app.core.config import get_settings
 from app.core.llm import get_llm_client
-from app.core.visual_adapter import build_visual_adapter
 from app.core.artifact_recovery import persist_rejected_artifact
 from app.core.semantic_validation import sanitize_unsupported_proof, validate_semantics
 from app.core.generation_contracts import generation_preflight
@@ -518,11 +517,9 @@ def _build_static_html_prompt(
     variant_type: str,
 ) -> str:
     """Build LLM prompt for static HTML generation."""
-    adapter = build_visual_adapter(extraction, brief)
     from app.core.variant_strategy import get_variant_strategies
 
-    strategy = get_variant_strategies(adapter=adapter)[variant_type]
-    plan = strategy.get("artDirectionPlan") or {}
+    strategy = get_variant_strategies()[variant_type]
     approved_testimonials = _approved_testimonial_quotes(extraction)
     approved_evidence_ids = _approved_evidence_ids(extraction)
     proof_allowed = bool(approved_testimonials and approved_evidence_ids)
@@ -654,21 +651,8 @@ BRAND ASSETS:
 
 VARIANT TYPE: {variant_type}
 
-INDUSTRY AND AUDIENCE VISUAL ADAPTER:
-- Industry: {adapter["industry"]} / {adapter["subcategory"]}
-- Audience and buying context: {adapter["audience"]}
-- Trust signals: {", ".join(adapter["trust"])}
-- Appropriate imagery: {", ".join(adapter["imagery"])}
-- Visual metaphors: {", ".join(adapter["metaphors"])}
-- Interaction patterns: {", ".join(adapter["interaction"])}
-- Motion language: {adapter["motion"]}
-- Typography personality: {adapter["type"]}
-- Color behavior: {adapter["color"]}
-- Patterns to avoid: {", ".join(adapter["avoid"])}
-- Conceptual imagery useful: {adapter["conceptual"]}
-
-ART-DIRECTION IMPLEMENTATION PLAN (implement this plan, do not invent a competing design):
-{plan}
+VARIANT CREATIVE DIRECTION:
+{strategy["creativeBriefGuidance"]}
 
 REQUIREMENTS:
 1. Generate THREE separate code blocks:

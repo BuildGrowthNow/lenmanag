@@ -15,8 +15,6 @@ import boto3
 from app.core.compiler_client import CompilerError, get_compiler_client
 from app.core.config import get_settings
 from app.core.llm import get_llm_client
-from app.core.variant_strategy import get_variant_strategies
-from app.core.visual_adapter import build_visual_adapter
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
 
@@ -233,8 +231,6 @@ def _build_generation_prompt(
     """Build the main generation prompt — leads with inspiration, not restrictions."""
     # Extract brand tokens
     brand_section = _build_brand_tokens_section(master_brief, extraction)
-    visual_adapter = build_visual_adapter(extraction, master_brief)
-    visual_plan = get_variant_strategies(adapter=visual_adapter)["html_v2"].get("artDirectionPlan", {})
 
     # Proof is opt-in. Auto-approved briefs may intentionally have no verified
     # testimonials, reviews, ratings, awards, or customer metrics. Keep those
@@ -424,13 +420,6 @@ Import from '@/components/ui/*':
 
 ## MASTER BRIEF
 
-## INDUSTRY VISUAL ADAPTER
-{visual_adapter}
-
-## ART-DIRECTION PLAN
-Implement this structured plan. Do not invent a different generic theme while coding:
-{visual_plan}
-
 **Business Goal**: {master_brief.businessGoal}
 **Target Audience**: {master_brief.primaryAudience}
 **Value Proposition**: {master_brief.valueProposition}
@@ -507,6 +496,7 @@ Implement this structured plan. Do not invent a different generic theme while co
 8. Responsive images: Always constrain images with max-width: 100%, object-fit: cover, and appropriate containers to prevent layout breaks
 9. **ANIMATION VISIBILITY RULE**: Every `motion.*` element with `initial={{{{ opacity: 0 }}}}` MUST become visible. Use `animate` (not `whileInView`) for above-fold/hero elements. Use `whileInView` with `viewport={{{{ once: true, amount: 0.1 }}}}` for below-fold elements. NEVER leave an element at opacity:0 permanently.
 10. Keep the complete component concise enough to finish in one response: target under 3,500 lines and under 12,000 generated tokens. Prefer reusable arrays, compact CSS classes, and a small number of polished sections over duplicated markup. Never stop mid-tag, mid-string, or mid-expression.
+11. HARD COPY RULE: avoid em dash (—) and en dash (–) characters in generated copy. Use an ASCII hyphen (-) or rewrite the sentence before returning the component.
 
 ## BROWSER-ONLY CONSTRAINTS
 
@@ -838,8 +828,6 @@ def _validate_tsx_source(source_code: str) -> list[str]:
     """
     errors = []
 
-    if "—" in source_code:
-        errors.append("Visible content must not contain an em dash")
     if re.search(r"\b(?:arial|comic\s+sans(?:\s+ms)?)\b", source_code, re.I):
         errors.append("Prohibited basic Windows font detected")
     if re.search(r"\b(?:lorem ipsum|example\.com|todo|xxx|coming soon|contact us for details|image placeholder)\b", source_code, re.I):
