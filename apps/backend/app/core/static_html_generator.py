@@ -141,9 +141,11 @@ async def generate_static_html(
         # Bedrock receives the historical full completion budget; Cloudflare
         # stays selectable but uses its supported completion ceiling.
         provider = (getattr(get_settings(), "llm_provider", "bedrock") or "bedrock").lower()
-        max_tokens = 32_768 if provider == "bedrock" else 16_384
+        max_tokens = 32_768 if provider == "bedrock" else 12_288
         response = await llm.generate_text(
-            prompt=prompt, temperature=0.7, max_tokens=max_tokens
+            prompt=prompt,
+            temperature=0.25 if provider == "cloudflare" else 0.7,
+            max_tokens=max_tokens,
         )
         html_content, css_content, js_content = _parse_llm_response(response)
     except Exception as exc:
@@ -200,7 +202,7 @@ async def generate_static_html(
                 # very placeholder or malformed text the validator rejected.
                 prompt=_build_static_html_retry_prompt(prompt, str(exc)),
                 temperature=0.2,
-                max_tokens=24_576,
+                max_tokens=12_288 if provider == "cloudflare" else 24_576,
             )
             html_content, css_content, js_content = _parse_llm_response(response)
             html_content = _enforce_footer_year(
@@ -229,7 +231,7 @@ async def generate_static_html(
                             )
                         ),
                         temperature=0.5,
-                        max_tokens=24_576,
+                        max_tokens=12_288 if provider == "cloudflare" else 24_576,
                     )
                     html_content, css_content, js_content = _parse_llm_response(response)
                     html_content = _enforce_footer_year(
