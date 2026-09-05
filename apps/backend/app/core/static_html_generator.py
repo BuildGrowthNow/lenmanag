@@ -152,6 +152,10 @@ async def generate_static_html(
             max_tokens=max_tokens,
         )
         html_content, css_content, js_content = _parse_llm_response(response)
+        if provider == "cloudflare":
+            html_content, css_content, js_content = _normalize_cloudflare_artifact(
+                html_content, css_content, js_content, master_brief
+            )
     except Exception as exc:
         # Provider/model failures must fail the generation, never publish a
         # generic substitute website.
@@ -210,6 +214,10 @@ async def generate_static_html(
                 max_tokens=12_288 if provider == "cloudflare" else 24_576,
             )
             html_content, css_content, js_content = _parse_llm_response(response)
+            if provider == "cloudflare":
+                html_content, css_content, js_content = _normalize_cloudflare_artifact(
+                    html_content, css_content, js_content, master_brief
+                )
             html_content = _enforce_footer_year(
                 html_content,
                 extraction=extraction,
@@ -240,6 +248,10 @@ async def generate_static_html(
                         max_tokens=12_288 if provider == "cloudflare" else 24_576,
                     )
                     html_content, css_content, js_content = _parse_llm_response(response)
+                    if provider == "cloudflare":
+                        html_content, css_content, js_content = _normalize_cloudflare_artifact(
+                            html_content, css_content, js_content, master_brief
+                        )
                     html_content = _enforce_footer_year(
                         html_content,
                         extraction=extraction,
@@ -543,6 +555,31 @@ CLOUDFLARE_ARTIFACT_MODE (mandatory compatibility contract):
 - Return exactly three closed fenced blocks in this order: ```html, ```css, ```javascript.
 - Keep each block complete and closed; prioritize complete CSS and JavaScript over commentary.
 """.strip()
+
+
+def _normalize_cloudflare_artifact(
+    html: str, css: str, js: str, brief: MasterBrief
+) -> tuple[str, str, str]:
+    """Remove model-only media markers when the brief has no approved media."""
+    approved_images = list(getattr(brief.brandAssets, "imageUrls", None) or [])
+    approved_images.extend(
+        item.get("url")
+        for item in list(getattr(brief.brandAssets, "imageInventory", None) or [])
+        if isinstance(item, dict) and item.get("url")
+    )
+    hero_mode = str(getattr(brief, "heroMode", "") or "").strip().lower()
+    if not approved_images and hero_mode in {"typography-only", "typography_only"}:
+        html = re.sub(r"\sdata-media-required(?:\s*=\s*(['\"])[^'\"]*\1)?", "", html, flags=re.I)
+        def strip_hero_media_class(match: re.Match[str]) -> str:
+            classes = re.sub(r"\bhero-media\b", "", match.group(2), flags=re.I).strip()
+            return f" class={match.group(1)}{classes}{match.group(1)}"
+
+        html = re.sub(
+            r"\sclass\s*=\s*(['\"])([^'\"]*)\1",
+            strip_hero_media_class,
+            html,
+        )
+    return html, css, js
 
 
 def _build_static_html_prompt(
