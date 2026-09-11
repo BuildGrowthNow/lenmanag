@@ -1668,10 +1668,18 @@ class LeadRepository:
         )
 
         now = _now()
+        # Keep one stable public slug across legacy and current lead records.
+        # Legacy leads may not have redesignSlug yet, while an earlier client
+        # link may already have a slug stored under clientShare.slug.
+        share_slug = (
+            lead.redesignSlug
+            or (existing_share or {}).get("slug")
+            or _generate_redesign_slug(lead.companyName)
+        )
         share = {
-            "id": (lead.redesignSlug or uuid4().hex),
+            "id": (existing_share or {}).get("id") or share_slug,
             "leadId": lead_id,
-            "slug": lead.redesignSlug or uuid4().hex,
+            "slug": share_slug,
             "selectedSiteIds": unique_ids,
             "bookingUrl": persisted_booking_url,
             "createdAt": now,
@@ -1684,11 +1692,18 @@ class LeadRepository:
                 if doc is None:
                     return None
                 doc["clientShare"] = share
+                doc["redesignSlug"] = share_slug
                 doc["updatedAt"] = now
         else:
             await database["leads"].update_one(
                 {"id": lead_id, "user_id": user_id},
-                {"$set": {"clientShare": share, "updatedAt": now}},
+                {
+                    "$set": {
+                        "clientShare": share,
+                        "redesignSlug": share_slug,
+                        "updatedAt": now,
+                    }
+                },
             )
         return {
             "id": share["id"],

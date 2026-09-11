@@ -110,7 +110,18 @@ async def get_redesign_page(
     if database is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    lead_doc = await database["leads"].find_one({"redesignSlug": slug})
+    # Older client links were saved only under clientShare.slug when the lead
+    # did not yet have a redesignSlug. Resolve both representations so links
+    # already sent to clients remain valid after the schema was extended.
+    normalized_slug = _normalize_preview_slug(slug)
+    lead_doc = await database["leads"].find_one(
+        {
+            "$or": [
+                {"redesignSlug": normalized_slug},
+                {"clientShare.slug": normalized_slug},
+            ]
+        }
+    )
     if lead_doc is None:
         raise HTTPException(status_code=404, detail="Redesign page not found")
 
