@@ -52,9 +52,13 @@ async def test_redesign_page_resolves_legacy_client_share_slug(
         variantTitle=None,
         variantDescription=None,
         variantLabel="Website option",
+        readinessStatus="ready_for_review",
+        qaStatus="warn",
         screenshotRefs=[],
         previewUrl="https://sites.lenquant.com/st/site-1",
         previewSlug="site-1",
+        staticHtml="<html></html>",
+        compilationStatus="success",
     )
 
     monkeypatch.setattr(public, "get_database", lambda: database)

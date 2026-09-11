@@ -9,7 +9,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.core.config import get_settings
 from app.core.leads import lead_repository
-from app.core.sites import CLIENT_VARIANT_COPY, is_usable_generated_site
+from app.core.sites import (
+    CLIENT_VARIANT_COPY,
+    is_artifact_generated_site,
+    is_usable_generated_site,
+)
 from app.core.mongo import get_database
 from app.core.sites import site_repository
 from app.core.versioning import response_meta
@@ -46,6 +50,17 @@ def _all_public_variants(sites: list[GeneratedSite]) -> list[GeneratedSite]:
         (site for site in sites if _publicly_eligible(site)),
         key=lambda site: (site.variantPosition, site.createdAt, site.id),
     )
+
+
+def _selected_share_variant(site: GeneratedSite) -> bool:
+    """Keep an existing client selection live after a QA warning.
+
+    A warning is not the same as a blocked or missing artifact. Previously
+    shared links must continue to show their selected, successfully built
+    variants even when a later QA pass records a warning instead of a pass.
+    New galleries still use the stricter ``_publicly_eligible`` filter.
+    """
+    return is_artifact_generated_site(site)
 
 
 def _client_variant_copy(site: GeneratedSite) -> tuple[str, str]:
@@ -132,7 +147,7 @@ async def get_redesign_page(
     share = lead_doc.get("clientShare") or {}
     selected_ids = list(share.get("selectedSiteIds") or [])
     if selected_ids:
-        by_id = {site.id: site for site in all_eligible}
+        by_id = {site.id: site for site in sites if _selected_share_variant(site)}
         eligible = [by_id[site_id] for site_id in selected_ids if site_id in by_id]
         # A client link must remain useful when an operator removes or
         # invalidates one of the variants that was selected earlier. Keep the
