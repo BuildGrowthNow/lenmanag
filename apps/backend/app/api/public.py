@@ -94,7 +94,10 @@ async def preview_site_variant(slug: str) -> Response:
     site = await site_repository.get_site_by_slug(_normalize_preview_slug(slug))
     if site is None:
         raise HTTPException(status_code=404, detail="Site preview not found")
-    if not _publicly_eligible(site):
+    # Client-facing preview URLs must remain usable after a later QA warning.
+    # QA pass is required for new galleries, but a complete non-blocked artifact
+    # already referenced by a client share must not become unavailable.
+    if not is_artifact_generated_site(site):
         raise HTTPException(status_code=409, detail="Site preview is not available yet")
 
     if site.variantType in ["html_v1", "html_v2", "html_v3"]:

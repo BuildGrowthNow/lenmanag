@@ -82,9 +82,35 @@ async def test_redesign_page_resolves_legacy_client_share_slug(
     }
 
 
+@pytest.mark.asyncio
+async def test_client_preview_remains_available_after_qa_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    site = SimpleNamespace(
+        readinessStatus="ready_for_review",
+        previewUrl="https://sites.lenquant.com/st/site-1",
+        previewSlug="site-1",
+        variantType="html_v1",
+        staticHtml="<html><body>Client preview</body></html>",
+        compilationStatus="success",
+        qaStatus="warn",
+    )
+
+    monkeypatch.setattr(public.site_repository, "get_site_by_slug", lambda *_args: _site(site))
+
+    response = await public.preview_site_variant("site-1")
+
+    assert response.status_code == 200
+    assert response.body == b"<html><body>Client preview</body></html>"
+
+
 async def _one(site: SimpleNamespace) -> list[SimpleNamespace]:
     return [site]
 
 
 async def _none() -> None:
     return None
+
+
+async def _site(site: SimpleNamespace) -> SimpleNamespace:
+    return site
