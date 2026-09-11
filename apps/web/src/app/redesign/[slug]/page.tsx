@@ -49,10 +49,35 @@ async function fetchRedesignData(slug: string): Promise<RedesignPageData | null>
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const data = await fetchRedesignData(slug);
-  const title = data?.companyName
-    ? `${data.companyName} — Custom landing page preview`
-    : "Custom landing page preview";
-  return { title };
+  const companyName = data?.companyName || "Your business";
+  const title = `${companyName} — Website redesign concept`;
+  const description = data?.variants.length
+    ? `We prepared ${data.variants.length === 1 ? "a tailored website redesign concept" : `${data.variants.length} tailored website redesign concepts`} for ${companyName}. Explore the selected direction and view it live.`
+    : `A tailored website redesign concept prepared for ${companyName} by LenQuant.`;
+  const shareImage = data?.variants[0]?.screenshotUrl || data?.logoUrl || undefined;
+  const pageUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://sites.lenquant.com"}/redesign/${encodeURIComponent(slug)}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: pageUrl },
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      url: pageUrl,
+      siteName: "LenQuant",
+      images: shareImage
+        ? [{ url: shareImage, alt: `${companyName} website redesign concept` }]
+        : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: shareImage ? [shareImage] : undefined,
+    },
+  };
 }
 
 export default async function RedesignPage({ params }: PageProps) {
