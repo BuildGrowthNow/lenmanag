@@ -52,6 +52,38 @@ curl -sf http://localhost:3000/                # frontend health
 - Backend API: `https://sites-api.lenquant.com`
 - Preview sites: `https://sites.lenquant.com/st/<slug>`
 
+### Durable public client links (non-negotiable)
+
+Public redesign pages and `/st/<slug>` previews are client deliverables, not temporary previews. Once a link can be sent externally, its route and underlying share data must remain available during normal platform improvements. Never knowingly make an issued client URL return a 404.
+
+Rules:
+
+- Treat `redesignSlug`, `clientShare.slug`, selected site IDs, and preview slugs as durable public identifiers. Keep immutable aliases and backward-compatible lookups; never regenerate, recycle, or silently rename an issued slug.
+- Preserve lead, share, selected-variant, and generated-artifact records. Use soft deletion or an explicit revocation state rather than hard deletion for anything referenced by an active client link.
+- Do not hide an already-selected, successfully built, non-blocked artifact solely because a newer QA or eligibility rule reports warnings. Keep the client page live and show warnings internally while rebuilding or improving it in the background.
+- A public endpoint may return 404 only for a URL that was never issued, or after an explicit operator-approved revocation. Missing, stale, temporarily failing, or non-passing data must render a graceful unavailable state or preserved snapshot instead of `notFound()`.
+- Before changing routing, schemas, migrations, retention, artifact eligibility, or deployment behavior, prove that existing production redesign and preview URLs still resolve and render.
+- Do not send a client-facing message containing a new link until that exact URL has passed a production-like smoke check.
+
+### Required release gates for public-link changes
+
+For every change that can affect public pages, run the normal checks and also:
+
+1. Snapshot representative already-issued redesign URLs and selected preview URLs before deployment.
+2. Verify those exact URLs return HTTP 200 and render the expected client page/options, not only that the API or frontend build succeeds.
+3. Deploy with a canary, staged rollout, or equivalent reversible release where available; retain the last known-good image/build for rollback.
+4. Recheck the same URLs after containers, caches, and migrations have settled.
+5. Monitor and alert on 404/5xx responses for `/redesign/` and `/st/`; roll back immediately on a regression instead of sending clients a replacement link as the first response.
+
+### Recommended public-link hardening backlog
+
+- Maintain a durable share/alias ledger mapping every issued slug to its lead and immutable artifact/version IDs; never recycle slugs.
+- Store a client-share snapshot or versioned artifact references so a current generated-sites query cannot make an old share disappear.
+- Add automated synthetic monitoring for a sample of active client links from outside the deployment environment.
+- Add a CI/CD smoke-test job that fails or blocks promotion when known public URLs change from healthy to 404/5xx.
+- Emit a privacy-safe structured event for every public-route 404/5xx, with alerting and a dashboard for active client shares.
+- Add a graceful fallback page for temporarily unavailable variants, preserving the share shell and all other valid options.
+
 ---
 
 ## Development Commands
