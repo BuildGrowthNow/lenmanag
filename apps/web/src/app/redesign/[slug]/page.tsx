@@ -54,8 +54,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = data?.variants.length
     ? `We prepared ${data.variants.length === 1 ? "a tailored website redesign concept" : `${data.variants.length} tailored website redesign concepts`} for ${companyName}. Explore the selected direction and view it live.`
     : `A tailored website redesign concept prepared for ${companyName} by LenQuant.`;
-  const shareImage = data?.variants[0]?.screenshotUrl || data?.logoUrl || undefined;
   const pageUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://sites.lenquant.com"}/redesign/${encodeURIComponent(slug)}`;
+  const shareImage = data?.variants[0]?.screenshotUrl || data?.logoUrl;
+  const shareImageUrl = `${pageUrl}/opengraph-image`;
 
   return {
     title,
@@ -68,14 +69,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url: pageUrl,
       siteName: "LenQuant",
       images: shareImage
-        ? [{ url: shareImage, alt: `${companyName} website redesign concept` }]
+        ? [{ url: shareImageUrl, alt: `${companyName} website redesign concept` }]
         : undefined,
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: shareImage ? [shareImage] : undefined,
+      images: shareImage ? [shareImageUrl] : undefined,
     },
   };
 }
