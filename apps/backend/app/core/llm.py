@@ -35,7 +35,7 @@ def get_llm_client() -> LLMClient:
     from app.core.config import get_settings
 
     settings = get_settings()
-    provider = (settings.llm_provider or "gemini").lower()
+    provider = (settings.llm_provider or "bedrock").lower()
 
     if provider == "cloudflare":
         from app.core.cloudflare_client import get_cloudflare_client

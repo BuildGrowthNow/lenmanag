@@ -197,7 +197,7 @@ schemas/                # Pydantic request/response models
 ```
 
 API prefix: `/api/v1/`  
-LLM: AWS Bedrock (Claude Sonnet) in production, Gemini in local dev (set `LLM_PROVIDER` env var).  
+LLM: AWS Bedrock (Claude Sonnet 4.6) by default, with Cloudflare/Gemini available as explicit provider overrides.
 Background tasks: Celery + Redis.  
 Database: MongoDB (Motor async driver).
 
@@ -219,7 +219,7 @@ Key variables (see `.env.example` for full list):
 | `NEXT_PUBLIC_API_BASE_URL` | Backend URL for frontend (public) |
 | `NEXT_PUBLIC_APP_URL` | Frontend app URL (public) |
 | `LLM_PROVIDER` | `bedrock` (prod) or `gemini` (local) |
-| `BEDROCK_MODEL_ID` | `us.anthropic.claude-sonnet-4-6-v1` |
+| `BEDROCK_MODEL_ID` | `global.anthropic.claude-sonnet-4-6` |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | AWS credentials |
 | `CELERY_BROKER_URL` | Redis URL for Celery |
 | `RESEND_API_KEY` | Transactional email (Resend) |

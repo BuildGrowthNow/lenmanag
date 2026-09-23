@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 from typing import List, Optional
 
@@ -68,21 +69,54 @@ class Settings(BaseSettings):
     gemini_vision_model: str = "gemini-2.0-flash"
 
     # Amazon Bedrock Configuration (used when llm_provider=bedrock)
-    bedrock_model_id: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    # Global inference profile for Claude Sonnet 4.6. This is the preferred
+    # production model for site generation and visual QA.
+    bedrock_model_id: str = "global.anthropic.claude-sonnet-4-6"
     bedrock_region: str = "us-east-1"
     bedrock_max_tokens: int = 32768  # Increased for full page code generation
     bedrock_timeout_seconds: int = (
         600  # 10 minutes for complex code generation (up from 5min)
     )
-    # Fallback models if primary fails 2-3x or times out
-    bedrock_fallback_models: list[str] = [
-        "amazon.nova-pro-v1:0",
-        "us.meta.llama4-scout-17b-instruct-v1:0",
-        "mistral.mistral-large-2402-v1:0",
-        "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-        "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-        "us.anthropic.claude-opus-4-6-v1",
-    ]
+    # Comma-separated so production can override the chain without relying on
+    # Pydantic's JSON-only parsing for list environment variables. These are
+    # tried in order through Bedrock Converse, which normalizes provider
+    # request/response formats for supported models.
+    bedrock_fallback_models: str = (
+        "amazon.nova-pro-v1:0,"
+        "us.meta.llama4-scout-17b-instruct-v1:0,"
+        "mistral.mistral-large-2402-v1:0,"
+        "us.anthropic.claude-haiku-4-5-20251001-v1:0,"
+        "us.anthropic.claude-sonnet-4-5-20250929-v1:0,"
+        "us.anthropic.claude-opus-4-6-v1"
+    )
+
+    @property
+    def bedrock_fallback_model_list(self) -> list[str]:
+        """Return an ordered, de-duplicated Bedrock fallback chain.
+
+        Accept both the documented comma-separated form and a JSON list so
+        older deployment environment files remain compatible.
+        """
+        raw = self.bedrock_fallback_models
+        if isinstance(raw, list):  # type: ignore[unreachable]
+            values = raw
+        else:
+            value = raw.strip()
+            if value.startswith("["):
+                try:
+                    parsed = json.loads(value)
+                except json.JSONDecodeError:
+                    parsed = []
+                values = parsed if isinstance(parsed, list) else []
+            else:
+                values = value.split(",")
+
+        result: list[str] = []
+        for model in values:
+            model_id = str(model).strip()
+            if model_id and model_id not in result:
+                result.append(model_id)
+        return result
 
     # Visual Redesign Configuration
     visual_redesign_enabled: bool = True
