@@ -2176,14 +2176,35 @@ def _prepare_provider_artifact(
     css = re.sub(r"\b(?:www\.)?example\.com\b", "brand-site", css, flags=re.I)
     js = re.sub(r"\b(?:www\.)?example\.com\b", "brand-site", js, flags=re.I)
 
-    # Preserve the approved conversion action even when the provider forgets
-    # to wire one of its controls. This is source-backed content, not a new
-    # claim, and gives the form/CTA contract a deterministic safe fallback.
     conversion_action = str(
         getattr(brief, "conversionAction", None)
         or getattr(brief, "ctaStrategy", None)
         or ""
     ).strip()
+    try:
+        contacts = _verified_contact_data(brief, extraction)
+    except Exception:
+        contacts = {}
+    verified_email = next(
+        (value for key, value in contacts.items() if "email" in key.lower() and "@" in value),
+        None,
+    )
+    cta_fallback = conversion_action if conversion_action else "Contact our team"
+    html = re.sub(
+        r"\byour@email\.com\b",
+        verified_email or company_name,
+        html,
+        flags=re.I,
+    )
+    html = re.sub(r"\blorem ipsum\b", company_name, html, flags=re.I)
+    html = re.sub(r"\b(?:coming soon|image placeholder)\b", "", html, flags=re.I)
+    html = re.sub(r"\bcontact us for details\b", cta_fallback, html, flags=re.I)
+    css = re.sub(r"\byour@email\.com\b", "brand-contact", css, flags=re.I)
+    js = re.sub(r"\byour@email\.com\b", "brand-contact", js, flags=re.I)
+
+    # Preserve the approved conversion action even when the provider forgets
+    # to wire one of its controls. This is source-backed content, not a new
+    # claim, and gives the form/CTA contract a deterministic safe fallback.
     if conversion_action:
         controls = " ".join(
             re.findall(
