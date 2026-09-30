@@ -900,8 +900,8 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
         return None
     try:
         sync_playwright = importlib.import_module("playwright.sync_api").sync_playwright
-    except Exception:
-        return None
+    except Exception as exc:
+        return {"_playwright_fallback": f"playwright_unavailable: {exc}"}
 
     try:
         with sync_playwright() as pw:
@@ -1147,19 +1147,27 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
             }
     except Exception as exc:
         logger.warning("Playwright fetch failed for %s: %s", url, exc)
-        return None
+        # Tell the caller to use the raw fetch fallback while preserving the
+        # fact that rendered extraction was unavailable. Without this signal a
+        # crawl could look completed even though JS-only content was skipped.
+        return {"_playwright_fallback": str(exc)}
 
 
 def _safe_fetch(url: str) -> dict[str, Any]:
     # Try Playwright first to get JS-rendered content
     pw_result = _playwright_fetch(url)
-    if pw_result is not None:
+    if pw_result is not None and "_playwright_fallback" not in pw_result:
         return pw_result
+    playwright_error = (
+        pw_result.get("_playwright_fallback")
+        if isinstance(pw_result, dict)
+        else None
+    )
 
     # Fallback to urllib for raw HTML
     try:
         body, final_url, headers = _fetch_url(url)
-        return {
+        result = {
             "ok": True,
             "body": body,
             "finalUrl": final_url,
@@ -1167,8 +1175,11 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "error": None,
             "renderedByPlaywright": False,
         }
+        if playwright_error:
+            result["playwrightError"] = playwright_error
+        return result
     except HTTPError as exc:
-        return {
+        result = {
             "ok": False,
             "body": None,
             "finalUrl": url,
@@ -1176,8 +1187,11 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "error": f"http_{exc.code}",
             "renderedByPlaywright": False,
         }
+        if playwright_error:
+            result["playwrightError"] = playwright_error
+        return result
     except URLError as exc:
-        return {
+        result = {
             "ok": False,
             "body": None,
             "finalUrl": url,
@@ -1185,8 +1199,11 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "error": f"url_{getattr(exc, 'reason', 'fetch_failed')}",
             "renderedByPlaywright": False,
         }
+        if playwright_error:
+            result["playwrightError"] = playwright_error
+        return result
     except Exception as exc:  # pragma: no cover - network edge cases
-        return {
+        result = {
             "ok": False,
             "body": None,
             "finalUrl": url,
@@ -1194,6 +1211,9 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "error": str(exc),
             "renderedByPlaywright": False,
         }
+        if playwright_error:
+            result["playwrightError"] = playwright_error
+        return result
 
 
 def _parse_html(body: str) -> PageSignals:
@@ -2127,6 +2147,9 @@ def crawl_website(
         crawled_count += 1
         page_data = _extract_page_summary(url, result["body"] or "", source, depth)
         signals: PageSignals = page_data.pop("signals")
+        if result.get("playwrightError"):
+            page_data["playwrightError"] = result["playwrightError"]
+            page_data.setdefault("errors", []).append("playwright_render_failed")
 
         # Enrich with Playwright pageData if available
         if result.get("renderedByPlaywright") and result.get("pageData"):
@@ -2494,6 +2517,8 @@ def crawl_website(
         gaps.append("section_structure_sparse")
     if not asset_manifest:
         gaps.append("asset_manifest_sparse")
+    if any(item.get("playwrightError") for item in page_inventory):
+        gaps.append("playwright_render_failed")
 
     errors = list(
         dict.fromkeys(
@@ -2628,9 +2653,15 @@ def crawl_website(
 def _extract_contact_info(page_inventory: list[dict[str, Any]]) -> dict[str, Any]:
     """Extract source-backed contact values without manufacturing a fallback."""
     # Telephone/mailto values are commonly absent from visual text but retained
-    # in crawled markup, so inspect both source and extracted text. Restrict
-    # matches to visibly formatted numbers so asset hashes are not contacts.
-    phone_pattern = re.compile(r"(?:\+1[\s.-]*)?\(?\d{3}\)?[\s.-]+\d{3}[\s.-]+\d{4}")
+    # in crawled markup. Support international prefixes, trunk prefixes,
+    # extensions, and compact local formats while requiring a plausible phone
+    # boundary so asset hashes are not contacts.
+    phone_pattern = re.compile(
+        r"(?<![\dA-Za-z])(?:\+?\d{1,3}[\s().-]*)?(?:\(?\d{2,4}\)?[\s.-]*)"
+        r"\d{2,4}[\s.-]+\d{2,4}(?:[\s.-]+\d{2,6})?"
+        r"(?:\s*(?:x|ext\.?|доб\.?|добочный)\s*\d{1,6})?(?!\d)",
+        re.I,
+    )
     candidates: list[tuple[str, str, str]] = []
     all_text: list[str] = []
     for page in page_inventory:
@@ -2639,7 +2670,8 @@ def _extract_contact_info(page_inventory: list[dict[str, Any]]) -> dict[str, Any
         all_text.append(page_text)
         for match in phone_pattern.finditer(page_text):
             normalised = re.sub(r"[^\d+]", "", match.group(0))
-            if len(re.sub(r"\D", "", normalised)) in {10, 11}:
+            digit_count = len(re.sub(r"\D", "", normalised))
+            if 7 <= digit_count <= 15:
                 candidates.append((normalised, page_url, page_text))
     deduped: list[tuple[str, str, str]] = []
     seen: set[str] = set()
@@ -2656,7 +2688,16 @@ def _extract_contact_info(page_inventory: list[dict[str, Any]]) -> dict[str, Any
     emails = list(dict.fromkeys(re.findall(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text, re.I)))
     source = (emergency_candidate or office_candidate or (deduped[0] if deduped else None))
     source_url = source[1] if source else next((str(page.get("url")) for page in page_inventory if page.get("url")), None)
-    hours_match = re.search(r"((?:Monday|Mon)\s*[-–]\s*(?:Friday|Fri)[^\n]{0,100})", text, re.I)
+    hours_patterns = (
+        r"((?:Monday|Mon)\s*(?:[-–—]|to)\s*(?:Friday|Fri)[^\n]{0,120})",
+        r"((?:Monday|Mon)(?:\s*[,;|/]\s*(?:Tuesday|Tue|Wednesday|Wed|Thursday|Thu|Friday|Fri|Saturday|Sat|Sunday|Sun))+[^\n]{0,120})",
+        r"((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s*[-–—:]\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*[-–—to]+\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?[^\n]{0,80})",
+        r"((?:opening|business|office)\s+hours?\s*[:\-]?[^\n]{0,160})",
+    )
+    hours_match = next(
+        (re.search(pattern, text, re.I) for pattern in hours_patterns if re.search(pattern, text, re.I)),
+        None,
+    )
     return {
         "officePhone": office_candidate[0] if office_candidate else None,
         "emergencyPhone": emergency_candidate[0] if emergency_candidate else None,

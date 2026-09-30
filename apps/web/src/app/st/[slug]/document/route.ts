@@ -1,7 +1,19 @@
+import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 
+function nonceTrustedRuntime(html: string, nonce: string): string {
+  return html
+    .replace(
+      /<(script|style)\b([^>]*\bdata-generated-site-(?:js|runtime|css)\b[^>]*)>/gi,
+      (_match, tag: string, attrs: string) => {
+        if (/\bnonce\s*=/.test(attrs)) return `<${tag}${attrs}>`;
+        return `<${tag}${attrs} nonce="${nonce}">`;
+      },
+    );
+}
+
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
@@ -12,12 +24,32 @@ export async function GET(
   if (!response.ok) return new NextResponse('Site not found', { status: response.status });
   const html = await response.text();
   if (!html.trim()) return new NextResponse('Static document unavailable', { status: 409 });
-  return new NextResponse(html, {
+  const nonce = randomBytes(18).toString('base64');
+  const documentHtml = nonceTrustedRuntime(html, nonce);
+  const backendOrigin = new URL(apiUrl, request.url).origin;
+  const contentSecurityPolicy = [
+    "default-src 'none'",
+    `script-src 'nonce-${nonce}' ${backendOrigin}`,
+    "script-src-attr 'none'",
+    `style-src 'nonce-${nonce}' ${backendOrigin}`,
+    'img-src https: data: blob:',
+    'font-src https: data:',
+    'media-src https: data: blob:',
+    `form-action ${backendOrigin}`,
+    "connect-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'self'",
+    'upgrade-insecure-requests',
+  ].join('; ');
+  return new NextResponse(documentHtml, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
       'X-LenManag-Static-Document': 'true',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'Content-Security-Policy': contentSecurityPolicy,
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }

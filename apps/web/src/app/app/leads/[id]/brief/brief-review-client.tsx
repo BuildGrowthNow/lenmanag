@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
   type MasterBrief,
   type GenerationPreflight,
@@ -423,12 +424,12 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
                   <input aria-label="Primary color" value={assets.primaryColor || ''} onChange={(e) => setAssets({...assets, primaryColor: e.target.value})} placeholder="Primary color" className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs" />
                   <input aria-label="Secondary color" value={assets.secondaryColor || ''} onChange={(e) => setAssets({...assets, secondaryColor: e.target.value})} placeholder="Secondary color" className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs" />
                 </div>
-                {(assets.imageInventory || []).length > 0 && <div className="grid grid-cols-3 gap-2">{(assets.imageInventory || []).slice(0, 12).map((image: any) => <label key={image.url} className="relative"><img src={image.url} alt={image.altText || image.category || 'Extracted image'} className="h-20 w-full rounded object-cover border border-zinc-800" /><input type="checkbox" checked={(assets.imageUrls || []).includes(image.url)} onChange={(e) => setAssets({...assets, imageUrls: e.target.checked ? [...(assets.imageUrls || []), image.url] : (assets.imageUrls || []).filter((url) => url !== image.url)})} className="absolute left-1 top-1" /></label>)}</div>}
+                {(assets.imageInventory || []).length > 0 && <div className="grid grid-cols-3 gap-2">{(assets.imageInventory || []).slice(0, 12).map((image: any) => <label key={image.url} className="relative h-20"><Image src={image.url} alt={image.altText || image.category || 'Extracted image'} fill unoptimized sizes="(max-width: 768px) 33vw, 160px" className="rounded object-cover border border-zinc-800" /><input type="checkbox" checked={(assets.imageUrls || []).includes(image.url)} onChange={(e) => setAssets({...assets, imageUrls: e.target.checked ? [...(assets.imageUrls || []), image.url] : (assets.imageUrls || []).filter((url) => url !== image.url)})} className="absolute left-1 top-1" /></label>)}</div>}
                 <button type="button" onClick={() => void saveAssets()} disabled={isSavingAssets} className="rounded bg-blue-600 px-3 py-1 text-xs hover:bg-blue-500 disabled:opacity-50">{isSavingAssets ? 'Saving...' : 'Save brand assets'}</button>
                 {brief.brandAssets.logoUrl && (
                   <div className="flex items-center gap-3">
                     <div className="h-14 w-40 rounded border border-zinc-700 bg-white p-2 flex items-center">
-                      <img src={brief.brandAssets.logoUrl} alt="Selected primary logo" className="max-h-full max-w-full object-contain" />
+                      <Image src={brief.brandAssets.logoUrl} alt="Selected primary logo" width={160} height={56} unoptimized className="max-h-full max-w-full object-contain" />
                     </div>
                     <span className="text-xs text-zinc-500 break-all">Primary logo</span>
                   </div>
@@ -451,7 +452,7 @@ export function BriefReviewClient({ leadId, initialBrief }: BriefReviewClientPro
                 {brief.brandAssets.imageUrls?.length > 0 && (
                   <div className="grid grid-cols-3 gap-2">
                     {brief.brandAssets.imageUrls.slice(0, 6).map((url) => (
-                      <img key={url} src={url} alt="Approved extracted brand imagery" className="h-20 w-full rounded object-cover border border-zinc-800" />
+                      <Image key={url} src={url} alt="Approved extracted brand imagery" width={240} height={80} unoptimized className="h-20 w-full rounded object-cover border border-zinc-800" />
                     ))}
                   </div>
                 )}

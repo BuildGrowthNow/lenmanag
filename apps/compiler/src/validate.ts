@@ -31,6 +31,12 @@ export function validateDeclaredImports(source: string, declared: string[] = [])
     if (!APPROVED_IMPORTS.has(name)) errors.push(`Import is not allowlisted: ${name}`);
     else if (!allowed.has(name)) errors.push(`Import is not declared: ${name}`);
   }
+  if (/\bimport\s*\(/.test(source)) {
+    errors.push('Dynamic imports are not allowed');
+  }
+  if (/\brequire\s*\(/.test(source)) {
+    errors.push('require() is not allowed');
+  }
   return { valid: errors.length === 0, errors };
 }
 
@@ -107,6 +113,15 @@ export function validateTsxSource(source: string, declared: string[] = []): Vali
     /\bfetch\s*\(/,
     /\bXMLHttpRequest\b/,
     /\bWebSocket\b/,
+    /\bWorker\b/,
+    /\bSharedWorker\b/,
+    /\bBroadcastChannel\b/,
+    /\b(?:localStorage|sessionStorage|indexedDB)\b/,
+    /\b(?:navigator\.)?sendBeacon\s*\(/,
+    /\bdocument\s*\.\s*(?:cookie|domain|location|write)\b/,
+    /\bwindow\s*\.\s*(?:parent|top|opener|frames|open)\b/,
+    /\blocation\s*\.\s*(?:href|assign|replace)\b/,
+    /\b(?:navigator\.serviceWorker|caches\.)/,
   ];
 
   for (const pattern of forbiddenApis) {
@@ -150,6 +165,17 @@ export function validateTsxSource(source: string, declared: string[] = []): Vali
     valid: errors.length === 0,
     errors,
   };
+}
+
+/** Validate a JavaScript runtime entry without requiring a React component export. */
+export function validateJavaScriptSource(source: string, declared: string[] = []): ValidationResult {
+  const result = validateTsxSource(source, declared);
+  const structuralErrors = new Set([
+    'Component must have a default export',
+    'Component must return valid JSX',
+  ]);
+  const errors = result.errors.filter((error) => !structuralErrors.has(error));
+  return { valid: errors.length === 0, errors };
 }
 
 /**

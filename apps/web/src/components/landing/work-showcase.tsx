@@ -172,7 +172,8 @@ function SiteViewer({
           src={siteUrl}
           className="w-full h-[calc(100%-56px)] bg-white"
           title={`${site.label} preview`}
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
+          referrerPolicy="no-referrer"
         />
       </motion.div>
     </motion.div>

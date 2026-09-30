@@ -1,20 +1,24 @@
 """
 Static HTML generation for multi-variant output.
 
-Generates standalone HTML/CSS/JS files (no React runtime) from master brief.
+Generates standalone HTML/CSS/JS files from master brief.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
+import os
 import re
 import subprocess
 import tempfile
 from datetime import datetime, timezone
-from html import escape
+from html import escape, unescape
 from html.parser import HTMLParser
 from typing import Any
+from urllib.parse import quote, unquote
+from types import SimpleNamespace
 
 import boto3
 from botocore.exceptions import ClientError
@@ -24,6 +28,12 @@ from app.core.llm import get_llm_client
 from app.core.artifact_recovery import persist_rejected_artifact
 from app.core.semantic_validation import sanitize_unsupported_proof, validate_semantics
 from app.core.generation_contracts import generation_preflight
+from app.core.compiler_capabilities import capability_manifest_for_source, hero_archetype_errors
+from app.core.generated_content_contracts import generated_content_contract_errors
+from app.core.generated_runtime_validation import (
+    validate_generated_html,
+    validate_generated_javascript,
+)
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
 
@@ -37,6 +47,19 @@ def _validation_rule_id(message: str) -> str:
         ("approved photography", "hero.asset_required"),
         ("footer", "footer.required"),
         ("insecure HTTP", "assets.https_only"),
+        ("Forbidden generated JavaScript API", "runtime.browser_api_forbidden"),
+        ("native POST", "forms.native_post_required"),
+        ("form endpoint", "forms.backend_endpoint_required"),
+        ("canonical", "seo.canonical_required"),
+        ("JSON-LD", "seo.structured_data_required"),
+        ("loading strategy", "assets.loading_strategy_required"),
+        ("hero media", "hero.asset_role"),
+        ("hero archetype", "hero.archetype_required"),
+        ("approved headline", "content.headline_required"),
+        ("approved subheadline", "content.subheadline_required"),
+        ("approved service", "content.service_required"),
+        ("content sections", "content.section_stack_required"),
+        ("brand color", "brand.palette_required"),
         ("placeholder", "content.no_placeholders"),
         ("em dash", "content.no_em_dash"),
     )
@@ -105,6 +128,7 @@ async def generate_static_html(
     extraction: ExtractionSnapshot,
     variant_type: str,
     site_id: str,
+    preview_slug: str | None = None,
 ) -> dict[str, Any]:
     """
     Generate static HTML/CSS/JS from master brief.
@@ -138,6 +162,8 @@ async def generate_static_html(
     # system. Splitting these into independent requests loses the brief's art
     # direction and leads to unrelated, template-like assets.
     prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
+    if preflight.hero_mode == "typography_only" and getattr(master_brief, "heroMode", None) == "typography_only":
+        prompt += _typography_only_fallback_instructions()
     if provider == "cloudflare":
         prompt = _build_cloudflare_static_html_prompt(prompt, variant_type)
     logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
@@ -192,11 +218,23 @@ async def generate_static_html(
     html_content = sanitize_unsupported_proof(
         html_content, approved_proof=_approved_testimonial_quotes(extraction)
     )
+    canonical_url = _static_canonical_url(site_id, preview_slug)
+    html_content = _inject_static_seo_contract(html_content, extraction, canonical_url)
     try:
         html_content = _normalize_secure_resource_urls(html_content)
         css_content = _normalize_secure_resource_urls(css_content)
         js_content = _normalize_secure_resource_urls(js_content)
-        _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
+        html_content = _inject_conceptual_visual(
+            html_content, master_brief, extraction, variant_type
+        )
+        _validate_generated_document(
+            html_content,
+            css_content,
+            js_content,
+            master_brief,
+            extraction,
+            expected_canonical_url=canonical_url,
+        )
     except ValueError as exc:
         # Models occasionally leak a comment such as "placeholder" or use an
         # insecure source URL. Give the same coherent artifact one corrective
@@ -226,10 +264,23 @@ async def generate_static_html(
             html_content = sanitize_unsupported_proof(
                 html_content, approved_proof=_approved_testimonial_quotes(extraction)
             )
+            html_content = _inject_static_seo_contract(
+                html_content, extraction, canonical_url
+            )
             html_content = _normalize_secure_resource_urls(html_content)
             css_content = _normalize_secure_resource_urls(css_content)
             js_content = _normalize_secure_resource_urls(js_content)
-            _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
+            html_content = _inject_conceptual_visual(
+                html_content, master_brief, extraction, variant_type
+            )
+            _validate_generated_document(
+                html_content,
+                css_content,
+                js_content,
+                master_brief,
+                extraction,
+                expected_canonical_url=canonical_url,
+            )
         except Exception as correction_error:
             # If the correction prompt itself was too large, request a fresh
             # concise artifact from the original design prompt once.
@@ -260,10 +311,23 @@ async def generate_static_html(
                     html_content = sanitize_unsupported_proof(
                         html_content, approved_proof=_approved_testimonial_quotes(extraction)
                     )
+                    html_content = _inject_static_seo_contract(
+                        html_content, extraction, canonical_url
+                    )
                     html_content = _normalize_secure_resource_urls(html_content)
                     css_content = _normalize_secure_resource_urls(css_content)
                     js_content = _normalize_secure_resource_urls(js_content)
-                    _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
+                    html_content = _inject_conceptual_visual(
+                        html_content, master_brief, extraction, variant_type
+                    )
+                    _validate_generated_document(
+                        html_content,
+                        css_content,
+                        js_content,
+                        master_brief,
+                        extraction,
+                        expected_canonical_url=canonical_url,
+                    )
                     correction_error = None
                 except Exception as concise_error:
                     correction_error = concise_error
@@ -305,7 +369,17 @@ async def generate_static_html(
             html_content = _normalize_secure_resource_urls(html_content)
             css_content = _normalize_secure_resource_urls(css_content)
             js_content = _normalize_secure_resource_urls(js_content)
-            _validate_generated_document(html_content, css_content, js_content, master_brief, extraction)
+            html_content = _inject_conceptual_visual(
+                html_content, master_brief, extraction, variant_type
+            )
+            _validate_generated_document(
+                html_content,
+                css_content,
+                js_content,
+                master_brief,
+                extraction,
+                expected_canonical_url=canonical_url,
+            )
             if not _javascript_is_valid(js_content):
                 raise ValueError("Generated JavaScript remains invalid after repair")
         except Exception as exc:
@@ -336,9 +410,24 @@ async def generate_static_html(
     html_content, css_content, js_content = _apply_static_safety_layer(
         html_content, css_content, js_content, master_brief, variant_type
     )
-    # Runtime state is bundled so production HTML stays CSP-compatible.
-    js_content = _runtime_bundle_prefix() + js_content + _runtime_bundle_suffix()
-
+    html_content = _inject_conceptual_visual(
+        html_content, master_brief, extraction, variant_type
+    )
+    html_content = html_content.replace(
+        "__LENMANAG_FORM_ENDPOINT__",
+        f"{os.getenv('BACKEND_PUBLIC_URL', 'http://localhost:8000').rstrip('/')}/api/v1/public/forms/{site_id}",
+    )
+    # Static HTML owns the semantic document, but its behavior is compiled by
+    # the same trusted compiler as the Next.js path. This keeps approved
+    # libraries same-origin and makes the dependency contract enforceable.
+    static_js_source = _runtime_bundle_prefix() + js_content + _runtime_bundle_suffix()
+    static_css_source = css_content
+    js_content, css_content, capability_manifest = await _compile_static_entry(
+        js_content=static_js_source,
+        css_content=css_content,
+        site_id=site_id,
+        variant_type=variant_type,
+    )
     # The model never owns delivery URLs. Remove any relative/generated asset
     # references before the backend deterministically injects the final URLs.
     html_content = _remove_generated_asset_references(html_content)
@@ -448,7 +537,7 @@ document.addEventListener('DOMContentLoaded', function () {
     runtime_ready = ""
     html_final = html_final.replace("</body>", runtime_ready)
     # Do not ship inline event handlers in the production document.
-    html_final = re.sub(r'\s+(?:onload|onerror)="[^"]*"', "", html_final)
+    html_final = re.sub(r"\s+on[a-z][a-z0-9_-]*\s*=\s*(['\"]).*?\1", "", html_final, flags=re.I | re.S)
 
     logger.info(
         f"[DEBUG] Final HTML length: {len(html_final)} (original: {len(html_content)})"
@@ -459,6 +548,12 @@ document.addEventListener('DOMContentLoaded', function () {
         "html": html_final,
         "cssUrl": css_url,
         "jsUrl": js_url,
+        "cssCode": css_content,
+        "jsCode": js_content,
+        "cssSourceCode": static_css_source,
+        "jsSourceCode": static_js_source,
+        "runtimeMode": capability_manifest.get("runtimeMode", "compiled-static-entry"),
+        "capabilityManifest": capability_manifest,
     }
 
 
@@ -484,6 +579,7 @@ def _deterministic_fallback_document(
         )
     )[:6]
     hero_image = escape(images[0] if images else "")
+    hero_background = f",url('{hero_image}') center/cover" if hero_image else ""
     logo_url = _approved_logo_url(brief) or ""
     cta_text = brief.ctaStrategy or "Contact us today"
     if re.search(r"xxx|placeholder|example\\.com", cta_text, re.IGNORECASE):
@@ -493,6 +589,8 @@ def _deterministic_fallback_document(
         "html_v2": ("Confident Momentum", "#111827", "#c8860a"),
         "html_v3": ("Distinctive Warmth", "#eef7f2", "#4a6741"),
     }.get(variant_type, ("Trusted Service", "#f4efe6", "#0d1b2a"))
+    primary_color = _safe_color(getattr(brief.brandAssets, "primaryColor", None)) or mode[2]
+    secondary_color = _safe_color(getattr(brief.brandAssets, "secondaryColor", None)) or mode[1]
     sections = list(brief.sections or [])[:6]
     section_html = (
         "".join(
@@ -502,7 +600,12 @@ def _deterministic_fallback_document(
         or f"<article><h2>How {company} helps</h2><p>{escape(brief.valueProposition or brief.businessGoal or f'Dependable service from {company}.')}</p></article>"
     )
     gallery = "".join(
-        f'<img src="{escape(url)}" alt="{company} field work">' for url in images[1:]
+        f'<img src="{escape(url)}" alt="{company} field work" width="1200" height="800" loading="lazy" decoding="async" sizes="(max-width: 700px) 100vw, 33vw">' for url in images[1:]
+    )
+    gallery_section = (
+        f'<section><p class="eyebrow">Highlights</p><div class="gallery">{gallery}</div></section>'
+        if images[1:]
+        else '<section><p class="eyebrow">Highlights</p><div class="art-grid" aria-label="Service highlights"><span>01</span><span>02</span><span>03</span></div></section>'
     )
     logo = (
         f'<img class="logo" src="{escape(logo_url)}" alt="{company} logo">'
@@ -523,14 +626,22 @@ def _deterministic_fallback_document(
     contact_heading = escape(
         brief.ctaStrategy or f"Start a conversation with {company_name}"
     )
-    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{company} - {mode[0]}</title><style>:root{{--bg:{mode[1]};--ink:{mode[2]};--accent:#c8860a}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}}main{{max-width:1180px;margin:auto;padding:28px}}header{{min-height:72vh;display:grid;align-content:center;gap:24px;background:linear-gradient(90deg,var(--bg) 35%,transparent),url('{hero_image}') center/cover;border-radius:24px;padding:clamp(28px,8vw,110px)}}.logo{{max-width:150px;max-height:70px;object-fit:contain;object-position:left}}h1{{font-size:clamp(3rem,9vw,8rem);line-height:.9;max-width:850px;margin:0}}h2{{font-size:clamp(1.8rem,4vw,3.5rem);line-height:1.05}}.eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:.75rem;font-weight:700;color:var(--accent)}}.cta{{display:inline-block;background:var(--accent);color:#fff;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700;width:max-content}}section{{padding:90px 0}}.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}article{{padding:26px;border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:18px}}.gallery{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}.gallery img{{width:100%;height:220px;object-fit:cover;border-radius:14px}}footer{{border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);padding:30px 0}}@media(max-width:700px){{main{{padding:16px}}header{{min-height:78vh;padding:28px 20px}}.grid,.gallery{{grid-template-columns:1fr}}.gallery img{{height:180px}}}}</style></head><body><main><header>{logo}<p class="eyebrow">{escape(mode[0])}</p><h1>{headline}</h1><p>{subheadline}</p><a class="cta" href="{primary_href}">{escape(cta_text)}</a></header><section><p class="eyebrow">What we do</p><div class="grid">{section_html}</div></section><section><p class="eyebrow">Highlights</p><div class="gallery">{gallery}</div></section><section id="contact"><p class="eyebrow">Contact</p><h2>{contact_heading}</h2><p>{('Office: <a href="tel:' + office + '">' + office + "</a><br>") if office else ""}{('Emergency: <a href="tel:' + emergency + '">' + emergency + "</a><br>") if emergency else ""}{hours}</p><a class="cta" href="{escape(contact.contactUrl or "#contact")}">Contact the team</a></section><footer><span class="site-copyright">© {company} {datetime.now(timezone.utc).year}</span></footer></main><script>window.__LENMANAG_RUNTIME__={{initialized:true,animationSetupComplete:true,errors:[],jsLoaded:true}};window.__LENMANAG_STATIC_READY__=true;</script></body></html>'''
+    canonical = _static_canonical_url(str(getattr(brief, "leadId", company_name)), None)
+    html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{company} - {mode[0]}</title><meta name="description" content="{escape(brief.valueProposition or brief.businessGoal or f'Dependable service from {company_name}.')}"><link rel="canonical" href="{escape(canonical)}"><meta property="og:title" content="{company} - {mode[0]}"><meta property="og:description" content="{escape(brief.valueProposition or brief.businessGoal or f'Dependable service from {company_name}.')}"><meta property="og:type" content="website"><meta property="og:url" content="{escape(canonical)}"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230f172a'/%3E%3C/svg%3E"><script type="application/ld+json">{{"@context":"https://schema.org","@type":"WebPage","name":{json.dumps(company_name)},"url":{json.dumps(canonical)}}}</script><style>:root{{--bg:{mode[1]};--ink:{mode[2]};--brand-primary:{primary_color};--brand-secondary:{secondary_color};--accent:var(--brand-primary)}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}}main{{max-width:1180px;margin:auto;padding:28px}}header{{min-height:72vh;display:grid;align-content:center;gap:24px;background:linear-gradient(90deg,var(--bg) 35%,transparent){hero_background};border-radius:24px;padding:clamp(28px,8vw,110px)}}.logo{{max-width:150px;max-height:70px;object-fit:contain;object-position:left}}h1{{font-size:clamp(3rem,9vw,8rem);line-height:.9;max-width:850px;margin:0}}h2{{font-size:clamp(1.8rem,4vw,3.5rem);line-height:1.05}}.eyebrow{{text-transform:uppercase;letter-spacing:.14em;font-size:.75rem;font-weight:700;color:var(--accent)}}.cta{{display:inline-block;background:var(--accent);color:#fff;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700;width:max-content}}section{{padding:90px 0}}.grid,.art-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}}article,.art-grid span{{padding:26px;border:1px solid color-mix(in srgb,var(--brand-secondary) 40%,transparent);border-radius:18px}}.gallery{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}}.gallery img{{width:100%;height:220px;object-fit:cover;border-radius:14px}}footer{{border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);padding:30px 0}}@media(max-width:700px){{main{{padding:16px}}header{{min-height:78vh;padding:28px 20px}}.grid,.gallery,.art-grid{{grid-template-columns:1fr}}.gallery img{{height:180px}}}}</style></head><body><main><header>{logo}<p class="eyebrow">{escape(mode[0])}</p><h1>{headline}</h1><p>{subheadline}</p><a class="cta" href="{primary_href}">{escape(cta_text)}</a></header><section><p class="eyebrow">What we do</p><div class="grid">{section_html}</div></section>{gallery_section}<section id="contact"><p class="eyebrow">Contact</p><h2>{contact_heading}</h2><p>{('Office: <a href="tel:' + office + '">' + office + "</a><br>") if office else ""}{('Emergency: <a href="tel:' + emergency + '">' + emergency + "</a><br>") if emergency else ""}{hours}</p><a class="cta" href="{escape(contact.contactUrl or "#contact")}">Contact the team</a></section><footer><span class="site-copyright">© {company} {datetime.now(timezone.utc).year}</span></footer></main><script data-generated-site-runtime>window.__LENMANAG_RUNTIME__={{initialized:true,animationSetupComplete:true,errors:[],jsLoaded:true}};window.__LENMANAG_STATIC_READY__=true;</script></body></html>'''
     formatted_office = office
     if len(re.sub(r"\\D", "", office)) == 11:
         digits = re.sub(r"\\D", "", office)[1:]
         formatted_office = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
     html = html.replace("(574) XXX-XXXX", formatted_office)
     html = html.replace("XXX-XXXX", formatted_office)
-    return {"html": html, "cssUrl": None, "jsUrl": None}
+    html = html.replace("<style>:root", "<style data-generated-site-css>:root", 1)
+    return {
+        "html": html,
+        "cssUrl": None,
+        "jsUrl": None,
+        "runtimeMode": "native-css-js",
+        "capabilityManifest": _static_capability_manifest(),
+    }
 
 
 def _build_cloudflare_static_html_prompt(base_prompt: str, variant_type: str) -> str:
@@ -567,6 +678,8 @@ def _normalize_cloudflare_artifact(
         for item in list(getattr(brief.brandAssets, "imageInventory", None) or [])
         if isinstance(item, dict) and item.get("url")
     )
+    if getattr(brief, "heroMode", None) == "typography_only":
+        approved_images = []
     hero_mode = str(getattr(brief, "heroMode", "") or "").strip().lower()
     if not approved_images and hero_mode in {"typography-only", "typography_only"}:
         html = re.sub(r"\sdata-media-required(?:\s*=\s*(['\"])[^'\"]*\1)?", "", html, flags=re.I)
@@ -589,8 +702,12 @@ def _build_static_html_prompt(
 ) -> str:
     """Build LLM prompt for static HTML generation."""
     from app.core.variant_strategy import get_variant_strategies
+    from app.core.visual_adapter import build_visual_adapter
 
-    strategy = get_variant_strategies()[variant_type]
+    industry = getattr(getattr(extraction, "analysis", None), "industry", None)
+    adapter = build_visual_adapter(extraction, brief, industry=industry)
+    strategy = get_variant_strategies(industry=industry, adapter=adapter)[variant_type]
+    art_direction_plan = strategy.get("artDirectionPlan") or {}
     approved_testimonials = _approved_testimonial_quotes(extraction)
     approved_evidence_ids = _approved_evidence_ids(extraction)
     proof_allowed = bool(approved_testimonials and approved_evidence_ids)
@@ -650,8 +767,8 @@ def _build_static_html_prompt(
 
     testimonials_context = (
         "\n".join(
-            f'- evidence ID: {item_id}; quote: "{quote}"'
-            for item_id, quote in zip(sorted(approved_evidence_ids), approved_testimonials)
+            f'- evidence ID: {"testimonial-" + hashlib.sha1(quote.strip().encode("utf-8")).hexdigest()[:12]}; quote: "{quote}"'
+            for quote in approved_testimonials
         )
         if proof_allowed
         else "- None approved. Omit testimonials, reviews, ratings, awards, customer quotes, and proof-like badges entirely."
@@ -685,6 +802,7 @@ MASTER BRIEF:
 - Visual Style: {brief.visualStyle}
 - Color Strategy: {brief.colorStrategy}
 - Motion Level: {brief.motionLevel}
+- Hero Archetype: {getattr(brief, "heroArchetype", "typography")} (must be visibly implemented in the hero: photography, typography, inline SVG/diagram, motion graphic, WebGL with a real 2D fallback, or hybrid)
 
 CREATIVE DIRECTION:
 - Design Concept: {brief.creativeDirection.designConcept}
@@ -725,17 +843,21 @@ VARIANT TYPE: {variant_type}
 VARIANT CREATIVE DIRECTION:
 {strategy["creativeBriefGuidance"]}
 
+EVIDENCE-LED ART DIRECTION PLAN (implement this, do not merely describe it):
+{json.dumps(art_direction_plan, ensure_ascii=False, sort_keys=True, indent=2)}
+
 REQUIREMENTS:
 1. Generate THREE separate code blocks:
    - HTML: Complete semantic HTML5 structure
    - CSS: All styles in a single stylesheet
-   - JavaScript: Vanilla JS for interactions (no frameworks)
+   - JavaScript: Browser JavaScript for interactions and motion
 
 2. HTML Structure:
    - Semantic tags (<header>, <main>, <section>, <footer>)
    - Proper meta tags (viewport, description, title)
     - Accessibility: ARIA labels, alt text, semantic structure
    - Include all eligible sections from the master brief. Sections requiring unavailable proof evidence are intentionally omitted.
+   - Every emitted content section MUST include `data-purpose` matching its approved section purpose. Services must render one semantic card per approved service with `data-service` equal to the approved service label. Proof cards must include exactly one `data-evidence-id` from the approved evidence list.
     - REQUIRED HEADER LOGO URL: {logo_url}
     - If this URL is not None, the <header> MUST contain an <img> whose src equals this exact URL. Do not omit, rewrite, substitute, or use a different logo variant. If it is None, no logo is required.
    - Map approved assets to header, hero, service/about, and footer before writing markup. If an approved logo exists, the header MUST contain it. If approved photography exists, use at least one <img> unless this specific concept is explicitly typography-only.
@@ -757,13 +879,22 @@ REQUIREMENTS:
    - Modern CSS (flexbox, grid)
 
 4. JavaScript Requirements:
-   - Vanilla JS only (no jQuery, no React, no frameworks)
+   - The HTML document itself has no GSAP, Lenis, Embla, Three.js, React, CDN,
+     module loader, or third-party runtime tags. The separate JavaScript entry
+     is compiled into a same-origin bundle and may import only the approved
+     capabilities declared by the backend manifest. Use GSAP, Lenis, Embla, or
+     Three.js with an explicit 2D fallback when they improve the approved
+     concept. Static JavaScript must use imperative APIs (or React.createElement)
+     because it is compiled as JavaScript; JSX React islands belong in the
+     Next.js/TSX path. Always preserve a deterministic native fallback.
    - Smooth scroll behavior for anchor links
    - Mobile menu toggle
    - {_animation_notes}
    - Form validation if contact form present
    - Call window.__LENMANAG_RUNTIME__.markInitialized() only after every required interaction has been bound and animation setup has completed. This call is mandatory.
+   - The backend derives a capability manifest from imports in this entry. The approved same-origin imports are: react, react-dom, framer-motion, gsap, gsap/ScrollTrigger, lenis, embla-carousel-react, lucide-react, three, @react-three/fiber, and @react-three/drei. Import only what is used.
    - Declare the required click and keyboard checks in window.__LENQUANT_INTERACTION_MANIFEST__ as an array of {{id, selector, action, key?, required?}}; selectors must point to real controls and each required interaction must produce an observable state change.
+   - Return behavior only in the dedicated JavaScript block. Do not emit executable <script> tags, inline event attributes such as onclick/onload, javascript: URLs, or inline style blocks in the HTML block. JSON-LD is the only permitted HTML script tag.
 
 5. Design Quality:
    - Produce an Awwwards-quality experience, not a conventional business template.
@@ -772,23 +903,39 @@ REQUIREMENTS:
      consequential rather than decorative labels.
    - Create strong typography, intentional composition, varied section layouts, depth,
      and excellent spacing. Use the approved signature technique prominently.
-   - Implement purposeful motion and the specified micro-interactions in vanilla
-     JavaScript/CSS; its motion language must match the stated motion level and scroll behavior.
+   - Implement purposeful motion and the specified micro-interactions with the
+     available runtime or vanilla JavaScript/CSS; its motion language must match
+     the stated motion level and scroll behavior.
    - Do not repeat rows, cards, or section treatments. Avoid spreadsheet-like layouts,
      generic service grids, excessive empty space, simple document styling, and every
      pattern listed in Avoid Patterns.
    - If approved photography is unavailable, create intentional art direction with
-     typography, SVG, gradients, textures, canvas, geometry, and layered composition;
-     never leave an empty or generic page.
-    - Keep factual accuracy: use only approved client assets and verified facts. Never
+     typography, inline SVG, gradients, textures, geometry, and layered composition;
+     never leave an empty or generic page. If the art-direction plan marks a
+     conceptual image as needed, include a meaningful inline SVG or CSS-generated
+     visual in the hero and label its role accessibly.
+   - Keep factual accuracy: use only approved client assets and verified facts. Never
      invent testimonials, reviews, phone numbers, emails, addresses, metrics, awards,
      or claims. Include a testimonial only when its exact quote appears in the approved
      testimonial list above; otherwise omit testimonials entirely.
    - Hard copy rules: never use an em dash (—) anywhere. Use a hyphen or rewrite the sentence.
     - Never output placeholder language, including lorem ipsum, example.com, TODO, XXX, "your email", "contact us for details", "coming soon", or "image placeholder". If source data is missing, omit that element.
     - Keep copy compact: hero headline <= 12 words, paragraph copy <= 45 words, card titles <= 8 words, card copy <= 24 words. Split or omit content rather than overflowing a component.
-   - Use only browser-native HTML, CSS, SVG, canvas, and vanilla JavaScript. Do not
-     import, claim, or rely on Three.js, GSAP, Lenis, or any other unprovided library.
+   - Use semantic HTML/CSS/SVG for the document. Behavior may use the compiled
+     same-origin entry and its declared approved capabilities, but may not add
+     runtime network loads or CDN dependencies.
+
+6. Forms and discoverability contracts:
+   - Any contact form MUST use native submission with method="post" and
+     action="__LENMANAG_FORM_ENDPOINT__". Include named fields for name, email,
+     and message when those fields are present, plus a hidden honeypot named
+     "website". Browser validation is progressive enhancement only; the backend
+     endpoint is the delivery contract. Never submit with fetch, XHR, or beacon.
+   - Include a non-empty title, meta description, viewport, canonical link,
+     og:title, og:description, og:type, and JSON-LD Organization/WebSite data.
+     Include a data: SVG favicon. Every image needs non-empty alt text, loading,
+     decoding, and sizes attributes; hero media must be eager and non-hero media
+     lazy. Use srcset only when approved cached variants exist.
 
 OUTPUT FORMAT:
 Return only the three complete fenced code blocks. Do not include an example,
@@ -865,7 +1012,12 @@ def _validate_generated_document(
     js: str,
     brief: MasterBrief | None = None,
     extraction: ExtractionSnapshot | None = None,
+    expected_canonical_url: str | None = None,
 ) -> None:
+    # Normalize the one deterministic contract we own before validating it.
+    # The same helper is applied during generation so QA and publication see
+    # the exact same footer landmark.
+    html = _ensure_footer_landmark(html, company_name=getattr(getattr(extraction, "summary", None), "companyName", None))
     if "```" in html or "```" in css or "```" in js:
         raise ValueError("Markdown fence leaked into generated asset")
     if not html.lstrip().lower().startswith("<!doctype html"):
@@ -879,6 +1031,9 @@ def _validate_generated_document(
         or not re.search(r"</html>\s*$", html, re.I)
     ):
         raise ValueError("Generated HTML is structurally incomplete")
+    html_runtime_errors = validate_generated_html(html)
+    if html_runtime_errors:
+        raise ValueError(html_runtime_errors[0])
     if (
         not css.strip()
         or css.count("{") != css.count("}")
@@ -887,6 +1042,9 @@ def _validate_generated_document(
         raise ValueError("Generated CSS is structurally incomplete")
     if not js.strip():
         raise ValueError("Generated JavaScript is empty")
+    runtime_errors = validate_generated_javascript(js)
+    if runtime_errors:
+        raise ValueError(runtime_errors[0])
     prohibited = r"\b(?:xxx|xxxx|000-0000|555[- )]?\d{3,4}|lorem ipsum|example\.com|your@email\.com|todo|coming soon|contact us for details|image placeholder)\b"
     if re.search(prohibited, "\n".join((html, css, js)), re.I):
         raise ValueError("Generated output contains prohibited placeholder content")
@@ -939,15 +1097,25 @@ def _validate_generated_document(
             if isinstance(item, dict)
         )
         approved_images = [url for url in approved_images if url]
-        if approved_images and not any(url in html for url in approved_images):
+        hero_mode = getattr(brief, "heroMode", None)
+        hero_archetype = getattr(brief, "heroArchetype", None)
+        requires_approved_photography = (
+            (hero_mode is None and hero_archetype is None)
+            or
+            hero_mode == "image_led" or hero_archetype == "photography"
+        )
+        if (
+            requires_approved_photography
+            and approved_images
+            and not any(url in html for url in approved_images)
+        ):
             raise ValueError("Generated HTML omitted approved photography")
         semantic = validate_semantics(
             html,
-            require_footer=bool(
-                getattr(brief, "contactInfo", None)
-                or any(s.purpose == "footer" for s in brief.sections)
-            ),
-            require_media=bool(approved_images),
+            # Runtime QA and no-JS QA both require one footer landmark for every
+            # published artifact, so validation must enforce the same contract.
+            require_footer=True,
+            require_media=requires_approved_photography and bool(approved_images),
             approved_images=set(approved_images),
             approved_proof=_approved_testimonial_quotes(extraction)
             if extraction is not None
@@ -956,12 +1124,283 @@ def _validate_generated_document(
             if extraction is not None
             else set(),
             hero_mode=getattr(brief, "heroMode", None),
+            require_hero_media=(
+                isinstance(brief, MasterBrief)
+                and getattr(brief, "heroMode", None) == "image_led"
+                and bool(approved_images)
+            ),
         )
         if semantic.issues:
             issue = semantic.issues[0]
             raise ValueError(
                 f"{issue.message} [{issue.rule_id}] selector={issue.selector}"
             )
+        if isinstance(brief, MasterBrief):
+            content_errors = generated_content_contract_errors(
+                html,
+                brief,
+                extraction,
+                rendered_html=True,
+                css=css,
+            )
+            if content_errors:
+                raise ValueError(content_errors[0])
+        if isinstance(brief, MasterBrief):
+            hero_errors = hero_archetype_errors(
+                js,
+                brief,
+                html=html,
+                css=css,
+            )
+            if hero_errors:
+                raise ValueError(hero_errors[0])
+        if isinstance(brief, MasterBrief):
+            _validate_static_discoverability_contract(
+                html, expected_canonical_url=expected_canonical_url
+            )
+    _validate_static_form_contract(html)
+
+
+def _static_capability_manifest() -> dict[str, Any]:
+    return capability_manifest_for_source(
+        "",
+        runtime_mode="compiled-static-entry",
+    ) | {
+        "networkAccess": False,
+        "fallback": "semantic HTML, CSS, SVG, and browser-native APIs",
+    }
+
+
+def _typography_only_fallback_instructions() -> str:
+    return """
+
+DETERMINISTIC TYPOGRAPHY-ONLY FALLBACK:
+- The approved asset inventory is unavailable for rendering. Do not emit any img, video, canvas, CSS background image, external font, gallery shell, image placeholder, or media-required region.
+- Convert photo, gallery, project, and image-led section requests into useful CSS, inline SVG, typographic, or diagrammatic compositions while preserving their approved copy and section purpose.
+- The page must remain complete and visually intentional without media. Never mention that media is missing.
+"""
+
+
+async def _compile_static_entry(
+    *, js_content: str, css_content: str, site_id: str, variant_type: str
+) -> tuple[str, str, dict[str, Any]]:
+    """Compile a static browser entry and return bundled JS/CSS plus its manifest."""
+    settings = get_settings()
+    compiler_url = getattr(settings, "compiler_service_url", None)
+    # Lightweight unit-test settings and local callers may intentionally omit
+    # the service. Production Settings always supplies the URL, so real
+    # publication cannot silently bypass the compiler.
+    if not compiler_url:
+        return js_content, css_content, _static_capability_manifest()
+
+    from app.core.compiler_client import CompilerError, get_compiler_client
+
+    manifest = capability_manifest_for_source(
+        js_content,
+        runtime_mode="compiled-static-entry",
+    )
+    compiler = get_compiler_client()
+    try:
+        result = await compiler.compile_tsx(
+            source_code=js_content,
+            js_entry=js_content,
+            component_name=f"StaticRuntime_{variant_type}_{site_id}",
+            site_id=site_id,
+            capability_manifest=manifest,
+        )
+    except CompilerError as exc:
+        raise StaticGenerationError(
+            f"{variant_type} static entry compilation failed: {exc}",
+            variant_type=variant_type,
+            stage="compile",
+            code="static_entry_compilation_failed",
+            rule_id="compiler.unavailable",
+        ) from exc
+    if not result.get("success") or not result.get("bundleCode"):
+        errors = result.get("validationErrors") or [result.get("error", "unknown compiler error")]
+        raise StaticGenerationError(
+            f"{variant_type} static entry compilation failed: {errors[0]}",
+            variant_type=variant_type,
+            stage="compile",
+            code="static_entry_compilation_failed",
+            rule_id="compiler.validation",
+            context={"validationErrors": errors},
+        )
+    compiled_css = result.get("cssCode") or ""
+    return result["bundleCode"], f"{css_content}\n{compiled_css}", result.get("capabilityManifest") or manifest
+
+
+def _static_canonical_url(site_id: str, preview_slug: str | None) -> str:
+    settings = get_settings()
+    base = (getattr(settings, "preview_base_url", "http://localhost:3000/st") or "").rstrip("/")
+    base = base.replace("http://", "https://", 1)
+    slug = quote(preview_slug or site_id, safe="")
+    return f"{base}/{slug}"
+
+
+def _inject_static_seo_contract(
+    html: str, extraction: ExtractionSnapshot, canonical_url: str
+) -> str:
+    """Own canonical identity so the model cannot invent a competing URL."""
+    company = str(getattr(getattr(extraction, "summary", None), "companyName", "") or "Site")
+    raw_description = str(
+        getattr(getattr(extraction, "summary", None), "positioningSummary", "")
+        or f"A source-backed website for {company}."
+    ).strip()
+    canonical = escape(canonical_url, quote=True)
+    html = re.sub(
+        r"<link\b[^>]*\brel\s*=\s*(['\"])[^'\"]*canonical[^'\"]*\1[^>]*>",
+        f'<link rel="canonical" href="{canonical}">',
+        html,
+        count=1,
+        flags=re.I | re.S,
+    )
+    if not re.search(r"<link\b[^>]*\brel\s*=\s*(['\"])[^'\"]*canonical", html, re.I):
+        html = re.sub(
+            r"</head\s*>",
+            f'<link rel="canonical" href="{canonical}"></head>',
+            html,
+            count=1,
+            flags=re.I,
+        )
+    html = re.sub(
+        r"(<meta\b[^>]*\bproperty\s*=\s*(['\"])og:url\2[^>]*\bcontent\s*=\s*(['\"]))(.*?)(\3[^>]*>)",
+        rf"\1{canonical}\5",
+        html,
+        count=1,
+        flags=re.I | re.S,
+    )
+    if not re.search(r"<meta\b[^>]*\bproperty\s*=\s*(['\"])og:url", html, re.I):
+        html = re.sub(
+            r"</head\s*>",
+            f'<meta property="og:url" content="{canonical}"></head>',
+            html,
+            count=1,
+            flags=re.I,
+        )
+    json_ld = json.dumps(
+        {
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            "name": company,
+            "description": re.sub(r"<[^>]+>", "", raw_description[:240]),
+            "url": canonical_url,
+        },
+        ensure_ascii=False,
+    )
+    json_tag = f'<script type="application/ld+json">{json_ld}</script>'
+    if re.search(r"<script\b[^>]*type\s*=\s*(['\"])application/ld\+json", html, re.I):
+        html = re.sub(
+            r"<script\b[^>]*type\s*=\s*(['\"])application/ld\+json\1[^>]*>.*?</script\s*>",
+            json_tag,
+            html,
+            count=1,
+            flags=re.I | re.S,
+        )
+    else:
+        html = re.sub(r"</head\s*>", json_tag + "</head>", html, count=1, flags=re.I)
+    return html
+
+
+def _html_attrs(tag: str) -> dict[str, str]:
+    """Parse the small attribute subset needed by generated-site contracts."""
+    return {
+        key.lower(): value or ""
+        for key, _quote, value in re.findall(
+            r"([:\w-]+)\s*=\s*(['\"])(.*?)\2", tag, re.I | re.S
+        )
+    }
+
+
+def _validate_static_form_contract(html: str) -> None:
+    """Require native POST delivery whenever a provider emits a form."""
+    for match in re.finditer(r"<form\b([^>]*)>(.*?)</form\s*>", html, re.I | re.S):
+        attrs = _html_attrs(match.group(0))
+        if attrs.get("method", "").lower() != "post":
+            raise ValueError("Generated forms must use native POST submission")
+        action = attrs.get("action", "")
+        if "__LENMANAG_FORM_ENDPOINT__" not in action and "/api/v1/public/forms/" not in action:
+            raise ValueError("Generated forms must target the LenManag form endpoint")
+        body = match.group(2)
+        names = {
+            value.lower()
+            for _quote, value in re.findall(
+                r"\bname\s*=\s*(['\"])(.*?)\1", body, re.I | re.S
+            )
+        }
+        if "email" not in names or not ({"name", "message"} & names):
+            raise ValueError("Generated forms must include named email and contact fields")
+        if "website" not in names:
+            raise ValueError("Generated forms must include the website honeypot field")
+
+
+def _validate_static_discoverability_contract(
+    html: str, expected_canonical_url: str | None = None
+) -> None:
+    """Validate the SEO and image-delivery contract for publishable HTML."""
+    if not re.search(r"<title\b[^>]*>\s*[^<]+\s*</title\s*>", html, re.I | re.S):
+        raise ValueError("Generated HTML requires a non-empty title")
+    for name in ("description", "viewport"):
+        if not re.search(
+            rf"<meta\b[^>]*\bname\s*=\s*['\"]{name}['\"][^>]*\bcontent\s*=\s*['\"]\s*[^'\"]+",
+            html,
+            re.I | re.S,
+        ):
+            raise ValueError(f"Generated HTML requires meta {name}")
+    for property_name in ("og:title", "og:description", "og:type", "og:url"):
+        if not re.search(
+            rf"<meta\b[^>]*\bproperty\s*=\s*['\"]{re.escape(property_name)}['\"][^>]*\bcontent\s*=\s*['\"]\s*[^'\"]+",
+            html,
+            re.I | re.S,
+        ):
+            raise ValueError(f"Generated HTML requires {property_name}")
+    canonical = re.search(
+        r"<link\b[^>]*\brel\s*=\s*['\"][^'\"]*canonical[^'\"]*['\"][^>]*\bhref\s*=\s*['\"]([^'\"]+)",
+        html,
+        re.I | re.S,
+    )
+    if not canonical or not canonical.group(1).strip():
+        raise ValueError("Generated HTML requires a canonical URL")
+    canonical_url = unescape(canonical.group(1).strip())
+    if expected_canonical_url and canonical_url != expected_canonical_url:
+        raise ValueError("Generated canonical URL does not match the site preview URL")
+    og_url = re.search(
+        r"<meta\b[^>]*\bproperty\s*=\s*['\"]og:url['\"][^>]*\bcontent\s*=\s*['\"]([^'\"]+)",
+        html,
+        re.I | re.S,
+    )
+    if expected_canonical_url and (not og_url or unescape(og_url.group(1).strip()) != expected_canonical_url):
+        raise ValueError("Generated og:url does not match the site preview URL")
+    favicon = re.search(
+        r"<link\b[^>]*\brel\s*=\s*['\"][^'\"]*(?:icon|shortcut icon)[^'\"]*['\"][^>]*\bhref\s*=\s*['\"]([^'\"]+)",
+        html,
+        re.I | re.S,
+    )
+    if not favicon or not favicon.group(1).startswith("data:image/svg+xml"):
+        raise ValueError("Generated HTML requires a data SVG favicon")
+    json_ld = re.search(
+        r"<script\b[^>]*type\s*=\s*['\"]application/ld\+json['\"][^>]*>(.*?)</script\s*>",
+        html,
+        re.I | re.S,
+    )
+    if not json_ld:
+        raise ValueError("Generated HTML requires JSON-LD structured data")
+    try:
+        parsed = json.loads(json_ld.group(1).strip())
+    except json.JSONDecodeError as exc:
+        raise ValueError("Generated JSON-LD structured data is invalid") from exc
+    if not isinstance(parsed, dict) or parsed.get("@type") not in {"Organization", "WebSite", "WebPage"}:
+        raise ValueError("Generated JSON-LD must describe an organization or website")
+    if expected_canonical_url and parsed.get("url") != expected_canonical_url:
+        raise ValueError("Generated JSON-LD URL does not match the site preview URL")
+    for image_tag in re.finditer(r"<img\b[^>]*>", html, re.I | re.S):
+        attrs = _html_attrs(image_tag.group(0))
+        if not attrs.get("alt", "").strip():
+            raise ValueError("Generated images require meaningful alt text")
+        if attrs.get("loading", "").lower() not in {"lazy", "eager"}:
+            raise ValueError("Generated images require an explicit loading strategy")
+        if not attrs.get("decoding", "").strip() or not attrs.get("sizes", "").strip():
+            raise ValueError("Generated images require decoding and responsive sizes")
 
 
 def _approved_logo_url(brief: MasterBrief) -> str | None:
@@ -1031,10 +1470,13 @@ def _has_unapproved_render_asset(
         r"\b(?:src|poster)\s*=\s*(['\"])(.*?)\1", html, re.I | re.S
     ):
         asset_values.append(match.group(2).strip())
-    for match in re.finditer(
-        r"<link\b[^>]*\bhref\s*=\s*(['\"])(.*?)\1", html, re.I | re.S
-    ):
-        asset_values.append(match.group(2).strip())
+    for match in re.finditer(r"<link\b[^>]*>", html, re.I | re.S):
+        tag = match.group(0)
+        if re.search(r"\brel\s*=\s*['\"][^'\"]*\bcanonical\b", tag, re.I):
+            continue
+        href = re.search(r"\bhref\s*=\s*(['\"])(.*?)\1", tag, re.I | re.S)
+        if href:
+            asset_values.append(href.group(2).strip())
     asset_values.extend(
         match.group(2).strip()
         for match in re.finditer(r"url\(\s*(['\"]?)(.*?)\1\s*\)", css, re.I | re.S)
@@ -1053,6 +1495,16 @@ def _safe_font_family(value: object) -> str | None:
     if re.search(r"\b(?:arial|comic\s+sans(?:\s+ms)?)\b", value, re.I):
         return None
     return value.strip()
+
+
+def _safe_color(value: object) -> str | None:
+    """Accept source palette tokens without allowing CSS declaration breaks."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    candidate = value.strip()
+    if re.fullmatch(r"#[0-9a-fA-F]{3,8}|(?:rgb|hsl)a?\([^;{}]+\)|[A-Za-z]{1,32}", candidate):
+        return candidate
+    return None
 
 
 def _upgrade_insecure_resource_urls(html: str) -> str:
@@ -1084,13 +1536,17 @@ def _approved_testimonial_quotes(extraction: ExtractionSnapshot) -> list[str]:
 
 
 def _approved_evidence_ids(extraction: ExtractionSnapshot) -> set[str]:
-    """Only explicit extraction IDs can authorize proof-bearing markup."""
+    """Return explicit or deterministic IDs for approved proof evidence."""
     items = list(getattr(getattr(extraction, "analysis", None), "testimonials", None) or []) + list(getattr(extraction, "extractedTestimonials", None) or [])
     ids: set[str] = set()
     for item in items:
         value = getattr(item, "id", None) if not isinstance(item, dict) else item.get("id")
         if isinstance(value, str) and value.strip():
             ids.add(value.strip())
+        else:
+            quote = getattr(item, "quote", None) if not isinstance(item, dict) else item.get("quote")
+            if isinstance(quote, str) and quote.strip():
+                ids.add("testimonial-" + hashlib.sha1(quote.strip().encode("utf-8")).hexdigest()[:12])
     return ids
 
 
@@ -1126,7 +1582,13 @@ Hard rules:
     - Use only these approved cached asset URLs, data: assets, or no asset at all: {", ".join(sorted(approved_asset_urls or set())) or "none"}.
     - Never use an original-site URL, even if it can be upgraded to HTTPS. Remove any uncached image or logo.
 - Never use Arial or Comic Sans.
-- JavaScript must be vanilla and must not use eval(), new Function(), or string-based timers.
+- JavaScript may import only approved same-origin capabilities when the selected
+  concept needs them: gsap, gsap/ScrollTrigger, lenis, embla-carousel-react,
+  three, react, react-dom, framer-motion, lucide-react, and the approved
+  Three.js helpers. Never use a CDN, dynamic imports, require(), fetch,
+  XMLHttpRequest, WebSocket, EventSource, Worker, BroadcastChannel, storage,
+  sendBeacon, parent-window access, eval(), new Function(), or string-based
+  timers. WebGL must retain a real 2D/SVG fallback.
 - Keep the required runtime call: window.__LENMANAG_RUNTIME__.markInitialized().
 
 ```html
@@ -1140,10 +1602,92 @@ Hard rules:
     ```"""
 
 
+def _inject_conceptual_visual(
+    html: str,
+    brief: MasterBrief,
+    extraction: ExtractionSnapshot,
+    variant_type: str,
+) -> str:
+    """Materialize the adapter's conceptual visual when photography is absent."""
+    hero_archetype = str(getattr(brief, "heroArchetype", "") or "").strip().lower()
+    if hero_archetype in {"typography", "motion_graphic", "webgl_fallback"}:
+        return html
+    assets = getattr(brief.brandAssets, "imageUrls", None) or []
+    inventory = getattr(brief.brandAssets, "imageInventory", None) or []
+    if assets and hero_archetype != "svg_diagram":
+        return html
+    if any(isinstance(item, dict) and item.get("url") for item in inventory) and hero_archetype != "svg_diagram":
+        return html
+    from app.core.variant_strategy import get_variant_strategies
+    from app.core.visual_adapter import build_visual_adapter
+
+    industry = getattr(getattr(extraction, "analysis", None), "industry", None)
+    adapter = build_visual_adapter(extraction, brief, industry=industry)
+    strategy = get_variant_strategies(industry=industry, adapter=adapter)[variant_type]
+    generated = (strategy.get("artDirectionPlan") or {}).get(
+        "conceptualImageRequirements", {}
+    ).get("generatedVisualAsset")
+    if not generated or "data-conceptual-visual" in html:
+        return html
+    asset_url = generated.get("assetUrl", "")
+    if not asset_url.startswith("data:image/svg+xml,"):
+        return html
+    svg = unquote(asset_url.split(",", 1)[1])
+    svg = svg.replace(
+        "<svg ",
+        '<svg data-conceptual-visual="true" class="hero-visual" ',
+        1,
+    )
+    media_marker = ' data-media-required' if hero_archetype not in {"svg_diagram", "hybrid"} else ""
+    visual = (
+        f'<figure class="conceptual-visual"{media_marker}>'
+        f'{svg}<figcaption class="sr-only">{escape(generated.get("altText", "Abstract visual"))}</figcaption></figure>'
+    )
+    for pattern in (r"</header\s*>", r"</section\s*>", r"</main\s*>"):
+        match = re.search(pattern, html, re.I)
+        if match:
+            return html[: match.start()] + visual + html[match.start() :]
+    return html + visual
+
+
+def _inject_native_signature_block(
+    html: str, brief: MasterBrief, variant_type: str
+) -> str:
+    """Add one deterministic signature interaction to the static variants."""
+    if variant_type != "html_v2" or "data-lq-carousel" in html:
+        return html
+    cards = list(getattr(brief, "sections", []) or [])[:3]
+    if not cards:
+        cards = [
+            SimpleNamespace(
+                purpose="focus",
+                headline=getattr(brief, "headline", "The next step"),
+                contentSummary=getattr(brief, "subheadline", "A clear next step."),
+            )
+        ]
+    card_markup = "".join(
+        f'<article class="lq-carousel-card"><p class="eyebrow">{escape(str(getattr(card, "purpose", "focus")))}</p>'
+        f'<h3>{escape(str(getattr(card, "headline", "Focus"))).replace("—", "-")}</h3>'
+        f'<p>{escape(str(getattr(card, "contentSummary", ""))).replace("—", "-")}</p></article>'
+        for card in cards
+    )
+    block = (
+        '<section class="lq-signature-section" data-lq-carousel aria-label="Key directions">'
+        '<div class="lq-carousel-track" id="lq-signature-carousel-track">'
+        f"{card_markup}</div>"
+        '<div class="lq-carousel-controls">'
+        '<button type="button" data-lq-carousel-prev aria-controls="lq-signature-carousel-track" aria-label="Previous direction" data-state="start">Previous</button>'
+        '<button type="button" data-lq-carousel-next aria-controls="lq-signature-carousel-track" aria-label="Next direction" data-state="start">Next</button>'
+        '</div></section>'
+    )
+    return re.sub(r"</main\s*>", f"{block}</main>", html, count=1, flags=re.I)
+
+
 def _apply_static_safety_layer(
     html: str, css: str, js: str, brief: MasterBrief, variant_type: str
 ) -> tuple[str, str, str]:
     """Guarantee readable layout and progressive enhancement for every variant."""
+    html = _inject_native_signature_block(html, brief, variant_type)
     required_logo = _approved_logo_url(brief)
     light_logo = _secure_asset_url(getattr(brief.brandAssets, "logoLightUrl", None))
     dark_logo = _secure_asset_url(getattr(brief.brandAssets, "logoDarkUrl", None))
@@ -1220,6 +1764,11 @@ h1, h2, h3, h4, p, a, button, li { overflow-wrap: anywhere; }
 @media (max-width: 720px) {
   [class*="grid"], [class*="columns"] { grid-template-columns: minmax(0, 1fr) !important; }
 }
+.lq-signature-section { margin-block: clamp(3rem, 10vw, 8rem); }
+.lq-carousel-track { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(min(82vw, 32rem), 1fr); gap: 1rem; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; padding: .5rem .1rem 1rem; }
+.lq-carousel-card { scroll-snap-align: start; min-height: 15rem; padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid currentColor; border-radius: 1.25rem; }
+.lq-carousel-controls { display: flex; gap: .75rem; margin-top: 1rem; }
+.lq-carousel-controls button { min-height: 2.75rem; padding: .65rem 1rem; cursor: pointer; }
 """
     js += """
 
@@ -1229,6 +1778,27 @@ h1, h2, h3, h4, p, a, button, li { overflow-wrap: anywhere; }
     var root = document.documentElement;
     var items = Array.prototype.slice.call(document.querySelectorAll('[data-lq-reveal]'));
     var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var carousel = document.querySelector('[data-lq-carousel]');
+    if (carousel) {
+      var track = carousel.querySelector('.lq-carousel-track');
+      var previous = carousel.querySelector('[data-lq-carousel-prev]');
+      var next = carousel.querySelector('[data-lq-carousel-next]');
+      var step = function (direction) {
+        if (!track) return;
+        var distance = direction * Math.max(track.clientWidth * 0.82, 240);
+        if (typeof track.scrollBy === 'function') {
+          track.scrollBy({ left: distance, behavior: reduced ? 'auto' : 'smooth' });
+        } else {
+          track.scrollLeft += distance;
+        }
+      };
+      if (previous) previous.addEventListener('click', function () { step(-1); previous.setAttribute('data-state', String(Date.now())); });
+      if (next) next.addEventListener('click', function () { step(1); next.setAttribute('data-state', String(Date.now())); });
+      window.__LENQUANT_INTERACTION_MANIFEST__ = (window.__LENQUANT_INTERACTION_MANIFEST__ || []).concat([
+        { id: 'signature-carousel-next', selector: '[data-lq-carousel-next]', action: 'click', required: true },
+        { id: 'signature-carousel-prev', selector: '[data-lq-carousel-prev]', action: 'click', required: true }
+      ]);
+    }
     if (reduced || !('IntersectionObserver' in window)) {
       items.forEach(function (item) { item.classList.add('lq-revealed'); });
       if (window.__LENMANAG_RUNTIME__ && window.__LENMANAG_RUNTIME__.markInitialized) window.__LENMANAG_RUNTIME__.markInitialized();
@@ -1300,7 +1870,7 @@ def _javascript_is_valid(script: str) -> bool:
 async def _repair_javascript(
     llm: Any, html: str, invalid_js: str, variant_type: str
 ) -> str:
-    prompt = f"""Repair this invalid generated JavaScript for a {variant_type} static site. Return ONLY one closed ```javascript block. Preserve its interaction intent and selectors from the finalized HTML. Do not use libraries. Call window.__LENMANAG_RUNTIME__.markInitialized() after binding interactions.\n\nHTML:\n{html}\n\nINVALID SCRIPT:\n{invalid_js}"""
+    prompt = f"""Repair this invalid generated JavaScript for a {variant_type} static site. Return ONLY one closed ```javascript block. Preserve its interaction intent and selectors from the finalized HTML. Use only the approved compiler imports when needed, never a CDN or unapproved runtime. Call window.__LENMANAG_RUNTIME__.markInitialized() after binding interactions.\n\nHTML:\n{html}\n\nINVALID SCRIPT:\n{invalid_js}"""
     for _ in range(2):
         response = await llm.generate_text(
             prompt=prompt, temperature=0.2, max_tokens=8000
@@ -1366,6 +1936,11 @@ def _enforce_footer_year(
         html,
         flags=re.I,
     )
+    normalized = _ensure_footer_landmark(
+        normalized,
+        extraction=extraction,
+        company_name=company_name,
+    )
     footer_match = re.search(r"<footer\b[^>]*>(.*?)</footer>", normalized, re.I | re.S)
     if footer_match and not re.search(
         r"(?:©|&copy;|copyright)\s*20\d{2}", footer_match.group(1), re.I
@@ -1385,6 +1960,23 @@ def _enforce_footer_year(
             + normalized[footer_match.end(1) :]
         )
     return normalized
+
+
+def _ensure_footer_landmark(
+    html: str,
+    *,
+    extraction: ExtractionSnapshot | None = None,
+    company_name: str | None = None,
+) -> str:
+    """Ensure generated artifacts have one outer footer landmark."""
+    if re.search(r"<footer\b", html, re.I):
+        return html
+    label = company_name or getattr(getattr(extraction, "summary", None), "companyName", None) or "Company"
+    safe_label = re.sub(r"[^A-Za-z0-9 &.-]", "", label)
+    footer = f'<footer><span class="site-copyright">© {safe_label} {datetime.now(timezone.utc).year}</span></footer>'
+    if re.search(r"</body\s*>", html, re.I):
+        return re.sub(r"</body\s*>", f"{footer}</body>", html, count=1, flags=re.I)
+    return f"{html}{footer}"
 
 
 def _normalize_secure_resource_urls(value: str) -> str:

@@ -8,11 +8,19 @@ that produces complete landing page TSX code from the approved master brief.
 from __future__ import annotations
 
 import logging
+import hashlib
+import os
 import re
 from typing import Any
 
 import boto3
 from app.core.compiler_client import CompilerError, get_compiler_client
+from app.core.compiler_capabilities import (
+    capability_manifest_for_source,
+    capability_usage_errors,
+    hero_archetype_errors,
+)
+from app.core.generated_content_contracts import generated_content_contract_errors
 from app.core.config import get_settings
 from app.core.llm import get_llm_client
 from app.schemas.brief import MasterBrief
@@ -123,6 +131,7 @@ async def generate_landing_page_code(
             master_brief=master_brief,
             extraction=extraction,
             refinement_prompt=refinement_prompt,
+            site_id=site_id,
         )
 
     # Generate code
@@ -138,6 +147,16 @@ async def generate_landing_page_code(
 
     # Validate syntax — retry with feedback if validation fails
     validation_errors = _validate_tsx_source(source_code)
+    validation_errors.extend(capability_usage_errors(source_code, master_brief))
+    validation_errors.extend(hero_archetype_errors(source_code, master_brief))
+    validation_errors.extend(
+        generated_content_contract_errors(
+            source_code,
+            master_brief,
+            extraction,
+            enforce_section_stack=True,
+        )
+    )
     if validation_errors:
         logger.warning(f"TSX validation errors on first attempt: {validation_errors}")
         source_code = await _retry_generation_with_validation_feedback(
@@ -149,6 +168,16 @@ async def generate_landing_page_code(
         )
         # Re-validate after retry
         final_errors = _validate_tsx_source(source_code)
+        final_errors.extend(capability_usage_errors(source_code, master_brief))
+        final_errors.extend(hero_archetype_errors(source_code, master_brief))
+        final_errors.extend(
+            generated_content_contract_errors(
+                source_code,
+                master_brief,
+                extraction,
+                enforce_section_stack=True,
+            )
+        )
         if final_errors:
             logger.error(f"TSX validation still failing after retry: {final_errors}")
             return {
@@ -162,10 +191,15 @@ async def generate_landing_page_code(
     # Compile code
     logger.info(f"Compiling TSX code for site {site_id}")
     try:
+        capability_manifest = capability_manifest_for_source(
+            source_code,
+            runtime_mode="compiled-react-entry",
+        )
         compile_result = await compiler.compile_tsx(
             source_code=source_code,
             component_name=f"LandingPage_{site_id}",
             site_id=site_id,
+            capability_manifest=capability_manifest,
         )
 
         if compile_result.get("success"):
@@ -202,6 +236,7 @@ async def generate_landing_page_code(
                 "compilationStatus": "success",
                 "bundleCode": bundle_code,
                 "cssCode": css_code,
+                "capabilityManifest": capability_manifest,
             }
         else:
             return {
@@ -227,6 +262,7 @@ def _build_generation_prompt(
     master_brief: MasterBrief,
     extraction: ExtractionSnapshot,
     refinement_prompt: str | None = None,
+    site_id: str | None = None,
 ) -> str:
     """Build the main generation prompt — leads with inspiration, not restrictions."""
     # Extract brand tokens
@@ -369,6 +405,11 @@ Subtle motion. Trust signals. Refined color usage.
         }
         design_mode_guidance = mode_details.get(master_brief.designMode, "")
 
+    form_endpoint = (
+        f"{os.getenv('BACKEND_PUBLIC_URL', 'http://localhost:8000').rstrip('/')}/api/v1/public/forms/{site_id}"
+        if site_id
+        else "http://localhost:8000/api/v1/public/forms/{site_id}"
+    )
     prompt = f"""You are building an Awwwards-worthy landing page. Your goal is to create something memorable — not a template, but an experience.
 
 ## PRIORITY ORDER
@@ -430,6 +471,8 @@ Import from '@/components/ui/*':
 - Style: {master_brief.visualStyle}
 - Color Strategy: {master_brief.colorStrategy}
 - Motion Level: {master_brief.motionLevel}
+- Hero Mode: {getattr(master_brief, "heroMode", "typography_only")} (image_led must use an approved asset; typography_only must not render a fake media shell)
+- Hero Archetype: {getattr(master_brief, "heroArchetype", "typography")} (the hero must visibly implement this concept: photography, typography, SVG/diagram, motion graphic, WebGL with a real 2D fallback, or hybrid)
 - Special Effects: {", ".join(master_brief.specialEffects) if master_brief.specialEffects else "None specified"}
 
 **Hero**:
@@ -497,6 +540,9 @@ Import from '@/components/ui/*':
 9. **ANIMATION VISIBILITY RULE**: Every `motion.*` element with `initial={{{{ opacity: 0 }}}}` MUST become visible. Use `animate` (not `whileInView`) for above-fold/hero elements. Use `whileInView` with `viewport={{{{ once: true, amount: 0.1 }}}}` for below-fold elements. NEVER leave an element at opacity:0 permanently.
 10. Keep the complete component concise enough to finish in one response: target under 3,500 lines and under 12,000 generated tokens. Prefer reusable arrays, compact CSS classes, and a small number of polished sections over duplicated markup. Never stop mid-tag, mid-string, or mid-expression.
 11. HARD COPY RULE: avoid em dash (—) and en dash (–) characters in generated copy. Use an ASCII hyphen (-) or rewrite the sentence before returning the component.
+12. If a contact form is present, it must use native method="post" action="{form_endpoint}" with named email/name/message fields and a hidden website honeypot. Do not use fetch, XHR, sendBeacon, or storage for submission.
+13. Render a complete SEO contract: title, meta description, viewport, canonical link, Open Graph title/description/type/url, JSON-LD Organization/WebSite data, and a data SVG favicon. Use explicit loading/decoding/sizes on every image.
+14. If you import Three.js or React Three Fiber, render a real non-WebGL branch using an element marked `data-webgl-fallback` (or an equivalent explicit 2D SVG/DOM branch) in the JSX. A comment or prose mention of "fallback" is not sufficient.
 
 ## BROWSER-ONLY CONSTRAINTS
 
@@ -897,7 +943,11 @@ def _validate_tsx_source(source_code: str) -> list[str]:
 
 
 def _build_refinement_prompt(
-    *, current_source_code: str, refinement_prompt: str, is_html: bool = False
+    *,
+    current_source_code: str,
+    refinement_prompt: str,
+    is_html: bool = False,
+    hero_archetype: str = "typography",
 ) -> str:
     """Build a prompt for targeted in-place edits to existing generated code."""
     if is_html:
@@ -915,6 +965,8 @@ def _build_refinement_prompt(
 - Apply ONLY the requested changes — do not redesign, restructure, or alter anything not mentioned
 - Preserve all styles, scripts, animations, and layout that are not being changed
 - Do NOT add, remove, or reorder sections unless explicitly asked
+- Keep the approved SEO metadata, canonical identity, verified contact data, asset URLs, data-purpose section markers, and evidence IDs intact. Do not add executable scripts, inline event handlers, CDN URLs, or unapproved assets.
+- Preserve the selected hero archetype ({hero_archetype}) or implement it visibly if the requested edit changes the hero. Do not replace an SVG, motion, WebGL fallback, photography, or hybrid treatment with an empty media shell.
 - Return ONLY the complete modified HTML — no markdown fences, no explanations
 - Start with `<!DOCTYPE html>` and include the full document
 """
@@ -932,6 +984,7 @@ def _build_refinement_prompt(
 - Apply ONLY the requested changes — do not redesign, restructure, or alter anything not mentioned
 - Preserve all animations, interactions, layout, and creative elements that are not being changed
 - Keep the same imports, component structure, and TypeScript types
+- Preserve the selected hero archetype ({hero_archetype}) or implement it visibly if the requested edit changes the hero. Do not replace an SVG, motion, WebGL fallback, photography, or hybrid treatment with a generic text block.
 - Do NOT add, remove, or reorder sections unless explicitly asked
 - Return ONLY the complete modified TSX code — no markdown fences, no explanations
 - Start with `'use client';` and end with the closing brace of the component
@@ -944,6 +997,11 @@ async def refine_landing_page_code(
     current_source_code: str,
     refinement_prompt: str,
     variant_type: str = "nextjs",
+    master_brief: MasterBrief | None = None,
+    extraction: Any | None = None,
+    preview_slug: str | None = None,
+    current_static_css: str | None = None,
+    current_static_js: str | None = None,
 ) -> dict[str, Any]:
     """Apply targeted operator edits to existing generated code without full regeneration."""
     llm = get_llm_client()
@@ -961,6 +1019,7 @@ async def refine_landing_page_code(
         current_source_code=current_source_code,
         refinement_prompt=refinement_prompt,
         is_html=is_html_variant,
+        hero_archetype=getattr(master_brief, "heroArchetype", "typography") if master_brief else "typography",
     )
 
     logger.info(f"Refining {variant_type} code for site {site_id}")
@@ -979,6 +1038,9 @@ async def refine_landing_page_code(
     # Only validate TSX for Next.js sites, skip for HTML variants
     if not is_html_variant:
         validation_errors = _validate_tsx_source(source_code)
+        if master_brief is not None:
+            validation_errors.extend(capability_usage_errors(source_code, master_brief))
+            validation_errors.extend(hero_archetype_errors(source_code, master_brief))
         if validation_errors:
             logger.warning(
                 f"TSX validation errors on refinement attempt: {validation_errors}"
@@ -991,24 +1053,32 @@ async def refine_landing_page_code(
                 "error": f"Code validation failed: {', '.join(validation_errors[:3])}",
             }
 
-    # For HTML variants, skip compilation and return immediately
+    # Static HTML has the same publication boundary as the initial generator:
+    # validate the complete artifact, compile its behavior, and return the
+    # fields required to update the public preview.
     if is_html_variant:
-        logger.info(
-            f"HTML variant {variant_type} refined successfully for site {site_id}"
+        return await _finalize_refined_static_html(
+            site_id=site_id,
+            variant_type=variant_type,
+            html=source_code,
+            master_brief=master_brief,
+            extraction=extraction,
+            preview_slug=preview_slug,
+            css=current_static_css,
+            js=current_static_js,
         )
-        return {
-            "success": True,
-            "sourceCode": source_code,
-            "compilationStatus": "success",
-            "staticHtml": source_code,
-        }
 
     logger.info(f"Compiling refined TSX code for site {site_id}")
     try:
+        capability_manifest = capability_manifest_for_source(
+            source_code,
+            runtime_mode="compiled-react-entry",
+        )
         compile_result = await compiler.compile_tsx(
             source_code=source_code,
             component_name=f"LandingPage_{site_id}",
             site_id=site_id,
+            capability_manifest=capability_manifest,
         )
 
         if compile_result.get("success"):
@@ -1044,6 +1114,7 @@ async def refine_landing_page_code(
                 "compilationStatus": "success",
                 "bundleCode": bundle_code,
                 "cssCode": css_code,
+                "capabilityManifest": capability_manifest,
             }
         else:
             return {
@@ -1064,6 +1135,178 @@ async def refine_landing_page_code(
         }
 
 
+async def _finalize_refined_static_html(
+    *,
+    site_id: str,
+    variant_type: str,
+    html: str,
+    master_brief: MasterBrief | None,
+    extraction: Any | None,
+    preview_slug: str | None,
+    css: str | None,
+    js: str | None,
+) -> dict[str, Any]:
+    """Run the complete static publication pipeline for an HTML refinement."""
+    if master_brief is None or extraction is None:
+        return {
+            "success": False,
+            "sourceCode": html,
+            "compilationStatus": "validation_failed",
+            "error": "HTML refinement requires the approved brief and extraction",
+        }
+    if not css or not js:
+        return {
+            "success": False,
+            "sourceCode": html,
+            "compilationStatus": "validation_failed",
+            "error": "HTML refinement requires the existing static CSS and JavaScript artifacts",
+        }
+
+    from app.core.static_html_generator import (
+        _apply_static_safety_layer,
+        _compile_static_entry,
+        _enforce_footer_year,
+        _inject_static_seo_contract,
+        _inject_conceptual_visual,
+        _remove_generated_asset_references,
+        _static_canonical_url,
+        _upload_to_s3,
+        _validate_generated_document,
+    )
+    from app.core.semantic_validation import sanitize_unsupported_proof
+
+    # Remove only delivery wrappers owned by LenQuant. Provider-authored
+    # executable HTML remains subject to validate_generated_html.
+    html = re.sub(
+        r"\s*<script\b[^>]*\bsrc\s*=\s*['\"][^'\"]*(?:static-assets|script\.js)[^'\"]*['\"][^>]*>\s*</script>",
+        "",
+        html,
+        flags=re.I | re.S,
+    )
+    html = re.sub(
+        r"\s*<script\b[^>]*>.*?(?:__LENMANAG_RUNTIME__|__LENMANAG_STATIC_READY__|data-generated-site-js).*?</script>",
+        "",
+        html,
+        flags=re.I | re.S,
+    )
+    html = re.sub(r"\s+on[a-z][a-z0-9_-]*\s*=\s*(['\"]).*?\1", "", html, flags=re.I | re.S)
+
+    canonical_url = _static_canonical_url(site_id, preview_slug)
+    html = _enforce_footer_year(
+        html,
+        extraction=extraction,
+        company_name=getattr(extraction.summary, "companyName", None),
+    )
+    html = sanitize_unsupported_proof(
+        html,
+        approved_proof=[
+            (item.get("quote", "") if isinstance(item, dict) else getattr(item, "quote", ""))
+            for item in list(getattr(getattr(extraction, "analysis", None), "testimonials", None) or [])
+            + list(getattr(extraction, "extractedTestimonials", None) or [])
+            if (item.get("quote", "") if isinstance(item, dict) else getattr(item, "quote", ""))
+        ],
+    )
+    html = _inject_static_seo_contract(html, extraction, canonical_url)
+    html, css, js = _apply_static_safety_layer(html, css, js, master_brief, variant_type)
+    html = _inject_conceptual_visual(html, master_brief, extraction, variant_type)
+    try:
+        _validate_generated_document(
+            html,
+            css,
+            js,
+            master_brief,
+            extraction,
+            expected_canonical_url=canonical_url,
+        )
+        if not _javascript_is_valid_for_refinement(js):
+            raise ValueError("Refined static JavaScript is not syntactically valid")
+        bundled_js, bundled_css, capability_manifest = await _compile_static_entry(
+            js_content=js,
+            css_content=css,
+            site_id=site_id,
+            variant_type=variant_type,
+        )
+    except Exception as exc:
+        return {
+            "success": False,
+            "sourceCode": html,
+            "compilationStatus": "validation_failed",
+            "validationErrors": [str(exc)],
+            "error": f"Refined static artifact rejected: {exc}",
+        }
+
+    settings = get_settings()
+    css_url = _upload_to_s3(
+        content=bundled_css,
+        filename=f"{site_id}/styles.css",
+        content_type="text/css",
+        bucket=settings.asset_s3_bucket,
+        prefix=settings.asset_s3_prefix,
+    )
+    js_url = _upload_to_s3(
+        content=bundled_js,
+        filename=f"{site_id}/script.js",
+        content_type="application/javascript",
+        bucket=settings.asset_s3_bucket,
+        prefix=settings.asset_s3_prefix,
+    )
+    if settings.asset_s3_bucket and (not css_url or not js_url):
+        return {
+            "success": False,
+            "sourceCode": html,
+            "compilationStatus": "upload_failed",
+            "error": "Refined static asset upload did not return both public URLs",
+        }
+
+    if css_url or js_url:
+        backend_url = (settings.backend_public_url or "http://localhost:8000").rstrip("/")
+        css_version = hashlib.sha256(bundled_css.encode("utf-8")).hexdigest()[:16]
+        js_version = hashlib.sha256(bundled_js.encode("utf-8")).hexdigest()[:16]
+        css_url = f"{backend_url}/api/v1/static-assets/{site_id}/css?v={css_version}"
+        js_url = f"{backend_url}/api/v1/static-assets/{site_id}/js?v={js_version}"
+    html = _remove_generated_asset_references(html)
+    html = re.sub(r"\s*<link\b[^>]*\brel\s*=\s*['\"]stylesheet['\"][^>]*>", "", html, flags=re.I | re.S)
+    html = re.sub(r"\s*<script\b[^>]*\bsrc\s*=\s*['\"][^'\"]+['\"][^>]*>\s*</script>", "", html, flags=re.I | re.S)
+    if css_url:
+        html = html.replace("</head>", f"<link rel='stylesheet' href='{css_url}'>\n</head>")
+    else:
+        html = html.replace("</head>", f"<style data-generated-site-css>{bundled_css}</style>\n</head>")
+    if js_url:
+        html = html.replace("</body>", f"<script src='{js_url}'></script>\n</body>")
+    else:
+        html = html.replace("</body>", f"<script data-generated-site-js>{bundled_js}</script>\n</body>")
+
+    return {
+        "success": True,
+        "sourceCode": html,
+        "staticHtml": html,
+        "staticCssUrl": css_url,
+        "staticJsUrl": js_url,
+        "staticCssCode": css,
+        "staticJsCode": js,
+        "compiledStaticCssCode": bundled_css,
+        "compiledStaticJsCode": bundled_js,
+        "capabilityManifest": capability_manifest,
+        "compilationStatus": "success",
+    }
+
+
+def _javascript_is_valid_for_refinement(source: str) -> bool:
+    """Use the same parser used by static generation without importing internals."""
+    try:
+        import subprocess
+        import tempfile
+
+        with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as handle:
+            handle.write(source)
+            filename = handle.name
+        result = subprocess.run(["node", "--check", filename], capture_output=True, check=False, timeout=10)
+        os.unlink(filename)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 async def refine_with_retry(
     *,
     site_id: str,
@@ -1071,6 +1314,11 @@ async def refine_with_retry(
     refinement_prompt: str,
     variant_type: str = "nextjs",
     max_retries: int = MAX_COMPILATION_RETRIES,
+    master_brief: MasterBrief | None = None,
+    extraction: Any | None = None,
+    preview_slug: str | None = None,
+    current_static_css: str | None = None,
+    current_static_js: str | None = None,
 ) -> dict[str, Any]:
     """Refine landing page code with retry on compilation failure."""
     result: dict[str, Any] = {
@@ -1089,6 +1337,11 @@ async def refine_with_retry(
             current_source_code=current_source_code,
             refinement_prompt=refinement_prompt,
             variant_type=variant_type,
+            master_brief=master_brief,
+            extraction=extraction,
+            preview_slug=preview_slug,
+            current_static_css=current_static_css,
+            current_static_js=current_static_js,
         )
 
         if result["success"]:

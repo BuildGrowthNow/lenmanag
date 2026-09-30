@@ -128,3 +128,16 @@ def check_api_rate_limit(request: Request, endpoint: str) -> None:
         max_requests=100,
         window_seconds=60,
     )
+
+
+def check_public_form_rate_limit(request: Request, endpoint: str) -> None:
+    """Restrict anonymous generated-site submissions per client IP."""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    get_rate_limiter().check_rate_limit(
+        request=request,
+        endpoint=endpoint,
+        max_requests=max(1, settings.public_form_max_requests),
+        window_seconds=max(60, settings.public_form_window_seconds),
+    )

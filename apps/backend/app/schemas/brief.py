@@ -17,6 +17,14 @@ DesignMode = Literal[
     "playful",  # Organic shapes, bouncy animations, vibrant colors
     "corporate",  # Professional but not boring — structured with subtle polish
 ]
+HeroArchetype = Literal[
+    "photography",
+    "typography",
+    "svg_diagram",
+    "motion_graphic",
+    "webgl_fallback",
+    "hybrid",
+]
 BriefSourceKind = Literal["source_backed", "inferred", "extraction"]
 BriefReferenceKind = Literal["page", "asset"]
 
@@ -254,6 +262,14 @@ class MasterBrief(BaseModel):
     heroMode: Literal["image_led", "typography_only"] = Field(
         default="typography_only",
         description="Explicit media contract for the hero; typography-only has no fake media shell.",
+    )
+    heroArchetype: HeroArchetype = Field(
+        default="typography",
+        description=(
+            "The visible hero concept: photography, typography, svg_diagram, "
+            "motion_graphic, webgl_fallback, or hybrid. This is creative intent, "
+            "separate from the hero media safety contract."
+        ),
     )
     specialEffects: list[str] = Field(
         default_factory=list, description="3d-hero, parallax-scroll, particle-bg, etc"

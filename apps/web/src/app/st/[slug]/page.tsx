@@ -4,9 +4,7 @@
  * Accessed via public URLs: /st/{slug}
  */
 
-import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { PreviewRenderer } from './preview-renderer';
 import { isPreviewUsable } from '@/lib/api/sites';
 
 interface PageProps {
@@ -49,13 +47,17 @@ export default async function PreviewPage({ params }: PageProps) {
       <iframe
         title={`Generated preview for ${slug}`}
         src={`/st/${encodeURIComponent(slug)}/document`}
-        className="min-h-screen w-full border-0"
-        style={{ height: '100vh' }}
-      />
+      className="min-h-screen w-full border-0"
+      style={{ height: '100vh' }}
+      sandbox="allow-scripts"
+      referrerPolicy="no-referrer"
+    />
     );
   }
 
-  // Check if this is a compiled Next.js bundle
+  // Compiled model output is rendered in a separate sandboxed document. The
+  // route below fetches the artifact server-side and mounts it only inside the
+  // isolated frame, keeping generated code out of this preview shell.
   const isCompiledBundle = isPreviewUsable(site) && !!site.compiledBundleUrl;
 
   if (!isCompiledBundle) {
@@ -73,20 +75,13 @@ export default async function PreviewPage({ params }: PageProps) {
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-zinc-950">
-          <div className="animate-pulse text-zinc-400">Loading preview...</div>
-        </div>
-      }
-    >
-      <PreviewRenderer
-        slug={slug}
-        bundleUrl={site.compiledBundleUrl}
-        cssUrl={site.compiledCssUrl}
-        brandTokens={site.brandTokens}
-        compilationStatus={site.compilationStatus}
-      />
-    </Suspense>
+    <iframe
+      title={`Generated preview for ${slug}`}
+      src={`/st/${encodeURIComponent(slug)}/compiled`}
+      className="min-h-screen w-full border-0"
+      style={{ height: '100vh' }}
+      sandbox="allow-scripts"
+      referrerPolicy="no-referrer"
+    />
   );
 }

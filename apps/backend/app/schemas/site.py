@@ -411,6 +411,12 @@ class GeneratedSite(BaseModel):
     staticJsUrl: Optional[str] = Field(
         default=None, description="S3 URL to script.js for static variants"
     )
+    staticCssCode: Optional[str] = Field(
+        default=None, description="Validated static CSS artifact for refinement and export"
+    )
+    staticJsCode: Optional[str] = Field(
+        default=None, description="Validated compiled static JS artifact for refinement and export"
+    )
 
     themeId: str
     themeKey: str
@@ -426,6 +432,7 @@ class GeneratedSite(BaseModel):
     awwwardsPatternMetadata: Optional[dict[str, Any]] = None
     qualityScore: int
     qualityScoreSource: Literal["visual", "fallback"] = "fallback"
+    capabilityManifest: Optional[dict[str, Any]] = None
     readinessStatus: SiteReadinessStatus
     qaStatus: SiteQaStatus
     reviewRubric: list[SiteQualityCheck] = Field(default_factory=list)
@@ -436,6 +443,7 @@ class GeneratedSite(BaseModel):
     browserReviewState: ReviewWorkflowState = "not_reviewed"
     publishApprovalState: PublishApprovalState = "pending"
     screenshotRefs: list[SiteScreenshotMetadata] = Field(default_factory=list)
+    qualityGateReport: Optional[dict[str, Any]] = None
     latestReviewId: Optional[str] = None
     handoffRecordId: Optional[str] = None
     diversityNotes: list[str] = Field(default_factory=list)
@@ -464,6 +472,12 @@ class GeneratedSite(BaseModel):
     )
     compiledCssUrl: Optional[str] = Field(
         default=None, description="URL to the generated per-site stylesheet"
+    )
+    staticCssCode: Optional[str] = Field(
+        default=None, description="Validated static CSS artifact for refinement and export"
+    )
+    staticJsCode: Optional[str] = Field(
+        default=None, description="Validated compiled static JS artifact for refinement and export"
     )
     compilationStatus: Optional[str] = Field(
         default=None, description="Status of compilation: pending, success, failed"

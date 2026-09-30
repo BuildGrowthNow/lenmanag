@@ -12,6 +12,7 @@ from io import BytesIO
 from typing import Any, cast
 from uuid import uuid4
 
+import httpx
 from pymongo.results import UpdateResult
 from app.core.analytics import analytics_repository
 from app.core.color_system import generate_color_system
@@ -28,6 +29,7 @@ from app.core.rollout import enhanced_html_enabled, rollout_decision
 from app.core.screenshot_comparator import ScreenshotComparator
 from app.schemas.brief import (
     BriefEvidence,
+    BriefSourceReference,
     SiteBrief,
     VisualCritique,
     VisualRedesignBrief,
@@ -2383,6 +2385,82 @@ def _site_source_attribution(
     }
 
 
+def _generated_site_traceability(
+    brief: Any, extraction: ExtractionSnapshot
+) -> list[dict[str, Any]]:
+    """Attach source evidence to each generated section and approved asset."""
+    refs: list[dict[str, Any]] = []
+    pages = list(getattr(extraction, "sourceCitations", None) or [])
+    source_sections = list(getattr(extraction, "sectionInventory", None) or [])
+    canonical = getattr(extraction, "canonicalWebsiteUrl", "") or ""
+
+    def add(ref: dict[str, Any]) -> None:
+        key = (ref.get("kind"), ref.get("sourceUrl"), ref.get("label"), ref.get("excerpt"))
+        if ref.get("sourceUrl") and key not in {
+            (item.get("kind"), item.get("sourceUrl"), item.get("label"), item.get("excerpt"))
+            for item in refs
+        }:
+            refs.append(ref)
+
+    for citation in pages[:80]:
+        data = citation.model_dump() if hasattr(citation, "model_dump") else dict(citation)
+        add(
+            {
+                "kind": "page",
+                "sourceUrl": data.get("pageUrl") or canonical,
+                "label": data.get("label") or data.get("evidenceType") or "Source page",
+                "excerpt": data.get("excerpt") or "",
+                "confidence": int(data.get("confidence") or 0),
+                "evidenceType": data.get("evidenceType"),
+            }
+        )
+
+    for cue in list(getattr(extraction, "brandAssetCues", None) or [])[:50]:
+        data = cue.model_dump() if hasattr(cue, "model_dump") else dict(cue)
+        add(
+            {
+                "kind": "asset",
+                "sourceUrl": data.get("sourceUrl") or data.get("pageUrl") or canonical,
+                "label": data.get("label") or data.get("assetType") or "Approved asset",
+                "excerpt": data.get("value") or "",
+                "confidence": int(data.get("confidence") or 0),
+                "assetType": data.get("assetType"),
+            }
+        )
+
+    for section in list(getattr(brief, "sections", None) or []):
+        purpose = str(getattr(section, "purpose", "section") or "section")
+        terms = " ".join(
+            str(value or "")
+            for value in (
+                purpose,
+                getattr(section, "headline", ""),
+                getattr(section, "contentSummary", ""),
+            )
+        ).casefold()
+        candidates = []
+        for source in source_sections:
+            data = source.model_dump() if hasattr(source, "model_dump") else dict(source)
+            haystack = " ".join(
+                str(data.get(key) or "")
+                for key in ("type", "heading", "text", "pageUrl")
+            ).casefold()
+            if any(token and token in haystack for token in terms.split() if len(token) > 3):
+                candidates.append(data)
+        candidate = candidates[0] if candidates else None
+        add(
+            {
+                "kind": "page",
+                "sourceUrl": (candidate or {}).get("pageUrl") or canonical,
+                "label": f"Generated section: {purpose}",
+                "excerpt": (candidate or {}).get("text") or getattr(section, "contentSummary", "") or "",
+                "confidence": int((candidate or {}).get("confidence") or 60),
+                "evidenceType": "section",
+            }
+        )
+    return refs[:160]
+
+
 def _check_theme_diversity_constraint(
     current_batch_sites: list[GeneratedSite],  # noqa: ARG001
     proposed_theme_key: str,  # noqa: ARG001
@@ -3348,6 +3426,7 @@ class SiteRepository:
                 extraction=extraction,
                 variant_type=variant_type,
                 site_id=site_id,
+                preview_slug=slug,
             )
             if not html_result.get("html", "").strip():
                 raise ValueError("static_html_empty_after_generation")
@@ -3536,6 +3615,10 @@ class SiteRepository:
             heroVariant=self._default_hero_variant(),
             sectionStack=[SiteSection.model_validate(section) for section in sections],
             ctaStrategy=CtaStrategy.model_validate(cta_strategy),
+            sourceTraceability=[
+                BriefSourceReference.model_validate(item)
+                for item in _generated_site_traceability(master_brief, extraction)
+            ],
             qualityScore=_quality_score(
                 brief=master_brief,
                 extraction=extraction,
@@ -3552,6 +3635,7 @@ class SiteRepository:
             sourceCode=code_result.get("sourceCode"),
             compiledBundleUrl=code_result.get("compiledBundleUrl"),
             compiledCssUrl=code_result.get("compiledCssUrl"),
+            capabilityManifest=code_result.get("capabilityManifest"),
             compilationStatus=code_result.get("compilationStatus", "pending"),
             createdAt=_now(),
             updatedAt=_now(),
@@ -3593,6 +3677,9 @@ class SiteRepository:
             staticHtml=html_result.get("html"),
             staticCssUrl=html_result.get("cssUrl"),
             staticJsUrl=html_result.get("jsUrl"),
+            staticCssCode=html_result.get("cssSourceCode") or html_result.get("cssCode"),
+            staticJsCode=html_result.get("jsSourceCode") or html_result.get("jsCode"),
+            capabilityManifest=html_result.get("capabilityManifest"),
             themeId="static-html",
             themeKey="static-html",
             themeName="Static HTML",
@@ -3603,6 +3690,10 @@ class SiteRepository:
             heroVariant=self._default_hero_variant(),
             sectionStack=[SiteSection.model_validate(section) for section in sections],
             ctaStrategy=CtaStrategy.model_validate(cta_strategy),
+            sourceTraceability=[
+                BriefSourceReference.model_validate(item)
+                for item in _generated_site_traceability(master_brief, extraction)
+            ],
             qualityScore=_quality_score(
                 brief=master_brief,
                 extraction=extraction,
@@ -4037,6 +4128,9 @@ class SiteRepository:
             snapshot = (run or {}).get("snapshot") or {}
             if snapshot.get("enhancedHtmlShadowMode"):
                 raise ValueError("shadow_mode_artifacts_cannot_be_published")
+        quality_gate_report = site.qualityGateReport or {}
+        if quality_gate_report.get("publishable") is not True:
+            raise ValueError("quality_gates_unmeasured_or_failed")
         review = await self._get_review_doc(site_id)
         record = self._handoff_doc_for_site(site, review)
         now = _now()
@@ -5285,11 +5379,50 @@ class SiteRepository:
             },
         )
 
+        master_brief = await lead_repository.get_master_brief(lead_id)
+        extraction = await lead_repository.get_extraction(lead_id)
+        if master_brief is None or extraction is None:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Brief or extraction missing before refinement",
+                error_message="Cannot validate refined site without brief/extraction",
+                finished=True,
+                lead_ids=[lead_id],
+            )
+            return None
+
+        static_css = current.staticCssCode
+        static_js = current.staticJsCode
+        if current.variantType and current.variantType.startswith("html_") and (
+            not static_css or not static_js
+        ):
+            # Backfill artifacts for sites generated before source artifacts
+            # were persisted, so refinement still validates the real bundle.
+            try:
+                async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+                    if not static_css and current.staticCssUrl:
+                        response = await client.get(current.staticCssUrl)
+                        if response.is_success:
+                            static_css = response.text
+                    if not static_js and current.staticJsUrl:
+                        response = await client.get(current.staticJsUrl)
+                        if response.is_success:
+                            static_js = response.text
+            except httpx.HTTPError as exc:
+                logger.warning("Unable to backfill static refinement artifacts for %s: %s", site_id, exc)
+
         result = await refine_with_retry(
             site_id=site_id,
             current_source_code=current.sourceCode,
             refinement_prompt=prompt_text,
             variant_type=current.variantType or "nextjs",
+            master_brief=master_brief,
+            extraction=extraction,
+            preview_slug=current.previewSlug,
+            current_static_css=static_css,
+            current_static_js=static_js,
         )
 
         if not result.get("success"):
@@ -5310,20 +5443,6 @@ class SiteRepository:
                 quality_score=0,
                 status="failed",
                 failure_reason=error_msg,
-            )
-            return None
-
-        master_brief = await lead_repository.get_master_brief(lead_id)
-        extraction = await lead_repository.get_extraction(lead_id)
-        if master_brief is None or extraction is None:
-            await lead_repository._update_job(  # noqa: SLF001
-                job_id,
-                status="failed",
-                progress=100,
-                step="Brief or extraction missing after refinement",
-                error_message="Cannot persist refined site without brief/extraction",
-                finished=True,
-                lead_ids=[lead_id],
             )
             return None
 
@@ -5580,7 +5699,7 @@ class SiteRepository:
             "qaStatus": computed_qa,
             "reviewRubric": [],
             "comparisonEntries": [],
-            "sourceTraceability": [],
+            "sourceTraceability": _generated_site_traceability(master_brief, extraction),
             "missingRequirements": list(master_brief.missingRequirements or []),
             "sourceAttribution": source_attribution,
             "browserReviewState": "not_reviewed",
@@ -5604,7 +5723,24 @@ class SiteRepository:
             "isManuallyRefined": refinement_prompt_id is not None,
             "improvementRecommendations": None,
             "sourceCode": result.get("sourceCode"),
+            "staticHtml": result.get("staticHtml")
+            if result.get("staticHtml") is not None
+            else (current.staticHtml if current else None),
+            "staticCssUrl": result.get("staticCssUrl")
+            if result.get("staticCssUrl") is not None
+            else (current.staticCssUrl if current else None),
+            "staticJsUrl": result.get("staticJsUrl")
+            if result.get("staticJsUrl") is not None
+            else (current.staticJsUrl if current else None),
+            "staticCssCode": result.get("staticCssCode")
+            if result.get("staticCssCode") is not None
+            else (current.staticCssCode if current else None),
+            "staticJsCode": result.get("staticJsCode")
+            if result.get("staticJsCode") is not None
+            else (current.staticJsCode if current else None),
             "compiledBundleUrl": result.get("compiledBundleUrl"),
+            "compiledCssUrl": result.get("compiledCssUrl"),
+            "capabilityManifest": result.get("capabilityManifest"),
             "compilationStatus": result.get("compilationStatus", "success"),
             "compilationError": None,
             "createdAt": current.createdAt if current else now,

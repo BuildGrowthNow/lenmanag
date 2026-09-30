@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import cast
+import json
 import os
-from urllib.parse import urlparse
+import re
+from datetime import datetime, timezone
+from typing import cast
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -15,6 +18,7 @@ from app.core.sites import (
     is_usable_generated_site,
 )
 from app.core.mongo import get_database
+from app.core.rate_limiter import check_public_form_rate_limit
 from app.core.sites import site_repository
 from app.core.versioning import response_meta
 from app.schemas.response import ResponseEnvelope, success_response
@@ -113,6 +117,119 @@ async def preview_site_variant(slug: str) -> Response:
     settings = get_settings()
     preview_base = settings.preview_base_url.rstrip("/")
     return RedirectResponse(url=f"{preview_base}/{site.previewSlug}")
+
+
+@router.post("/forms/{site_id}", response_class=HTMLResponse, status_code=200)
+async def submit_public_form(site_id: str, request: Request) -> HTMLResponse:
+    """Persist a generated-site contact form submission.
+
+    Generated static pages use native POST forms so delivery still works when
+    JavaScript is disabled and generated runtimes never need network access.
+    """
+    check_public_form_rate_limit(request, f"public-form:{site_id}")
+    _check_public_form_origin(request)
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > 16_384:
+                raise HTTPException(status_code=413, detail="Form payload is too large")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid content length") from exc
+    site = await site_repository.get_site(site_id)
+    if site is None or not is_artifact_generated_site(site):
+        raise HTTPException(status_code=404, detail="Site form is unavailable")
+
+    body = await request.body()
+    content_type = request.headers.get("content-type", "").lower()
+    if "application/json" in content_type:
+        try:
+            payload = json.loads(body.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid form payload") from exc
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail="Invalid form payload")
+    else:
+        payload = {
+            key: values[-1]
+            for key, values in parse_qs(
+                body.decode("utf-8"), keep_blank_values=True
+            ).items()
+        }
+
+    # Honeypot submissions are acknowledged without persistence.
+    if str(payload.get("website", "")).strip():
+        return HTMLResponse(_form_confirmation_page())
+
+    def clean(name: str, limit: int) -> str:
+        return str(payload.get(name, "") or "").strip()[:limit]
+
+    name = clean("name", 160)
+    email = clean("email", 320).lower()
+    message = clean("message", 4000)
+    phone = clean("phone", 80)
+    company = clean("company", 160)
+    if not email or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        raise HTTPException(status_code=422, detail="A valid email is required")
+    if not name and not message:
+        raise HTTPException(status_code=422, detail="Name or message is required")
+
+    database = get_database()
+    if database is None:
+        raise HTTPException(status_code=503, detail="Form delivery is unavailable")
+    notification_target = get_settings().public_form_notification_email.strip().lower()
+    submission = {
+            "siteId": site_id,
+            "leadId": site.leadId,
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "company": company,
+            "message": message,
+            "source": "generated_site_form",
+            "createdAt": datetime.now(timezone.utc),
+            "deliveryStatus": "stored_only",
+        }
+    result = await database["public_form_submissions"].insert_one(submission)
+    notified = False
+    if notification_target:
+        from app.core.email_service import send_public_form_notification
+
+        notified = await send_public_form_notification(
+            recipient=notification_target,
+            submission_id=str(result.inserted_id),
+            site_id=site_id,
+            name=name,
+            email=email,
+            message=message,
+            phone=phone,
+            company=company,
+        )
+        await database["public_form_submissions"].update_one(
+            {"_id": result.inserted_id},
+            {"$set": {"deliveryStatus": "notified" if notified else "notification_failed", "notifiedAt": datetime.now(timezone.utc) if notified else None}},
+        )
+    return HTMLResponse(_form_confirmation_page())
+
+
+def _check_public_form_origin(request: Request) -> None:
+    """Reject browser submissions from unrelated origins when a browser sends one."""
+    origin = (request.headers.get("origin") or "").strip().rstrip("/")
+    referer = (request.headers.get("referer") or "").strip()
+    candidate = origin or (urlparse(referer).scheme + "://" + urlparse(referer).netloc if referer else "")
+    if not candidate:
+        return
+    settings = get_settings()
+    allowed = {
+        urlparse(settings.frontend_url).scheme + "://" + urlparse(settings.frontend_url).netloc,
+        urlparse(settings.backend_public_url).scheme + "://" + urlparse(settings.backend_public_url).netloc,
+        urlparse(settings.preview_base_url).scheme + "://" + urlparse(settings.preview_base_url).netloc,
+    }
+    if candidate not in {value.rstrip("/") for value in allowed if value != "://"}:
+        raise HTTPException(status_code=403, detail="Form origin is not allowed")
+
+
+def _form_confirmation_page() -> str:
+    return """<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Message received</title></head><body><main><h1>Message received</h1><p>Thanks. The team will be in touch soon.</p></main></body></html>"""
 
 
 @router.get("/redesign/{slug}", response_model=ResponseEnvelope[RedesignPageData])

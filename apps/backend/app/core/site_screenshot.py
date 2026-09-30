@@ -12,7 +12,7 @@ import importlib
 import logging
 import os
 import json
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -27,6 +27,16 @@ logger = logging.getLogger(__name__)
 _VIEWPORT_WIDTH = 1440
 _VIEWPORT_HEIGHT = 900
 _MOBILE_VIEWPORT = {"width": 390, "height": 844}
+
+
+def _expected_canonical_url(preview_url: str) -> str:
+    parsed = urlsplit(preview_url)
+    path = parsed.path.rstrip("/")
+    if path.endswith("/document"):
+        path = path[: -len("/document")]
+    return urlunsplit(
+        (parsed.scheme.replace("http", "https", 1), parsed.netloc, path, "", "")
+    )
 
 
 def capture_site_screenshot(
@@ -147,6 +157,44 @@ def capture_site_screenshot(
                 qa["brokenImages"] = page.locator("img").evaluate_all(
                     "els => els.filter(img => !img.complete || !img.naturalWidth).length"
                 )
+                qa["seoContract"] = page.evaluate(
+                    """(expectedCanonical) => {
+                      const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.content?.trim();
+                      const property = (name) => document.querySelector(`meta[property="${name}"]`)?.content?.trim();
+                      const canonical = document.querySelector('link[rel="canonical"]')?.href;
+                      const favicon = document.querySelector('link[rel~="icon"]')?.href || '';
+                      const structured = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).some((node) => {
+                        try { const value = JSON.parse(node.textContent || '{}'); return ['Organization', 'WebSite', 'WebPage'].includes(value['@type']); }
+                        catch (_) { return false; }
+                      });
+                      const structuredMatches = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).some((node) => {
+                        try { const value = JSON.parse(node.textContent || '{}'); return value.url === expectedCanonical; }
+                        catch (_) { return false; }
+                      });
+                      const images = Array.from(document.images).every((img) =>
+                        !!img.alt && ['lazy', 'eager'].includes(img.getAttribute('loading')) &&
+                        !!img.getAttribute('decoding') && !!img.getAttribute('sizes')
+                      );
+                      const forms = Array.from(document.forms).every((form) =>
+                        form.method.toLowerCase() === 'post' && form.action.includes('/api/v1/public/forms/') &&
+                        !!form.querySelector('[name="email"]') && !!form.querySelector('[name="website"]')
+                      );
+                      return {
+                        title: !!document.title.trim(),
+                        description: !!meta('description'),
+                        viewport: !!meta('viewport'),
+                        canonical: !!canonical,
+                        canonicalMatches: canonical === expectedCanonical,
+                        openGraph: ['og:title', 'og:description', 'og:type', 'og:url'].every(property),
+                        structuredData: structured,
+                        structuredDataMatches: structuredMatches,
+                        favicon: favicon.startsWith('data:image/svg+xml'),
+                        images,
+                        forms,
+                      };
+                    }""",
+                    _expected_canonical_url(preview_url),
+                )
                 qa["missingFooter"] = page.locator("footer").count() != 1
                 qa["emptyMediaRegions"] = page.locator(
                     "[data-media-required]"
@@ -162,7 +210,7 @@ def capture_site_screenshot(
                     "document.fonts ? document.fonts.status === 'loaded' : true"
                 )
                 qa["hiddenAfterScroll"] = page.locator(
-                    "[data-animate], .animate-on-scroll"
+                    "[data-animate], .animate-on-scroll, [data-lq-reveal]"
                 ).evaluate_all(
                     "els => els.filter(el => getComputedStyle(el).opacity === '0' || getComputedStyle(el).visibility === 'hidden').length"
                 )
@@ -246,7 +294,7 @@ def capture_site_screenshot(
                 qa["reducedMotion"] = reduced.evaluate(
                     """() => ({
                       requested: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-                      hidden: Array.from(document.querySelectorAll('[data-animate], .animate-on-scroll')).filter(
+                      hidden: Array.from(document.querySelectorAll('[data-animate], .animate-on-scroll, [data-lq-reveal]')).filter(
                         el => getComputedStyle(el).opacity === '0' || getComputedStyle(el).visibility === 'hidden'
                       ).length
                     })"""
@@ -370,4 +418,11 @@ def _fatal_runtime_failures(qa: dict[str, object]) -> list[str]:
         failures.append("content_hidden_after_scroll")
     if qa.get("horizontalOverflow"):
         failures.append("horizontal_overflow")
+    seo_contract = qa.get("seoContract") or {}
+    if any(not seo_contract.get(key, False) for key in (
+        "title", "description", "viewport", "canonical", "canonicalMatches",
+        "openGraph", "structuredData", "structuredDataMatches", "favicon",
+        "images", "forms",
+    )):
+        failures.append("seo_or_form_contract_failed")
     return failures

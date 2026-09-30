@@ -473,7 +473,7 @@ a:hover {
   max-width: none;
 }
 
-.pullquote footer {
+.pullquote .attribution {
   font-size: 0.9rem;
   opacity: 0.85;
 }

@@ -318,6 +318,8 @@ Return a JSON object with this structure:
   "visualStyle": "Overall aesthetic (be specific, not 'clean and modern')",
   "colorStrategy": "How colors create mood (e.g., 'dark canvas with electric blue accents for tech authority')",
   "motionLevel": "none|subtle|moderate|dramatic",
+  "heroMode": "image_led|typography_only",
+  "heroArchetype": "photography|typography|svg_diagram|motion_graphic|webgl_fallback|hybrid",
   "specialEffects": ["parallax-scroll", "3d-hero", "particle-bg", "cursor-glow", "morphing-shapes"],
   "creativeDirection": {{
     "designConcept": "One sentence capturing the creative vision (e.g., 'A dark command center where data comes alive')",
@@ -350,6 +352,8 @@ Return a JSON object with this structure:
 
 CRITICAL:
 - Every field must be populated with real, specific content
+- Choose heroMode explicitly. Use image_led only when approved cached photography or a verified logo/visual asset is available and the hero genuinely benefits from it; otherwise use typography_only. Never choose image_led for an empty media shell.
+- Choose heroArchetype explicitly. This is the visible creative treatment, not a media permission: photography uses approved extracted imagery, typography uses type as the visual, svg_diagram uses inline SVG/diagrams, motion_graphic uses implemented animation, webgl_fallback uses Three.js/WebGL plus a real 2D fallback, and hybrid combines at least two of these. Do not select photography without approved photography or webgl_fallback without a fallback-capable effect.
 - The creativeDirection must have SPECIFIC techniques, not generic descriptions
 - suggestedApproach for each section should describe a specific component pattern
 - Think like an Awwwards judge — what makes this site worth featuring?
@@ -391,6 +395,8 @@ def _build_refinement_prompt(
         ],
         "visualStyle": previous_brief.visualStyle,
         "motionLevel": previous_brief.motionLevel,
+        "heroMode": getattr(previous_brief, "heroMode", "typography_only"),
+        "heroArchetype": getattr(previous_brief, "heroArchetype", "typography"),
         "creativeDirection": {
             "designConcept": previous_brief.creativeDirection.designConcept,
             "heroTreatment": previous_brief.creativeDirection.heroTreatment,
@@ -423,6 +429,8 @@ Return a JSON object with this structure:
   "visualStyle": "Description of look/feel (be specific)",
   "colorStrategy": "How colors should be used",
   "motionLevel": "none|subtle|moderate|dramatic",
+  "heroMode": "image_led|typography_only",
+  "heroArchetype": "photography|typography|svg_diagram|motion_graphic|webgl_fallback|hybrid",
   "specialEffects": ["3d-hero", "parallax-scroll"],
   "creativeDirection": {{
     "designConcept": "One sentence capturing the creative vision",
@@ -711,6 +719,80 @@ def _build_master_brief_from_response(
     if design_mode not in valid_design_modes:
         design_mode = None
 
+    # The hero media decision is part of the approved brief contract. Keep a
+    # conservative fallback for older LLM responses, and never allow an
+    # image-led brief when the extractor did not produce a usable cached asset.
+    requested_hero_mode = str(brief_data.get("heroMode", "")).strip().lower()
+    has_approved_hero_asset = bool(
+        brand_assets.imageUrls
+        or brand_assets.logoUrl
+        or brand_assets.logoLightUrl
+        or brand_assets.logoDarkUrl
+        or brand_assets.logoVariants
+    )
+    if requested_hero_mode not in {"image_led", "typography_only"}:
+        requested_hero_mode = "image_led" if has_approved_hero_asset else "typography_only"
+    hero_mode = (
+        "image_led"
+        if requested_hero_mode == "image_led" and has_approved_hero_asset
+        else "typography_only"
+    )
+
+    # Normalize creative hero intent separately from the safety-oriented media
+    # mode. Persisting this choice makes every renderer accountable for the
+    # visual idea selected by the brief instead of silently defaulting to a
+    # generic text hero.
+    requested_hero_archetype = str(brief_data.get("heroArchetype", "")).strip().lower()
+    archetype_aliases = {
+        "image": "photography",
+        "image_led": "photography",
+        "photo": "photography",
+        "photographic": "photography",
+        "type": "typography",
+        "kinetic_typography": "motion_graphic",
+        "svg": "svg_diagram",
+        "diagram": "svg_diagram",
+        "webgl": "webgl_fallback",
+        "three": "webgl_fallback",
+        "motion": "motion_graphic",
+    }
+    requested_hero_archetype = archetype_aliases.get(
+        requested_hero_archetype, requested_hero_archetype
+    )
+    valid_hero_archetypes = {
+        "photography",
+        "typography",
+        "svg_diagram",
+        "motion_graphic",
+        "webgl_fallback",
+        "hybrid",
+    }
+    direction_text = " ".join(
+        str(value or "")
+        for value in (
+            creative_direction.heroTreatment,
+            creative_direction.signatureTechnique,
+            *creative_direction.inspirationKeywords,
+            *brief_data.get("specialEffects", []),
+        )
+    ).lower()
+    if requested_hero_archetype not in valid_hero_archetypes:
+        if any(token in direction_text for token in ("webgl", "three", "3d")):
+            requested_hero_archetype = "webgl_fallback"
+        elif any(token in direction_text for token in ("photo", "photograph", "image", "video", "full-bleed")) and brand_assets.imageUrls:
+            requested_hero_archetype = "photography"
+        elif any(token in direction_text for token in ("svg", "diagram", "geometric", "illustration")):
+            requested_hero_archetype = "svg_diagram"
+        elif any(token in direction_text for token in ("motion", "kinetic", "animation", "particle", "parallax")):
+            requested_hero_archetype = "motion_graphic"
+        else:
+            requested_hero_archetype = "typography"
+    if requested_hero_archetype == "photography" and not brand_assets.imageUrls:
+        requested_hero_archetype = "svg_diagram" if "svg" in direction_text or "diagram" in direction_text else "typography"
+    hero_archetype = requested_hero_archetype
+    if hero_archetype in {"typography", "svg_diagram", "motion_graphic", "webgl_fallback"}:
+        hero_mode = "typography_only"
+
     master_brief = MasterBrief(
         id=str(uuid4()),
         leadId=lead_id,
@@ -726,6 +808,8 @@ def _build_master_brief_from_response(
         visualStyle=brief_data.get("visualStyle", "Clean and modern"),
         colorStrategy=brief_data.get("colorStrategy", "Neutral with subtle accents"),
         motionLevel=motion_level,
+        heroMode=hero_mode,
+        heroArchetype=hero_archetype,
         specialEffects=brief_data.get("specialEffects", []),
         creativeDirection=creative_direction,
         designMode=design_mode,

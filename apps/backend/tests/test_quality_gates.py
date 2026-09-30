@@ -23,8 +23,9 @@ def test_quality_gate_report_distinguishes_unmeasured_from_failed() -> None:
         }
     )
     assert report["gates"]["evidenceSafety"] is None
-    assert "evidenceSafety" not in report["hardFailures"]
-    assert report["publishable"] is True
+    assert "evidenceSafety" in report["hardFailures"]
+    assert "evidenceSafety" in report["unmeasured"]
+    assert report["publishable"] is False
 
 
 def test_shadow_rollout_never_allows_publication_and_rolls_back_on_latency() -> None:

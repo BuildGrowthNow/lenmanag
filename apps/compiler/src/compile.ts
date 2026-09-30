@@ -6,7 +6,7 @@
 import * as esbuild from 'esbuild';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
-import { validateTsxSource, validateDeclaredImports, validateDeclaredCapabilityUsage, validateCapabilityFallback, extractImportedDependencies, sanitizeComponentName } from './validate.js';
+import { validateTsxSource, validateJavaScriptSource, validateDeclaredCapabilityUsage, validateCapabilityFallback, extractImportedDependencies, sanitizeComponentName } from './validate.js';
 import { createVirtualModulesPlugin } from './virtual-modules-plugin.js';
 
 export interface CompileRequest {
@@ -38,7 +38,7 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
 
   // Validate source code first
   const validation = jsEntry
-    ? validateDeclaredImports(entrySource, capabilityManifest?.dependencies)
+    ? validateJavaScriptSource(entrySource, capabilityManifest?.dependencies)
     : validateTsxSource(entrySource, capabilityManifest?.dependencies);
   if (capabilityManifest && validation.valid) {
     validation.errors.push(...validateDeclaredCapabilityUsage(entrySource, capabilityManifest?.dependencies).errors);

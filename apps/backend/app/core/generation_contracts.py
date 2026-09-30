@@ -44,7 +44,16 @@ def generation_preflight(brief: Any, *, asset_download_enabled: bool) -> Generat
     urls = list(getattr(assets, "imageUrls", None) or [])
     approved = [url for item in inventory if isinstance(item, dict) and item.get("approved") for url in [_cached_https(item.get("url"))] if url]
     approved.extend(url for url in (_cached_https(item) for item in urls) if url and url not in approved)
-    discovered = [item for item in inventory if isinstance(item, dict) and (item.get("sourceUrl") or item.get("url"))]
+    # A source URL is provenance, not a reason to block generation when the
+    # render URL is already cached and approved. Only uncached discoveries
+    # require the downloader to be enabled and healthy.
+    uncached_discovered = [
+        item
+        for item in inventory
+        if isinstance(item, dict)
+        and item.get("sourceUrl")
+        and not _cached_https(item.get("url"))
+    ]
     rejected = [item for item in inventory if isinstance(item, dict) and not _cached_https(item.get("url"))]
     mode = str(getattr(brief, "heroMode", "") or "").strip().lower()
     if mode not in {IMAGE_LED, TYPOGRAPHY_ONLY}:
@@ -53,8 +62,8 @@ def generation_preflight(brief: Any, *, asset_download_enabled: bool) -> Generat
         mode = IMAGE_LED if approved else TYPOGRAPHY_ONLY
     missing = list(getattr(brief, "missingRequirements", None) or [])
     blocks: list[GenerationBlock] = []
-    if discovered and not asset_download_enabled:
-        blocks.append(GenerationBlock("assets.downloader_disabled", "Source assets were discovered but asset downloading is disabled."))
+    if uncached_discovered and not asset_download_enabled:
+        blocks.append(GenerationBlock("assets.downloader_disabled", "Source assets require caching, but asset downloading is disabled."))
     if mode == IMAGE_LED and not approved:
         blocks.append(GenerationBlock("hero.approved_media_required", "Image-led hero requires at least one approved cached HTTPS asset."))
     return GenerationPreflight(mode, approved, rejected, missing, blocks)

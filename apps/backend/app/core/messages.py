@@ -295,7 +295,9 @@ Write the message now. Be specific, not generic. Reference their actual business
         from app.core.config import get_settings
 
         settings = get_settings()
-        app_base = (settings.preview_base_url or "https://sites.lenquant.com").rstrip(
+        # PREVIEW_BASE_URL includes the public /st route prefix; comparison
+        # pages live at the frontend origin, so do not append /compare to /st.
+        app_base = (settings.frontend_url or "https://sites.lenquant.com").rstrip(
             "/"
         )
         compare_url = f"{app_base}/compare/{lead_id}"

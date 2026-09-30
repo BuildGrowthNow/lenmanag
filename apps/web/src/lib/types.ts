@@ -1340,6 +1340,7 @@ export type CreativeDirection = {
 };
 
 export type DesignMode = "editorial" | "immersive" | "interactive" | "minimalist" | "playful" | "corporate";
+export type HeroArchetype = "photography" | "typography" | "svg_diagram" | "motion_graphic" | "webgl_fallback" | "hybrid";
 
 export type MasterBrief = {
   id: string;
@@ -1353,6 +1354,8 @@ export type MasterBrief = {
   visualStyle: string;
   colorStrategy: string;
   motionLevel: "none" | "subtle" | "moderate" | "dramatic";
+  heroMode?: "image_led" | "typography_only";
+  heroArchetype?: HeroArchetype;
   specialEffects: string[];
   creativeDirection?: CreativeDirection;
   designMode?: DesignMode;

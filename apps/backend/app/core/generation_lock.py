@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Global lock key in Redis
 GENERATION_LOCK_KEY = "lenquant:generation:lock"
 LOCK_TIMEOUT_SECONDS = 3600  # 1 hour max per generation
+_LOCAL_TEST_LOCK = asyncio.Lock()
 
 
 class GenerationLockTimeout(Exception):
@@ -55,6 +56,13 @@ async def generation_lock(
             await generate_site(...)
     """
     settings = get_settings()
+
+    # Unit tests use mongomock and must not require a developer Redis daemon.
+    # Keep the same serialization semantics inside the test process.
+    if settings.mongo_use_mock:
+        async with _LOCAL_TEST_LOCK:
+            yield
+        return
 
     # Parse Redis URL from Celery broker
     redis_url = settings.celery_broker_url

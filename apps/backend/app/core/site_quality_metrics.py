@@ -34,9 +34,17 @@ def build_quality_gate_report(
     # partial QA must pass explicit None; omitted gates remain hard failures.
     normalized = {name: gates.get(name, False) for name in QUALITY_GATES}
     failures = [
-        name for name, value in normalized.items() if value is False or value == 0
+        name
+        for name, value in normalized.items()
+        if value is None or value is False or value == 0
     ]
-    return {"gates": normalized, "hardFailures": failures, "publishable": not failures}
+    unmeasured = [name for name, value in normalized.items() if value is None]
+    return {
+        "gates": normalized,
+        "hardFailures": failures,
+        "unmeasured": unmeasured,
+        "publishable": not failures,
+    }
 
 
 def calculate_visual_similarity_score(

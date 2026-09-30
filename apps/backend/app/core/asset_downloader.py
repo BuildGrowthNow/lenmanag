@@ -12,13 +12,6 @@ from typing import List, Optional
 import httpx
 import tempfile
 
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential_jitter,
-    retry_if_exception_type,
-)
-
 from .asset_storage import LocalAssetStorage
 
 try:
@@ -122,27 +115,20 @@ class AssetDownloader:
             raise ValueError("image has zero dimensions")
         return width, height
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential_jitter(initial=0.1, max=5),
-        retry=retry_if_exception_type(Exception),
-    )
     async def _stream_to_tempfile(
-        self, client: httpx.AsyncClient, url: str, temp_path: str, max_bytes: int
+        self, response: httpx.Response, temp_path: str, max_bytes: int
     ) -> int:
+        """Write the already-open response to disk without issuing another GET."""
         bytes_written = 0
-        hasher = hashlib.sha256()
-        async with client.stream("GET", url) as resp:
-            resp.raise_for_status()
-            async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
+        response.raise_for_status()
+        with open(temp_path, "wb") as output:
+            async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
                 if not chunk:
                     break
                 bytes_written += len(chunk)
                 if max_bytes and bytes_written > max_bytes:
                     raise ValueError(f"file exceeded max bytes limit: {bytes_written}")
-                # write to file in thread to avoid blocking
-                await asyncio.to_thread(lambda b: open(temp_path, "ab").write(b), chunk)
-                hasher.update(chunk)
+                output.write(chunk)
 
         return bytes_written
 
@@ -189,10 +175,11 @@ class AssetDownloader:
                         temp_f = tf.name
                         tf.close()
 
-                        # write streaming using helper
+                        # Stream the response that was already opened above.
+                        # Re-opening the URL here used to cause duplicate GETs.
                         try:
                             await self._stream_to_tempfile(
-                                client, url, temp_f, self.settings.asset_max_file_bytes
+                                resp, temp_f, self.settings.asset_max_file_bytes
                             )
                         except Exception as ex:
                             # cleanup

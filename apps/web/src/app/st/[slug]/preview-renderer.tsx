@@ -81,16 +81,6 @@ export function PreviewRenderer({
         // captured unstyled by screenshot/QA tooling.
         await loadStylesheet();
         if (cancelled) return;
-        // Ensure React and JSX runtime are available globally for the bundle
-        if (typeof window !== 'undefined') {
-          const react = require('react');
-          const reactDOM = require('react-dom');
-          const jsxRuntime = require('react/jsx-runtime');
-          (window as any).React = react;
-          (window as any).ReactDOM = reactDOM;
-          (window as any).__reactJsxRuntime = jsxRuntime;
-        }
-
         // Fetch the IIFE bundle
         const response = await fetch(bundleUrl);
         if (!response.ok) {

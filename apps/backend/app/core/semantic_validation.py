@@ -32,6 +32,7 @@ def validate_semantics(
     approved_proof: list[str] | None = None,
     approved_evidence_ids: set[str] | None = None,
     hero_mode: str | None = None,
+    require_hero_media: bool = False,
 ) -> SemanticValidation:
     result = SemanticValidation()
     footer_matches = list(
@@ -61,6 +62,58 @@ def validate_semantics(
             result.issues.append(
                 SemanticIssue("hero.asset_approved", "No approved image is used", "img")
             )
+    if require_hero_media:
+        approved = approved_images or set()
+        hero_match = re.search(
+            r"<(?:header|section)\b[^>]*(?:id|class)\s*=\s*['\"][^'\"]*\bhero\b[^'\"]*['\"][^>]*>(.*?)</(?:header|section)\s*>",
+            html,
+            re.I | re.S,
+        ) or re.search(r"<header\b[^>]*>(.*?)</header\s*>", html, re.I | re.S)
+        hero_html = hero_match.group(1) if hero_match else ""
+        hero_images = list(re.finditer(r"<img\b[^>]*>", hero_html, re.I | re.S))
+        hero_approved = [
+            image
+            for image in hero_images
+            if re.search(
+                rf"\bsrc\s*=\s*['\"](?:{'|'.join(re.escape(url) for url in sorted(approved))})['\"]",
+                image.group(0),
+                re.I,
+            )
+        ]
+        if not hero_approved:
+            result.issues.append(
+                SemanticIssue(
+                    "hero.asset_required",
+                    "Image-led heroes must use an approved image in the hero",
+                    "header img, [id*=hero] img, [class*=hero] img",
+                )
+            )
+        else:
+            tag = hero_approved[0].group(0)
+            if not re.search(r"\bdata-hero-media(?:\s*=\s*['\"][^'\"]*['\"])?|\bclass\s*=\s*['\"][^'\"]*(?:hero-media|hero-visual|hero)[^'\"]*['\"]", tag, re.I):
+                result.issues.append(
+                    SemanticIssue(
+                        "hero.asset_role",
+                        "Hero media must declare a meaningful visual role",
+                        "[data-hero-media], .hero-media, .hero-visual",
+                    )
+                )
+            if not re.search(r"\b(?:width|height)\s*=\s*['\"]\d+", tag, re.I):
+                result.issues.append(
+                    SemanticIssue(
+                        "hero.asset_dimensions",
+                        "Hero media must declare intrinsic dimensions",
+                        "hero img[width][height]",
+                    )
+                )
+            if re.search(r"\bloading\s*=\s*['\"]lazy['\"]", tag, re.I):
+                result.issues.append(
+                    SemanticIssue(
+                        "hero.asset_loading",
+                        "Hero media must load eagerly",
+                        "hero img[loading=eager]",
+                    )
+                )
     if hero_mode == "typography_only" and re.search(
         r"<(?:img|video|canvas)\b|data-media-required|class\s*=\s*['\"][^'\"]*(?:hero-media|image-shell|media-placeholder)[^'\"]*['\"]",
         html,
@@ -80,6 +133,34 @@ def validate_semantics(
                     "[class*=testimonial], [id*=review]",
                 )
             )
+        # Validate each proof-bearing card independently. A valid quote and ID
+        # elsewhere on the page must not authorize an invented neighboring
+        # testimonial, rating, badge, or author.
+        proof_container_pattern = re.compile(
+            r"<(?P<tag>section|article|blockquote|aside|div)\b(?=[^>]*(?:id|class)\s*=\s*['\"][^'\"]*(?:testimonial|review|quote|proof|rating|award|badge|metric)[^'\"]*['\"])[^>]*>(?P<body>.*?)</(?P=tag)\s*>",
+            re.I | re.S,
+        )
+        for match in proof_container_pattern.finditer(html):
+            block = match.group(0)
+            block_ids = set(re.findall(r"data-evidence-id\s*=\s*['\"]([^'\"]+)['\"]", block, re.I))
+            if len(block_ids) != 1 or not block_ids.issubset(evidence_ids):
+                result.issues.append(
+                    SemanticIssue(
+                        "proof.card_evidence_required",
+                        "Every proof card requires exactly one approved evidence ID",
+                        "[data-evidence-id]",
+                    )
+                )
+                break
+            if quotes and not any(quote in block.lower() for quote in quotes):
+                result.issues.append(
+                    SemanticIssue(
+                        "proof.card_quote_required",
+                        "Every proof card requires its own approved quote",
+                        "[class*=testimonial], [id*=review]",
+                    )
+                )
+                break
     return result
 
 

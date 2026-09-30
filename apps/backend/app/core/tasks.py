@@ -11,6 +11,10 @@ from app.core.celery_app import celery_app
 from app.core.leads import lead_repository
 from app.core.sites import is_artifact_generated_site, site_repository
 from app.core.screenshot_analyzer import get_screenshot_analyzer
+from app.core.screenshot_comparator import (
+    RENDERED_VARIANT_MIN_STRUCTURAL_DIFFERENCE,
+    rendered_variant_difference_score,
+)
 from app.core.site_quality_metrics import QUALITY_GATES, build_quality_gate_report
 from app.schemas.site import SiteGenerateRequest
 from app.core.asset_retention import AssetRetentionManager
@@ -319,6 +323,14 @@ async def capture_screenshot(
             runtime_qa = json.loads(metadata.notes or "{}")
         except (TypeError, ValueError):
             runtime_qa = {}
+        rendered_gate = await _check_rendered_variant_difference(database, site_id)
+        runtime_qa["renderedVariantDifference"] = rendered_gate
+        if rendered_gate.get("checked") is True and rendered_gate.get("passed") is False:
+            runtime_qa.setdefault("fatalRuntimeFailures", []).append(
+                "rendered_variants_too_similar"
+            )
+            runtime_qa["runtimeStatus"] = "failed"
+        metadata.notes = json.dumps(runtime_qa)
         interactions = runtime_qa.get("interactions") or []
         semantic_measured = (
             "missingFooter" in runtime_qa or "emptyMediaRegions" in runtime_qa
@@ -531,6 +543,61 @@ def _metadata_has_fatal_runtime_failure(metadata: Any) -> bool:
         bool(runtime.get("fatalRuntimeFailures"))
         or runtime.get("runtimeStatus") == "failed"
     )
+
+
+async def _check_rendered_variant_difference(database: Any, site_id: str) -> dict[str, Any]:
+    """Compare a rendered variant against earlier variants in its generation run."""
+    try:
+        from app.core.config import get_settings
+
+        current = await database["generated_sites"].find_one({"id": site_id})
+        run_id = current.get("generationRunId") if current else None
+        if not run_id:
+            return {"checked": False, "passed": None, "comparisons": [], "status": "insufficient_evidence"}
+        previous = await database["generated_sites"].find(
+            {
+                "generationRunId": run_id,
+                "id": {"$ne": site_id},
+                "screenshotRefs.0": {"$exists": True},
+            }
+        ).to_list(length=12)
+        if not previous:
+            return {"checked": False, "passed": None, "comparisons": [], "status": "insufficient_evidence"}
+        settings = get_settings()
+        if not settings.asset_s3_bucket:
+            return {"checked": False, "passed": None, "comparisons": [], "status": "comparison_unavailable", "reason": "s3_unconfigured"}
+        prefix = settings.asset_s3_prefix or "lenmanag/"
+        client = boto3.client("s3", region_name=settings.asset_s3_region or "us-east-1")
+
+        def read(site_key: str) -> bytes:
+            return client.get_object(
+                Bucket=settings.asset_s3_bucket,
+                Key=f"{prefix}screenshots/{site_key}/preview.jpg",
+            )["Body"].read()
+
+        current_bytes = await asyncio.to_thread(read, site_id)
+        comparisons: list[dict[str, Any]] = []
+        for item in previous:
+            try:
+                difference = await asyncio.to_thread(read, str(item["id"]))
+                score = rendered_variant_difference_score(current_bytes, difference)
+            except Exception as exc:
+                logger.warning("Unable to compare rendered variants %s/%s: %s", site_id, item.get("id"), exc)
+                continue
+            comparisons.append({"siteId": str(item["id"]), **score})
+        return {
+            "checked": bool(comparisons),
+            "passed": bool(comparisons) and all(
+                item["structuralDifference"] >= RENDERED_VARIANT_MIN_STRUCTURAL_DIFFERENCE
+                for item in comparisons
+            ),
+            "minimumStructuralDifference": RENDERED_VARIANT_MIN_STRUCTURAL_DIFFERENCE,
+            "comparisons": comparisons,
+        }
+    except Exception as exc:
+        # Missing comparison evidence must not silently become a duplicate pass.
+        logger.warning("Rendered variant comparison unavailable for %s: %s", site_id, exc)
+        return {"checked": False, "passed": None, "comparisons": [], "status": "comparison_unavailable", "reason": "comparison_unavailable"}
 
 
 @celery_app.task(

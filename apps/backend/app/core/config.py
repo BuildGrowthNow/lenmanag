@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     mongodb_uri: str = ""
     mongodb_db_name: str = "lenquant"
+    # Explicit opt-in for isolated test runs. Production keeps using the
+    # configured URI; pytest sets this before importing the application.
+    mongo_use_mock: bool = False
     session_secret: str = "replace-me"
     jwt_secret: str = "replace-with-a-secure-random-string"
     jwt_algorithm: str = "HS256"
@@ -29,6 +32,9 @@ class Settings(BaseSettings):
     auth_allowlist_domains: str = ""
     resend_api_key: str = ""
     resend_from_email: str = "noreply@lenquant.com"
+    public_form_notification_email: str = ""
+    public_form_max_requests: int = 5
+    public_form_window_seconds: int = 900
     backend_cors_origins: str = "http://localhost:3000,http://localhost:3002"
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str | None = None
@@ -128,7 +134,9 @@ class Settings(BaseSettings):
     # Base URL for rendering public previews used by screenshot QA.
     # Can be overridden via PREVIEW_BASE_URL env var when the frontend
     # runs on a non-default port or host.
-    preview_base_url: str = "http://localhost:3000"
+    # Public preview routes live below /st. Keep the route prefix in the
+    # setting so generated links and screenshot QA resolve to the same page.
+    preview_base_url: str = "http://localhost:3000/st"
 
     # Compiler service URL for TSX compilation
     compiler_service_url: str = "http://localhost:3001"
