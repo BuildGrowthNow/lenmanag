@@ -2220,14 +2220,27 @@ def _prepare_provider_artifact(
     html = re.sub(r"\blorem ipsum\b", company_name, html, flags=re.I)
     html = re.sub(r"\b(?:coming soon|image placeholder)\b", "", html, flags=re.I)
     html = re.sub(r"\bcontact us for details\b", cta_fallback, html, flags=re.I)
+    safe_phone_or_company = str(verified_phone or company_name)
     html = re.sub(
         r"\b555[- )]?\d{3,4}\b|\b000[- )]?\d{3,4}\b",
-        str(verified_phone or company_name),
+        safe_phone_or_company,
         html,
         flags=re.I,
     )
     css = re.sub(r"\byour@email\.com\b", "brand-contact", css, flags=re.I)
     js = re.sub(r"\byour@email\.com\b", "brand-contact", js, flags=re.I)
+    css = re.sub(
+        r"\b555[- )]?\d{3,4}\b|\b000[- )]?\d{3,4}\b",
+        safe_phone_or_company,
+        css,
+        flags=re.I,
+    )
+    js = re.sub(
+        r"\b555[- )]?\d{3,4}\b|\b000[- )]?\d{3,4}\b",
+        safe_phone_or_company,
+        js,
+        flags=re.I,
+    )
 
     # Preserve approved copy even when the provider omits a required field.
     # These are source-backed fallbacks, not new claims.
@@ -2304,6 +2317,16 @@ def _prepare_provider_artifact(
             missing_copy.append(
                 f'<p class="lq-generated-service-copy">{escape(service.replace("—", "-").replace("–", "-"))}</p>'
             )
+    if isinstance(extracted_content, dict):
+        for key, items in extracted_content.items():
+            if key in {"testimonial", "testimonials", "review", "reviews", "socialProof", "proof", "services"}:
+                continue
+            for item in list(items or []):
+                value = str(item or "").strip().replace("—", "-").replace("–", "-")
+                if value and not _has_semantic_phrase(visible_copy(), value):
+                    missing_copy.append(
+                        f'<p class="lq-generated-extracted-copy" data-content-source="{escape(str(key))}">{escape(value)}</p>'
+                    )
     if missing_copy and re.search(r"</body\s*>", html, re.I):
         fallback_section = (
             '<section class="lq-generated-copy-fallback" aria-label="Business introduction">'

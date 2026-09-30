@@ -200,6 +200,7 @@ def test_provider_artifact_normalization_restores_required_copy_and_ascii_dashes
 def test_provider_artifact_normalization_restores_dict_section_and_service_copy() -> None:
     brief = _brief_with_logo(None)
     brief.sections = [{"headline": "Approved section", "purpose": "Approved purpose", "contentPoints": ["Approved point"]}]
+    brief.extractedContent = {"audiences": ["Residential homeowners"]}
     extraction = SimpleNamespace(
         summary=SimpleNamespace(companyName="Example", serviceClues=["Gutter cleaning"]),
         analysis=SimpleNamespace(services=["Home improvements"], testimonials=[]),
@@ -217,6 +218,24 @@ def test_provider_artifact_normalization_restores_dict_section_and_service_copy(
     assert "Approved point" in html
     assert "Home improvements" in html
     assert "Gutter cleaning" in html
+    assert "Residential homeowners" in html
+
+
+def test_provider_artifact_normalization_removes_numeric_placeholders_from_all_artifacts() -> None:
+    brief = _brief_with_logo(None)
+    extraction = SimpleNamespace(
+        summary=SimpleNamespace(companyName="Example"),
+        analysis=SimpleNamespace(testimonials=[]),
+        extractedTestimonials=[],
+    )
+    html, css, js = _prepare_provider_artifact(
+        "<!doctype html><html><head></head><body>555577</body></html>",
+        "body::after { content: '555577'; }",
+        "const phone = '555577';",
+        brief,
+        extraction,
+    )
+    assert "555577" not in html + css + js
 
 
 def test_page_url_cannot_become_logo_and_relative_asset_resolves() -> None:
