@@ -1067,8 +1067,12 @@ def _validate_generated_document(
     if runtime_errors:
         raise ValueError(runtime_errors[0])
     prohibited = r"\b(?:xxx|xxxx|000-0000|555[- )]?\d{3,4}|lorem ipsum|example\.com|your@email\.com|todo|coming soon|contact us for details|image placeholder)\b"
-    if re.search(prohibited, "\n".join((html, css, js)), re.I):
-        raise ValueError("Generated output contains prohibited placeholder content")
+    placeholder_match = re.search(prohibited, "\n".join((html, css, js)), re.I)
+    if placeholder_match:
+        raise ValueError(
+            "Generated output contains prohibited placeholder content: "
+            f"{placeholder_match.group(0)}"
+        )
     if "—" in "\n".join((html, css, js)):
         raise ValueError("Generated output contains an em dash; use a hyphen instead")
     if re.search(
@@ -2129,6 +2133,42 @@ def _prepare_provider_artifact(
         html = re.sub(rf"\b{re.escape(name)}\b", approved_font, html, flags=re.I)
         css = re.sub(rf"\b{re.escape(name)}\b", approved_font, css, flags=re.I)
         js = re.sub(rf"\b{re.escape(name)}\b", approved_font, js, flags=re.I)
+
+    # Typography-only heroes must not retain the media marker used by the
+    # image-led contract. Remove the provider marker/class before semantic QA;
+    # the hero can remain fully visual through type, gradients, and motion.
+    approved_media = {
+        url
+        for value in list(getattr(brief.brandAssets, "imageUrls", None) or [])
+        + [
+            item.get("url")
+            for item in list(getattr(brief.brandAssets, "imageInventory", None) or [])
+            if isinstance(item, dict)
+        ]
+        if (url := _secure_asset_url(value))
+    }
+    if (
+        str(getattr(brief, "heroMode", "") or "").lower() == "typography_only"
+        and not approved_media
+    ):
+        html = re.sub(
+            r"\sdata-media-required(?:\s*=\s*(['\"])[^'\"]*\1)?",
+            "",
+            html,
+            flags=re.I,
+        )
+
+        def strip_hero_media_class(match: re.Match[str]) -> str:
+            classes = re.sub(r"\bhero-media\b", "", match.group(2), flags=re.I)
+            classes = re.sub(r"\s+", " ", classes).strip()
+            return f' class={match.group(1)}{classes}{match.group(1)}'
+
+        html = re.sub(
+            r"\sclass\s*=\s*(['\"])([^'\"]*)\1",
+            strip_hero_media_class,
+            html,
+            flags=re.I,
+        )
 
     html = sanitize_unverified_proof(
         html,

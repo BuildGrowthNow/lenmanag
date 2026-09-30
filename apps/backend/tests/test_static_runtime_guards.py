@@ -115,6 +115,26 @@ def test_provider_artifact_normalization_replaces_prohibited_fonts() -> None:
     assert "serif" in html + css + js
 
 
+def test_provider_artifact_normalization_removes_typography_media_markers() -> None:
+    brief = _brief_with_logo(None)
+    brief.heroMode = "typography_only"
+    extraction = SimpleNamespace(
+        analysis=SimpleNamespace(testimonials=[]),
+        extractedTestimonials=[],
+    )
+    html, _css, _js = _prepare_provider_artifact(
+        "<!doctype html><html><head></head><body>"
+        '<div class="hero hero-media" data-media-required><h1>Service</h1></div>'
+        "</body></html>",
+        "body {}",
+        "const ready = true;",
+        brief,
+        extraction,
+    )
+    assert "hero-media" not in html
+    assert "data-media-required" not in html
+
+
 def test_page_url_cannot_become_logo_and_relative_asset_resolves() -> None:
     assert get_best_asset_url({"assetUrl": "https://example.test/", "sourceUrl": "https://example.test/"}) is None
     assert get_best_asset_url({"value": "/assets/brand.svg", "pageUrl": "https://example.test/about"}) == "https://example.test/assets/brand.svg"

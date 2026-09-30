@@ -245,7 +245,15 @@ def sanitize_unverified_proof(
             return ""
         return block
 
-    cleaned = container_pattern.sub(keep_or_remove, html)
+    # Proof markup is often nested (for example a testimonial card inside a
+    # section). Repeat the narrow removal so an invalid inner card cannot
+    # survive because the first match stopped at an outer closing tag.
+    cleaned = html
+    for _ in range(4):
+        updated = container_pattern.sub(keep_or_remove, cleaned)
+        if updated == cleaned:
+            break
+        cleaned = updated
     return re.sub(
         r"\s*<a\b[^>]*(?:href|aria-controls)\s*=\s*['\"][^'\"]*"
         r"(?:testimonial|review|rating)[^'\"]*['\"][^>]*>.*?</a\s*>",

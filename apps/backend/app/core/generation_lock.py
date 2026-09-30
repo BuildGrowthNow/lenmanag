@@ -25,6 +25,28 @@ LOCK_TIMEOUT_SECONDS = 3600  # 1 hour max per generation
 _LOCAL_TEST_LOCK = asyncio.Lock()
 
 
+async def clear_orphaned_generation_locks() -> int:
+    """Clear locks left by in-process jobs before a backend restart.
+
+    Production generation currently runs inside the API process. If that
+    process is recreated during a provider call, Redis cannot know that the
+    owner disappeared and the old per-lead lock can block the next run for an
+    hour. Startup is a safe boundary: no task from the previous process can
+    still be active in this process.
+    """
+    settings = get_settings()
+    if settings.mongo_use_mock:
+        return 0
+    redis_client = redis.from_url(settings.celery_broker_url, decode_responses=True)
+    try:
+        keys = [key async for key in redis_client.scan_iter(match=f"{GENERATION_LOCK_KEY}*")]
+        if not keys:
+            return 0
+        return int(await redis_client.delete(*keys))
+    finally:
+        await redis_client.aclose()
+
+
 class GenerationLockTimeout(Exception):
     """Raised when unable to acquire generation lock within timeout."""
 
