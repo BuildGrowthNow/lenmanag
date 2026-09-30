@@ -115,7 +115,7 @@ def validate_semantics(
                     )
                 )
     if hero_mode == "typography_only" and re.search(
-        r"<(?:img|video|canvas)\b|data-media-required|class\s*=\s*['\"][^'\"]*(?:hero-media|image-shell|media-placeholder)[^'\"]*['\"]",
+        r"data-media-required|class\s*=\s*['\"][^'\"]*(?:hero-media|image-shell|media-placeholder)[^'\"]*['\"]",
         html,
         re.I,
     ):

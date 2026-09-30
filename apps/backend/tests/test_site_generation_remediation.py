@@ -92,6 +92,16 @@ def test_typography_only_contract_rejects_fake_media_shell() -> None:
     assert any(issue.rule_id == "hero.typography_only_no_media_shell" for issue in result.issues)
 
 
+def test_typography_only_contract_allows_non_hero_animation_or_brand_media() -> None:
+    result = validate_semantics(
+        "<main><section class='hero'><h1>Service</h1><canvas aria-label='Animated texture'></canvas></section>"
+        "<img class='brand-logo' src='/logo.svg' alt='Company logo'></main><footer>Footer</footer>",
+        require_footer=True,
+        hero_mode="typography_only",
+    )
+    assert not any(issue.rule_id == "hero.typography_only_no_media_shell" for issue in result.issues)
+
+
 def test_proof_bearing_markup_requires_exact_evidence_id() -> None:
     result = validate_semantics("<main><section class='review' data-evidence-id='wrong'>5 stars</section></main>", approved_evidence_ids={"right"})
     assert any(issue.rule_id == "proof.evidence_required" for issue in result.issues)

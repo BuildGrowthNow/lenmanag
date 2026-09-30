@@ -2149,7 +2149,12 @@ def _prepare_provider_artifact(
         )
 
         def strip_hero_media_class(match: re.Match[str]) -> str:
-            classes = re.sub(r"\bhero-media\b", "", match.group(2), flags=re.I)
+            classes = re.sub(
+                r"\b(?:hero-media|image-shell|media-placeholder)\b",
+                "",
+                match.group(2),
+                flags=re.I,
+            )
             classes = re.sub(r"\s+", " ", classes).strip()
             return f' class={match.group(1)}{classes}{match.group(1)}'
 
