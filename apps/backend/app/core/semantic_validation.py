@@ -226,7 +226,7 @@ def sanitize_unverified_proof(
     evidence_ids = approved_evidence_ids or set()
     quotes = [quote.lower() for quote in approved_proof if quote]
     container_pattern = re.compile(
-        r"<(?P<tag>section|article|blockquote|aside|div)\b"
+        r"<(?P<tag>section|article|blockquote|aside|div|ul|li|figure|span)\b"
         r"(?=[^>]*(?:id|class)\s*=\s*['\"][^'\"]*"
         r"(?:testimonial|review|quote|proof|rating|award|badge|metric)"
         r"[^'\"]*['\"])[^>]*>"

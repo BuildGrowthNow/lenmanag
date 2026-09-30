@@ -2137,20 +2137,9 @@ def _prepare_provider_artifact(
     # Typography-only heroes must not retain the media marker used by the
     # image-led contract. Remove the provider marker/class before semantic QA;
     # the hero can remain fully visual through type, gradients, and motion.
-    approved_media = {
-        url
-        for value in list(getattr(brief.brandAssets, "imageUrls", None) or [])
-        + [
-            item.get("url")
-            for item in list(getattr(brief.brandAssets, "imageInventory", None) or [])
-            if isinstance(item, dict)
-        ]
-        if (url := _secure_asset_url(value))
-    }
     if (
         str(getattr(brief, "heroMode", "") or "").lower().replace("-", "_")
         == "typography_only"
-        and not approved_media
     ):
         html = re.sub(
             r"\sdata-media-required(?:\s*=\s*(['\"])[^'\"]*\1)?",
@@ -2186,6 +2175,28 @@ def _prepare_provider_artifact(
     html = re.sub(r"\b(?:www\.)?example\.com\b", company_name, html, flags=re.I)
     css = re.sub(r"\b(?:www\.)?example\.com\b", "brand-site", css, flags=re.I)
     js = re.sub(r"\b(?:www\.)?example\.com\b", "brand-site", js, flags=re.I)
+
+    # Preserve the approved conversion action even when the provider forgets
+    # to wire one of its controls. This is source-backed content, not a new
+    # claim, and gives the form/CTA contract a deterministic safe fallback.
+    conversion_action = str(
+        getattr(brief, "conversionAction", None)
+        or getattr(brief, "ctaStrategy", None)
+        or ""
+    ).strip()
+    if conversion_action:
+        controls = " ".join(
+            re.findall(
+                r"<(?:a|button|form)\b[^>]*>.*?</(?:a|button|form)\s*>",
+                html,
+                re.I | re.S,
+            )
+        ).lower()
+        action_tokens = re.findall(r"[\w]+", conversion_action.lower())
+        if action_tokens and not any(token in controls for token in action_tokens[:2]):
+            cta = f'<a class="lq-generated-cta" href="#contact">{escape(conversion_action)}</a>'
+            if re.search(r"</body\s*>", html, re.I):
+                html = re.sub(r"</body\s*>", f"{cta}</body>", html, count=1, flags=re.I)
 
     html = sanitize_unverified_proof(
         html,
