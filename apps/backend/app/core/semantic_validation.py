@@ -204,3 +204,52 @@ def sanitize_unsupported_proof(
         cleaned,
         flags=re.I | re.S,
     )
+
+
+def sanitize_unverified_proof(
+    html: str,
+    *,
+    approved_proof: list[str] | None = None,
+    approved_evidence_ids: set[str] | None = None,
+) -> str:
+    """Remove proof cards that cannot be traced to approved evidence.
+
+    Providers sometimes emit a testimonial shell even when they were told to
+    omit unsupported proof. Removing that shell is safer than retrying the
+    entire document or publishing a card whose quote, author, or rating cannot
+    be audited. Cards with one approved evidence id and an approved quote are
+    preserved unchanged.
+    """
+    if not approved_proof:
+        return sanitize_unsupported_proof(html, approved_proof=[])
+
+    evidence_ids = approved_evidence_ids or set()
+    quotes = [quote.lower() for quote in approved_proof if quote]
+    container_pattern = re.compile(
+        r"<(?P<tag>section|article|blockquote|aside|div)\b"
+        r"(?=[^>]*(?:id|class)\s*=\s*['\"][^'\"]*"
+        r"(?:testimonial|review|quote|proof|rating|award|badge|metric)"
+        r"[^'\"]*['\"])[^>]*>"
+        r"(?P<body>.*?)</(?P=tag)\s*>",
+        re.I | re.S,
+    )
+
+    def keep_or_remove(match: re.Match[str]) -> str:
+        block = match.group(0)
+        block_ids = set(
+            re.findall(r"data-evidence-id\s*=\s*['\"]([^'\"]+)['\"]", block, re.I)
+        )
+        if len(block_ids) != 1 or not block_ids.issubset(evidence_ids):
+            return ""
+        if quotes and not any(quote in block.lower() for quote in quotes):
+            return ""
+        return block
+
+    cleaned = container_pattern.sub(keep_or_remove, html)
+    return re.sub(
+        r"\s*<a\b[^>]*(?:href|aria-controls)\s*=\s*['\"][^'\"]*"
+        r"(?:testimonial|review|rating)[^'\"]*['\"][^>]*>.*?</a\s*>",
+        "",
+        cleaned,
+        flags=re.I | re.S,
+    )

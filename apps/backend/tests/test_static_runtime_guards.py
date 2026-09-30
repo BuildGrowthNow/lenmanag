@@ -8,6 +8,7 @@ from app.core.static_html_generator import (
     _enforce_footer_year,
     _javascript_is_valid,
     _parse_llm_response,
+    _prepare_provider_artifact,
     _remove_generated_asset_references,
     _validate_generated_document,
     _verified_contact_data,
@@ -43,6 +44,55 @@ def test_relative_generated_asset_references_are_removed() -> None:
     html = '<html><head><link rel="stylesheet" href="/st/demo/styles.css"></head><body><script src="./script.js"></script></body></html>'
     cleaned = _remove_generated_asset_references(html)
     assert "styles.css" not in cleaned and "script.js" not in cleaned
+
+
+def test_provider_artifact_normalization_keeps_behavior_in_dedicated_js() -> None:
+    brief = _brief_with_logo(None)
+    approved_image = "https://cdn.example.test/approved.jpg"
+    brief.brandAssets.imageUrls = [approved_image]
+    extraction = SimpleNamespace(
+        analysis=SimpleNamespace(testimonials=[]),
+        extractedTestimonials=[],
+    )
+    html = (
+        '<!doctype html><html><head><meta name="viewport" content="width=device-width">'
+        '</meta><script>document.body.dataset.ready = "yes";</script></head>'
+        '<body><main><img src="https://original.example.test/work.jpg" alt="Work"></main></body></html>'
+    )
+    cleaned_html, cleaned_css, cleaned_js = _prepare_provider_artifact(
+        html,
+        "body { background-image: url('https://original.example.test/bg.jpg'); }",
+        "const ready = true;",
+        brief,
+        extraction,
+    )
+    assert "</meta>" not in cleaned_html
+    assert "<script>" not in cleaned_html
+    assert 'dataset.ready = "yes"' in cleaned_js
+    assert approved_image in cleaned_html
+    assert "original.example.test" not in cleaned_html + cleaned_css
+
+
+def test_provider_artifact_normalization_removes_unverified_proof_cards() -> None:
+    brief = _brief_with_logo(None)
+    extraction = SimpleNamespace(
+        analysis=SimpleNamespace(
+            testimonials=[SimpleNamespace(id="quote-1", quote="We recommend them.")]
+        ),
+        extractedTestimonials=[],
+    )
+    html = (
+        '<!doctype html><html><head></head><body><main>'
+        '<section class="testimonials"><blockquote>Made up review</blockquote></section>'
+        '<section class="testimonials"><blockquote data-evidence-id="quote-1">'
+        "We recommend them.</blockquote></section>"
+        '</main></body></html>'
+    )
+    cleaned_html, _cleaned_css, _cleaned_js = _prepare_provider_artifact(
+        html, "body {}", "const ready = true;", brief, extraction
+    )
+    assert "Made up review" not in cleaned_html
+    assert "We recommend them." in cleaned_html
 
 
 def test_page_url_cannot_become_logo_and_relative_asset_resolves() -> None:

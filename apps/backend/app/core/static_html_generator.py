@@ -26,7 +26,10 @@ from botocore.exceptions import ClientError
 from app.core.config import get_settings
 from app.core.llm import get_llm_client
 from app.core.artifact_recovery import persist_rejected_artifact
-from app.core.semantic_validation import sanitize_unsupported_proof, validate_semantics
+from app.core.semantic_validation import (
+    sanitize_unverified_proof,
+    validate_semantics,
+)
 from app.core.generation_contracts import generation_preflight
 from app.core.compiler_capabilities import capability_manifest_for_source, hero_archetype_errors
 from app.core.generated_content_contracts import generated_content_contract_errors
@@ -215,8 +218,10 @@ async def generate_static_html(
     html_content = _enforce_footer_year(
         html_content, extraction=extraction, company_name=extraction.summary.companyName
     )
-    html_content = sanitize_unsupported_proof(
-        html_content, approved_proof=_approved_testimonial_quotes(extraction)
+    html_content = sanitize_unverified_proof(
+        html_content,
+        approved_proof=_approved_testimonial_quotes(extraction),
+        approved_evidence_ids=_approved_evidence_ids(extraction),
     )
     canonical_url = _static_canonical_url(site_id, preview_slug)
     html_content = _inject_static_seo_contract(html_content, extraction, canonical_url)
@@ -226,6 +231,9 @@ async def generate_static_html(
         js_content = _normalize_secure_resource_urls(js_content)
         html_content = _inject_conceptual_visual(
             html_content, master_brief, extraction, variant_type
+        )
+        html_content, css_content, js_content = _prepare_provider_artifact(
+            html_content, css_content, js_content, master_brief, extraction
         )
         _validate_generated_document(
             html_content,
@@ -261,8 +269,10 @@ async def generate_static_html(
                 extraction=extraction,
                 company_name=extraction.summary.companyName,
             )
-            html_content = sanitize_unsupported_proof(
-                html_content, approved_proof=_approved_testimonial_quotes(extraction)
+            html_content = sanitize_unverified_proof(
+                html_content,
+                approved_proof=_approved_testimonial_quotes(extraction),
+                approved_evidence_ids=_approved_evidence_ids(extraction),
             )
             html_content = _inject_static_seo_contract(
                 html_content, extraction, canonical_url
@@ -272,6 +282,9 @@ async def generate_static_html(
             js_content = _normalize_secure_resource_urls(js_content)
             html_content = _inject_conceptual_visual(
                 html_content, master_brief, extraction, variant_type
+            )
+            html_content, css_content, js_content = _prepare_provider_artifact(
+                html_content, css_content, js_content, master_brief, extraction
             )
             _validate_generated_document(
                 html_content,
@@ -308,8 +321,10 @@ async def generate_static_html(
                         extraction=extraction,
                         company_name=extraction.summary.companyName,
                     )
-                    html_content = sanitize_unsupported_proof(
-                        html_content, approved_proof=_approved_testimonial_quotes(extraction)
+                    html_content = sanitize_unverified_proof(
+                        html_content,
+                        approved_proof=_approved_testimonial_quotes(extraction),
+                        approved_evidence_ids=_approved_evidence_ids(extraction),
                     )
                     html_content = _inject_static_seo_contract(
                         html_content, extraction, canonical_url
@@ -319,6 +334,9 @@ async def generate_static_html(
                     js_content = _normalize_secure_resource_urls(js_content)
                     html_content = _inject_conceptual_visual(
                         html_content, master_brief, extraction, variant_type
+                    )
+                    html_content, css_content, js_content = _prepare_provider_artifact(
+                        html_content, css_content, js_content, master_brief, extraction
                     )
                     _validate_generated_document(
                         html_content,
@@ -371,6 +389,9 @@ async def generate_static_html(
             js_content = _normalize_secure_resource_urls(js_content)
             html_content = _inject_conceptual_visual(
                 html_content, master_brief, extraction, variant_type
+            )
+            html_content, css_content, js_content = _prepare_provider_artifact(
+                html_content, css_content, js_content, master_brief, extraction
             )
             _validate_generated_document(
                 html_content,
@@ -1982,6 +2003,135 @@ def _ensure_footer_landmark(
 def _normalize_secure_resource_urls(value: str) -> str:
     """Upgrade model-emitted insecure resource URLs before validation."""
     return value.replace("http://", "https://")
+
+
+_VOID_ELEMENT_CLOSING_TAG = re.compile(
+    r"</\s*(?:meta|link|img|input|br|hr|source|area|base|embed|param|track|wbr)\s*>",
+    re.I,
+)
+_PROVIDER_SCRIPT = re.compile(
+    r"<script\b(?P<attrs>[^>]*)>(?P<body>.*?)</script\s*>",
+    re.I | re.S,
+)
+_PROVIDER_ASSET_TAG = re.compile(
+    r"<(?P<tag>img|source|video|audio|iframe|embed)\b[^>]*>", re.I | re.S
+)
+_EMPTY_DATA_IMAGE = "data:image/svg+xml,%3Csvg%20/%3E"
+
+
+def _prepare_provider_artifact(
+    html: str,
+    css: str,
+    js: str,
+    brief: MasterBrief,
+    extraction: ExtractionSnapshot,
+) -> tuple[str, str, str]:
+    """Normalize safe provider mistakes before the hard publication gates.
+
+    This is deliberately narrow: it fixes syntax and delivery wrappers that
+    the provider does not own, moves inline behavior into the dedicated JS
+    entry, replaces/removes unapproved remote assets, and drops untraceable
+    proof cards. Visible unsupported copy and unsafe JavaScript still fail
+    validation after this pass.
+    """
+    html = _VOID_ELEMENT_CLOSING_TAG.sub("", html)
+
+    moved_scripts: list[str] = []
+
+    def strip_provider_script(match: re.Match[str]) -> str:
+        attrs = match.group("attrs") or ""
+        script_type = re.search(
+            r"\btype\s*=\s*(['\"])(.*?)\1", attrs, re.I | re.S
+        )
+        normalized_type = script_type.group(2).strip().lower() if script_type else ""
+        if normalized_type == "application/ld+json":
+            return match.group(0)
+        body = (match.group("body") or "").strip()
+        if body:
+            moved_scripts.append(body)
+        return ""
+
+    html = _PROVIDER_SCRIPT.sub(strip_provider_script, html)
+    if moved_scripts:
+        js = f"{js.rstrip()}\n\n" + "\n\n".join(moved_scripts)
+
+    approved = _approved_render_asset_urls(brief)
+    image_urls = [
+        url
+        for value in list(getattr(brief.brandAssets, "imageUrls", None) or [])
+        + [
+            item.get("url")
+            for item in list(getattr(brief.brandAssets, "imageInventory", None) or [])
+            if isinstance(item, dict)
+        ]
+        if (url := _secure_asset_url(value))
+    ]
+    image_urls = list(dict.fromkeys(image_urls))
+    logo_url = _approved_logo_url(brief)
+
+    def normalize_asset_tag(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        lowered = tag.lower()
+        if not any(
+            value.startswith(("http://", "https://", "/api/internal/assets/"))
+            and not value.startswith("data:")
+            or value in approved
+            for value in re.findall(r"\b(?:src|poster)\s*=\s*['\"]([^'\"]+)", tag, re.I)
+        ):
+            return tag
+        attrs = re.findall(
+            r"\b(?:src|poster)\s*=\s*(['\"])(.*?)\1", tag, re.I | re.S
+        )
+        if not attrs:
+            return tag
+        replacement = logo_url if "logo" in lowered and logo_url else (image_urls[0] if image_urls else None)
+        if replacement:
+            updated = tag
+            for quote, value in attrs:
+                if value not in approved and value.startswith(("http://", "https://", "/api/internal/assets/")):
+                    updated = updated.replace(
+                        f"{quote}{value}{quote}",
+                        f"{quote}{escape(replacement, quote=True)}{quote}",
+                        1,
+                    )
+            return updated
+        return ""
+
+    html = _PROVIDER_ASSET_TAG.sub(normalize_asset_tag, html)
+
+    def remove_unapproved_link(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        if re.search(r"\brel\s*=\s*['\"][^'\"]*canonical", tag, re.I):
+            return tag
+        href = re.search(r"\bhref\s*=\s*(['\"])(.*?)\1", tag, re.I | re.S)
+        if href and href.group(2).startswith(("http://", "https://", "/api/internal/assets/")) and href.group(2) not in approved:
+            return ""
+        return tag
+
+    html = re.sub(r"<link\b[^>]*>", remove_unapproved_link, html, flags=re.I | re.S)
+    css = re.sub(r"@import\s+url\([^;]+\);?", "", css, flags=re.I)
+    css = re.sub(
+        r"url\(\s*(['\"]?)(https?://[^'\")]+|/api/internal/assets/[^'\")]+)\1\s*\)",
+        f"url('{_EMPTY_DATA_IMAGE}')",
+        css,
+        flags=re.I,
+    )
+
+    html = sanitize_unverified_proof(
+        html,
+        approved_proof=_approved_testimonial_quotes(extraction),
+        approved_evidence_ids=_approved_evidence_ids(extraction),
+    )
+    html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    js = re.sub(r"/\*.*?\*/", "", js, flags=re.S)
+    js = re.sub(
+        r"^\s*//.*(?:TODO|placeholder|coming soon|example\.com).*?$",
+        "",
+        js,
+        flags=re.I | re.M,
+    )
+    return html, css, js
 
 
 def _upload_to_s3(
