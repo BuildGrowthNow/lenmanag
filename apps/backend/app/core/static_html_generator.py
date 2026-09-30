@@ -32,7 +32,10 @@ from app.core.semantic_validation import (
 )
 from app.core.generation_contracts import generation_preflight
 from app.core.compiler_capabilities import capability_manifest_for_source, hero_archetype_errors
-from app.core.generated_content_contracts import generated_content_contract_errors
+from app.core.generated_content_contracts import (
+    _has_semantic_phrase,
+    generated_content_contract_errors,
+)
 from app.core.generated_runtime_validation import (
     validate_generated_html,
     validate_generated_javascript,
@@ -2039,6 +2042,11 @@ def _prepare_provider_artifact(
     validation after this pass.
     """
     html = _VOID_ELEMENT_CLOSING_TAG.sub("", html)
+    # Keep provider output on the same ASCII copy contract as the prompt and
+    # deterministic content validator.
+    html = html.replace("—", "-").replace("–", "-")
+    css = css.replace("—", "-").replace("–", "-")
+    js = js.replace("—", "-").replace("–", "-")
 
     moved_scripts: list[str] = []
 
@@ -2170,7 +2178,7 @@ def _prepare_provider_artifact(
     company_name = str(
         getattr(getattr(extraction, "summary", None), "companyName", None)
         or "our team"
-    ).strip()
+    ).strip().replace("—", "-").replace("–", "-")
     html = re.sub(
         r"(\b(?:https?://|www\.)example\.com(?:/[^'\"\s<]*)?)",
         "#",
@@ -2207,9 +2215,39 @@ def _prepare_provider_artifact(
     css = re.sub(r"\byour@email\.com\b", "brand-contact", css, flags=re.I)
     js = re.sub(r"\byour@email\.com\b", "brand-contact", js, flags=re.I)
 
+    # Preserve approved copy even when the provider omits a required field.
+    # These are source-backed fallbacks, not new claims.
+    def visible_copy() -> str:
+        without_behavior = re.sub(
+            r"<(?:script|style|noscript)\b[^>]*>.*?</(?:script|style|noscript)\s*>",
+            " ",
+            html,
+            flags=re.I | re.S,
+        )
+        return re.sub(r"<[^>]+>", " ", without_behavior)
+
+    missing_copy: list[str] = []
+    for field, tag, class_name in (
+        ("headline", "h1", "lq-generated-headline"),
+        ("subheadline", "p", "lq-generated-subheadline"),
+    ):
+        value = str(getattr(brief, field, None) or "").strip()
+        if value and not _has_semantic_phrase(visible_copy(), value):
+            missing_copy.append(
+                f'<{tag} class="{class_name}">{escape(value)}</{tag}>'
+            )
+    if missing_copy and re.search(r"</body\s*>", html, re.I):
+        fallback_section = (
+            '<section class="lq-generated-copy-fallback" aria-label="Business introduction">'
+            + "".join(missing_copy)
+            + "</section>"
+        )
+        html = re.sub(
+            r"</body\s*>", f"{fallback_section}</body>", html, count=1, flags=re.I
+        )
+
     # Preserve the approved conversion action even when the provider forgets
-    # to wire one of its controls. This is source-backed content, not a new
-    # claim, and gives the form/CTA contract a deterministic safe fallback.
+    # to wire one of its controls. Check the complete phrase, not one token.
     if conversion_action:
         controls = " ".join(
             re.findall(
@@ -2219,7 +2257,7 @@ def _prepare_provider_artifact(
             )
         ).lower()
         action_tokens = re.findall(r"[\w]+", conversion_action.lower())
-        if action_tokens and not any(token in controls for token in action_tokens[:2]):
+        if action_tokens and not _has_semantic_phrase(controls, conversion_action):
             cta = f'<a class="lq-generated-cta" href="#contact">{escape(conversion_action)}</a>'
             if re.search(r"</body\s*>", html, re.I):
                 html = re.sub(r"</body\s*>", f"{cta}</body>", html, count=1, flags=re.I)

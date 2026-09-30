@@ -174,6 +174,29 @@ def test_provider_artifact_normalization_restores_approved_cta() -> None:
     assert "Request a free estimate" in html
 
 
+def test_provider_artifact_normalization_restores_required_copy_and_ascii_dashes() -> None:
+    brief = _brief_with_logo(None)
+    brief.headline = "Approved headline"
+    brief.subheadline = "Approved subheadline - no surprises"
+    brief.conversionAction = "Call today for a free estimate"
+    extraction = SimpleNamespace(
+        summary=SimpleNamespace(companyName="Example"),
+        analysis=SimpleNamespace(testimonials=[]),
+        extractedTestimonials=[],
+    )
+    html, _css, _js = _prepare_provider_artifact(
+        "<!doctype html><html><head></head><body><main><p>We review options.</p></main></body></html>",
+        "body {}",
+        "const ready = true;",
+        brief,
+        extraction,
+    )
+    assert "Approved headline" in html
+    assert "Approved subheadline - no surprises" in html
+    assert "Call today for a free estimate" in html
+    assert "—" not in html
+
+
 def test_page_url_cannot_become_logo_and_relative_asset_resolves() -> None:
     assert get_best_asset_url({"assetUrl": "https://example.test/", "sourceUrl": "https://example.test/"}) is None
     assert get_best_asset_url({"value": "/assets/brand.svg", "pageUrl": "https://example.test/about"}) == "https://example.test/assets/brand.svg"
