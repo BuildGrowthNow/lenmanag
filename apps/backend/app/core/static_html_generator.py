@@ -2117,6 +2117,19 @@ def _prepare_provider_artifact(
         flags=re.I,
     )
 
+    # Providers occasionally ignore the typography brief and emit Arial or
+    # Comic Sans. Normalize those declarations before the hard validator so a
+    # single bad font choice does not consume another full provider retry.
+    approved_font = str(getattr(brief.brandAssets, "fontFamily", "") or "").strip()
+    if re.search(r"\b(?:arial|comic\s+sans(?:\s+ms)?)\b", approved_font, re.I):
+        approved_font = "Inter, system-ui, sans-serif"
+    if not approved_font:
+        approved_font = "Inter, system-ui, sans-serif"
+    for name in ("Arial", "Comic Sans MS", "Comic Sans"):
+        html = re.sub(rf"\b{re.escape(name)}\b", approved_font, html, flags=re.I)
+        css = re.sub(rf"\b{re.escape(name)}\b", approved_font, css, flags=re.I)
+        js = re.sub(rf"\b{re.escape(name)}\b", approved_font, js, flags=re.I)
+
     html = sanitize_unverified_proof(
         html,
         approved_proof=_approved_testimonial_quotes(extraction),

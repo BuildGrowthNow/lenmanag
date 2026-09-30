@@ -95,6 +95,26 @@ def test_provider_artifact_normalization_removes_unverified_proof_cards() -> Non
     assert "We recommend them." in cleaned_html
 
 
+def test_provider_artifact_normalization_replaces_prohibited_fonts() -> None:
+    brief = _brief_with_logo(None)
+    brief.brandAssets.fontFamily = "serif"
+    extraction = SimpleNamespace(
+        analysis=SimpleNamespace(testimonials=[]),
+        extractedTestimonials=[],
+    )
+    html, css, js = _prepare_provider_artifact(
+        "<!doctype html><html><head><style>body { font-family: Arial; }</style></head>"
+        "<body><main>Content</main></body></html>",
+        "body { font-family: Comic Sans MS; }",
+        "const font = 'Arial';",
+        brief,
+        extraction,
+    )
+    assert "Arial" not in html + css + js
+    assert "Comic Sans" not in html + css + js
+    assert "serif" in html + css + js
+
+
 def test_page_url_cannot_become_logo_and_relative_asset_resolves() -> None:
     assert get_best_asset_url({"assetUrl": "https://example.test/", "sourceUrl": "https://example.test/"}) is None
     assert get_best_asset_url({"value": "/assets/brand.svg", "pageUrl": "https://example.test/about"}) == "https://example.test/assets/brand.svg"
