@@ -120,7 +120,13 @@ def validate_semantics(
         re.I,
     ):
         result.issues.append(SemanticIssue("hero.typography_only_no_media_shell", "Typography-only hero must not contain a fake media shell", "[data-media-required], .hero-media"))
-    proof_markers = re.compile(r"testimonial|review|rating|customer quote|what clients say|award|badge|\b(?:[0-9]+(?:\.[0-9]+)?\s*(?:stars?|reviews?|projects?|years?))\b|client(?:\s+name)?|project\s+location", re.I)
+    proof_markers = re.compile(
+        r"<(?:section|article|blockquote|aside|div|ul|li|figure|span|cite)\b"
+        r"[^>]*(?:id|class)\s*=\s*['\"][^'\"]*"
+        r"(?:testimonial|review|quote|proof|rating|award|badge|metric)"
+        r"[^'\"]*['\"][^>]*>",
+        re.I,
+    )
     if proof_markers.search(html):
         quotes = [quote.lower() for quote in (approved_proof or []) if quote]
         evidence_ids = approved_evidence_ids or set()

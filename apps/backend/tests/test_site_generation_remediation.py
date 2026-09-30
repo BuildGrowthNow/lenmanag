@@ -105,3 +105,10 @@ def test_typography_only_contract_allows_non_hero_animation_or_brand_media() -> 
 def test_proof_bearing_markup_requires_exact_evidence_id() -> None:
     result = validate_semantics("<main><section class='review' data-evidence-id='wrong'>5 stars</section></main>", approved_evidence_ids={"right"})
     assert any(issue.rule_id == "proof.evidence_required" for issue in result.issues)
+
+
+def test_ordinary_review_copy_does_not_require_proof_evidence() -> None:
+    result = validate_semantics(
+        "<main><p>We review every project plan with you before work begins.</p></main><footer>Footer</footer>"
+    )
+    assert not any(issue.rule_id == "proof.evidence_required" for issue in result.issues)
