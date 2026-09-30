@@ -2241,6 +2241,12 @@ def _prepare_provider_artifact(
         return re.sub(r"<[^>]+>", " ", without_behavior)
 
     missing_copy: list[str] = []
+
+    def source_value(item: Any, key: str, default: Any = None) -> Any:
+        if isinstance(item, dict):
+            return item.get(key, default)
+        return getattr(item, key, default)
+
     for field, tag, class_name in (
         ("headline", "h1", "lq-generated-headline"),
         ("subheadline", "p", "lq-generated-subheadline"),
@@ -2260,7 +2266,7 @@ def _prepare_provider_artifact(
     ):
         for field, tag in (("headline", "h2"), ("purpose", "p")):
             value = (
-                str(getattr(section, field, None) or "")
+                str(source_value(section, field, "") or "")
                 .strip()
                 .replace("—", "-")
                 .replace("–", "-")
@@ -2269,12 +2275,35 @@ def _prepare_provider_artifact(
                 missing_copy.append(
                     f'<{tag} class="lq-generated-section-{field}">{escape(value)}</{tag}>'
                 )
-        for point in list(getattr(section, "contentPoints", None) or []):
+        for point in list(source_value(section, "contentPoints", []) or []):
             value = str(point or "").strip().replace("—", "-").replace("–", "-")
             if value and not _has_semantic_phrase(visible_copy(), value):
                 missing_copy.append(
                     f'<p class="lq-generated-section-point" data-section="{section_index}">{escape(value)}</p>'
                 )
+    analysis = source_value(extraction, "analysis")
+    summary = source_value(extraction, "summary")
+    approved_services: list[str] = []
+    extracted_content = source_value(brief, "extractedContent", {}) or {}
+    if isinstance(extracted_content, dict):
+        approved_services.extend(
+            str(item) for item in list(extracted_content.get("services", []) or []) if item
+        )
+    approved_services.extend(
+        str(item)
+        for item in list(source_value(analysis, "services", []) or [])
+        if item
+    )
+    approved_services.extend(
+        str(item)
+        for item in list(source_value(summary, "serviceClues", []) or [])
+        if item
+    )
+    for service in dict.fromkeys(approved_services):
+        if not _has_semantic_phrase(visible_copy(), service):
+            missing_copy.append(
+                f'<p class="lq-generated-service-copy">{escape(service.replace("—", "-").replace("–", "-"))}</p>'
+            )
     if missing_copy and re.search(r"</body\s*>", html, re.I):
         fallback_section = (
             '<section class="lq-generated-copy-fallback" aria-label="Business introduction">'
