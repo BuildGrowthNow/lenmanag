@@ -2202,6 +2202,14 @@ def _prepare_provider_artifact(
         (value for key, value in contacts.items() if "email" in key.lower() and "@" in value),
         None,
     )
+    verified_phone = next(
+        (
+            value
+            for key, value in contacts.items()
+            if "phone" in key.lower() and str(value).strip()
+        ),
+        None,
+    )
     cta_fallback = conversion_action if conversion_action else "Contact our team"
     html = re.sub(
         r"\byour@email\.com\b",
@@ -2212,6 +2220,12 @@ def _prepare_provider_artifact(
     html = re.sub(r"\blorem ipsum\b", company_name, html, flags=re.I)
     html = re.sub(r"\b(?:coming soon|image placeholder)\b", "", html, flags=re.I)
     html = re.sub(r"\bcontact us for details\b", cta_fallback, html, flags=re.I)
+    html = re.sub(
+        r"\b555[- )]?\d{3,4}\b|\b000[- )]?\d{3,4}\b",
+        str(verified_phone or company_name),
+        html,
+        flags=re.I,
+    )
     css = re.sub(r"\byour@email\.com\b", "brand-contact", css, flags=re.I)
     js = re.sub(r"\byour@email\.com\b", "brand-contact", js, flags=re.I)
 
@@ -2231,11 +2245,36 @@ def _prepare_provider_artifact(
         ("headline", "h1", "lq-generated-headline"),
         ("subheadline", "p", "lq-generated-subheadline"),
     ):
-        value = str(getattr(brief, field, None) or "").strip()
+        value = (
+            str(getattr(brief, field, None) or "")
+            .strip()
+            .replace("—", "-")
+            .replace("–", "-")
+        )
         if value and not _has_semantic_phrase(visible_copy(), value):
             missing_copy.append(
                 f'<{tag} class="{class_name}">{escape(value)}</{tag}>'
             )
+    for section_index, section in enumerate(
+        list(getattr(brief, "sections", None) or []), start=1
+    ):
+        for field, tag in (("headline", "h2"), ("purpose", "p")):
+            value = (
+                str(getattr(section, field, None) or "")
+                .strip()
+                .replace("—", "-")
+                .replace("–", "-")
+            )
+            if value and not _has_semantic_phrase(visible_copy(), value):
+                missing_copy.append(
+                    f'<{tag} class="lq-generated-section-{field}">{escape(value)}</{tag}>'
+                )
+        for point in list(getattr(section, "contentPoints", None) or []):
+            value = str(point or "").strip().replace("—", "-").replace("–", "-")
+            if value and not _has_semantic_phrase(visible_copy(), value):
+                missing_copy.append(
+                    f'<p class="lq-generated-section-point" data-section="{section_index}">{escape(value)}</p>'
+                )
     if missing_copy and re.search(r"</body\s*>", html, re.I):
         fallback_section = (
             '<section class="lq-generated-copy-fallback" aria-label="Business introduction">'
