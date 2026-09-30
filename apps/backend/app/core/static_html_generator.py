@@ -2148,7 +2148,8 @@ def _prepare_provider_artifact(
         if (url := _secure_asset_url(value))
     }
     if (
-        str(getattr(brief, "heroMode", "") or "").lower() == "typography_only"
+        str(getattr(brief, "heroMode", "") or "").lower().replace("-", "_")
+        == "typography_only"
         and not approved_media
     ):
         html = re.sub(
@@ -2169,6 +2170,22 @@ def _prepare_provider_artifact(
             html,
             flags=re.I,
         )
+
+    # Replace provider-only example domains with safe, source-backed values so
+    # a decorative link cannot poison an otherwise usable artifact.
+    company_name = str(
+        getattr(getattr(extraction, "summary", None), "companyName", None)
+        or "our team"
+    ).strip()
+    html = re.sub(
+        r"(\b(?:https?://|www\.)example\.com(?:/[^'\"\s<]*)?)",
+        "#",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(r"\b(?:www\.)?example\.com\b", company_name, html, flags=re.I)
+    css = re.sub(r"\b(?:www\.)?example\.com\b", "brand-site", css, flags=re.I)
+    js = re.sub(r"\b(?:www\.)?example\.com\b", "brand-site", js, flags=re.I)
 
     html = sanitize_unverified_proof(
         html,

@@ -135,6 +135,26 @@ def test_provider_artifact_normalization_removes_typography_media_markers() -> N
     assert "data-media-required" not in html
 
 
+def test_provider_artifact_normalization_replaces_example_domains() -> None:
+    brief = _brief_with_logo(None)
+    extraction = SimpleNamespace(
+        summary=SimpleNamespace(companyName="Example Home Improvements"),
+        analysis=SimpleNamespace(testimonials=[]),
+        extractedTestimonials=[],
+    )
+    html, css, js = _prepare_provider_artifact(
+        "<!doctype html><html><head></head><body><a href=\"https://example.com/contact\">"
+        "example.com</a></body></html>",
+        "body { background: url('https://example.com/bg.jpg'); }",
+        "const site = 'example.com';",
+        brief,
+        extraction,
+    )
+    assert "example.com" not in html + css + js
+    assert 'href="#"' in html
+    assert "Example Home Improvements" in html
+
+
 def test_page_url_cannot_become_logo_and_relative_asset_resolves() -> None:
     assert get_best_asset_url({"assetUrl": "https://example.test/", "sourceUrl": "https://example.test/"}) is None
     assert get_best_asset_url({"value": "/assets/brand.svg", "pageUrl": "https://example.test/about"}) == "https://example.test/assets/brand.svg"
