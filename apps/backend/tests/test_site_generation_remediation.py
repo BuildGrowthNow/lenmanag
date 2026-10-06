@@ -15,6 +15,27 @@ def test_unsupported_proof_is_removed_as_a_complete_section() -> None:
     assert "Reviews" not in cleaned
 
 
+def test_unapproved_quote_styled_blocks_are_removed_before_semantic_validation() -> None:
+    html = """
+    <main>
+      <h1>Greenleaf Painters</h1>
+      <div class="about-quote"><blockquote class="quote-text">A quote without evidence</blockquote></div>
+      <blockquote class="pull-quote">Another unsupported quote</blockquote>
+      <section class="services"><h2>Painting services</h2></section>
+    </main>
+    """
+
+    cleaned = sanitize_unsupported_proof(html)
+    result = validate_semantics(cleaned, approved_evidence_ids=set())
+
+    assert "about-quote" not in cleaned
+    assert "pull-quote" not in cleaned
+    assert "A quote without evidence" not in cleaned
+    assert "Another unsupported quote" not in cleaned
+    assert "Painting services" in cleaned
+    assert not any(issue.rule_id == "proof.evidence_required" for issue in result.issues)
+
+
 def test_semantic_gate_reports_exact_rule_and_selector() -> None:
     result = validate_semantics(
         "<main><section class='hero'></section></main>",

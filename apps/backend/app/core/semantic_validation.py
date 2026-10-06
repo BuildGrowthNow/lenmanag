@@ -177,7 +177,7 @@ def sanitize_unsupported_proof(
     if approved_proof:
         return html
     section_pattern = re.compile(
-        r"<(?P<tag>section|article|aside|div)\b(?=[^>]*(?:id|class)\s*=\s*['\"][^'\"]*(?:testimonial|review|rating|social-proof|award|badge|metrics?)[^'\"]*['\"])[^>]*>.*?</(?P=tag)\s*>",
+        r"<(?P<tag>section|article|blockquote|aside|div)\b(?=[^>]*(?:id|class)\s*=\s*['\"][^'\"]*(?:testimonial|review|quote|proof|rating|social-proof|award|badge|metrics?)[^'\"]*['\"])[^>]*>.*?</(?P=tag)\s*>",
         re.I | re.S,
     )
     cleaned = section_pattern.sub("", html)
