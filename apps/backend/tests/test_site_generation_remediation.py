@@ -1,5 +1,6 @@
 from app.core.semantic_validation import sanitize_unsupported_proof, validate_semantics
 from app.core.generation_contracts import generation_preflight
+from app.core.generated_content_contracts import generated_content_contract_errors
 from app.core.interaction_qa import normalize_interaction_manifest, state_changed
 from app.api.internal import CompileRequest
 
@@ -34,6 +35,28 @@ def test_unapproved_quote_styled_blocks_are_removed_before_semantic_validation()
     assert "Another unsupported quote" not in cleaned
     assert "Painting services" in cleaned
     assert not any(issue.rule_id == "proof.evidence_required" for issue in result.issues)
+
+
+def test_approved_award_copy_is_not_mistaken_for_testimonial_proof() -> None:
+    brief = {
+        "headline": "Painted. Perfected. Proven.",
+        "subheadline": "Award-winning craftsmen serving Princeton since 2006.",
+        "sections": [],
+        "extractedContent": {},
+        "brandAssets": {},
+        "conversionAction": "",
+    }
+    extraction = {"analysis": {"testimonials": []}, "extractedTestimonials": []}
+    html = (
+        "<main><h1>Painted. Perfected. Proven.</h1>"
+        "<p>Award-winning craftsmen serving Princeton since 2006.</p></main>"
+    )
+
+    errors = generated_content_contract_errors(
+        html, brief, extraction, rendered_html=True
+    )
+
+    assert not any("proof" in error.lower() for error in errors)
 
 
 def test_semantic_gate_reports_exact_rule_and_selector() -> None:

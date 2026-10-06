@@ -268,13 +268,11 @@ def _approved_quotes(brief: Any, extraction: Any) -> list[str]:
 
 
 def _proof_contract_errors(source: str, brief: Any, extraction: Any) -> list[str]:
-    markers = re.compile(r"testimonial|review|rating|social[- ]proof|customer quote|what clients say|award|badge", re.I)
+    # Ordinary approved copy can describe an award without being a testimonial
+    # or proof card. Structural award/badge markup is still checked below.
+    markers = re.compile(r"testimonial|review|rating|social[- ]proof|customer quote|what clients say", re.I)
     visible = _contract_text(source, rendered_html=True)
-    structural_source = re.sub(r"/\*.*?\*/|//[^\n]*", " ", source, flags=re.S)
-    if not markers.search(visible) and not re.search(
-        r"(?:testimonial|review|proof|rating|award|badge)", structural_source, re.I
-    ):
-        return []
+    structural_source = " ".join(re.findall(r"<[^>]+>", source))
     if not markers.search(visible) and not re.search(
         r"(?:testimonial|review|proof|rating|award|badge)", structural_source, re.I
     ):

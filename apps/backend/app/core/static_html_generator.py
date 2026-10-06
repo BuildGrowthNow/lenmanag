@@ -2042,6 +2042,14 @@ def _prepare_provider_artifact(
     validation after this pass.
     """
     html = _VOID_ELEMENT_CLOSING_TAG.sub("", html)
+    # Strip unsupported provider proof before inserting approved fallback copy.
+    # Otherwise a broad proof cleanup can remove the whole fallback section
+    # because an approved headline or subheadline happens to mention an award.
+    html = sanitize_unverified_proof(
+        html,
+        approved_proof=_approved_testimonial_quotes(extraction),
+        approved_evidence_ids=_approved_evidence_ids(extraction),
+    )
     # Keep provider output on the same ASCII copy contract as the prompt and
     # deterministic content validator.
     html = html.replace("—", "-").replace("–", "-")
@@ -2353,11 +2361,6 @@ def _prepare_provider_artifact(
             if re.search(r"</body\s*>", html, re.I):
                 html = re.sub(r"</body\s*>", f"{cta}</body>", html, count=1, flags=re.I)
 
-    html = sanitize_unverified_proof(
-        html,
-        approved_proof=_approved_testimonial_quotes(extraction),
-        approved_evidence_ids=_approved_evidence_ids(extraction),
-    )
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     js = re.sub(r"/\*.*?\*/", "", js, flags=re.S)

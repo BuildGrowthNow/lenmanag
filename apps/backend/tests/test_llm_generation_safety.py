@@ -9,6 +9,7 @@ from app.core.ai_site_generation import _build_generation_prompt
 from app.core.static_html_generator import (
     StaticGenerationError,
     _build_static_html_prompt,
+    _prepare_provider_artifact,
     generate_static_html,
 )
 
@@ -168,6 +169,26 @@ async def test_generation_uses_one_coherent_artifact_request() -> None:
     assert llm.generate_text.await_args.kwargs["max_tokens"] == 32_768
     assert "data-generated-site-css" in result["html"]
     assert "data-generated-site-js" in result["html"]
+
+
+def test_approved_copy_fallback_survives_unsupported_proof_cleanup() -> None:
+    brief = _brief()
+    brief.headline = "Painted. Perfected. Proven."
+    brief.subheadline = "Award-winning craftsmen serving Princeton since 2006."
+    extraction = _extraction()
+    html = (
+        "<!doctype html><html><head><title>Example</title></head><body>"
+        "<main><blockquote class='pull-quote'>Unverified quote</blockquote></main>"
+        "<footer>© Example Service 2026</footer></body></html>"
+    )
+
+    prepared, _, _ = _prepare_provider_artifact(
+        html, "body { color: #123456; }", "void 0;", brief, extraction
+    )
+
+    assert "Unverified quote" not in prepared
+    assert "Painted. Perfected. Proven." in prepared
+    assert "Award-winning craftsmen serving Princeton since 2006." in prepared
 
 
 @pytest.mark.asyncio
