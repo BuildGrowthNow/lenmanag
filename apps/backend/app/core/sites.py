@@ -158,6 +158,13 @@ def is_artifact_generated_site(site: GeneratedSite) -> bool:
     """Return true when a complete artifact exists, before runtime QA."""
     if site.readinessStatus == "blocked" or not (site.previewUrl or site.previewSlug):
         return False
+    return has_renderable_generated_artifact(site)
+
+
+def has_renderable_generated_artifact(site: GeneratedSite) -> bool:
+    """Return true when the compiled output itself can be shown in a preview."""
+    if not (site.previewUrl or site.previewSlug):
+        return False
     if site.variantType in {"html_v1", "html_v2", "html_v3"}:
         return bool(
             site.staticHtml

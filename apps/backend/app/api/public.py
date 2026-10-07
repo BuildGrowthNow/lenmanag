@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.leads import lead_repository
 from app.core.sites import (
     CLIENT_VARIANT_COPY,
+    has_renderable_generated_artifact,
     is_artifact_generated_site,
     is_usable_generated_site,
 )
@@ -98,10 +99,9 @@ async def preview_site_variant(slug: str) -> Response:
     site = await site_repository.get_site_by_slug(_normalize_preview_slug(slug))
     if site is None:
         raise HTTPException(status_code=404, detail="Site preview not found")
-    # Client-facing preview URLs must remain usable after a later QA warning.
-    # QA pass is required for new galleries, but a complete non-blocked artifact
-    # already referenced by a client share must not become unavailable.
-    if not is_artifact_generated_site(site):
+    # Operator previews can inspect a complete artifact while QA is blocked;
+    # publication, shares, and forms still require the stricter readiness gate.
+    if not has_renderable_generated_artifact(site):
         raise HTTPException(status_code=409, detail="Site preview is not available yet")
 
     if site.variantType in ["html_v1", "html_v2", "html_v3"]:
