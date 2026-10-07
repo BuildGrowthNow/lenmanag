@@ -68,7 +68,9 @@ async def list_sites(
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
         success_response(
-            await site_repository.list_sites(limit=limit, offset=offset),
+            await site_repository.list_sites(
+                limit=limit, offset=offset, user_id=user_id
+            ),
             meta=response_meta(request),
         ),
     )
@@ -82,7 +84,9 @@ async def review_queue(
     offset: int = 0,
 ) -> ResponseEnvelope[SiteReviewQueueResponse]:
     return success_response(
-        await site_repository.list_review_queue(limit=limit, offset=offset),
+        await site_repository.list_review_queue(
+            limit=limit, offset=offset, user_id=user_id
+        ),
         meta=response_meta(request),
     )
 
@@ -94,7 +98,7 @@ async def diversity_report(
     limit: int = 100,
 ) -> ResponseEnvelope[dict[str, Any]]:
     return success_response(
-        await site_repository.get_diversity_report(limit=limit),
+        await site_repository.get_diversity_report(limit=limit, user_id=user_id),
         meta=response_meta(request),
     )
 

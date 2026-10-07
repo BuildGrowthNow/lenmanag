@@ -92,7 +92,12 @@ async def list_leads(
 ) -> ResponseEnvelope[LeadListResponse]:
     try:
         result = await lead_repository.list_leads(
-            q=q, status=status, stage=stage, limit=limit, offset=offset
+            q=q,
+            status=status,
+            stage=stage,
+            limit=limit,
+            offset=offset,
+            user_id=user_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
