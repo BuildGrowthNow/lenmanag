@@ -2440,6 +2440,40 @@ def _prepare_provider_artifact(
             r"</body\s*>", f"{fallback_section}</body>", html, count=1, flags=re.I
         )
 
+    # Approved services must appear in a section the page identifies as a
+    # services area; copy in a generic fallback block is not enough.
+    if approved_services:
+        service_sections = re.findall(
+            r"<section\b(?=[^>]*(?:id|class|data-purpose)\s*=\s*['\"][^'\"]*"
+            r"(?:service|offering)[^'\"]*['\"])[^>]*>(.*?)</section\s*>",
+            html,
+            flags=re.I | re.S,
+        )
+        service_section_text = re.sub(
+            r"<[^>]+>", " ", " ".join(service_sections)
+        )
+        if any(
+            not _has_semantic_phrase(service_section_text, service)
+            for service in dict.fromkeys(approved_services)
+        ):
+            services_markup = (
+                '<section class="lq-generated-service-fallback" data-purpose="services" '
+                'aria-label="Services"><h2>Services</h2>'
+                + "".join(
+                    f'<p>{escape(service.replace("—", "-").replace("–", "-"))}</p>'
+                    for service in dict.fromkeys(approved_services)
+                )
+                + "</section>"
+            )
+            if re.search(r"</body\s*>", html, re.I):
+                html = re.sub(
+                    r"</body\s*>",
+                    f"{services_markup}</body>",
+                    html,
+                    count=1,
+                    flags=re.I,
+                )
+
     # Preserve the approved conversion action even when the provider forgets
     # to wire one of its controls. Check the complete phrase, not one token.
     if conversion_action:

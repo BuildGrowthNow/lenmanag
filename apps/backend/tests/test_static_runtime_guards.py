@@ -23,6 +23,7 @@ from app.schemas.extraction import ExtractionSnapshot
 from app.core.extraction import _extract_contact_info
 from app.core.sites import is_usable_generated_site
 from datetime import datetime, timezone
+from app.core.generated_content_contracts import generated_content_contract_errors
 
 
 def test_truncated_javascript_is_rejected() -> None:
@@ -283,6 +284,33 @@ def test_provider_artifact_restores_omitted_verified_office_phone() -> None:
     )
     assert "+1 (609) 555-1234" in html
     assert 'href="tel:+16095551234"' in html
+
+
+def test_provider_artifact_places_approved_service_copy_in_services_section() -> None:
+    brief = _brief_with_logo(None)
+    extraction = SimpleNamespace(
+        summary=SimpleNamespace(companyName="Green Leaf Painter", serviceClues=[]),
+        analysis=SimpleNamespace(services=["Exterior house painting with prep work"], testimonials=[]),
+        extractedTestimonials=[],
+        contactInfo={},
+    )
+    html, css, js = _prepare_provider_artifact(
+        "<!doctype html><html><head></head><body>"
+        "<section class='hero'><h1>Green Leaf Painter</h1></section>"
+        "<section class='about'><h2>About us</h2></section>"
+        "</body></html>",
+        "body {}",
+        "const ready = true;",
+        brief,
+        extraction,
+    )
+
+    assert 'data-purpose="services"' in html
+    assert "Exterior house painting with prep work" in html
+    errors = generated_content_contract_errors(
+        html, brief, extraction, rendered_html=True, css=css
+    )
+    assert not any("service" in error.lower() for error in errors)
 
 
 def _brief_with_logo(logo: str | None):
