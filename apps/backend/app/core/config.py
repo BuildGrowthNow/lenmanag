@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 from typing import List, Optional
 
@@ -48,14 +49,24 @@ class Settings(BaseSettings):
         600  # 10 minutes for complex code generation (up from 5min)
     )
     # Fallback models if primary fails 2-3x or times out
-    bedrock_fallback_models: list[str] = [
-        "amazon.nova-pro-v1:0",
-        "us.meta.llama4-scout-17b-instruct-v1:0",
-        "mistral.mistral-large-2402-v1:0",
-        "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-        "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-        "us.anthropic.claude-opus-4-6-v1",
-    ]
+    bedrock_fallback_models: str = (
+        "amazon.nova-pro-v1:0,"
+        "us.meta.llama4-scout-17b-instruct-v1:0,"
+        "mistral.mistral-large-2402-v1:0,"
+        "us.anthropic.claude-haiku-4-5-20251001-v1:0,"
+        "us.anthropic.claude-sonnet-4-5-20250929-v1:0,"
+        "us.anthropic.claude-opus-4-6-v1"
+    )
+
+    @property
+    def bedrock_fallback_model_list(self) -> list[str]:
+        raw = self.bedrock_fallback_models.strip()
+        try:
+            decoded = json.loads(raw)
+        except json.JSONDecodeError:
+            decoded = None
+        values = decoded if isinstance(decoded, list) else raw.split(",")
+        return [str(value).strip() for value in values if str(value).strip()]
 
     # Visual Redesign Configuration
     visual_redesign_enabled: bool = True

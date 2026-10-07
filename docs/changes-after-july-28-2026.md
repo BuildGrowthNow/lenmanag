@@ -16,6 +16,10 @@ There are 113 commits after the selected baseline. This file is retained across 
 
 The July 28 snapshot predates owner scoping for lead/site APIs (`41a8744`, `72c1e74`) and credential-commit prevention (`112bbc1`). It also predates later deletion safeguards and operational hardening. Treat those as priority candidates for selective reapplication before exposing the application broadly. Review compatibility instead of cherry-picking blindly.
 
+## Rollback compatibility adjustment
+
+The July 28 settings model expected Bedrock fallback model IDs as a JSON list, while the current production `.env.production` stores the same IDs as a comma-separated value. The rollback branch keeps the existing production setting intact and parses either representation in `config.py`; `bedrock_client.py` consumes the normalized list.
+
 ## Chronological commit ledger
 
 - `d4b4088` (2026-08-31) Complete brand asset extraction and runtime QA

@@ -27,7 +27,7 @@ class BedrockClient:
         self.region = settings.bedrock_region
         self.max_tokens = settings.bedrock_max_tokens
         self.timeout_seconds = settings.bedrock_timeout_seconds
-        self.fallback_models = settings.bedrock_fallback_models
+        self.fallback_models = settings.bedrock_fallback_model_list
         self._model_failures: dict[str, int] = {}
 
         self._clients: dict[str, Any] = {}
