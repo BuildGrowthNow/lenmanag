@@ -1111,6 +1111,10 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                         return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden' &&
                             /estimate|quote|call|book|schedule|request|contact|get started|services|learn more/i.test(el.innerText);
                     }).slice(0, 50).map(el => getStyle(el, 'backgroundColor')),
+                    headingColors: Array.from(document.querySelectorAll('h1, h2')).filter(el => {
+                        const rect = el.getBoundingClientRect();
+                        return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden';
+                    }).slice(0, 30).map(el => getStyle(el, 'color')),
                     sectionsData: sections.map((sec, idx) => ({
                         index: idx,
                         tagName: sec.tagName.toLowerCase(),
@@ -2046,8 +2050,12 @@ def crawl_website(
             brand_asset_cues.extend(rendered_brand_cues(result.get("pageData") or {}, url))
             # Sites often keep their brand color in external CSS rather than theme-color metadata.
             stylesheets = [asset["url"] for asset in page_data.get("assets", [])
-                           if asset.get("kind") == "stylesheet" and asset.get("url", "").startswith(("http://", "https://"))]
-            stylesheets.sort(key=lambda stylesheet: not _same_origin(url, stylesheet))
+                           if asset.get("kind") == "stylesheet" and asset.get("url", "").startswith(("http://", "https://"))
+                           and not re.search(r"wp-content/plugins/|wp-includes/|bootstrap|font-awesome|normalize|animate\.min", asset["url"], re.I)]
+            stylesheets.sort(key=lambda stylesheet: (
+                not bool(re.search(r"skin|custom|/themes/", stylesheet, re.I)),
+                not _same_origin(url, stylesheet),
+            ))
             for stylesheet_url in list(dict.fromkeys(stylesheets))[:3]:
                 try:
                     request = Request(stylesheet_url, headers={"User-Agent": BROWSER_USER_AGENT, "Accept": "text/css"})

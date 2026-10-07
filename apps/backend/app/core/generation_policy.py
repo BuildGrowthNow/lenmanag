@@ -102,7 +102,20 @@ def rendered_brand_cues(data: dict, source_url: str) -> list[dict]:
             if max(channels) - min(channels) > 30:
                 colors.append(color)
     if not colors:
-        return []
+        # Some brands use outlined/transparent buttons; colored service headings
+        # are stronger evidence than colors from unrelated gallery plugins.
+        for value in data.get("headingColors", []):
+            color = normalize_color(value)
+            if color:
+                channels = [int(color[i:i + 2], 16) for i in (1, 3, 5)]
+                if max(channels) - min(channels) > 30:
+                    colors.append(color)
+        if not colors:
+            return []
+        color = max(dict.fromkeys(colors), key=colors.count)
+        return [{"assetType": "color", "label": "Primary brand color from rendered source headings",
+                 "value": color, "sourceUrl": source_url, "confidence": 96,
+                 "note": "Most frequent chromatic heading color when source conversion buttons are transparent."}]
     color = max(dict.fromkeys(colors), key=colors.count)
     return [{"assetType": "color", "label": "Primary brand color from rendered source actions",
              "value": color, "sourceUrl": source_url, "confidence": 98,
