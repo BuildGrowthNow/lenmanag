@@ -70,7 +70,9 @@ async def get_redesign_page(
     if database is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    lead_doc = await database["leads"].find_one({"redesignSlug": slug})
+    lead_doc = await database["leads"].find_one(
+        {"$or": [{"redesignSlug": slug}, {"redesignAliases": slug}]}
+    )
     if lead_doc is None:
         raise HTTPException(status_code=404, detail="Redesign page not found")
 

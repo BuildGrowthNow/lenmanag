@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 from urllib.parse import urlparse, urlunparse
 from uuid import uuid4
+from pymongo.errors import DuplicateKeyError
 
 from app.core.analytics import analytics_repository
 from app.core.checkpoint import TaskCheckpoint, resume_or_start_task
@@ -363,20 +364,47 @@ def _pipeline_event_to_model(doc: dict[str, Any]) -> PipelineEvent:
     )
 
 
-def _generate_redesign_slug(company_name: str | None) -> str:
-    """Generate a short unique slug for the public redesign page."""
-    suffix = uuid4().hex[:4]
-    if not company_name:
-        return f"site-{uuid4().hex[:6]}"
-    # Lowercase, keep only alphanumeric chars and hyphens, replace spaces with hyphens
-    slug = company_name.lower()
+def _generate_redesign_slug(company_name: str | None, website_url: str = "") -> str:
+    """Use the business name, or its domain when intake has no name yet."""
+    domain = (urlparse(website_url).hostname or "").removeprefix("www.").split(".")[0]
+    slug = (company_name or domain).lower()
     slug = re.sub(r"[^a-z0-9\s-]", "", slug)
     slug = re.sub(r"\s+", "-", slug.strip())
     slug = re.sub(r"-+", "-", slug).strip("-")
-    slug = slug[:8].rstrip("-")
+    slug = slug[:48].rstrip("-")
     if not slug:
-        return f"site-{uuid4().hex[:6]}"
-    return f"{slug}-{suffix}"
+        return re.sub(r"[^a-z0-9-]", "", domain.lower())[:48] or "business"
+    return slug
+
+
+async def _reserve_redesign_slug(database, incoming: dict[str, Any]) -> None:
+    """Reserve once across concurrent imports; never reuse an existing URL."""
+    stem = incoming["redesignSlug"]
+    candidate = stem
+    while True:
+        existing = await database["leads"].find_one(
+            {"$or": [{"redesignSlug": candidate}, {"redesignAliases": candidate}]},
+            {"id": 1},
+        )
+        if not existing:
+            try:
+                await database["redesign_slug_reservations"].insert_one(
+                    {"_id": candidate, "leadId": incoming["id"]}
+                )
+                incoming["redesignSlug"] = candidate
+                return
+            except DuplicateKeyError:
+                pass
+        candidate = f"{stem}-{uuid4().hex[:6]}"
+
+
+def _reserve_memory_redesign_slug(leads, incoming: dict[str, Any]) -> None:
+    occupied = {lead.get("redesignSlug") for lead in leads}
+    for lead in leads:
+        occupied.update(lead.get("redesignAliases", []))
+    stem = incoming["redesignSlug"]
+    while incoming["redesignSlug"] in occupied:
+        incoming["redesignSlug"] = f"{stem}-{uuid4().hex[:6]}"
 
 
 def _build_lead_doc(
@@ -434,7 +462,7 @@ def _build_lead_doc(
         "pipelineMode": pipeline_mode,
         "pipelineStatusDetail": None,
         "pipelineEvents": [initial_event],
-        "redesignSlug": _generate_redesign_slug(company_name),
+        "redesignSlug": _generate_redesign_slug(company_name, website_url),
         "createdAt": now,
         "updatedAt": now,
         "archivedAt": None,
@@ -596,6 +624,7 @@ class LeadRepository:
                         message="Lead merged into existing record.",
                     )
                 else:
+                    _reserve_memory_redesign_slug(list(self._memory.values()), incoming)
                     self._memory[incoming["id"]] = incoming
                     response = LeadActionResponse(
                         lead=_lead_doc_to_detail(incoming),
@@ -633,6 +662,7 @@ class LeadRepository:
             await self._record_manual_lead_event(response, incoming["sourceType"])
             return response
 
+        await _reserve_redesign_slug(database, incoming)
         await database["leads"].insert_one(incoming)
         response = LeadActionResponse(
             lead=_lead_doc_to_detail(incoming),
@@ -1204,6 +1234,7 @@ class LeadRepository:
                     self._memory[existing["id"]] = merged
                     response = (merged, False, True, "Merged into existing lead.")
                 else:
+                    _reserve_memory_redesign_slug(list(self._memory.values()), incoming)
                     self._memory[incoming["id"]] = incoming
                     response = (incoming, True, False, "Lead created.")
             await self._record_lead_import_event(response, source_ref)
@@ -1222,6 +1253,7 @@ class LeadRepository:
             await self._record_lead_import_event(response, source_ref)
             return response
 
+        await _reserve_redesign_slug(database, incoming)
         await database["leads"].insert_one(incoming)
         response = (incoming, True, False, "Lead created.")
         await self._record_lead_import_event(response, source_ref)
