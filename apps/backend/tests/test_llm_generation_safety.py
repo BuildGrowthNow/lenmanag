@@ -175,6 +175,15 @@ def test_approved_copy_fallback_survives_unsupported_proof_cleanup() -> None:
     brief = _brief()
     brief.headline = "Painted. Perfected. Proven."
     brief.subheadline = "Award-winning craftsmen serving Princeton since 2006."
+    brief.sections.append(
+        SimpleNamespace(
+            purpose="testimonials",
+            headline="What Princeton Trusts.",
+            contentSummary="Customer testimonials",
+            contentPoints=["Residential homeowner praising prep work quality"],
+            suggestedApproach="testimonial cards",
+        )
+    )
     extraction = _extraction()
     html = (
         "<!doctype html><html><head><title>Example</title></head><body>"
@@ -189,6 +198,9 @@ def test_approved_copy_fallback_survives_unsupported_proof_cleanup() -> None:
     assert "Unverified quote" not in prepared
     assert "Painted. Perfected. Proven." in prepared
     assert "Award-winning craftsmen serving Princeton since 2006." in prepared
+    assert "What Princeton Trusts." not in prepared
+    assert "Customer testimonials" not in prepared
+    assert "Residential homeowner praising prep work quality" not in prepared
 
 
 @pytest.mark.asyncio

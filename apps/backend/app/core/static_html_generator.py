@@ -2282,9 +2282,19 @@ def _prepare_provider_artifact(
             missing_copy.append(
                 f'<{tag} class="{class_name}">{escape(value)}</{tag}>'
             )
+    proof_allowed = bool(
+        _approved_testimonial_quotes(extraction)
+        and _approved_evidence_ids(extraction)
+    )
+    proof_section_purposes = {
+        "testimonial", "testimonials", "review", "reviews", "socialproof", "social-proof", "proof"
+    }
     for section_index, section in enumerate(
         list(getattr(brief, "sections", None) or []), start=1
     ):
+        purpose = str(getattr(section, "purpose", "") or "").strip().lower().replace("_", "-")
+        if purpose in proof_section_purposes and not proof_allowed:
+            continue
         for field, tag in (("headline", "h2"), ("purpose", "p")):
             value = (
                 str(source_value(section, field, "") or "")

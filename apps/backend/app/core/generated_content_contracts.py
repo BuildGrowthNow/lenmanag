@@ -10,6 +10,7 @@ from typing import Any
 
 
 _PROOF_KEYS = {"testimonial", "testimonials", "review", "reviews", "socialProof", "proof"}
+_PROOF_PURPOSES = {"testimonial", "testimonials", "review", "reviews", "socialproof", "social-proof", "proof"}
 
 
 def _value(item: Any, key: str, default: Any = None) -> Any:
@@ -154,7 +155,7 @@ def _section_contract_errors(source: str, brief: Any, *, rendered_html: bool) ->
         purpose = _norm(_value(section, "purpose", ""))
         if not purpose or purpose == "section":
             continue
-        if purpose in _PROOF_KEYS or purpose in {"social-proof", "proof"}:
+        if purpose in _PROOF_PURPOSES:
             # Proof sections are optional when no approved evidence exists.
             continue
         aliases = {
@@ -207,7 +208,11 @@ def _content_values(brief: Any, extraction: Any) -> list[tuple[str, str]]:
         if value:
             values.append((label, str(value)))
 
+    proof_allowed = _approved_proof_available(brief, extraction)
     for index, section in enumerate(_value(brief, "sections", []) or [], start=1):
+        purpose = _norm(_value(section, "purpose", "")).replace(" ", "-")
+        if purpose in _PROOF_PURPOSES and not proof_allowed:
+            continue
         for label, field in ((f"section {index} headline", "headline"), (f"section {index} purpose", "purpose")):
             value = _value(section, field)
             if value:
@@ -265,6 +270,17 @@ def _approved_quotes(brief: Any, extraction: Any) -> list[str]:
         if quote and str(quote).strip():
             quotes.append(str(quote).strip())
     return list(dict.fromkeys(quotes))
+
+
+def _approved_proof_available(brief: Any, extraction: Any) -> bool:
+    """Only require proof-section copy when quote evidence can be verified."""
+    quotes = _approved_quotes(brief, extraction)
+    if not quotes:
+        return False
+    analysis = _value(extraction, "analysis")
+    items = list(_value(analysis, "testimonials", []) or [])
+    items.extend(_value(extraction, "extractedTestimonials", []) or [])
+    return any(_value(item, "id") or _value(item, "quote") for item in items)
 
 
 def _proof_contract_errors(source: str, brief: Any, extraction: Any) -> list[str]:
@@ -335,7 +351,7 @@ def generated_content_contract_errors(
         required_sections = [
             section
             for section in all_sections
-            if _norm(_value(section, "purpose", "")) not in _PROOF_KEYS | {"social-proof", "proof"}
+            if _norm(_value(section, "purpose", "")).replace(" ", "-") not in _PROOF_PURPOSES
         ]
         required_count = max(3, len(required_sections))
         if section_count < required_count:

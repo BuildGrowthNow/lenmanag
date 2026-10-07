@@ -22,6 +22,7 @@ def test_unapproved_quote_styled_blocks_are_removed_before_semantic_validation()
       <h1>Greenleaf Painters</h1>
       <div class="about-quote"><blockquote class="quote-text">A quote without evidence</blockquote></div>
       <blockquote class="pull-quote">Another unsupported quote</blockquote>
+      <span class="award-badge">Unapproved award badge</span>
       <section class="services"><h2>Painting services</h2></section>
     </main>
     """
@@ -33,6 +34,7 @@ def test_unapproved_quote_styled_blocks_are_removed_before_semantic_validation()
     assert "pull-quote" not in cleaned
     assert "A quote without evidence" not in cleaned
     assert "Another unsupported quote" not in cleaned
+    assert "Unapproved award badge" not in cleaned
     assert "Painting services" in cleaned
     assert not any(issue.rule_id == "proof.evidence_required" for issue in result.issues)
 
@@ -57,6 +59,34 @@ def test_approved_award_copy_is_not_mistaken_for_testimonial_proof() -> None:
     )
 
     assert not any("proof" in error.lower() for error in errors)
+
+
+def test_unapproved_proof_sections_are_optional_in_copy_contract() -> None:
+    brief = {
+        "headline": "Painted. Perfected. Proven.",
+        "subheadline": "Award-winning craftsmen serving Princeton since 2006.",
+        "sections": [
+            {
+                "purpose": "testimonials",
+                "headline": "What Princeton Trusts.",
+                "contentSummary": "Customer testimonials",
+                "contentPoints": ["Homeowners praised our work"],
+            }
+        ],
+        "extractedContent": {},
+        "brandAssets": {},
+        "conversionAction": "",
+    }
+    extraction = {"analysis": {"testimonials": []}, "extractedTestimonials": []}
+
+    errors = generated_content_contract_errors(
+        "<main><h1>Painted. Perfected. Proven.</h1></main>",
+        brief,
+        extraction,
+        rendered_html=True,
+    )
+
+    assert not any("section 1" in error.lower() for error in errors)
 
 
 def test_semantic_gate_reports_exact_rule_and_selector() -> None:
