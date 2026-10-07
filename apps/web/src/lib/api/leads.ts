@@ -33,6 +33,18 @@ function buildQuery(query: LeadListQuery = {}) {
 }
 
 export async function listLeads(query: LeadListQuery = {}): Promise<LeadListResponse> {
+  if ((query.limit ?? 25) > 100) {
+    const limit = query.limit!;
+    const offset = query.offset ?? 0;
+    const first = await listLeads({ ...query, limit: 100 });
+    const items = [...first.items];
+    while (items.length < limit && offset + items.length < first.pagination.total) {
+      const page = await listLeads({ ...query, limit: Math.min(100, limit - items.length), offset: offset + items.length });
+      if (page.items.length === 0) break;
+      items.push(...page.items);
+    }
+    return { ...first, items, pagination: { ...first.pagination, limit } };
+  }
   return safeRequest(`/api/leads${buildQuery(query)}`, {
     items: [],
     pagination: { total: 0, limit: query.limit ?? 25, offset: query.offset ?? 0 },

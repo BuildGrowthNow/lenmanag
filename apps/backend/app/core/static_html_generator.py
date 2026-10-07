@@ -21,6 +21,7 @@ from app.core.config import get_settings
 from app.core.compiler_client import get_compiler_client
 from app.core.generation_policy import apply_brief_policy, brand_color_policy, enforce_html_testimonials, static_safety_css
 from app.core.llm import get_llm_client
+from app.core.verified_images import verified_image_catalog, enforce_image_catalog
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
 
@@ -47,7 +48,10 @@ async def generate_static_html(
     llm = get_llm_client()
 
     master_brief = apply_brief_policy(master_brief, extraction)
+    images = await verified_image_catalog(extraction)
     prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
+    prompt += "\nVERIFIED SOURCE PHOTOGRAPHS (use only these exact URLs; match subjects to descriptions):\n" + json.dumps(images)
+    prompt += "\nIf no appropriate photograph exists, use CSS shapes, typography and gradients. Do not invent project locations, team identities or image URLs."
     html_content = css_content = ""
     for attempt in range(2):
         response = await llm.generate_text(prompt=prompt, temperature=0.7, max_tokens=32768)
@@ -65,6 +69,7 @@ async def generate_static_html(
 
     # Reviews are rendered from extraction records rather than AI-written quotes.
     html_content = enforce_html_testimonials(html_content, extraction)
+    html_content, css_content = enforce_image_catalog(html_content, css_content, images)
     document = BeautifulSoup(html_content, "html.parser")
     for script in list(document.find_all("script")):
         if script.get("type", "") not in {"application/ld+json", "application/json"}:
@@ -384,7 +389,8 @@ REQUIREMENTS:
    - Include all listed sections, subject to the testimonial evidence rule above
    - Use brand logo if available (as img src)
    - NO inline styles or scripts
-   - Use placeholder image URLs from https://images.unsplash.com for any images
+   - Use only the verified source photograph URLs supplied below. Never invent or guess image URLs.
+   - Keep the native cursor visible everywhere. Never use cursor:none or a replacement custom cursor.
 
 3. CSS Requirements:
    - Use CSS custom properties for colors/spacing

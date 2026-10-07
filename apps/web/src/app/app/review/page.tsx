@@ -12,12 +12,17 @@ import type { SiteReviewQueueResponse } from "@/lib/types";
 export default function ReviewQueuePage() {
   const [queue, setQueue] = useState<SiteReviewQueueResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
-    getSiteReviewQueue({ limit: 25, offset: 0 })
-      .then(setQueue)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load review queue."));
-  }, []);
+    let active = true;
+    setQueue(null);
+    setError(null);
+    getSiteReviewQueue({ limit: 25, offset })
+      .then((value) => { if (active) setQueue(value); })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Failed to load review queue."); });
+    return () => { active = false; };
+  }, [offset]);
 
   return (
     <PageFrame
@@ -30,7 +35,14 @@ export default function ReviewQueuePage() {
       ) : queue === null ? (
         <LoadingState label="Loading review queue…" />
       ) : (
-        <SiteReviewQueue queue={queue} />
+        <>
+          <SiteReviewQueue queue={queue} />
+          <div className="flex items-center justify-between gap-4 py-6">
+            <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 25))} className="disabled:opacity-40">Previous</button>
+            <span>{queue.pagination.total === 0 ? "0" : `${offset + 1}–${Math.min(offset + 25, queue.pagination.total)}`} of {queue.pagination.total} websites</span>
+            <button disabled={offset + 25 >= queue.pagination.total} onClick={() => setOffset(offset + 25)} className="disabled:opacity-40">Next</button>
+          </div>
+        </>
       )}
     </PageFrame>
   );

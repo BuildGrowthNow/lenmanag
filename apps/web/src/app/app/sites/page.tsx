@@ -103,7 +103,12 @@ export default function SitesPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getSites({ limit: 200 });
+      const data: GeneratedSite[] = [];
+      for (let offset = 0; ; offset += 100) {
+        const page = await getSites({ limit: 100, offset });
+        data.push(...page);
+        if (page.length < 100) break;
+      }
       setSites(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load websites.");

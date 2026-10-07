@@ -187,6 +187,9 @@ def static_safety_css(extraction: ExtractionSnapshot | None) -> str:
 """
     return brand + """
 /* The hero is readable before JavaScript loads and if an enhancement fails. */
+html, body { cursor: auto !important; }
+a, button, [role="button"], input[type="submit"] { cursor: pointer !important; }
+.custom-cursor, #custom-cursor, [data-custom-cursor] { display: none !important; }
 h1, h1 *, [data-hero-headline], [data-hero-headline] *, .headline-word {
   opacity: 1 !important; visibility: visible !important; clip-path: none !important;
   transform: none !important; animation: none !important;
