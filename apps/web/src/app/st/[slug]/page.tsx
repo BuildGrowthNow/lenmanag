@@ -5,10 +5,17 @@
  */
 
 import { notFound } from 'next/navigation';
-import { isPreviewUsable } from '@/lib/api/sites';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+}
+
+function hasPreviewArtifact(site: Record<string, unknown>): boolean {
+  if (!["success", "completed"].includes(String(site.compilationStatus ?? ""))) return false;
+  if (site.variantType === "html_v1" || site.variantType === "html_v2" || site.variantType === "html_v3") {
+    return typeof site.staticHtml === "string" && Boolean(site.staticHtml.trim());
+  }
+  return typeof site.compiledBundleUrl === "string" && Boolean(site.compiledBundleUrl.trim());
 }
 
 async function fetchSiteBundle(slug: string) {
@@ -41,8 +48,9 @@ export default async function PreviewPage({ params }: PageProps) {
   const htmlContent = strippedSource.startsWith('<') ? strippedSource : null;
 
   const isStaticVariant = site.variantType === 'html_v1' || site.variantType === 'html_v2' || site.variantType === 'html_v3';
+  const hasArtifact = hasPreviewArtifact(site as Record<string, unknown>);
 
-  if (isStaticVariant && htmlContent && isPreviewUsable(site)) {
+  if (isStaticVariant && htmlContent && hasArtifact) {
     return (
       <iframe
         title={`Generated preview for ${slug}`}
@@ -58,7 +66,7 @@ export default async function PreviewPage({ params }: PageProps) {
   // Compiled model output is rendered in a separate sandboxed document. The
   // route below fetches the artifact server-side and mounts it only inside the
   // isolated frame, keeping generated code out of this preview shell.
-  const isCompiledBundle = isPreviewUsable(site) && !!site.compiledBundleUrl;
+  const isCompiledBundle = hasArtifact && !!site.compiledBundleUrl;
 
   if (!isCompiledBundle) {
     return (
@@ -66,7 +74,7 @@ export default async function PreviewPage({ params }: PageProps) {
         <div className="text-center space-y-4">
           <h1 className="text-2xl font-semibold">Preview unavailable</h1>
           <p className="text-zinc-400">
-            This variant did not produce a usable published artifact. No website was published.
+            This variant has no generated artifact to preview yet. QA approval is still required before publication.
           </p>
           <p className="text-sm text-zinc-500">Slug: {slug}</p>
         </div>
