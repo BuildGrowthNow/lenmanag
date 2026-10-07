@@ -3097,7 +3097,8 @@ class SiteRepository:
             confidence=50,
         )
         cue = primary_brand_cue(extraction)
-        primary_evidence = BriefEvidence(sourceKind="source_backed", inferenceLabel="Extracted primary brand color", confidence=cue.confidence) if cue else default_evidence
+        primary_evidence = BriefEvidence(sourceKind="source_backed", inferenceLabel="Extracted primary brand color", confidence=cue.confidence,
+                                        references=[_asset_reference_from_cue(cue.model_dump())]) if cue else default_evidence
         return BrandTokens(
             paletteMode="zinc",
             primaryColor=SiteToken(value=normalize_color(cue.value) if cue else "#3b82f6", evidence=primary_evidence),

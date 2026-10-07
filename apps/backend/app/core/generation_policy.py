@@ -81,7 +81,7 @@ def stylesheet_color_cues(css: str, source_url: str) -> list[dict]:
 
 def is_testimonial_section(value: str) -> bool:
     return bool(re.search(
-        r"testimonial|customer[\s_-]+(?:quote|review)|client[\s_-]+(?:quote|review)|\breviews\b|schema.org/Review|review[\s_-]*(?:card|carousel|section)|"
+        r"testimonial|customer[\s_-]+(?:quote|review)|client[\s_-]+(?:quote|review)|\breviews\b|schema.org/Review|(?:quote|review)[\s_-]*(?:card|carousel|section|rating)|"
         r"endorsement|what\s+(?:our\s+)?(?:clients|customers|homeowners)\s+say",
         value, re.I,
     ))
@@ -109,9 +109,13 @@ def enforce_html_testimonials(html: str, extraction: ExtractionSnapshot | None) 
     for node in list(soup.find_all(True)):
         if node.parent is None:
             continue
-        marker = " ".join([str(node.get("id", "")), " ".join(node.get("class", [])), str(node.get("itemtype", ""))])
-        heading = node.get_text(" ", strip=True) if node.name in {"h2", "h3"} else ""
-        if is_testimonial_section(marker) or is_testimonial_section(heading) or node.name == "blockquote":
+        marker = " ".join([str(node.get("id", "")), " ".join(node.get("class", [])), str(node.get("itemtype", "")), str(node.get("aria-label", ""))])
+        heading = node.get_text(" ", strip=True) if node.name in {"h2", "h3", "h4"} else ""
+        direct_text = " ".join(str(text) for text in node.find_all(string=True, recursive=False)).strip() if node.name not in {"script", "style", "head", "title", "textarea"} else ""
+        rating = re.search(r"google\s+reviews?|\b[1-5](?:\.\d)?\s*/\s*5\b|\b[1-5](?:\.\d)?[\s-]+stars?\b|\bstar[\s-]+reviews?\b|[★⭐]{3,}", direct_text, re.I)
+        quote_context = " ".join([direct_text, marker, *[" ".join(parent.get("class", [])) for parent in node.parents if parent.attrs]])
+        customer_quote = re.search(r'["“][^"”]{25,}["”]', direct_text) and re.search(r"homeowner|customer|client|ticker|testimonial|quote|trust|proof|review", quote_context, re.I)
+        if is_testimonial_section(marker) or is_testimonial_section(heading) or node.name == "blockquote" or rating or customer_quote:
             region = node.find_parent("section") or node
             region.decompose()
     # Review schemas can invent ratings even without a visible review section.
@@ -124,12 +128,18 @@ def enforce_html_testimonials(html: str, extraction: ExtractionSnapshot | None) 
         for record in records[:6]:
             attribution = ", ".join(part for part in [record.authorName, record.authorTitle, record.authorCompany] if part)
             cards.append(f'<figure><blockquote>{escape(record.quote)}</blockquote>' + (f'<figcaption>{escape(attribution)}</figcaption>' if attribution else "") + '</figure>')
-        section = BeautifulSoup('<section class="source-testimonials" aria-label="Customer testimonials"><h2>What our customers say</h2>' + "".join(cards) + '</section>', "html.parser")
+        section = BeautifulSoup('<section id="source-testimonials" class="source-testimonials" aria-label="Customer testimonials"><h2>What our customers say</h2>' + "".join(cards) + '</section>', "html.parser")
         footer = soup.body.find("footer")
         if footer:
             footer.insert_before(section)
         else:
             soup.body.append(section)
+    for link in list(soup.find_all("a", href=True)):
+        if link["href"].startswith("#") and is_testimonial_section(link["href"]):
+            if records:
+                link["href"] = "#source-testimonials"
+            else:
+                link.decompose()
     return str(soup)
 
 

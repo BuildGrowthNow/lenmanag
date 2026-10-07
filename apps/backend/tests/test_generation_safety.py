@@ -114,6 +114,14 @@ def test_testimonials_are_rebuilt_from_exact_source_records_only():
     assert validate_testimonial_source("<blockquote>Fake</blockquote>", extraction())
 
 
+def test_quote_tickers_review_badges_and_empty_review_links_are_removed():
+    html = '<html><body><nav><a href="#testimonials">Reviews</a><a href="#services">Services</a></nav><section class="ticker-strip"><span>Homeowner — "Best crew we have ever hired for our house"</span></section><section class="trust-strip"><b>4.9/5 Stars</b><p>Google Reviews</p></section><section id="services"><p>Home improvements</p></section></body></html>'
+    output = enforce_html_testimonials(html, extraction())
+    assert 'ticker-strip' not in output and 'trust-strip' not in output
+    assert 'href="#testimonials"' not in output
+    assert 'href="#services"' in output
+
+
 @pytest.mark.parametrize("remote", [True, False])
 def test_local_assets_are_rewritten_once_or_inlined(remote):
     html = '<html><head><link href="./styles.css" rel="stylesheet"><link href="/st/styles.css" rel="stylesheet"><link href="https://vendor.example/font.css"></head><body><script src="script.js"></script><script src="/st/script.js"></script></body></html>'

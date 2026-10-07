@@ -2033,7 +2033,8 @@ def crawl_website(
         if source == "homepage":
             # Sites often keep their brand color in external CSS rather than theme-color metadata.
             stylesheets = [asset["url"] for asset in page_data.get("assets", [])
-                           if asset.get("kind") == "stylesheet" and _same_origin(url, asset.get("url", ""))]
+                           if asset.get("kind") == "stylesheet" and asset.get("url", "").startswith(("http://", "https://"))]
+            stylesheets.sort(key=lambda stylesheet: not _same_origin(url, stylesheet))
             for stylesheet_url in list(dict.fromkeys(stylesheets))[:3]:
                 try:
                     request = Request(stylesheet_url, headers={"User-Agent": BROWSER_USER_AGENT, "Accept": "text/css"})

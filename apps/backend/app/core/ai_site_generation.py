@@ -8,6 +8,7 @@ that produces complete landing page TSX code from the approved master brief.
 from __future__ import annotations
 
 import logging
+import json
 import re
 from typing import Any
 
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 MAX_COMPILATION_RETRIES = 3
 
 
-def _upload_bundle_to_s3(bundle_code: str, css_code: str | None, site_id: str) -> str:
+def _upload_bundle_to_s3(bundle_code: str, css_code: str | None, site_id: str, extraction: ExtractionSnapshot | None = None) -> str:
     """
     Upload compiled bundle to S3 and return public URL.
 
@@ -50,6 +51,8 @@ def _upload_bundle_to_s3(bundle_code: str, css_code: str | None, site_id: str) -
     # Generate S3 key path: bundles/<site_id>/bundle.js
     prefix = settings.asset_s3_prefix or "lenmanag/"
     bundle_key = f"{prefix}bundles/{site_id}/bundle.js"
+    safety_css = json.dumps(static_safety_css(extraction))
+    bundle_code = "(() => { const style = document.getElementById('lenquant-generation-safety') || document.createElement('style'); style.id = 'lenquant-generation-safety'; style.textContent = " + safety_css + "; document.head.appendChild(style); })();\n" + bundle_code
 
     # Upload JS bundle
     s3_client.put_object(
@@ -178,7 +181,7 @@ async def generate_landing_page_code(
                 }
 
             try:
-                bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id)
+                bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id, extraction)
             except Exception as upload_error:
                 logger.error(
                     f"Failed to upload bundle for site {site_id}: {upload_error}"
@@ -264,7 +267,7 @@ def _build_generation_prompt(
         ]
     )
 
-    testimonial_policy = _testimonial_policy(extraction) + "\n" + brand_color_policy(extraction)
+    testimonial_policy = _testimonial_policy(extraction) + "\n" + brand_color_policy(extraction) + "\nMark every primary CTA with data-primary-cta and the hero headline with data-hero-headline. Content must be readable before animations and when motion is reduced."
 
     # Build creative direction section if available
     creative_section = ""
@@ -1070,7 +1073,7 @@ async def refine_landing_page_code(
                 }
 
             try:
-                bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id)
+                bundle_url = _upload_bundle_to_s3(bundle_code, css_code, site_id, extraction)
             except Exception as upload_error:
                 logger.error(
                     f"Failed to upload refined bundle for site {site_id}: {upload_error}"
