@@ -95,12 +95,15 @@ def rendered_brand_cues(data: dict, source_url: str) -> list[dict]:
                      "value": color, "sourceUrl": source_url, "confidence": 100,
                      "note": "Resolved from the active source theme, after CSS overrides."}]
     colors = []
+    neutral_actions = []
     for value in data.get("actionColors", []):
         color = normalize_color(value)
         if color:
             channels = [int(color[i:i + 2], 16) for i in (1, 3, 5)]
             if max(channels) - min(channels) > 30:
                 colors.append(color)
+            elif max(channels) < 160:
+                neutral_actions.append(color)
     if not colors:
         # Some brands use outlined/transparent buttons; colored service headings
         # are stronger evidence than colors from unrelated gallery plugins.
@@ -111,6 +114,21 @@ def rendered_brand_cues(data: dict, source_url: str) -> list[dict]:
                 if max(channels) - min(channels) > 30:
                     colors.append(color)
         if not colors:
+            if neutral_actions:
+                color = max(dict.fromkeys(neutral_actions), key=neutral_actions.count)
+                return [{"assetType": "color", "label": "Primary brand color from rendered monochrome actions",
+                         "value": color, "sourceUrl": source_url, "confidence": 96,
+                         "note": "Source uses dark neutral conversion buttons with no colored heading or action accents."}]
+            dark_headings = []
+            for value in data.get("headingColors", []):
+                color = normalize_color(value)
+                if color and max(int(color[i:i + 2], 16) for i in (1, 3, 5)) < 160:
+                    dark_headings.append(color)
+            if dark_headings:
+                color = max(dict.fromkeys(dark_headings), key=dark_headings.count)
+                return [{"assetType": "color", "label": "Primary brand color from monochrome source headings",
+                         "value": color, "sourceUrl": source_url, "confidence": 90,
+                         "note": "Monochrome source typography fallback when no colored brand styling is available."}]
             return []
         color = max(dict.fromkeys(colors), key=colors.count)
         return [{"assetType": "color", "label": "Primary brand color from rendered source headings",
