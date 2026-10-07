@@ -142,7 +142,9 @@ export function RedesignClient({ data }: { data: RedesignPageData }) {
             Your custom landing page
           </p>
           <h2 id="redesign-offer-heading" className="mt-3 text-2xl font-semibold text-white">
-            Love one of these? Let&apos;s build your final version.
+            {variants.length === 1
+              ? "Love this design? Let's build your final version."
+              : "Love one of these? Let's build your final version."}
           </h2>
           <dl className="mt-7 grid gap-5 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-white/10">
             <div>
@@ -173,9 +175,9 @@ export function RedesignClient({ data }: { data: RedesignPageData }) {
             Book a call
           </a>
           <p className="mt-3 text-sm text-zinc-400">Free 30-minute call · No commitment</p>
-          <p className="mx-auto mt-5 max-w-2xl text-xs leading-relaxed text-zinc-500">
+          <p className="mx-auto mt-5 max-w-2xl text-xs leading-relaxed text-zinc-400">
             Delivery starts after scope approval and receipt of your content. Additional pages and features
-            are scoped on the call. Guarantee covers the base service.{' '}
+            are scoped on the call.{' '}
             <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-zinc-300">
               See terms
             </a>.
