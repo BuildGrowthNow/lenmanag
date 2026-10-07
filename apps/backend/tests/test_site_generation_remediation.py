@@ -1,4 +1,4 @@
-from app.core.semantic_validation import sanitize_unsupported_proof, validate_semantics
+from app.core.semantic_validation import sanitize_unverified_proof, sanitize_unsupported_proof, validate_semantics
 from app.core.generation_contracts import generation_preflight
 from app.core.generated_content_contracts import generated_content_contract_errors
 from app.core.interaction_qa import normalize_interaction_manifest, state_changed
@@ -37,6 +37,25 @@ def test_unapproved_quote_styled_blocks_are_removed_before_semantic_validation()
     assert "Unapproved award badge" not in cleaned
     assert "Painting services" in cleaned
     assert not any(issue.rule_id == "proof.evidence_required" for issue in result.issues)
+
+
+def test_unapproved_bare_blockquotes_are_removed_and_meta_copy_is_not_proof_markup() -> None:
+    html = (
+        '<meta name="description" content="Award-winning painting professionals">'
+        "<main><blockquote>A claim with no source evidence.</blockquote>"
+        "<p>Award-winning painting professionals</p></main>"
+    )
+    cleaned = sanitize_unverified_proof(html, approved_proof=[], approved_evidence_ids=set())
+    brief = {"sections": [], "extractedContent": {}, "contactInfo": {}}
+    errors = generated_content_contract_errors(
+        cleaned,
+        brief,
+        {"analysis": {"testimonials": []}, "extractedTestimonials": []},
+    )
+
+    assert "<blockquote" not in cleaned
+    assert "Award-winning painting professionals" in cleaned
+    assert not any("proof" in error.lower() for error in errors)
 
 
 def test_approved_award_copy_is_not_mistaken_for_testimonial_proof() -> None:

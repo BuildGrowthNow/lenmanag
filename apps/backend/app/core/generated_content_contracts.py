@@ -308,7 +308,16 @@ def _proof_contract_errors(source: str, brief: Any, extraction: Any) -> list[str
     # or proof card. Structural award/badge markup is still checked below.
     markers = re.compile(r"testimonial|review|rating|social[- ]proof|customer quote|what clients say", re.I)
     visible = _contract_text(source, rendered_html=True)
-    structural_source = " ".join(re.findall(r"<[^>]+>", source))
+    structural_values: list[str] = []
+    for tag in re.findall(r"<[^>]+>", source):
+        structural_values.extend(
+            re.findall(
+                r"\b(?:id|class|data-purpose|role|aria-label)\s*=\s*['\"]([^'\"]*)['\"]",
+                tag,
+                re.I,
+            )
+        )
+    structural_source = " ".join(structural_values)
     if not markers.search(visible) and not re.search(
         r"(?:testimonial|review|proof|rating|award|badge)", structural_source, re.I
     ):

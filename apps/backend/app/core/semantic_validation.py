@@ -176,6 +176,14 @@ def sanitize_unsupported_proof(
     """Remove entire unsupported proof sections and their navigation links."""
     if approved_proof:
         return html
+    # A bare blockquote is still a quote-shaped claim even without a marker
+    # class. Remove it when there is no approved evidence to preserve it.
+    html = re.sub(
+        r"<blockquote\b[^>]*>.*?</blockquote\s*>",
+        "",
+        html,
+        flags=re.I | re.S,
+    )
     section_pattern = re.compile(
         r"<(?P<tag>section|article|blockquote|aside|div|ul|li|figure|span|cite)\b(?=[^>]*(?:id|class)\s*=\s*['\"][^'\"]*(?:testimonial|review|quote|proof|rating|social-proof|award|badge|metrics?)[^'\"]*['\"])[^>]*>.*?</(?P=tag)\s*>",
         re.I | re.S,
