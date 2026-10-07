@@ -107,6 +107,8 @@ async def get_redesign_page(
         variants.append(
             RedesignVariant(
                 siteId=site.id,
+                variantLabel=site.variantLabel,
+                variantDescription=site.variantDescription,
                 previewUrl=site.previewUrl,
                 screenshotUrl=screenshot_url,
                 variantPosition=site.variantPosition,

@@ -2897,6 +2897,21 @@ class SiteRepository:
                 extraction=extraction,
             )
 
+        # Give the client a useful, brand-specific name and explanation for
+        # this design. If the naming provider is unavailable, the helper uses
+        # a contextual fallback and site generation can still complete.
+        from app.core.site_identity import generate_site_identity
+
+        existing_sites = await self.list_sites_by_lead(lead_id, user_id=user_id)
+        site.variantLabel, site.variantDescription = await generate_site_identity(
+            company_name=extraction.summary.companyName,
+            industry=industry,
+            strategy=variant_strategy,
+            brief=master_brief,
+            site=site,
+            existing_names=[existing.variantLabel for existing in existing_sites],
+        )
+
         # Stamp the owning user and source attribution before saving
         site.userId = user_id
         site.sourceAttribution = SiteSourceAttribution.model_validate(
@@ -2979,6 +2994,7 @@ class SiteRepository:
             version=1,
             variantType="nextjs",
             variantLabel=variant_strategy.get("variantLabel", "Next.js Site"),
+            variantDescription=variant_strategy.get("variantDescription"),
             variantPosition=variant_strategy.get("variantPosition", 4),
             themeId="nextjs-generated",
             themeKey="nextjs-generated",
@@ -3032,6 +3048,7 @@ class SiteRepository:
             version=1,
             variantType=variant_strategy.get("variantType", "html_v1"),
             variantLabel=variant_strategy.get("variantLabel", "Static HTML"),
+            variantDescription=variant_strategy.get("variantDescription"),
             variantPosition=variant_strategy.get("variantPosition", 1),
             staticHtml=html_result.get("html"),
             staticCssUrl=html_result.get("cssUrl"),
@@ -4390,6 +4407,34 @@ class SiteRepository:
             "createdAt": current.createdAt if current else now,
             "updatedAt": now,
         }
+
+        # Refresh the client-facing name and description from the actual
+        # generated design on first generation and every regeneration.
+        from app.core.site_identity import generate_site_identity
+
+        existing_sites = await self.list_sites_by_lead(
+            lead.id, user_id=lead.user_id
+        )
+        strategy = {
+            "variantType": current.variantType if current else "nextjs",
+            "designMode": master_brief.designMode or "editorial",
+            "creativeBriefGuidance": master_brief.visualStyle,
+            "inspirationKeywords": master_brief.creativeDirection.inspirationKeywords,
+        }
+        site_doc["variantLabel"], site_doc["variantDescription"] = (
+            await generate_site_identity(
+                company_name=lead.companyName or extraction.summary.companyName,
+                industry=lead.industry,
+                strategy=strategy,
+                brief=master_brief,
+                site=site_doc,
+                existing_names=[
+                    existing.variantLabel
+                    for existing in existing_sites
+                    if existing.id != site_id
+                ],
+            )
+        )
 
         # Apply any active structured overrides to the site doc before persisting
         active_overrides = await self._site_overrides(site_id)

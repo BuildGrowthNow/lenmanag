@@ -117,7 +117,9 @@ function VariantCard({ site, onRefresh }: { site: GeneratedSite; onRefresh: () =
             <CardTitle className="text-base font-medium text-text truncate">
               {site.variantLabel || variantInfo.name}
             </CardTitle>
-            <p className="text-xs text-muted mt-0.5">{variantInfo.description}</p>
+            <p className="text-xs text-muted mt-0.5">
+              {site.variantDescription || variantInfo.description}
+            </p>
           </div>
           <div className="flex items-center gap-1.5">
             <StatusIcon status={site.readinessStatus} />

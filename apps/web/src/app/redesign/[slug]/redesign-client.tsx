@@ -63,6 +63,12 @@ function VariantCard({ variant }: { variant: RedesignVariant }) {
           </div>
         )}
       </div>
+      <div className="space-y-1.5 p-4 text-left">
+        <h2 className="text-base font-semibold text-zinc-100">{variant.variantLabel}</h2>
+        {variant.variantDescription ? (
+          <p className="text-sm leading-relaxed text-zinc-400">{variant.variantDescription}</p>
+        ) : null}
+      </div>
     </a>
   );
 }

@@ -367,6 +367,7 @@ class GeneratedSite(BaseModel):
     # NEW: Variant identification
     variantType: VariantType = "nextjs"
     variantLabel: str = "Next.js Site"
+    variantDescription: Optional[str] = None
     variantPosition: int = 1  # Display order: 1=first, 2=second, etc.
 
     # NEW: Static HTML output (for HTML variants only)
@@ -504,6 +505,8 @@ class SiteOverrideCreateRequest(BaseModel):
 
 class RedesignVariant(BaseModel):
     siteId: str
+    variantLabel: str
+    variantDescription: Optional[str] = None
     previewUrl: str
     screenshotUrl: str
     variantPosition: int

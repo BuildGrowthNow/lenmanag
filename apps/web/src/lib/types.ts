@@ -635,6 +635,7 @@ export type SiteVariant = {
   leadId: string;
   variantType: VariantType;
   variantLabel: string;
+  variantDescription?: string | null;
   variantPosition: number;
   previewSlug: string;
   previewUrl: string;
@@ -660,6 +661,7 @@ export type GeneratedSite = {
   // Variant fields
   variantType?: VariantType;
   variantLabel?: string;
+  variantDescription?: string | null;
   variantPosition?: number;
   staticHtml?: string;
   staticCssUrl?: string;

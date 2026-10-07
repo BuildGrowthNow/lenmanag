@@ -14,6 +14,8 @@ interface PageProps {
 
 export type RedesignVariant = {
   siteId: string;
+  variantLabel: string;
+  variantDescription: string | null;
   previewUrl: string;
   screenshotUrl: string;
   variantPosition: number;
