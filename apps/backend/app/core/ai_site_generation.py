@@ -15,7 +15,7 @@ from typing import Any
 import boto3
 from app.core.compiler_client import CompilerError, get_compiler_client
 from app.core.config import get_settings
-from app.core.generation_policy import apply_brief_policy, brand_color_policy, enforce_html_testimonials, static_safety_css, validate_testimonial_source
+from app.core.generation_policy import FOOTER_YEAR_POLICY, apply_brief_policy, brand_color_policy, enforce_html_footer_year, enforce_source_footer_year, enforce_html_testimonials, static_safety_css, validate_testimonial_source
 from app.core.llm import get_llm_client
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
@@ -124,6 +124,7 @@ async def generate_landing_page_code(
             refinement_prompt=refinement_prompt,
         )
 
+    prompt += "\n" + FOOTER_YEAR_POLICY
     # Generate code
     logger.info(f"Generating TSX code for site {site_id}")
     response = await llm.generate_text(
@@ -133,7 +134,7 @@ async def generate_landing_page_code(
     )
 
     # Extract code from response
-    source_code = _extract_tsx_code(response)
+    source_code = enforce_source_footer_year(_extract_tsx_code(response))
 
     # Validate syntax — retry with feedback if validation fails
     validation_errors = _validate_tsx_source(source_code) + validate_testimonial_source(source_code, extraction)
@@ -158,6 +159,7 @@ async def generate_landing_page_code(
                 "error": f"Code validation failed after retry: {', '.join(final_errors[:3])}",
             }
 
+    source_code = enforce_source_footer_year(source_code)
     # Compile code
     logger.info(f"Compiling TSX code for site {site_id}")
     try:
@@ -844,7 +846,7 @@ Do NOT simplify or remove animations/effects just to fix validation errors.
             max_tokens=32768,  # Match increased limit for complete code
         )
 
-        fixed_code = _extract_tsx_code(response)
+        fixed_code = enforce_source_footer_year(_extract_tsx_code(response))
         new_errors = _validate_tsx_source(fixed_code) + validate_testimonial_source(fixed_code, extraction)
 
         if not new_errors:
@@ -1009,6 +1011,7 @@ async def refine_landing_page_code(
         extraction=extraction,
     )
 
+    prompt += "\n" + FOOTER_YEAR_POLICY
     logger.info(f"Refining {variant_type} code for site {site_id}")
     response = await llm.generate_text(
         prompt=prompt,
@@ -1016,7 +1019,7 @@ async def refine_landing_page_code(
         max_tokens=32768,
     )
 
-    source_code = _extract_tsx_code(response) if not is_html_variant else _extract_html_code(response)
+    source_code = enforce_source_footer_year(_extract_tsx_code(response)) if not is_html_variant else _extract_html_code(response)
 
     # Only validate TSX for Next.js sites, skip for HTML variants
     if not is_html_variant:
@@ -1040,6 +1043,7 @@ async def refine_landing_page_code(
         if not re.search(r"</html\s*>", source_code, re.I):
             return {"success": False, "error": "Refined HTML is incomplete"}
         source_code = enforce_html_testimonials(source_code, extraction)
+        source_code = enforce_html_footer_year(source_code)
         source_code = _insert_before_or_append(source_code, "</head>", f"<style>{static_safety_css(extraction)}</style>")
         for script in BeautifulSoup(source_code, "html.parser").find_all("script"):
             if not script.get("src") and script.get("type", "") not in {"application/ld+json", "application/json"}:

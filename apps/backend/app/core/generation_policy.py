@@ -9,6 +9,47 @@ from bs4 import BeautifulSoup
 
 from app.schemas.extraction import BrandAssetCue, ExtractionSnapshot
 
+FOOTER_YEAR = "2026"
+FOOTER_YEAR_POLICY = (
+    "FOOTER YEAR RULE: If the footer displays a copyright/legal year, use the literal year 2026. "
+    "Never copy an old copyright year from the source website or use a dynamic current year. "
+    "Do not invent a year when the footer has none. Preserve genuine founding dates."
+)
+
+
+def _footer_year_text(text: str) -> str:
+    def replace(match: re.Match) -> str:
+        prefix = text[max(0, match.start() - 40):match.start()]
+        if re.search(r"\b(?:since|founded|established|est\.)\s*$", prefix, re.I):
+            return match.group()
+        return FOOTER_YEAR
+
+    return re.sub(r"\b(?:19|20)\d{2}(?:\s*[-–—]\s*(?:19|20)\d{2})?\b", replace, text)
+
+
+def enforce_html_footer_year(html: str) -> str:
+    """Normalize visible footer years without changing assets or historical claims."""
+    soup = BeautifulSoup(html, "html.parser")
+    for footer in soup.select('footer, [role="contentinfo"]'):
+        for node in list(footer.find_all(string=True)):
+            if node.parent.name in {"script", "style"}:
+                continue
+            original = str(node)
+            updated = _footer_year_text(original)
+            if updated != original:
+                node.replace_with(updated)
+    return str(soup)
+
+
+def enforce_source_footer_year(source: str) -> str:
+    """Preserve JSX markup while fixing footer literals and inline year expressions."""
+    def footer(match: re.Match) -> str:
+        block = match.group()
+        block = re.sub(r"new Date\(\)\.getFullYear\(\)", FOOTER_YEAR, block)
+        return re.sub(r"(?<=>)([^<]+)(?=<)", lambda text: _footer_year_text(text.group()), block)
+
+    return re.sub(r"<footer\b[^>]*>.*?</footer\s*>", footer, source, flags=re.I | re.S)
+
 
 def normalize_color(value: str) -> str | None:
     value = value.strip().lower()
