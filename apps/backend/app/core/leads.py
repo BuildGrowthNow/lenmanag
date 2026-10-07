@@ -576,6 +576,8 @@ class LeadRepository:
         self._memory_ready = True
         await database["leads"].create_index("normalizedDomain")
         await database["leads"].create_index("normalizedWebsiteUrl")
+        await database["leads"].create_index("redesignSlug")
+        await database["leads"].create_index("redesignAliases")
         await database["jobs"].create_index("leadId")
         await database["jobs"].create_index("status")
         await database["site_extractions"].create_index("leadId")
