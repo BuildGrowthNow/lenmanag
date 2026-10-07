@@ -19,6 +19,24 @@ def _value(item: Any, key: str, default: Any = None) -> Any:
     return getattr(item, key, default)
 
 
+def _is_plausible_contact_value(key: str, value: Any) -> bool:
+    """Reject obviously misclassified schedule text without inventing a correction."""
+    if not value:
+        return False
+    if key.casefold() not in {"hours", "officehours", "openinghours"}:
+        return True
+    text = re.sub(r"\s+", " ", str(value)).strip()
+    if len(text) > 80:
+        return False
+    return bool(
+        re.search(
+            r"\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?|open|closed|daily|weekdays|weekends|by appointment|business hours|24\s*/\s*7)\b|\b\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?\b",
+            text,
+            re.I,
+        )
+    )
+
+
 def _norm(value: Any) -> str:
     text = html_module.unescape(str(value or "")).replace("\u2014", "-").replace("\u2013", "-")
     text = re.sub(r"<[^>]+>", " ", text)
@@ -249,7 +267,9 @@ def _content_values(brief: Any, extraction: Any) -> list[tuple[str, str]]:
         if value:
             contacts.setdefault(key, value)
     for key, value in contacts.items():
-        if key not in {"sourceUrl", "confidence"} and value:
+        if key not in {"sourceUrl", "confidence"} and _is_plausible_contact_value(
+            key, value
+        ):
             values.append((f"verified contact {key}", str(value)))
     return values
 

@@ -34,6 +34,7 @@ from app.core.generation_contracts import generation_preflight
 from app.core.compiler_capabilities import capability_manifest_for_source, hero_archetype_errors
 from app.core.generated_content_contracts import (
     _has_semantic_phrase,
+    _is_plausible_contact_value,
     generated_content_contract_errors,
 )
 from app.core.generated_runtime_validation import (
@@ -1952,7 +1953,7 @@ def _verified_contact_data(
     """Merge only structured, source-derived contacts into the generation context."""
     result: dict[str, str] = {}
     for key, value in (brief.contactInfo or {}).items():
-        if value and str(value).strip():
+        if value and str(value).strip() and _is_plausible_contact_value(key, value):
             result[key] = str(value).strip()
     contact_model = extraction.contactInfo
     extracted = (
@@ -1962,7 +1963,11 @@ def _verified_contact_data(
     )
     aliases = {"hours": "officeHours", "contactUrl": "contactPageUrl"}
     for key, value in extracted.items():
-        if key in {"sourceUrl", "confidence"} or not value:
+        if (
+            key in {"sourceUrl", "confidence"}
+            or not value
+            or not _is_plausible_contact_value(aliases.get(key, key), value)
+        ):
             continue
         result.setdefault(aliases.get(key, key), str(value).strip())
     return result
@@ -2236,43 +2241,60 @@ def _prepare_provider_artifact(
         ),
         None,
     )
-    # Verified contact details are deterministic source data. Restore them
-    # when the model omits them, instead of rejecting an otherwise usable
-    # artifact for a small content omission.
-    if verified_phone:
-        visible_html = re.sub(
-            r"<(?:script|style|noscript)\b[^>]*>.*?</(?:script|style|noscript)\s*>",
-            " ",
-            html,
-            flags=re.I | re.S,
+    # Verified contact details are deterministic source data. Restore any
+    # omitted fields instead of rejecting an otherwise usable artifact for a
+    # small copy omission.
+    visible_html = re.sub(
+        r"<(?:script|style|noscript)\b[^>]*>.*?</(?:script|style|noscript)\s*>",
+        " ",
+        html,
+        flags=re.I | re.S,
+    )
+    visible_text = re.sub(r"<[^>]+>", " ", visible_html)
+    missing_contacts: list[str] = []
+    for key, value in contacts.items():
+        if not value or _has_semantic_phrase(visible_text, value):
+            continue
+        label = key.replace("office", "").replace("contactPage", "contact").strip().title()
+        safe_value = escape(str(value))
+        if "phone" in key.lower():
+            telephone_target = re.sub(r"[^0-9+]", "", str(value))
+            missing_contacts.append(
+                f'<span>{label}: </span><a class="lq-verified-phone" '
+                f'href="tel:{escape(telephone_target, quote=True)}">{safe_value}</a>'
+            )
+        elif "email" in key.lower() and "@" in str(value):
+            missing_contacts.append(
+                f'<span>{label}: </span><a href="mailto:{escape(str(value), quote=True)}">{safe_value}</a>'
+            )
+        elif "url" in key.lower() and str(value).startswith(("https://", "http://")):
+            missing_contacts.append(
+                f'<span>{label}: </span><a href="{escape(str(value), quote=True)}">{safe_value}</a>'
+            )
+        else:
+            missing_contacts.append(f"<span>{label}: {safe_value}</span>")
+    if missing_contacts:
+        contact_markup = (
+            '<div class="lq-verified-contact" aria-label="Verified contact information">'
+            + " ".join(missing_contacts)
+            + "</div>"
         )
-        visible_text = re.sub(r"<[^>]+>", " ", visible_html)
-        if not _has_semantic_phrase(visible_text, verified_phone):
-            telephone_target = re.sub(r"[^0-9+]", "", verified_phone)
-            phone_link = (
-                f'<a class="lq-verified-phone" href="tel:{escape(telephone_target, quote=True)}">'
-                f'{escape(verified_phone)}</a>'
+        if re.search(r"</footer\s*>", html, re.I):
+            html = re.sub(
+                r"</footer\s*>",
+                f"{contact_markup}</footer>",
+                html,
+                count=1,
+                flags=re.I,
             )
-            contact_markup = (
-                '<div class="lq-verified-contact" aria-label="Verified contact information">'
-                f'<span>Call </span>{phone_link}</div>'
+        elif re.search(r"</body\s*>", html, re.I):
+            html = re.sub(
+                r"</body\s*>",
+                f'<section id="contact" aria-label="Contact">{contact_markup}</section></body>',
+                html,
+                count=1,
+                flags=re.I,
             )
-            if re.search(r"</footer\s*>", html, re.I):
-                html = re.sub(
-                    r"</footer\s*>",
-                    f"{contact_markup}</footer>",
-                    html,
-                    count=1,
-                    flags=re.I,
-                )
-            elif re.search(r"</body\s*>", html, re.I):
-                html = re.sub(
-                    r"</body\s*>",
-                    f'<section id="contact" aria-label="Contact">{contact_markup}</section></body>',
-                    html,
-                    count=1,
-                    flags=re.I,
-                )
     cta_fallback = conversion_action if conversion_action else "Contact our team"
     html = re.sub(
         r"\byour@email\.com\b",

@@ -89,6 +89,29 @@ def test_unapproved_proof_sections_are_optional_in_copy_contract() -> None:
     assert not any("section 1" in error.lower() for error in errors)
 
 
+def test_misclassified_review_text_is_not_required_or_published_as_business_hours() -> None:
+    brief = {
+        "headline": "Green Leaf Painter",
+        "subheadline": "Residential painting",
+        "sections": [],
+        "extractedContent": {},
+        "brandAssets": {},
+        "contactInfo": {
+            "hours": "business hours, efficient and the work product is outstanding. I would not hesitate to recommend Greenleaf to anyone in the area who needs painting done at their home or busi",
+            "officePhone": "6097500030",
+        },
+        "conversionAction": "",
+    }
+    errors = generated_content_contract_errors(
+        "Green Leaf Painter residential painting",
+        brief,
+        {"contactInfo": {"hours": brief["contactInfo"]["hours"]}},
+    )
+
+    assert "Approved verified contact officePhone is missing" in errors
+    assert not any("contact hours" in error.lower() for error in errors)
+
+
 def test_semantic_gate_reports_exact_rule_and_selector() -> None:
     result = validate_semantics(
         "<main><section class='hero'></section></main>",
