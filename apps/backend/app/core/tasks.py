@@ -299,8 +299,8 @@ def run_multi_variant_generation_task(
     """
     Generate multiple site variants for a lead.
 
-    Uses distributed lock to ensure sequential execution globally.
-    Each variant generation is atomic and sequential.
+    Runs up to three variants per lead, within shared global generation capacity.
+    Additional leads remain queued until a worker and capacity are available.
     """
     try:
         _run(_run_multi_variant_generation_async(lead_id, job_id, generation_types))
@@ -370,144 +370,169 @@ async def _run_multi_variant_generation_async(
     total_variants = len(generation_types)
     log_generation_start(lead_id, generation_types, total_variants)
 
-    # Generate each variant sequentially with distributed lock
+    # Reserve URLs in the requested order before any concurrent generation.
+    # Both reservation and completed outputs are reused if Celery redelivers a job.
+    generation_types = list(dict.fromkeys(generation_types))
+    total_variants = len(generation_types)
+    identities = {}
+    for variant in generation_types:
+        identities[variant] = await site_repository.reserve_variant_identity(
+            lead_id=lead_id,
+            variant_type=variant,
+            company_name=lead.companyName or extraction.summary.companyName,
+            website_url=lead.websiteUrl,
+            job_id=job_id,
+        )
     generated_sites = []
     failed_variants = 0
+    completed = 0
+    active: set[str] = set()
+    progress_lock = asyncio.Lock()
+    per_lead_capacity = asyncio.Semaphore(3)
 
-    for i, variant_type_str in enumerate(generation_types):
-        # Cast to VariantType for type safety
-        variant_type: VariantType = variant_type_str  # type: ignore[assignment]
-
-        # Log progress
-        log_variant_progress(lead_id, variant_type_str, i + 1, total_variants)
-
-        # Update job progress
-        progress = int((i / total_variants) * 100)
+    async def update_progress():
+        # Caller holds progress_lock so concurrent completions cannot regress UI.
         await lead_repository._update_job(
             job_id=job_id,
             status="running",
-            progress=progress,
-            step=f"Generating {variant_type} ({i + 1}/{total_variants})",
+            progress=int(completed / max(1, total_variants) * 100),
+            step=f"Generated {completed}/{total_variants}; active: {', '.join(sorted(active)) or 'finishing'}",
         )
 
-        # Log pipeline event for variant progress
-        await lead_repository.log_pipeline_event(
-            lead_id,
-            event_type="site_generation_progress",
-            status="info",
-            message=f"Generating {variant_type} variant",
-            detail=f"Variant {i + 1} of {total_variants}",
-            job_id=job_id,
-            variant_type=variant_type_str,
-            metadata={"variantIndex": i + 1, "totalVariants": total_variants},
-        )
-
-        # Track this variant's metrics
-        async with metrics_collector.track_generation(
-            lead_id, variant_type_str
-        ) as metrics:
+    async def generate_variant(i: int, variant_type: VariantType):
+        nonlocal failed_variants, completed
+        async with metrics_collector.track_generation(lead_id, variant_type) as metrics:
+            lock_start = time.monotonic()
             try:
-                # Track lock wait time
-                lock_start = time.monotonic()
-
-                # Acquire global lock and generate
-                async with generation_lock(timeout_seconds=600):  # 10 min timeout
-                    metrics.lock_wait_seconds = time.monotonic() - lock_start
-
-                    logger.info(
-                        f"Generating variant {variant_type} for lead {lead_id} "
-                        f"(lock_wait={metrics.lock_wait_seconds:.1f}s)"
+                async with (
+                    per_lead_capacity,
+                    generation_lock(
+                        key=f"lenquant:generation:job:{job_id}:{variant_type}", limit=1
+                    ),
+                ):
+                    previous = await site_repository.find_generated_variant(
+                        job_id, variant_type
                     )
-
-                    # Get strategy for this variant type (cast for dict lookup)
-                    strategy = strategies.get(variant_type)  # type: ignore[arg-type]
-                    if not strategy and variant_type_str == "nextjs":
-                        # NextJS uses default strategy
-                        strategy = {
-                            "variantType": "nextjs",
-                            "variantLabel": "Next.js Site",
-                            "variantPosition": 4,
-                            "designMode": "interactive",
-                            "paletteMode": "zinc",
-                            "creativeBriefGuidance": "",
-                            "inspirationKeywords": [],
-                            "avoidPatterns": [],
-                        }
-
-                    if not strategy:
-                        logger.warning(f"Unknown variant type {variant_type}, skipping")
-                        metrics.success = False
-                        metrics.error_message = "Unknown variant type"
-                        failed_variants += 1
-                        continue
-
-                    site = await site_repository.generate_site_variant(
-                        lead_id=lead_id,
-                        variant_type=variant_type,
-                        variant_strategy=dict(strategy),
-                        extraction=extraction,
-                        analysis=analysis,
-                        user_id=lead.user_id,
-                    )
-
-                    generated_sites.append(site)
-                    metrics.success = True
-                    metrics.model_used = "bedrock"  # TODO: Track actual model
-
-                    # Log pipeline event for variant completed
-                    variant_time_ms = int(
-                        (time.monotonic() - lock_start - metrics.lock_wait_seconds)
-                        * 1000
-                    )
-                    await lead_repository.log_pipeline_event(
-                        lead_id,
-                        event_type="site_variant_generated",
-                        status="success",
-                        message=f"{variant_type} variant generated",
-                        detail=f"Quality score: {site.qualityScore}%",
-                        job_id=job_id,
-                        variant_type=variant_type_str,
-                        duration_ms=variant_time_ms,
-                        metadata={
-                            "qualityScore": site.qualityScore,
-                            "previewSlug": site.previewSlug,
-                        },
-                    )
-
-                    logger.info(
-                        f"Variant {variant_type} completed ({i + 1}/{total_variants}): "
-                        f"{site.previewUrl}"
-                    )
-
-            except Exception as e:
+                    if previous:
+                        generated_sites.append(previous)
+                        metrics.success = True
+                        metrics.lock_wait_seconds = time.monotonic() - lock_start
+                        return
+                    # No queue timeout: a large batch waits instead of becoming failed jobs.
+                    async with generation_lock():
+                        metrics.lock_wait_seconds = time.monotonic() - lock_start
+                        async with progress_lock:
+                            active.add(variant_type)
+                            await update_progress()
+                        log_variant_progress(
+                            lead_id, variant_type, i + 1, total_variants
+                        )
+                        await lead_repository.log_pipeline_event(
+                            lead_id,
+                            event_type="site_generation_progress",
+                            status="info",
+                            message=f"Generating {variant_type} variant",
+                            detail=f"Variant {i + 1} of {total_variants}",
+                            job_id=job_id,
+                            variant_type=variant_type,
+                            metadata={
+                                "variantIndex": i + 1,
+                                "totalVariants": total_variants,
+                            },
+                        )
+                        strategy = strategies.get(variant_type)
+                        if not strategy and variant_type == "nextjs":
+                            strategy = {
+                                "variantType": "nextjs",
+                                "variantLabel": "Next.js Site",
+                                "variantPosition": 4,
+                                "designMode": "interactive",
+                                "paletteMode": "zinc",
+                                "creativeBriefGuidance": "",
+                                "inspirationKeywords": [],
+                                "avoidPatterns": [],
+                            }
+                        if not strategy:
+                            raise ValueError(f"Unknown variant type {variant_type}")
+                        site = await site_repository.generate_site_variant(
+                            lead_id=lead_id,
+                            variant_type=variant_type,
+                            variant_strategy=dict(strategy),
+                            extraction=extraction,
+                            analysis=analysis,
+                            user_id=lead.user_id,
+                            reserved_identity=identities[variant_type],
+                            generation_job_id=job_id,
+                        )
+                        generated_sites.append(site)
+                        metrics.success = True
+                        metrics.model_used = "bedrock"
+                        await lead_repository.log_pipeline_event(
+                            lead_id,
+                            event_type="site_variant_generated",
+                            status="success",
+                            message=f"{variant_type} variant generated",
+                            detail=f"Quality score: {site.qualityScore}%",
+                            job_id=job_id,
+                            variant_type=variant_type,
+                            duration_ms=int(
+                                (
+                                    time.monotonic()
+                                    - lock_start
+                                    - metrics.lock_wait_seconds
+                                )
+                                * 1000
+                            ),
+                            metadata={
+                                "qualityScore": site.qualityScore,
+                                "previewSlug": site.previewSlug,
+                            },
+                        )
+            except Exception as error:
                 import traceback
 
                 logger.error(
-                    f"Variant {variant_type} failed for lead {lead_id}: {e}",
+                    "Variant %s failed for lead %s: %s",
+                    variant_type,
+                    lead_id,
+                    error,
                     exc_info=True,
                 )
-                metrics.success = False
-                metrics.error_message = str(e)
-                failed_variants += 1
-
-                # Capture full error details
-                error_type = type(e).__name__
-                error_msg = str(e)
-                tb_lines = traceback.format_exc().split("\n")[-6:]
-                tb_summary = "\n".join(tb_lines).strip()
-
-                # Log pipeline event for variant failure with full traceback
+                metrics.error_message = str(error)
+                # A saved site remains successful even if recording its event fails.
+                if not metrics.success:
+                    failed_variants += 1
                 await lead_repository.log_pipeline_event(
                     lead_id,
                     event_type="site_generation_failed",
                     status="error",
-                    message=f"{variant_type} variant failed: {error_type}",
-                    detail=f"{error_msg}\n\nTraceback:\n{tb_summary}",
+                    message=f"{variant_type} variant failed: {type(error).__name__}",
+                    detail=str(error)
+                    + "\n\nTraceback:\n"
+                    + "\n".join(traceback.format_exc().split("\n")[-6:]).strip(),
                     job_id=job_id,
-                    variant_type=variant_type_str,
-                    metadata={"errorType": error_type, "errorMessage": error_msg},
+                    variant_type=variant_type,
+                    metadata={
+                        "errorType": type(error).__name__,
+                        "errorMessage": str(error),
+                    },
                 )
-                # Continue with next variant instead of failing entire job
+            finally:
+                async with progress_lock:
+                    active.discard(variant_type)
+                    completed += 1
+                    await update_progress()
+
+    # Wait for every variant to finish before finalizing the batch. An infrastructure
+    # error is retried after siblings settle; already saved sites will be reused.
+    results = await asyncio.gather(
+        *(generate_variant(i, variant) for i, variant in enumerate(generation_types)),
+        return_exceptions=True,
+    )
+    for result in results:
+        if isinstance(result, BaseException):
+            raise result
+    generated_sites.sort(key=lambda site: site.variantPosition)
 
     # Log metrics summary
     total_time = time.monotonic() - generation_start_time
@@ -523,7 +548,11 @@ async def _run_multi_variant_generation_async(
     # Mark job complete
     await lead_repository._update_job(
         job_id=job_id,
-        status="completed" if not failed_variants else "partial" if generated_sites else "failed",
+        status="completed"
+        if not failed_variants
+        else "partial"
+        if generated_sites
+        else "failed",
         progress=100,
         step=f"Generated {len(generated_sites)}/{total_variants} variants",
         finished=True,

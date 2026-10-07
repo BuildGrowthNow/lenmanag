@@ -48,14 +48,26 @@ class Settings(BaseSettings):
     bedrock_timeout_seconds: int = (
         600  # 10 minutes for complex code generation (up from 5min)
     )
+    generation_max_concurrent: int = 6
+    bedrock_max_concurrent: int = 6
+    bedrock_requests_per_minute: int = 8
+    bedrock_tokens_per_minute: int = 500_000
+    # Per-model application budgets, below the account's AWS quotas.
+    bedrock_model_limits: str = (
+        '{"anthropic.claude-sonnet-4-6":{"rpm":8,"tpm":4800000},'
+        '"moonshotai.kimi-k3":{"rpm":120,"tpm":8000000},'
+        '"anthropic.claude-sonnet-4-5-20250929-v1:0":{"rpm":8,"tpm":4000000},'
+        '"anthropic.claude-opus-4-6-v1":{"rpm":4,"tpm":2400000}}'
+    )
     # Fallback models if primary fails 2-3x or times out
     bedrock_fallback_models: str = (
-        "amazon.nova-pro-v1:0,"
-        "us.meta.llama4-scout-17b-instruct-v1:0,"
-        "mistral.mistral-large-2402-v1:0,"
+        "global.moonshotai.kimi-k3,"
         "us.anthropic.claude-haiku-4-5-20251001-v1:0,"
         "us.anthropic.claude-sonnet-4-5-20250929-v1:0,"
-        "us.anthropic.claude-opus-4-6-v1"
+        "us.anthropic.claude-opus-4-6-v1,"
+        "amazon.nova-pro-v1:0,"
+        "us.meta.llama4-scout-17b-instruct-v1:0,"
+        "mistral.mistral-large-2402-v1:0"
     )
 
     @property

@@ -15,6 +15,8 @@ from typing import Any, cast
 from uuid import uuid4
 
 from pymongo.results import UpdateResult
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 from app.core.analytics import analytics_repository
 from app.core.color_system import generate_color_system
 from app.core.config import get_settings
@@ -2325,6 +2327,7 @@ class SiteRepository:
     def __init__(self) -> None:
         self._memory_lock = asyncio.Lock()
         self._sites: dict[str, dict[str, Any]] = {}
+        self._generation_reservations: dict[str, dict[str, Any]] = {}
         self._versions: dict[str, list[dict[str, Any]]] = {}
         self._overrides: dict[str, list[dict[str, Any]]] = {}
         self._exports: dict[str, list[dict[str, Any]]] = {}
@@ -2341,6 +2344,8 @@ class SiteRepository:
         await database["generated_sites"].create_index("id", unique=True)
         await database["generated_sites"].create_index("leadId")
         await database["generated_sites"].create_index("previewSlug")
+        await database["generated_sites"].create_index("previewAliases")
+        await database["generated_sites"].create_index([("generationJobId", 1), ("variantType", 1)])
         await database["generated_site_versions"].create_index("siteId")
         await database["generated_site_versions"].create_index(
             [("siteId", 1), ("version", -1)]
@@ -2795,6 +2800,159 @@ class SiteRepository:
         sites = [_site_doc_to_current(doc) for doc in docs]
         return sorted(sites, key=lambda s: s.variantPosition)
 
+    async def find_generated_variant(
+        self, job_id: str, variant_type: str
+    ) -> GeneratedSite | None:
+        database = get_database()
+        query = {"generationJobId": job_id, "variantType": variant_type}
+        if database is not None:
+            doc = await database["generated_sites"].find_one(query)
+        else:
+            async with self._memory_lock:
+                doc = next(
+                    (
+                        doc
+                        for doc in self._sites.values()
+                        if all(doc.get(k) == v for k, v in query.items())
+                    ),
+                    None,
+                )
+        return _site_doc_to_current(doc) if doc else None
+
+    async def reserve_variant_identity(
+        self,
+        *,
+        lead_id: str,
+        variant_type: VariantType,
+        company_name: str | None,
+        website_url: str | None = None,
+        job_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Atomically reserve a globally unique URL and reuse it on job redelivery."""
+        database = get_database()
+        job_key = f"{job_id}:{variant_type}" if job_id else None
+        if database is None:
+            async with self._memory_lock:
+                if job_key:
+                    previous = next(
+                        (
+                            r
+                            for r in self._generation_reservations.values()
+                            if r.get("jobKey") == job_key
+                        ),
+                        None,
+                    )
+                    if previous:
+                        return previous
+                used = {
+                    slug
+                    for doc in self._sites.values()
+                    for slug in [
+                        doc.get("previewSlug", ""),
+                        *doc.get("previewAliases", []),
+                    ]
+                }
+                used.update(self._generation_reservations)
+                numbers = [
+                    int(m.group(1))
+                    for doc in self._sites.values()
+                    if doc.get("leadId") == lead_id
+                    and (m := re.search(r"-v(\d+)$", doc.get("previewSlug", "")))
+                ]
+                numbers.extend(
+                    r["variantNumber"]
+                    for r in self._generation_reservations.values()
+                    if r["leadId"] == lead_id
+                )
+                number = max(numbers, default=0) + 1
+                while True:
+                    slug = self._generate_variant_slug(
+                        lead_id,
+                        variant_type,
+                        company_name,
+                        website_url=website_url,
+                        variant_number=number,
+                    )
+                    if slug not in used:
+                        break
+                    number += 1
+                reservation = {
+                    "_id": slug,
+                    "siteId": str(uuid4()),
+                    "leadId": lead_id,
+                    "variantNumber": number,
+                    "variantType": variant_type,
+                }
+                if job_key:
+                    reservation["jobKey"] = job_key
+                self._generation_reservations[slug] = reservation
+                return reservation
+
+        reservations = database["generation_slug_reservations"]
+        await reservations.create_index("jobKey", unique=True, sparse=True)
+        if job_key:
+            previous = await reservations.find_one({"jobKey": job_key})
+            if previous:
+                return previous
+        docs = (
+            await database["generated_sites"]
+            .find({"leadId": lead_id}, {"previewSlug": 1})
+            .to_list(length=None)
+        )
+        numbers = [
+            int(m.group(1))
+            for doc in docs
+            if (m := re.search(r"-v(\d+)$", doc.get("previewSlug", "")))
+        ]
+        counters = database["generation_counters"]
+        try:
+            await counters.update_one(
+                {"_id": lead_id},
+                {"$max": {"value": max(numbers, default=0)}},
+                upsert=True,
+            )
+        except DuplicateKeyError:
+            # Another process created the counter concurrently.
+            await counters.update_one(
+                {"_id": lead_id}, {"$max": {"value": max(numbers, default=0)}}
+            )
+        while True:
+            counter = await counters.find_one_and_update(
+                {"_id": lead_id},
+                {"$inc": {"value": 1}},
+                return_document=ReturnDocument.AFTER,
+            )
+            number = counter["value"]
+            slug = self._generate_variant_slug(
+                lead_id,
+                variant_type,
+                company_name,
+                website_url=website_url,
+                variant_number=number,
+            )
+            if await database["generated_sites"].find_one(
+                {"$or": [{"previewSlug": slug}, {"previewAliases": slug}]}, {"id": 1}
+            ):
+                continue
+            reservation = {
+                "_id": slug,
+                "siteId": str(uuid4()),
+                "leadId": lead_id,
+                "variantNumber": number,
+                "variantType": variant_type,
+                "createdAt": datetime.now(timezone.utc),
+            }
+            if job_key:
+                reservation["jobKey"] = job_key
+            try:
+                await reservations.insert_one(reservation)
+                return reservation
+            except DuplicateKeyError:
+                if job_key:
+                    previous = await reservations.find_one({"jobKey": job_key})
+                    if previous:
+                        return previous
+
     async def generate_site_variant(
         self,
         *,
@@ -2804,6 +2962,8 @@ class SiteRepository:
         extraction: ExtractionSnapshot,
         analysis: Any,
         user_id: str,
+        reserved_identity: dict[str, Any] | None = None,
+        generation_job_id: str | None = None,
     ) -> GeneratedSite:
         """
         Generate a single site variant (HTML or Next.js).
@@ -2827,8 +2987,23 @@ class SiteRepository:
         lead = await lead_repository.get_lead(lead_id, user_id=user_id)
         if lead is None:
             raise ValueError("Lead unavailable for generation")
+        if generation_job_id:
+            previous = await self.find_generated_variant(
+                generation_job_id, variant_type
+            )
+            if previous:
+                return previous
+        identity = reserved_identity or await self.reserve_variant_identity(
+            lead_id=lead_id,
+            variant_type=variant_type,
+            company_name=lead.companyName or extraction.summary.companyName,
+            website_url=lead.websiteUrl,
+            job_id=generation_job_id,
+        )
         extraction = extraction.model_copy(deep=True)
-        extraction.summary.companyName = lead.companyName or extraction.summary.companyName
+        extraction.summary.companyName = (
+            lead.companyName or extraction.summary.companyName
+        )
         industry = lead.industry
         if not industry and analysis and hasattr(analysis, "analysis"):
             industry = getattr(analysis.analysis, "industry", None)
@@ -2849,19 +3024,12 @@ class SiteRepository:
             )
 
         # Step 2: Generate site based on variant type
-        site_id = str(uuid4())
-        existing_sites = await self.list_sites_by_lead(lead_id, user_id=user_id)
-        existing_slugs = await self._get_existing_slugs()
-        numbers = [int(match.group(1)) for site in existing_sites
-                   if (match := re.search(r"-v(\d+)$", site.previewSlug))]
-        next_number = max(numbers, default=0) + 1
-        slug = self._generate_variant_slug(lead_id, variant_type, lead.companyName or extraction.summary.companyName,
-                                           website_url=lead.websiteUrl, variant_number=next_number)
-        while slug in existing_slugs:
-            next_number += 1
-            slug = self._generate_variant_slug(lead_id, variant_type, lead.companyName or extraction.summary.companyName,
-                                               website_url=lead.websiteUrl, variant_number=next_number)
-        variant_strategy = {**variant_strategy, "variantPosition": next_number}
+        site_id = identity["siteId"]
+        slug = identity["_id"]
+        variant_strategy = {
+            **variant_strategy,
+            "variantPosition": identity["variantNumber"],
+        }
 
         if variant_type == "nextjs":
             # Use existing Next.js generation
@@ -2873,7 +3041,10 @@ class SiteRepository:
                     site_id=site_id,
                 )
                 if not code_result.get("success"):
-                    raise ValueError(code_result.get("error") or "Generated site did not pass validation")
+                    raise ValueError(
+                        code_result.get("error")
+                        or "Generated site did not pass validation"
+                    )
             except Exception as e:
                 logger.error(f"Next.js generation failed: {e}")
                 raise
@@ -2928,6 +3099,7 @@ class SiteRepository:
 
         # Stamp the owning user and source attribution before saving
         site.userId = user_id
+        site.generationJobId = generation_job_id
         site.sourceAttribution = SiteSourceAttribution.model_validate(
             _site_source_attribution(
                 lead=await lead_repository.get_lead(lead_id),
@@ -2959,14 +3131,28 @@ class SiteRepository:
         variant_number: int | None = None,
     ) -> str:
         """Use five to seven brand letters and retain the numbered version suffix."""
-        name = company_name or (urlsplit(website_url or "").hostname or "website").removeprefix("www.").split(".")[0]
-        ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
+        name = (
+            company_name
+            or (urlsplit(website_url or "").hostname or "website")
+            .removeprefix("www.")
+            .split(".")[0]
+        )
+        ascii_name = (
+            unicodedata.normalize("NFKD", name)
+            .encode("ascii", "ignore")
+            .decode()
+            .lower()
+        )
         words = re.findall(r"[a-z]+", ascii_name)
         base = words[0][:7] if words and len(words[0]) >= 5 else "".join(words)[:7]
         base = base or "website"
         if len(base) < 5:
             base = (base + "site")[:7]
-        number = variant_number or (int(variant_type.rsplit("v", 1)[-1]) if variant_type.startswith("html_v") else 1)
+        number = variant_number or (
+            int(variant_type.rsplit("v", 1)[-1])
+            if variant_type.startswith("html_v")
+            else 1
+        )
         return f"{base}-v{number}"
 
     async def _get_existing_slugs(self) -> set[str]:
@@ -2974,11 +3160,24 @@ class SiteRepository:
         database = get_database()
         if database is None:
             async with self._memory_lock:
-                return {slug for doc in self._sites.values() for slug in [doc.get("previewSlug", ""), *doc.get("previewAliases", [])]}
+                return {
+                    slug
+                    for doc in self._sites.values()
+                    for slug in [
+                        doc.get("previewSlug", ""),
+                        *doc.get("previewAliases", []),
+                    ]
+                }
 
-        cursor = database["generated_sites"].find({}, {"previewSlug": 1, "previewAliases": 1})
+        cursor = database["generated_sites"].find(
+            {}, {"previewSlug": 1, "previewAliases": 1}
+        )
         docs = await cursor.to_list(length=10000)
-        return {slug for doc in docs for slug in [doc.get("previewSlug", ""), *doc.get("previewAliases", [])]}
+        return {
+            slug
+            for doc in docs
+            for slug in [doc.get("previewSlug", ""), *doc.get("previewAliases", [])]
+        }
 
     def _build_nextjs_site(
         self,

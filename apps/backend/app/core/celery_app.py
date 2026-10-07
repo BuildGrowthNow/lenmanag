@@ -24,4 +24,5 @@ celery_app.conf.update(
     # when tasks use asyncio (via _run helper in tasks.py)
     worker_pool="solo",
     worker_concurrency=1,
+    worker_prefetch_multiplier=1,
 )

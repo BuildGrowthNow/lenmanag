@@ -1,3 +1,12 @@
+x-ai-environment: &ai-environment
+  CELERY_TASK_ALWAYS_EAGER: "false"
+  GENERATION_MAX_CONCURRENT: "6"
+  BEDROCK_MAX_CONCURRENT: "6"
+  BEDROCK_REQUESTS_PER_MINUTE: "8"
+  BEDROCK_TOKENS_PER_MINUTE: "500000"
+  BEDROCK_MODEL_LIMITS: '{"anthropic.claude-sonnet-4-6":{"rpm":8,"tpm":4800000},"moonshotai.kimi-k3":{"rpm":120,"tpm":8000000},"anthropic.claude-sonnet-4-5-20250929-v1:0":{"rpm":8,"tpm":4000000},"anthropic.claude-opus-4-6-v1":{"rpm":4,"tpm":2400000}}'
+  BEDROCK_FALLBACK_MODELS: "global.moonshotai.kimi-k3,us.anthropic.claude-haiku-4-5-20251001-v1:0,us.anthropic.claude-sonnet-4-5-20250929-v1:0,us.anthropic.claude-opus-4-6-v1,amazon.nova-pro-v1:0,us.meta.llama4-scout-17b-instruct-v1:0,mistral.mistral-large-2402-v1:0"
+
 services:
   redis:
     image: redis:7-alpine
@@ -21,8 +30,7 @@ services:
       - "127.0.0.1:8000:8000"
     env_file:
       - .env.production
-    environment:
-      CELERY_TASK_ALWAYS_EAGER: "false"
+    environment: *ai-environment
     depends_on:
       redis:
         condition: service_healthy
@@ -39,11 +47,12 @@ services:
       context: ./apps/backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
+    command: celery -A app.core.celery_app worker --loglevel=info --pool=solo --concurrency=1
+    deploy:
+      replicas: 2
     env_file:
       - .env.production
-    environment:
-      CELERY_TASK_ALWAYS_EAGER: "false"
+    environment: *ai-environment
     depends_on:
       redis:
         condition: service_healthy
@@ -60,8 +69,7 @@ services:
     command: celery -A app.core.celery_app beat --loglevel=info
     env_file:
       - .env.production
-    environment:
-      CELERY_TASK_ALWAYS_EAGER: "false"
+    environment: *ai-environment
     depends_on:
       redis:
         condition: service_healthy
