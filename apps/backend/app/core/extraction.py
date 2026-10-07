@@ -919,21 +919,25 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                 locale="en-US",
                 timezone_id="America/New_York",
             )
-            context.set_extra_http_headers(
-                {
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Accept-Encoding": "gzip, deflate, br",
-                    "Sec-Fetch-Dest": "document",
-                    "Sec-Fetch-Mode": "navigate",
-                    "Sec-Fetch-Site": "none",
-                    "Sec-Fetch-User": "?1",
-                    "Upgrade-Insecure-Requests": "1",
-                }
-            )
+            # Chromium sets transport and fetch metadata per resource. Forcing
+            # document navigation headers onto CSS/font requests prevented those
+            # requests from loading, leaving source styles unavailable.
+            context.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
             page = context.new_page()
             response = page.goto(url, wait_until="domcontentloaded", timeout=20000)
             if urlparse(url).path in {"", "/"}:
-                # Let the homepage theme hydrate before reading its active colors.
+                # Theme CSS and web fonts can arrive after DOMContentLoaded.
+                # Bound the wait so analytics cannot stall brand extraction.
+                try:
+                    page.wait_for_load_state("networkidle", timeout=5000)
+                except Exception:
+                    logger.debug("Homepage remained busy while waiting for theme styles: %s", url)
+                page.evaluate("""async () => {
+                    if (document.fonts) await Promise.race([
+                        document.fonts.ready,
+                        new Promise(resolve => setTimeout(resolve, 3000))
+                    ]);
+                }""")
                 page.wait_for_timeout(1500)
 
             # Handle Cloudflare/bot challenge pages: wait for challenge to complete
@@ -1978,7 +1982,7 @@ def crawl_website(
         ):
             # stop due to crawl budget
             break
-        result = _safe_fetch(url)
+        result = homepage_result if url == homepage_url else _safe_fetch(url)
         if not result["ok"]:
             page_inventory.append(
                 {
@@ -2057,9 +2061,9 @@ def crawl_website(
             # Sites often keep their brand color in external CSS rather than theme-color metadata.
             stylesheets = [asset["url"] for asset in page_data.get("assets", [])
                            if asset.get("kind") == "stylesheet" and asset.get("url", "").startswith(("http://", "https://"))
-                           and not re.search(r"wp-content/plugins/|wp-includes/|website\.components\.form|bootstrap|font-awesome|normalize|animate\.min", asset["url"], re.I)]
+                           and not re.search(r"wp-content/plugins/|wp-includes/|website\.components\.|bootstrap|font-awesome|normalize|animate\.min", asset["url"], re.I)]
             stylesheets.sort(key=lambda stylesheet: (
-                not bool(re.search(r"skin|custom|/themes/", stylesheet, re.I)),
+                not bool(re.search(r"skin|custom|/themes/|versioned-site-css|/site\.css", stylesheet, re.I)),
                 not _same_origin(url, stylesheet),
             ))
             for stylesheet_url in list(dict.fromkeys(stylesheets))[:3]:
