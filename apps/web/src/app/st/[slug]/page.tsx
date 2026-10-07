@@ -42,7 +42,14 @@ export default async function PreviewPage({ params }: PageProps) {
   const htmlContent = strippedSource.startsWith('<') ? strippedSource : null;
 
   if (htmlContent) {
-    return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
+    const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    return (
+      <iframe
+        title={site.variantLabel || 'Website preview'}
+        src={`${apiUrl}/api/v1/public/preview/${encodeURIComponent(slug)}`}
+        className="fixed inset-0 h-dvh w-full border-0 bg-white"
+      />
+    );
   }
 
   // Check if this is a compiled Next.js bundle

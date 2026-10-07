@@ -5,6 +5,8 @@ import html
 import json
 import logging
 import re
+import unicodedata
+from urllib.parse import urlsplit
 import zipfile
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -16,6 +18,7 @@ from pymongo.results import UpdateResult
 from app.core.analytics import analytics_repository
 from app.core.color_system import generate_color_system
 from app.core.config import get_settings
+from app.core.generation_policy import primary_brand_cue, normalize_color
 from app.core.industry_detection import get_industry_design_config
 from app.core.leads import _job_doc_to_summary, lead_repository  # type: ignore[attr-defined]
 from app.core.mongo import get_database
@@ -758,6 +761,11 @@ def _brand_tokens(
         primary_refs = color_reference
         secondary_refs = color_reference
         accent_refs = color_reference
+
+    primary_cue = primary_brand_cue(extraction)
+    if primary_cue:
+        primary_value = normalize_color(primary_cue.value)
+        primary_refs = [_asset_reference_from_cue(primary_cue.model_dump())]
 
     logo_value = (
         (logo_cues[0]["cachedUri"] or logo_cues[0]["sourceUrl"])
@@ -2755,10 +2763,10 @@ class SiteRepository:
         if database is None:
             async with self._memory_lock:
                 for doc in self._sites.values():
-                    if doc.get("previewSlug") == slug or doc.get("id") == slug:
+                    if doc.get("previewSlug") == slug or slug in doc.get("previewAliases", []) or doc.get("id") == slug:
                         return _site_doc_to_current(doc)
                 return None
-        doc = await database["generated_sites"].find_one({"previewSlug": slug})
+        doc = await database["generated_sites"].find_one({"$or": [{"previewSlug": slug}, {"previewAliases": slug}]})
         if doc is None:
             doc = await database["generated_sites"].find_one({"id": slug})
         return _site_doc_to_current(doc) if doc else None
@@ -2815,9 +2823,14 @@ class SiteRepository:
         from app.core.static_html_generator import generate_static_html
         from app.core.ai_site_generation import generate_landing_page_code
 
-        # Step 1: Generate variant-specific master brief
-        industry = None
-        if analysis and hasattr(analysis, "analysis"):
+        # The lead identity is authoritative when the crawl cannot infer a name.
+        lead = await lead_repository.get_lead(lead_id, user_id=user_id)
+        if lead is None:
+            raise ValueError("Lead unavailable for generation")
+        extraction = extraction.model_copy(deep=True)
+        extraction.summary.companyName = lead.companyName or extraction.summary.companyName
+        industry = lead.industry
+        if not industry and analysis and hasattr(analysis, "analysis"):
             industry = getattr(analysis.analysis, "industry", None)
 
         logger.info(f"Generating master brief for {variant_type} (lead {lead_id})")
@@ -2837,19 +2850,18 @@ class SiteRepository:
 
         # Step 2: Generate site based on variant type
         site_id = str(uuid4())
-        slug = self._generate_variant_slug(
-            lead_id, variant_type, extraction.summary.companyName
-        )
-
-        # Get existing slugs to avoid duplicates
+        existing_sites = await self.list_sites_by_lead(lead_id, user_id=user_id)
         existing_slugs = await self._get_existing_slugs()
-
-        # Ensure slug is unique
-        base_slug = slug
-        counter = 2
+        numbers = [int(match.group(1)) for site in existing_sites
+                   if (match := re.search(r"-v(\d+)$", site.previewSlug))]
+        next_number = max(numbers, default=0) + 1
+        slug = self._generate_variant_slug(lead_id, variant_type, lead.companyName or extraction.summary.companyName,
+                                           website_url=lead.websiteUrl, variant_number=next_number)
         while slug in existing_slugs:
-            slug = f"{base_slug[:6]}{counter}"
-            counter += 1
+            next_number += 1
+            slug = self._generate_variant_slug(lead_id, variant_type, lead.companyName or extraction.summary.companyName,
+                                               website_url=lead.websiteUrl, variant_number=next_number)
+        variant_strategy = {**variant_strategy, "variantPosition": next_number}
 
         if variant_type == "nextjs":
             # Use existing Next.js generation
@@ -2860,9 +2872,11 @@ class SiteRepository:
                     extraction=extraction,
                     site_id=site_id,
                 )
+                if not code_result.get("success"):
+                    raise ValueError(code_result.get("error") or "Generated site did not pass validation")
             except Exception as e:
                 logger.error(f"Next.js generation failed: {e}")
-                code_result = {}
+                raise
 
             site = self._build_nextjs_site(
                 site_id=site_id,
@@ -2885,7 +2899,7 @@ class SiteRepository:
                 )
             except Exception as e:
                 logger.error(f"Static HTML generation failed: {e}")
-                html_result = {"html": "", "cssUrl": None, "jsUrl": None}
+                raise
 
             site = self._build_static_html_site(
                 site_id=site_id,
@@ -2904,7 +2918,7 @@ class SiteRepository:
 
         existing_sites = await self.list_sites_by_lead(lead_id, user_id=user_id)
         site.variantLabel, site.variantDescription = await generate_site_identity(
-            company_name=extraction.summary.companyName,
+            company_name=lead.companyName or extraction.summary.companyName,
             industry=industry,
             strategy=variant_strategy,
             brief=master_brief,
@@ -2940,36 +2954,31 @@ class SiteRepository:
         lead_id: str,
         variant_type: VariantType,
         company_name: str | None,
+        *,
+        website_url: str | None = None,
+        variant_number: int | None = None,
     ) -> str:
-        """Generate preview slug for variant."""
-        # Base slug from company name or lead ID
-        if company_name:
-            base = company_name.lower().replace(" ", "-").replace("_", "-")
-            base = "".join(c for c in base if c.isalnum() or c == "-")
-            base = base[:8]  # Truncate to 8 chars
-        else:
-            base = lead_id[:8]
-
-        # Add variant suffix
-        if variant_type == "html_v1":
-            return f"{base}-v1"
-        elif variant_type == "html_v2":
-            return f"{base}-v2"
-        elif variant_type == "html_v3":
-            return f"{base}-v3"
-        else:  # nextjs
-            return base
+        """Use five to seven brand letters and retain the numbered version suffix."""
+        name = company_name or (urlsplit(website_url or "").hostname or "website").removeprefix("www.").split(".")[0]
+        ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
+        words = re.findall(r"[a-z]+", ascii_name)
+        base = words[0][:7] if words and len(words[0]) >= 5 else "".join(words)[:7]
+        base = base or "website"
+        if len(base) < 5:
+            base = (base + "site")[:7]
+        number = variant_number or (int(variant_type.rsplit("v", 1)[-1]) if variant_type.startswith("html_v") else 1)
+        return f"{base}-v{number}"
 
     async def _get_existing_slugs(self) -> set[str]:
         """Get all existing preview slugs."""
         database = get_database()
         if database is None:
             async with self._memory_lock:
-                return {doc.get("previewSlug", "") for doc in self._sites.values()}
+                return {slug for doc in self._sites.values() for slug in [doc.get("previewSlug", ""), *doc.get("previewAliases", [])]}
 
-        cursor = database["generated_sites"].find({}, {"previewSlug": 1})
+        cursor = database["generated_sites"].find({}, {"previewSlug": 1, "previewAliases": 1})
         docs = await cursor.to_list(length=10000)
-        return {doc.get("previewSlug", "") for doc in docs}
+        return {slug for doc in docs for slug in [doc.get("previewSlug", ""), *doc.get("previewAliases", [])]}
 
     def _build_nextjs_site(
         self,
@@ -3002,7 +3011,7 @@ class SiteRepository:
             themeRationale="AI-generated Next.js site",
             paletteMode=variant_strategy.get("paletteMode", "zinc"),
             paletteRationale="From variant strategy",
-            brandTokens=self._default_brand_tokens(),
+            brandTokens=self._default_brand_tokens(extraction),
             heroVariant=self._default_hero_variant(),
             sectionStack=[],
             ctaStrategy=self._default_cta_strategy(),
@@ -3059,7 +3068,7 @@ class SiteRepository:
             themeRationale="AI-generated static HTML",
             paletteMode=variant_strategy.get("paletteMode", "light"),
             paletteRationale="From variant strategy",
-            brandTokens=self._default_brand_tokens(),
+            brandTokens=self._default_brand_tokens(extraction),
             heroVariant=self._default_hero_variant(),
             sectionStack=[],
             ctaStrategy=self._default_cta_strategy(),
@@ -3080,16 +3089,18 @@ class SiteRepository:
             updatedAt=_now(),
         )
 
-    def _default_brand_tokens(self) -> BrandTokens:
+    def _default_brand_tokens(self, extraction: ExtractionSnapshot | None = None) -> BrandTokens:
         """Return default brand tokens."""
         default_evidence = BriefEvidence(
             sourceKind="inferred",
             inferenceLabel="Default value",
             confidence=50,
         )
+        cue = primary_brand_cue(extraction)
+        primary_evidence = BriefEvidence(sourceKind="source_backed", inferenceLabel="Extracted primary brand color", confidence=cue.confidence) if cue else default_evidence
         return BrandTokens(
             paletteMode="zinc",
-            primaryColor=SiteToken(value="#3b82f6", evidence=default_evidence),
+            primaryColor=SiteToken(value=normalize_color(cue.value) if cue else "#3b82f6", evidence=primary_evidence),
             secondaryColor=SiteToken(value="#64748b", evidence=default_evidence),
             accentColor=SiteToken(value="#f97316", evidence=default_evidence),
             backgroundColor=SiteToken(value="#0f172a", evidence=default_evidence),
@@ -4104,6 +4115,7 @@ class SiteRepository:
             current_source_code=current.sourceCode,
             refinement_prompt=prompt_text,
             variant_type=current.variantType or "nextjs",
+            extraction=await lead_repository.get_extraction(lead_id),
         )
 
         if not result.get("success"):
@@ -4278,6 +4290,16 @@ class SiteRepository:
             },
             "layoutDensity": {"value": "balanced", "evidence": default_evidence},
         }
+
+        primary_cue = primary_brand_cue(extraction)
+        if primary_cue:
+            brand_tokens["primaryColor"] = _token(
+                normalize_color(primary_cue.value),
+                source_kind="source_backed",
+                inference_label="Extracted primary brand color",
+                confidence=primary_cue.confidence,
+                references=[_asset_reference_from_cue(primary_cue.model_dump())],
+            )
 
         hero_variant = {
             "headline": master_brief.headline,

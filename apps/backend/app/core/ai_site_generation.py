@@ -8,11 +8,13 @@ that produces complete landing page TSX code from the approved master brief.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import boto3
 from app.core.compiler_client import CompilerError, get_compiler_client
 from app.core.config import get_settings
+from app.core.generation_policy import apply_brief_policy, brand_color_policy, enforce_html_testimonials, static_safety_css, validate_testimonial_source
 from app.core.llm import get_llm_client
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
@@ -131,7 +133,7 @@ async def generate_landing_page_code(
     source_code = _extract_tsx_code(response)
 
     # Validate syntax — retry with feedback if validation fails
-    validation_errors = _validate_tsx_source(source_code)
+    validation_errors = _validate_tsx_source(source_code) + validate_testimonial_source(source_code, extraction)
     if validation_errors:
         logger.warning(f"TSX validation errors on first attempt: {validation_errors}")
         source_code = await _retry_generation_with_validation_feedback(
@@ -142,7 +144,7 @@ async def generate_landing_page_code(
             extraction=extraction,
         )
         # Re-validate after retry
-        final_errors = _validate_tsx_source(source_code)
+        final_errors = _validate_tsx_source(source_code) + validate_testimonial_source(source_code, extraction)
         if final_errors:
             logger.error(f"TSX validation still failing after retry: {final_errors}")
             return {
@@ -223,18 +225,46 @@ def _build_generation_prompt(
 ) -> str:
     """Build the main generation prompt — leads with inspiration, not restrictions."""
     # Extract brand tokens
-    brand_section = _build_brand_tokens_section(master_brief, extraction)
+    master_brief = apply_brief_policy(master_brief, extraction)
+    brand_section = _build_brand_tokens_section(master_brief, extraction) + "\n" + brand_color_policy(extraction)
 
     # Extract content sections
+    extracted_testimonials = [
+        testimonial
+        for testimonial in extraction.extractedTestimonials
+        if testimonial.quote.strip()
+    ]
+    has_extracted_testimonials = bool(extracted_testimonials)
+
+    # A brief can recommend a testimonial section even when crawling found no
+    # testimonial evidence. Never pass that unsupported section to generation.
+    brief_sections = [
+        section
+        for section in master_brief.sections
+        if has_extracted_testimonials
+        or not _is_testimonial_section(
+            " ".join(
+                [
+                    section.purpose,
+                    section.headline,
+                    section.suggestedApproach,
+                    section.contentSummary,
+                    *section.contentPoints,
+                ]
+            )
+        )
+    ]
     sections_list = "\n".join(
         [
             f"  {i + 1}. **{section.headline}** ({section.purpose})\n"
             f"     Approach: {section.suggestedApproach}\n"
             f"     Content: {section.contentSummary}\n"
             f"     Key points: {', '.join(section.contentPoints[:3])}"
-            for i, section in enumerate(master_brief.sections)
+            for i, section in enumerate(brief_sections)
         ]
     )
+
+    testimonial_policy = _testimonial_policy(extraction) + "\n" + brand_color_policy(extraction)
 
     # Build creative direction section if available
     creative_section = ""
@@ -320,7 +350,7 @@ Vibrant colors. Unexpected layouts. Fun > formal.
 Subtle motion. Trust signals. Refined color usage.
 - Clean grid layouts but with visual interest
 - Subtle hover states and transitions
-- Trust badges, testimonials, social proof prominent
+- Use only trust signals supported by extracted source content
 - Motion should feel confident, not flashy""",
         }
         design_mode_guidance = mode_details.get(master_brief.designMode, "")
@@ -395,6 +425,8 @@ Import from '@/components/ui/*':
 **Page Sections**:
 {sections_list}
 
+{testimonial_policy}
+
 **CTA Strategy**: {master_brief.ctaStrategy}
 
 {brand_section}
@@ -411,7 +443,7 @@ Import from '@/components/ui/*':
 **Section Patterns**:
 - Bento grids with varied card sizes (not uniform 3-column)
 - Alternating image/text with scroll-triggered reveals
-- Horizontal scroll galleries for features or testimonials
+- Horizontal scroll galleries for extracted content or features
 - Sticky headers with scrolling content
 - Cards with 3D tilt on hover (transform: perspective + rotateX/Y)
 - Overlapping sections with negative margins
@@ -484,10 +516,66 @@ The operator reviewed the previous version and provided this feedback. You MUST 
     return prompt
 
 
+def _testimonial_policy(extraction: ExtractionSnapshot | None) -> str:
+    """Describe the only testimonial evidence allowed in generated or refined sites."""
+    extracted_testimonials = [
+        testimonial
+        for testimonial in (extraction.extractedTestimonials if extraction else [])
+        if testimonial.quote.strip()
+    ]
+    if not extracted_testimonials:
+        return (
+            "## TESTIMONIAL EVIDENCE (NONE FOUND)\n"
+            "The extraction contains no testimonials. Do not include a "
+            "testimonial, review, customer quote, endorsement, star rating, "
+            "testimonial carousel, or testimonial section. Remove any such "
+            "content already present in source code. Do not invent customer "
+            "names or companies. If the brief recommends testimonials, ignore "
+            "that recommendation. You may show other proof only when it is "
+            "explicitly supported by extracted source content.\n"
+        )
+
+    records = "\n".join(
+        f"- Quote: {testimonial.quote!r}; "
+        f"authorName: {testimonial.authorName or 'not extracted'}; "
+        f"authorTitle: {testimonial.authorTitle or 'not extracted'}; "
+        f"authorCompany: {testimonial.authorCompany or 'not extracted'}"
+        for testimonial in extracted_testimonials
+    )
+    return (
+        "## TESTIMONIAL EVIDENCE (USE EXACTLY; NEVER INVENT)\n"
+        "The following are the only extracted testimonials you may show. Use "
+        "quote text verbatim; do not rewrite, combine, attribute it to a "
+        "different person, or add a rating/result. Only show author details "
+        "that are present on that same extracted record. Do not create any "
+        "additional customer quotes or endorsements.\n"
+        f"{records}\n"
+    )
+
+
+def _is_testimonial_section(value: str) -> bool:
+    """Return whether a brief section explicitly calls for testimonials/reviews."""
+    normalized = value.casefold()
+    return any(
+        term in normalized
+        for term in (
+            "testimonial",
+            "customer quote",
+            "client quote",
+            "review carousel",
+            "customer review",
+            "client review",
+            "review",
+            "quote card",
+            "endorsement",
+        )
+    )
+
+
 def _build_correction_prompt(
     *,
     master_brief: MasterBrief,
-    extraction: ExtractionSnapshot,  # noqa: ARG001
+    extraction: ExtractionSnapshot,
     previous_code: str,
     error_message: str,
 ) -> str:
@@ -525,6 +613,8 @@ Do NOT simplify or remove creative elements just to fix errors.
 
 The code you generated was cut off before completion. This is a CRITICAL issue.
 {creative_reminder}
+{_testimonial_policy(extraction)}
+{brand_color_policy(extraction)}
 
 ## What You Must Do
 Generate a COMPLETE landing page with ALL sections FULLY closed:
@@ -537,7 +627,7 @@ Generate a COMPLETE landing page with ALL sections FULLY closed:
 
 ## Master Brief Requirements
 **Sections to include** (ALL must be complete):
-{chr(10).join(f"  - {section.headline}" for section in master_brief.sections[:10])}
+{chr(10).join(f"  - {section.headline}" for section in apply_brief_policy(master_brief, extraction).sections[:10])}
 
 ## Previous Code (INCOMPLETE - DO NOT REPEAT THIS)
 ```tsx
@@ -561,6 +651,8 @@ GENERATE THE COMPLETE CODE NOW:
 ## Error Message
 {error_message}
 {creative_reminder}
+{_testimonial_policy(extraction)}
+{brand_color_policy(extraction)}
 
 ## Previous Code
 ```tsx
@@ -672,7 +764,7 @@ async def _retry_generation_with_validation_feedback(
     original_code: str,
     validation_errors: list[str],
     master_brief: MasterBrief,
-    extraction: ExtractionSnapshot,  # noqa: ARG001
+    extraction: ExtractionSnapshot,
     max_retries: int = 2,
 ) -> str:
     """
@@ -708,6 +800,8 @@ Do NOT simplify or remove animations/effects just to fix validation errors.
 ## VALIDATION ERRORS (must fix ALL of these):
 {errors_text}
 {creative_reminder}
+{_testimonial_policy(extraction)}
+{brand_color_policy(extraction)}
 
 ## CRITICAL RULES — BROWSER-ONLY CODE:
 - This is a React component that runs in the BROWSER, NOT Node.js
@@ -748,7 +842,7 @@ Do NOT simplify or remove animations/effects just to fix validation errors.
         )
 
         fixed_code = _extract_tsx_code(response)
-        new_errors = _validate_tsx_source(fixed_code)
+        new_errors = _validate_tsx_source(fixed_code) + validate_testimonial_source(fixed_code, extraction)
 
         if not new_errors:
             logger.info("Validation retry succeeded on attempt %d", attempt + 1)
@@ -835,9 +929,14 @@ def _validate_tsx_source(source_code: str) -> list[str]:
 
 
 def _build_refinement_prompt(
-    *, current_source_code: str, refinement_prompt: str, is_html: bool = False
+    *,
+    current_source_code: str,
+    refinement_prompt: str,
+    is_html: bool = False,
+    extraction: ExtractionSnapshot | None = None,
 ) -> str:
     """Build a prompt for targeted in-place edits to existing generated code."""
+    testimonial_policy = _testimonial_policy(extraction) + "\n" + brand_color_policy(extraction)
     if is_html:
         return f"""You are editing an existing HTML landing page. Apply the requested changes precisely and return the complete modified code.
 
@@ -848,6 +947,8 @@ def _build_refinement_prompt(
 
 ## Operator Instructions (apply these changes ONLY)
 {refinement_prompt}
+
+{testimonial_policy}
 
 ## Rules
 - Apply ONLY the requested changes — do not redesign, restructure, or alter anything not mentioned
@@ -866,6 +967,8 @@ def _build_refinement_prompt(
 ## Operator Instructions (apply these changes ONLY)
 {refinement_prompt}
 
+{testimonial_policy}
+
 ## Rules
 - Apply ONLY the requested changes — do not redesign, restructure, or alter anything not mentioned
 - Preserve all animations, interactions, layout, and creative elements that are not being changed
@@ -882,6 +985,7 @@ async def refine_landing_page_code(
     current_source_code: str,
     refinement_prompt: str,
     variant_type: str = "nextjs",
+    extraction: ExtractionSnapshot | None = None,
 ) -> dict[str, Any]:
     """Apply targeted operator edits to existing generated code without full regeneration."""
     llm = get_llm_client()
@@ -899,6 +1003,7 @@ async def refine_landing_page_code(
         current_source_code=current_source_code,
         refinement_prompt=refinement_prompt,
         is_html=is_html_variant,
+        extraction=extraction,
     )
 
     logger.info(f"Refining {variant_type} code for site {site_id}")
@@ -912,7 +1017,7 @@ async def refine_landing_page_code(
 
     # Only validate TSX for Next.js sites, skip for HTML variants
     if not is_html_variant:
-        validation_errors = _validate_tsx_source(source_code)
+        validation_errors = _validate_tsx_source(source_code) + validate_testimonial_source(source_code, extraction)
         if validation_errors:
             logger.warning(
                 f"TSX validation errors on refinement attempt: {validation_errors}"
@@ -927,6 +1032,15 @@ async def refine_landing_page_code(
 
     # For HTML variants, skip compilation and return immediately
     if is_html_variant:
+        from bs4 import BeautifulSoup
+        from app.core.static_html_generator import _insert_before_or_append
+        if not re.search(r"</html\s*>", source_code, re.I):
+            return {"success": False, "error": "Refined HTML is incomplete"}
+        source_code = enforce_html_testimonials(source_code, extraction)
+        source_code = _insert_before_or_append(source_code, "</head>", f"<style>{static_safety_css(extraction)}</style>")
+        for script in BeautifulSoup(source_code, "html.parser").find_all("script"):
+            if not script.get("src") and script.get("type", "") not in {"application/ld+json", "application/json"}:
+                await compiler.validate_javascript(script.get_text())
         logger.info(f"HTML variant {variant_type} refined successfully for site {site_id}")
         return {
             "success": True,
@@ -1002,6 +1116,7 @@ async def refine_with_retry(
     refinement_prompt: str,
     variant_type: str = "nextjs",
     max_retries: int = MAX_COMPILATION_RETRIES,
+    extraction: ExtractionSnapshot | None = None,
 ) -> dict[str, Any]:
     """Refine landing page code with retry on compilation failure."""
     result: dict[str, Any] = {
@@ -1020,6 +1135,7 @@ async def refine_with_retry(
             current_source_code=current_source_code,
             refinement_prompt=refinement_prompt,
             variant_type=variant_type,
+            extraction=extraction,
         )
 
         if result["success"]:

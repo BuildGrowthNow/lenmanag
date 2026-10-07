@@ -19,6 +19,7 @@ from app.core.asset_utils import (
     log_asset_cache_stats,
 )
 from app.core.llm import get_llm_client
+from app.core.generation_policy import apply_brief_policy, brand_color_policy, primary_brand_cue, normalize_color
 from app.core.variant_strategy import get_variant_strategy
 from app.schemas.brief import (
     BrandAssets,
@@ -90,6 +91,10 @@ async def generate_master_brief(
             variant_guidance=variant_guidance,
         )
 
+    prompt += "\n" + brand_color_policy(extraction)
+    if not extraction.extractedTestimonials:
+        prompt += "\nNo testimonials were extracted. Omit testimonial, review, customer quote, endorsement and star-rating sections. Do not invent social proof."
+
     # Call LLM
     response = await llm.generate_text(
         prompt=prompt,
@@ -109,7 +114,7 @@ async def generate_master_brief(
         previous_brief=previous_brief,
     )
 
-    return master_brief
+    return apply_brief_policy(master_brief, extraction)
 
 
 def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
@@ -205,10 +210,10 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
                 summary_parts.append(f"Typography: {fonts[0].value}")
 
     # LLM-validated testimonials
-    if extraction.analysis and extraction.analysis.testimonials:
+    if extraction.extractedTestimonials:
         summary_parts.append("\n## Customer Testimonials (Verified)")
-        for t in extraction.analysis.testimonials[:3]:
-            quote_preview = t.quote[:150] + "..." if len(t.quote) > 150 else t.quote
+        for t in extraction.extractedTestimonials[:3]:
+            quote_preview = t.quote
             author_info = t.authorName or "Anonymous"
             if t.authorCompany:
                 author_info += f" at {t.authorCompany}"
@@ -479,7 +484,8 @@ def _build_master_brief_from_response(
     if extraction.brandAssetCues:
         colors = [c for c in extraction.brandAssetCues if c.assetType == "color"]
         if colors:
-            brand_assets.primaryColor = colors[0].value
+            primary_cue = primary_brand_cue(extraction)
+            brand_assets.primaryColor = normalize_color(primary_cue.value) if primary_cue else None
             if len(colors) > 1:
                 brand_assets.secondaryColor = colors[1].value
 

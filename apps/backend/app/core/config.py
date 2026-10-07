@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str | None = None
     celery_default_queue: str = "lenquant"
-    celery_task_always_eager: bool = True
+    celery_task_always_eager: bool = False
 
     # LLM Provider: "gemini" (default for local) or "bedrock" (production)
     llm_provider: str = "gemini"

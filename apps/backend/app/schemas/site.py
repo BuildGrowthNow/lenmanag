@@ -413,6 +413,7 @@ class GeneratedSite(BaseModel):
     layoutHash: str = Field(
         default="", description="Hash of layout for duplicate detection"
     )
+    previewAliases: list[str] = Field(default_factory=list)
     previewSlug: str
     previewUrl: str
     overrideCount: int

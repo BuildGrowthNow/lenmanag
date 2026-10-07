@@ -6,6 +6,7 @@
 import Fastify from 'fastify';
 import { z } from 'zod';
 import { compileTsx, isCompilerAvailable } from './compile.js';
+import { Script } from 'node:vm';
 
 const CompileRequestSchema = z.object({
   sourceCode: z.string().min(1),
@@ -29,6 +30,18 @@ fastify.get('/health', async () => {
 });
 
 // Compilation endpoint
+// Parse generated browser JavaScript without executing it or requiring a React export.
+fastify.post('/validate-javascript', async (request, reply) => {
+  const parsed = z.object({ sourceCode: z.string() }).safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ success: false, error: 'Invalid JavaScript request' });
+  try {
+    new Script(parsed.data.sourceCode);
+    return { success: true };
+  } catch (error: any) {
+    return reply.code(422).send({ success: false, error: error.message });
+  }
+});
+
 fastify.post('/compile', async (request, reply) => {
   try {
     const parsed = CompileRequestSchema.safeParse(request.body);

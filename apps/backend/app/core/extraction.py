@@ -21,6 +21,7 @@ from urllib.request import Request, urlopen
 from app.core import asset_metadata
 from app.core.asset_downloader import AssetDownloader
 from app.core.config import get_settings
+from app.core.generation_policy import stylesheet_color_cues
 
 USER_AGENT = "LenQuantBot/0.3 (+internal extraction)"
 BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -2028,6 +2029,23 @@ def crawl_website(
         if page_data.get("sections"):
             logger.info(f"Extracted {len(page_data['sections'])} sections from {url}")
         brand_asset_cues.extend(_extract_brand_asset_cues(url, signals))
+
+        if source == "homepage":
+            # Sites often keep their brand color in external CSS rather than theme-color metadata.
+            stylesheets = [asset["url"] for asset in page_data.get("assets", [])
+                           if asset.get("kind") == "stylesheet" and _same_origin(url, asset.get("url", ""))]
+            for stylesheet_url in list(dict.fromkeys(stylesheets))[:3]:
+                try:
+                    request = Request(stylesheet_url, headers={"User-Agent": BROWSER_USER_AGENT, "Accept": "text/css"})
+                    with urlopen(request, timeout=FETCH_TIMEOUT, context=ssl.create_default_context()) as response:
+                        css_body = response.read(256_000).decode("utf-8", errors="replace")
+                    if not css_body.lstrip().startswith("<"):
+                        brand_asset_cues.extend(stylesheet_color_cues(css_body, stylesheet_url))
+                except (OSError, ValueError) as exc:
+                    logger.info("Source stylesheet unavailable for color extraction: %s", exc)
+            # Inline styles are equally authoritative source evidence.
+            for inline_css in re.findall(r"<style\b[^>]*>(.*?)</style\s*>", result.get("body") or "", re.I | re.S):
+                brand_asset_cues.extend(stylesheet_color_cues(inline_css[:256_000], url))
 
         # Collect enhanced extraction data from signals
         for testimonial in signals.testimonials:

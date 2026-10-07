@@ -6,14 +6,20 @@ Generates standalone HTML/CSS/JS files (no React runtime) from master brief.
 
 from __future__ import annotations
 
+import json
 import logging
+import posixpath
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 import boto3
+from bs4 import BeautifulSoup
 from botocore.exceptions import ClientError
 
 from app.core.config import get_settings
+from app.core.compiler_client import get_compiler_client
+from app.core.generation_policy import apply_brief_policy, brand_color_policy, enforce_html_testimonials, static_safety_css
 from app.core.llm import get_llm_client
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
@@ -40,58 +46,45 @@ async def generate_static_html(
     """
     llm = get_llm_client()
 
-    # Build HTML generation prompt
+    master_brief = apply_brief_policy(master_brief, extraction)
     prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
+    html_content = css_content = ""
+    for attempt in range(2):
+        response = await llm.generate_text(prompt=prompt, temperature=0.7, max_tokens=32768)
+        try:
+            html_content = _extract_complete_block(response, "html")
+            css_content = _extract_complete_block(response, "css")
+            if not re.search(r"</html\s*>", html_content, re.I):
+                raise ValueError("HTML document is incomplete")
+            break
+        except ValueError as exc:
+            if attempt == 1:
+                raise
+            logger.warning("Incomplete static design, retrying compact output: %s", exc)
+            prompt += "\nPrevious output was incomplete. Reduce repetition and size; return complete HTML and CSS blocks under 18000 tokens total."
 
-    # Generate HTML, CSS, JS via LLM
-    logger.info(f"Generating static HTML for variant {variant_type} (site {site_id})")
-    response = await llm.generate_text(
-        prompt=prompt,
-        temperature=0.7,
-        max_tokens=32768,  # Increased to maximum to avoid truncation
-    )
+    # Reviews are rendered from extraction records rather than AI-written quotes.
+    html_content = enforce_html_testimonials(html_content, extraction)
+    document = BeautifulSoup(html_content, "html.parser")
+    for script in list(document.find_all("script")):
+        if script.get("type", "") not in {"application/ld+json", "application/json"}:
+            script.decompose()
+    html_content = str(document)
+    css_content += "\n" + static_safety_css(extraction)
 
-    # Debug: Log response metadata
-    logger.info(
-        f"[DEBUG] LLM response received for {variant_type}: "
-        f"length={len(response)}, first_200_chars={response[:200]}"
-    )
-
-    # Debug: Check for code block markers
-    html_start = response.find("```html")
-    html_end = response.find("```", html_start + 7) if html_start >= 0 else -1
-    css_start = response.find("```css")
-    css_end = response.find("```", css_start + 6) if css_start >= 0 else -1
-    js_start = response.find("```javascript")
-    if js_start < 0:
-        js_start = response.find("```js")
-    logger.info(
-        f"[DEBUG] Code block positions: html_start={html_start}, html_end={html_end}, "
-        f"css_start={css_start}, css_end={css_end}, js_start={js_start}"
-    )
-    if html_start >= 0:
-        # Log 100 chars after ```html marker to see what follows
-        logger.info(
-            f"[DEBUG] After ```html marker: {repr(response[html_start : html_start + 100])}"
-        )
-    if css_start >= 0:
-        logger.info(
-            f"[DEBUG] After ```css marker: {repr(response[css_start : css_start + 100])}"
-        )
-
-    # Parse response
-    try:
-        html_content, css_content, js_content = _parse_llm_response(response)
-        logger.info(
-            f"[DEBUG] Parsed successfully: "
-            f"html_len={len(html_content)}, css_len={len(css_content)}, js_len={len(js_content)}"
-        )
-    except ValueError as e:
-        logger.error(f"[DEBUG] Parsing failed: {e}")
-        logger.error(f"[DEBUG] Response starts with: {repr(response[:150])}")
-        if html_start >= 0 and html_end >= 0:
-            logger.error(f"[DEBUG] HTML block length would be: {html_end - html_start}")
-        raise
+    # A separate bounded script response cannot be cut off by a large stylesheet.
+    js_prompt = _build_javascript_prompt(html_content)
+    js_content = ""
+    for attempt in range(2):
+        response = await llm.generate_text(prompt=js_prompt, temperature=0.3, max_tokens=8192)
+        try:
+            js_content = _extract_complete_block(response, "javascript")
+            await get_compiler_client().validate_javascript(js_content)
+            break
+        except ValueError as exc:
+            if attempt == 1:
+                raise
+            js_prompt += f"\nPrevious script was invalid: {str(exc)[:1000]}. Return a complete, concise script with all delimiters closed; stay under 4000 tokens."
 
     # Upload CSS and JS to S3
     settings = get_settings()
@@ -115,16 +108,16 @@ async def generate_static_html(
     )
     logger.info(f"[DEBUG] S3 upload results: css_url={css_url}, js_url={js_url}")
 
-    # Inject CSS/JS URLs into HTML
-    html_final = html_content
-    if css_url:
-        html_final = html_final.replace(
-            "</head>", f'<link rel="stylesheet" href="{css_url}">\n</head>'
-        )
-    if js_url:
-        html_final = html_final.replace(
-            "</body>", f'<script src="{js_url}"></script>\n</body>'
-        )
+    # Point generated local asset references at the uploaded files. A relative
+    # "styles.css" on /st/{slug} resolves to /st/styles.css, not alongside the
+    # generated page, and Next.js then returns an HTML 404 for the stylesheet.
+    html_final = _attach_static_assets(
+        html_content,
+        css_url=css_url,
+        js_url=js_url,
+        css_content=css_content,
+        js_content=js_content,
+    )
 
     logger.info(
         f"[DEBUG] Final HTML length: {len(html_final)} (original: {len(html_content)})"
@@ -138,6 +131,123 @@ async def generate_static_html(
     }
 
 
+def _attach_static_assets(
+    html: str,
+    *,
+    css_url: str | None,
+    js_url: str | None,
+    css_content: str,
+    js_content: str,
+) -> str:
+    """Resolve generated local CSS/JS references and attach their contents.
+
+    Generated HTML often includes its own ``styles.css`` and ``script.js``
+    tags. Rewriting those tags avoids broken relative URLs on nested preview
+    routes and avoids loading each asset twice.
+    """
+
+    html, css_attached = _rewrite_asset_tags(
+        html,
+        tag_name="link",
+        attribute="href",
+        filename="styles.css",
+        remote_url=css_url,
+        content=css_content,
+    )
+    html, js_attached = _rewrite_asset_tags(
+        html,
+        tag_name="script",
+        attribute="src",
+        filename="script.js",
+        remote_url=js_url,
+        content=js_content,
+    )
+
+    if not css_attached:
+        css_tag = (
+            f'<link rel="stylesheet" href="{css_url}">'
+            if css_url
+            else f"<style>\n{css_content}\n</style>"
+        )
+        html = _insert_before_or_append(html, "</head>", css_tag)
+
+    if not js_attached:
+        js_tag = (
+            f'<script src="{js_url}" defer></script>'
+            if js_url
+            else f"<script>\n{js_content}\n</script>"
+        )
+        html = _insert_before_or_append(html, "</body>", js_tag)
+
+    return html
+
+
+def _rewrite_asset_tags(
+    html: str,
+    *,
+    tag_name: str,
+    attribute: str,
+    filename: str,
+    remote_url: str | None,
+    content: str,
+) -> tuple[str, bool]:
+    """Rewrite references to a generated local asset, if one is present."""
+
+    tag_pattern = re.compile(
+        r"<script\b[^>]*>.*?</script\s*>" if tag_name == "script" else r"<link\b[^>]*>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    attribute_pattern = re.compile(
+        rf"\b{attribute}\s*=\s*(?:(['\"])(.*?)\1|([^\s>]+))",
+        re.IGNORECASE,
+    )
+    attached = False
+
+    def replace_tag(match: re.Match[str]) -> str:
+        nonlocal attached
+        tag = match.group(0)
+        attr_match = attribute_pattern.search(tag)
+        if not attr_match:
+            return tag
+
+        source = attr_match.group(2) if attr_match.group(1) else attr_match.group(3)
+        if source != remote_url and not _is_local_asset_reference(source, filename):
+            return tag
+
+        if attached:
+            return ""
+        attached = True
+        if remote_url:
+            quote = attr_match.group(1) or '"'
+            return (
+                tag[: attr_match.start()]
+                + f"{attribute}={quote}{remote_url}{quote}"
+                + tag[attr_match.end() :]
+            )
+
+        inline_tag = "style" if tag_name == "link" else "script"
+        safe_content = re.sub(r"</script", r"<\\/script", content, flags=re.I) if inline_tag == "script" else content
+        return f"<{inline_tag}>\n{safe_content}\n</{inline_tag}>"
+
+    return tag_pattern.sub(replace_tag, html), attached
+
+
+def _is_local_asset_reference(source: str, filename: str) -> bool:
+    """Match only local references to the generated asset, not remote files."""
+    parsed = urlsplit(source.strip())
+    if parsed.scheme or parsed.netloc:
+        return False
+    basename = posixpath.basename(parsed.path)
+    return basename == filename or basename.endswith(posixpath.splitext(filename)[1])
+
+
+def _insert_before_or_append(html: str, closing_tag: str, content: str) -> str:
+    match = re.search(re.escape(closing_tag), html, re.IGNORECASE)
+    if not match:
+        return f"{html}\n{content}"
+    return f"{html[:match.start()]}{content}\n{html[match.start():]}"
+
+
 def _build_static_html_prompt(
     brief: MasterBrief,
     extraction: ExtractionSnapshot,
@@ -145,9 +255,61 @@ def _build_static_html_prompt(
 ) -> str:
     """Build LLM prompt for static HTML generation."""
     # Build sections summary
+    extracted_testimonials = [
+        testimonial
+        for testimonial in extraction.extractedTestimonials
+        if testimonial.quote.strip()
+    ]
+    brief_sections = [
+        section
+        for section in brief.sections
+        if extracted_testimonials
+        or not any(
+            term in " ".join(
+                [
+                    section.purpose,
+                    section.headline,
+                    section.suggestedApproach,
+                    section.contentSummary,
+                    *section.contentPoints,
+                ]
+            ).casefold()
+            for term in (
+                "testimonial",
+                "customer quote",
+                "client quote",
+                "review",
+                "endorsement",
+            )
+        )
+    ]
     sections_summary = "\n".join(
-        f"  - {s.purpose}: {s.headline}" for s in brief.sections[:7]
+        f"  - {s.purpose}: {s.headline}" for s in brief_sections[:7]
     )
+
+    if extracted_testimonials:
+        testimonial_policy = (
+            "TESTIMONIAL EVIDENCE (USE EXACTLY; NEVER INVENT):\n"
+            "Only the extracted testimonials below may appear. Reproduce each "
+            "quote verbatim. Do not rewrite, combine, invent quotes, ratings, "
+            "results, names, or company details. Only use author details listed "
+            "on that same record.\n"
+            + "\n".join(
+                f"- Quote: {testimonial.quote!r}; "
+                f"authorName: {testimonial.authorName or 'not extracted'}; "
+                f"authorTitle: {testimonial.authorTitle or 'not extracted'}; "
+                f"authorCompany: {testimonial.authorCompany or 'not extracted'}"
+                for testimonial in extracted_testimonials
+            )
+        )
+    else:
+        testimonial_policy = (
+            "TESTIMONIAL EVIDENCE (NONE FOUND): The extraction contains no "
+            "testimonials. Do not create a testimonial, review, customer quote, "
+            "endorsement, rating, or testimonial section. Ignore any brief "
+            "recommendation for one. Other proof may only use facts explicitly "
+            "supported by extracted source content."
+        )
 
     # Get brand info
     logo_url = brief.brandAssets.logoUrl or "None"
@@ -156,14 +318,14 @@ def _build_static_html_prompt(
     font_family = brief.brandAssets.fontFamily or "system-ui, sans-serif"
 
     # Get company name
-    company_name = extraction.summary.companyName or "Company"
+    company_name = extraction.summary.companyName or (urlsplit(extraction.canonicalWebsiteUrl or "").hostname or "Company")
     # Kept outside the f-string so pyright doesn't misparse the JS object literal syntax
     _animation_notes = (
         "Scroll-triggered animations using IntersectionObserver — important rules:\n"
         "   - NEVER set opacity:0 in CSS directly. Only hide elements by adding a class via JS "
         "(e.g. add 'js-loaded' to <html> first, then use '.js-loaded .animate-on-scroll { opacity:0 }') "
         "so content is always fully visible if JS fails or is slow.\n"
-        "   - Hero/above-the-fold elements must never be hidden — always visible on load.\n"
+        "   - Hero/above-the-fold elements must never be hidden by opacity, visibility, clip-path, scale, masks, or transforms — always visible on load.\n"
         "   - Number counters must animate to their final value; always set the final number as a "
         "fallback in case the animation does not trigger."
     )
@@ -194,6 +356,8 @@ CONTENT BLUEPRINT:
 {sections_summary}
 - CTA Strategy: {brief.ctaStrategy}
 
+{testimonial_policy}
+
 BRAND ASSETS:
 - Company Name: {company_name}
 - Logo URL: {logo_url}
@@ -201,19 +365,23 @@ BRAND ASSETS:
 - Secondary Color: {secondary_color}
 - Font Family: {font_family}
 
+{brand_color_policy(extraction)}
+
 VARIANT TYPE: {variant_type}
 
 REQUIREMENTS:
-1. Generate THREE separate code blocks:
+1. Generate TWO separate code blocks; JavaScript is generated separately:
    - HTML: Complete semantic HTML5 structure
    - CSS: All styles in a single stylesheet
-   - JavaScript: Vanilla JS for interactions (no frameworks)
+   - Keep the total response under 20000 tokens; avoid repetitive CSS and verbose comments.
 
 2. HTML Structure:
    - Semantic tags (<header>, <main>, <section>, <footer>)
+   - Mark the hero headline with data-hero-headline and primary CTA links/buttons with data-primary-cta
+   - No testimonial/review markup: verified testimonial cards are inserted from extraction records by the renderer
    - Proper meta tags (viewport, description, title)
    - Accessibility: ARIA labels, alt text, semantic structure
-   - Include all sections from the master brief
+   - Include all listed sections, subject to the testimonial evidence rule above
    - Use brand logo if available (as img src)
    - NO inline styles or scripts
    - Use placeholder image URLs from https://images.unsplash.com for any images
@@ -236,12 +404,12 @@ REQUIREMENTS:
 5. Design Quality:
    - Match the visual style and creative direction
    - Implement the design concept prominently
-   - Use the specified color strategy
+   - The source brand color rule takes precedence over the creative color strategy
    - Typography should reflect the personality described
    - Professional, polished appearance
 
 OUTPUT FORMAT:
-Return your response in this exact format (three code blocks):
+Return your response in this exact format (two complete, closed code blocks):
 
 ```html
 <!DOCTYPE html>
@@ -267,104 +435,43 @@ Return your response in this exact format (three code blocks):
 ...complete CSS here...
 ```
 
-```javascript
-// script.js
-document.addEventListener('DOMContentLoaded', () => {{
-  ...complete JS here...
-}});
-```
+
 
 Generate high-quality, production-ready code that implements this brief faithfully.
 """
 
 
+def _extract_complete_block(response: str, language: str) -> str:
+    languages = r"(?:javascript|js)" if language == "javascript" else re.escape(language)
+    match = re.search(rf"```{languages}\s*\n(.*?)\n```", response, re.DOTALL | re.IGNORECASE)
+    if not match:
+        raise ValueError(f"No {language.upper()} code block or truncated block")
+    content = match.group(1).strip()
+    if not content:
+        raise ValueError(f"Empty {language} code block")
+    return content
+
+
 def _parse_llm_response(response: str) -> tuple[str, str, str]:
-    """Parse HTML, CSS, JS from LLM response."""
+    """Legacy three-block parser: incomplete assets must never be published."""
+    return tuple(_extract_complete_block(response, lang) for lang in ("html", "css", "javascript"))
 
-    # Extract HTML - try multiple patterns with increasing leniency
-    html_match = None
-    # Pattern 1: Standard with explicit newline
-    html_match = re.search(r"```html\s*\n(.*?)\n```", response, re.DOTALL)
-    if not html_match:
-        # Pattern 2: Any whitespace after marker
-        html_match = re.search(r"```html\s+(.*?)```", response, re.DOTALL)
-    if not html_match:
-        # Pattern 3: No whitespace requirement, greedy
-        html_match = re.search(r"```html(.*?)```", response, re.DOTALL)
-    if not html_match:
-        # Pattern 4: Manual extraction if markers exist
-        html_start_pos = response.find("```html")
-        html_end_pos = (
-            response.find("```", html_start_pos + 7) if html_start_pos >= 0 else -1
-        )
-        if html_start_pos >= 0 and html_end_pos >= 0:
-            html = response[html_start_pos + 7 : html_end_pos].strip()
-            logger.info(f"[DEBUG] Manual HTML extraction: {len(html)} chars")
-        else:
-            raise ValueError("No HTML code block found in LLM response")
-    else:
-        html = html_match.group(1).strip()
 
-    # Extract CSS - same pattern approach with truncation handling
-    css_match = None
-    css_match = re.search(r"```css\s*\n(.*?)\n```", response, re.DOTALL)
-    if not css_match:
-        css_match = re.search(r"```css\s+(.*?)```", response, re.DOTALL)
-    if not css_match:
-        css_match = re.search(r"```css(.*?)```", response, re.DOTALL)
-    if not css_match:
-        # Pattern 4: Manual extraction if markers exist
-        css_start_pos = response.find("```css")
-        if css_start_pos >= 0:
-            css_end_pos = response.find("```", css_start_pos + 6)
-            if css_end_pos >= 0:
-                css = response[css_start_pos + 6 : css_end_pos].strip()
-                logger.info(f"[DEBUG] Manual CSS extraction: {len(css)} chars")
-            else:
-                # CSS block started but no closing marker (truncated response)
-                # Take everything from CSS start to end of response
-                css = response[css_start_pos + 6 :].strip()
-                logger.warning(
-                    f"[DEBUG] CSS truncated (no closing marker), extracted {len(css)} chars"
-                )
-        else:
-            raise ValueError("No CSS code block found in LLM response")
-    else:
-        css = css_match.group(1).strip()
-
-    # Extract JS - same pattern approach with truncation handling
-    js_match = None
-    js_match = re.search(r"```(?:javascript|js)\s*\n(.*?)\n```", response, re.DOTALL)
-    if not js_match:
-        js_match = re.search(r"```(?:javascript|js)\s+(.*?)```", response, re.DOTALL)
-    if not js_match:
-        js_match = re.search(r"```(?:javascript|js)(.*?)```", response, re.DOTALL)
-    if not js_match:
-        # Pattern 4: Manual extraction if markers exist
-        js_start_pos = response.find("```javascript")
-        if js_start_pos < 0:
-            js_start_pos = response.find("```js")
-            js_marker_len = 5 if js_start_pos >= 0 else 0
-        else:
-            js_marker_len = 13
-        if js_start_pos >= 0:
-            js_end_pos = response.find("```", js_start_pos + js_marker_len)
-            if js_end_pos >= 0:
-                js = response[js_start_pos + js_marker_len : js_end_pos].strip()
-                logger.info(f"[DEBUG] Manual JS extraction: {len(js)} chars")
-            else:
-                # JS block started but no closing marker (truncated)
-                js = response[js_start_pos + js_marker_len :].strip()
-                logger.warning(
-                    f"[DEBUG] JS truncated (no closing marker), extracted {len(js)} chars"
-                )
-        else:
-            logger.warning("No JavaScript code block found, using minimal JS")
-            js = "// Minimal script\ndocument.addEventListener('DOMContentLoaded', () => {});"
-    else:
-        js = js_match.group(1).strip()
-
-    return html, css, js
+def _build_javascript_prompt(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    manifest = [{"tag": node.name, "attributes": node.attrs}
+                for node in soup.find_all(True) if node.name not in {"meta", "link", "script", "style"}]
+    return """Generate concise, complete vanilla browser JavaScript for this DOM.
+Return ONE closed ```javascript code block. Do not output HTML or CSS.
+Implement mobile navigation, form validation, anchor scrolling, and optional scroll enhancements.
+Use only selectors that exist in the DOM inventory. Null-check elements and optional browser APIs.
+Use a deferred script; initialize when DOM is ready, including when DOMContentLoaded already fired.
+Hero text is always visible. Never hide h1, its words, or any above-the-fold content.
+Scroll animation must use progressive enhancement and leave final content visible if anything fails.
+Respect prefers-reduced-motion. Do not add testimonials, star ratings, fake counters, or unsupported claims.
+Keep all interactions within 4000 tokens and close every function, string, and delimiter.
+DOM inventory:
+""" + json.dumps(manifest, ensure_ascii=False)
 
 
 def _upload_to_s3(

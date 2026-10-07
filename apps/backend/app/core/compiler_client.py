@@ -82,6 +82,18 @@ class CompilerClient:
         except httpx.HTTPError as e:
             raise CompilerError(f"HTTP error: {e}")
 
+    async def validate_javascript(self, source_code: str) -> None:
+        """Reject malformed scripts before they become public assets."""
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(
+                f"{self.base_url}/validate-javascript", json={"sourceCode": source_code}
+            )
+            if response.status_code == 422:
+                raise ValueError(response.json().get("error", "Invalid JavaScript"))
+            response.raise_for_status()
+            if not response.json().get("success"):
+                raise CompilerError("JavaScript validation failed")
+
     async def health_check(self) -> dict[str, Any]:
         """
         Check if the compiler service is healthy.

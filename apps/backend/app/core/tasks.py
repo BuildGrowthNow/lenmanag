@@ -523,7 +523,7 @@ async def _run_multi_variant_generation_async(
     # Mark job complete
     await lead_repository._update_job(
         job_id=job_id,
-        status="completed",
+        status="completed" if not failed_variants else "partial" if generated_sites else "failed",
         progress=100,
         step=f"Generated {len(generated_sites)}/{total_variants} variants",
         finished=True,

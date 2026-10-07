@@ -258,8 +258,8 @@ console.log('test');
         with pytest.raises(ValueError, match="No CSS code block"):
             _parse_llm_response(response)
 
-    def test_parse_llm_response_missing_js_uses_default(self) -> None:
-        """Test that missing JS block uses minimal JS placeholder."""
+    def test_parse_llm_response_missing_js_is_rejected(self) -> None:
+        """An incomplete response must not silently publish a broken site."""
         from app.core.static_html_generator import _parse_llm_response
 
         response = """
@@ -271,11 +271,8 @@ console.log('test');
 body { margin: 0; }
 ```
 """
-        html, css, js = _parse_llm_response(response)
-
-        assert "<!DOCTYPE html>" in html
-        assert "margin: 0" in css
-        assert "Minimal script" in js or "DOMContentLoaded" in js
+        with pytest.raises(ValueError, match="No JAVASCRIPT code block"):
+            _parse_llm_response(response)
 
     def test_parse_llm_response_js_alternate_syntax(self) -> None:
         """Test parsing JS with ```js instead of ```javascript."""
@@ -387,7 +384,7 @@ class TestSlugGeneration:
         slug = repo._generate_variant_slug("lead123", "html_v1", "Acme Corp")
 
         # "acme-cor" is 8 chars (acme + dash + cor)
-        assert slug == "acme-cor-v1"
+        assert slug == "acmecor-v1"
         assert "-v1" in slug
 
     def test_generate_variant_slug_v2(self) -> None:
@@ -418,9 +415,7 @@ class TestSlugGeneration:
         repo = SiteRepository.__new__(SiteRepository)
         slug = repo._generate_variant_slug("lead123", "nextjs", "Acme Corp")
 
-        # No variant suffix for nextjs
-        assert "-v" not in slug
-        assert len(slug) <= 8
+        assert slug == "acmecor-v1"
 
     def test_generate_variant_slug_no_company_name(self) -> None:
         """Test slug generation when company name is None uses lead ID."""
@@ -429,8 +424,7 @@ class TestSlugGeneration:
         repo = SiteRepository.__new__(SiteRepository)
         slug = repo._generate_variant_slug("abcd1234efgh", "html_v1", None)
 
-        assert slug == "abcd1234-v1"
-        assert slug.startswith("abcd1234")
+        assert slug == "website-v1"
 
     def test_generate_variant_slug_special_characters(self) -> None:
         """Test slug generation removes special characters."""
