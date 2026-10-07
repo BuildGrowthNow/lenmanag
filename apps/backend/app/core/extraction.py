@@ -1116,7 +1116,7 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                         return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden' &&
                             /estimate|quote|call|book|schedule|request|contact|get started|services|learn more/i.test(el.innerText);
                     }).slice(0, 50).map(el => getStyle(el, 'backgroundColor')),
-                    headingColors: Array.from(document.querySelectorAll('h1, h2')).filter(el => {
+                    headingColors: Array.from(document.querySelectorAll('h1, h2, h3')).filter(el => {
                         const rect = el.getBoundingClientRect();
                         return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden';
                     }).slice(0, 30).map(el => getStyle(el, 'color')),
@@ -2057,7 +2057,7 @@ def crawl_website(
             # Sites often keep their brand color in external CSS rather than theme-color metadata.
             stylesheets = [asset["url"] for asset in page_data.get("assets", [])
                            if asset.get("kind") == "stylesheet" and asset.get("url", "").startswith(("http://", "https://"))
-                           and not re.search(r"wp-content/plugins/|wp-includes/|bootstrap|font-awesome|normalize|animate\.min", asset["url"], re.I)]
+                           and not re.search(r"wp-content/plugins/|wp-includes/|website\.components\.form|bootstrap|font-awesome|normalize|animate\.min", asset["url"], re.I)]
             stylesheets.sort(key=lambda stylesheet: (
                 not bool(re.search(r"skin|custom|/themes/", stylesheet, re.I)),
                 not _same_origin(url, stylesheet),
