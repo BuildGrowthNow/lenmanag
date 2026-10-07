@@ -42,11 +42,11 @@ export default async function PreviewPage({ params }: PageProps) {
   const htmlContent = strippedSource.startsWith('<') ? strippedSource : null;
 
   if (htmlContent) {
-    const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
     return (
       <iframe
         title={site.variantLabel || 'Website preview'}
-        src={`${apiUrl}/api/v1/public/preview/${encodeURIComponent(slug)}`}
+        srcDoc={htmlContent}
+        sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
         className="fixed inset-0 h-dvh w-full border-0 bg-white"
       />
     );
