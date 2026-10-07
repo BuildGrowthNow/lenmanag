@@ -1101,6 +1101,11 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                     headings: Array.from(document.querySelectorAll('h1, h2, h3, h4')).map(el => el.innerText),
                     links: Array.from(document.querySelectorAll('a[href]')).map(el => ({href: el.href, text: el.innerText.trim()})).filter(l => l.href),
                     images: Array.from(document.querySelectorAll('img[src]')).map(el => ({src: el.src, alt: el.alt || ''})),
+                    testimonials: Array.from(document.querySelectorAll('[itemprop="reviewBody"], .ti-review-content, .wp-google-text, .review-text, .testimonial-text')).map(el => {
+                        const card = el.closest('.ti-review-item, .review, .testimonial, [itemtype*="Review"], .testimonial-card');
+                        const author = card?.querySelector('.ti-name, .review-author, .testimonial-author, [itemprop="author"]');
+                        return {quote:el.innerText.trim(), authorName:author?.innerText.trim() || null, confidence:95};
+                    }).filter(record => record.quote.length >= 30),
                     logoImages: logoImages.sort((a, b) => b.score - a.score),
                     brandVariables: [document.body, document.documentElement].filter(Boolean).flatMap(el =>
                         ['--brand-primary', '--brand-color', '--primary-color', '--color-primary', '--primary']
@@ -1999,6 +2004,7 @@ def crawl_website(
         if result.get("renderedByPlaywright") and result.get("pageData"):
             pw_data = result["pageData"]
             page_data["renderedByPlaywright"] = True
+            signals.testimonials.extend(pw_data.get("testimonials", []))
 
             # Merge Playwright's enhanced logo detection
             if pw_data.get("logoImages"):
@@ -2071,6 +2077,8 @@ def crawl_website(
 
         # Collect enhanced extraction data from signals
         for testimonial in signals.testimonials:
+            if testimonial.get("confidence", 0) < 70:
+                continue
             testimonial["sourceUrl"] = url
             extracted_testimonials.append(testimonial)
 

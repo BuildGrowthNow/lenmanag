@@ -19,7 +19,7 @@ from botocore.exceptions import ClientError
 
 from app.core.config import get_settings
 from app.core.compiler_client import get_compiler_client
-from app.core.generation_policy import apply_brief_policy, brand_color_policy, enforce_html_testimonials, static_safety_css
+from app.core.generation_policy import apply_brief_policy, brand_color_policy, enforce_html_testimonials, source_testimonials, static_safety_css
 from app.core.llm import get_llm_client
 from app.core.verified_images import verified_image_catalog, enforce_image_catalog
 from app.schemas.brief import MasterBrief
@@ -260,11 +260,7 @@ def _build_static_html_prompt(
 ) -> str:
     """Build LLM prompt for static HTML generation."""
     # Build sections summary
-    extracted_testimonials = [
-        testimonial
-        for testimonial in extraction.extractedTestimonials
-        if testimonial.quote.strip()
-    ]
+    extracted_testimonials = source_testimonials(extraction)
     brief_sections = [
         section
         for section in brief.sections

@@ -130,6 +130,12 @@ def is_testimonial_section(value: str) -> bool:
     ))
 
 
+def source_testimonials(extraction: ExtractionSnapshot | None):
+    """Low-confidence proof text can be navigation or headings, not a review."""
+    return [record for record in (extraction.extractedTestimonials if extraction else [])
+            if record.quote.strip() and record.sourceUrl and record.confidence >= 70]
+
+
 def apply_brief_policy(brief, extraction: ExtractionSnapshot):
     """Enforce evidence even when an AI brief suggests unsupported content."""
     brief = brief.model_copy(deep=True)
@@ -139,7 +145,7 @@ def apply_brief_policy(brief, extraction: ExtractionSnapshot):
         policy = brand_color_policy(extraction)
         if policy not in brief.colorStrategy:
             brief.colorStrategy = policy + "\n" + brief.colorStrategy
-    if not any(record.quote.strip() and record.sourceUrl for record in extraction.extractedTestimonials):
+    if not source_testimonials(extraction):
         brief.sections = [section for section in brief.sections if not is_testimonial_section(
             " ".join([section.purpose, section.headline, section.contentSummary, section.suggestedApproach, *section.contentPoints])
         )]
@@ -165,7 +171,7 @@ def enforce_html_testimonials(html: str, extraction: ExtractionSnapshot | None) 
     for node in list(soup.find_all("script", type="application/ld+json")):
         if re.search(r'"(?:Review|AggregateRating|review|aggregateRating)"', node.get_text()):
             node.decompose()
-    records = [record for record in (extraction.extractedTestimonials if extraction else []) if record.quote.strip() and record.sourceUrl]
+    records = source_testimonials(extraction)
     if records and soup.body:
         cards = []
         for record in records[:6]:
@@ -219,7 +225,7 @@ h1, h1 *, [data-hero-headline], [data-hero-headline] *, .headline-word {
 
 def validate_testimonial_source(source: str, extraction: ExtractionSnapshot | None) -> list[str]:
     """Reject unsupported review content in generated React code before compilation."""
-    has_records = bool(extraction and any(record.quote.strip() and record.sourceUrl for record in extraction.extractedTestimonials))
+    has_records = bool(source_testimonials(extraction))
     markers = re.search(r"<blockquote\b|\btestimonials?\b|\breviews\s*[=:]|(?:id|className)\s*=\s*[\"'][^\"']*review|AggregateRating|customer reviews|what (?:our )?(?:customers|clients|homeowners) say", source, re.I)
     if markers and not has_records:
         return ["Remove testimonials, customer reviews, quote cards, and review ratings: no source testimonials were extracted."]
