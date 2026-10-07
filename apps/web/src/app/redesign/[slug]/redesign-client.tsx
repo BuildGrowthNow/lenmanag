@@ -1,7 +1,30 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import type { RedesignPageData, RedesignVariant } from "./page";
+
+function BusinessIdentity({ logoUrl, companyName }: { logoUrl: string | null; companyName: string | null }) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  const name = companyName?.trim() || "Business";
+  const src = logoUrl?.trim();
+
+  if (!src || logoFailed) {
+    return <p className="text-2xl font-bold text-zinc-100">{name}</p>;
+  }
+
+  return (
+    <Image
+      src={src}
+      alt={name}
+      width={160}
+      height={40}
+      className="h-10 w-auto object-contain"
+      unoptimized
+      onError={() => setLogoFailed(true)}
+    />
+  );
+}
 
 function gridClass(count: number): string {
   if (count === 1) return "flex justify-center";
@@ -92,20 +115,7 @@ export function RedesignClient({ data }: { data: RedesignPageData }) {
       <div className="relative z-10 mx-auto max-w-6xl px-6 py-16">
         {/* Logo / company name header */}
         <div className="mb-12 flex flex-col items-center gap-4 text-center">
-          {logoUrl ? (
-            <Image
-              src={logoUrl}
-              alt={companyName ?? "Logo"}
-              width={160}
-              height={40}
-              className="h-10 w-auto object-contain"
-              unoptimized
-            />
-          ) : (
-            <p className="text-2xl font-bold text-zinc-100">
-              {companyName ?? ""}
-            </p>
-          )}
+          <BusinessIdentity key={logoUrl} logoUrl={logoUrl} companyName={companyName} />
 
           <h1 className="mt-2 max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             {headline}
