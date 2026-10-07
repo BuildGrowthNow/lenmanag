@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # reservations remain charged until completion; usage stays charged for 60s
 # afterwards, including Claude's output-token burndown multiplier.
 ADMIT = """
+if redis.call('EXISTS', KEYS[6]) == 1 then return -1 end
 local now = tonumber(redis.call('TIME')[1])
 redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
 local expired = redis.call('ZRANGEBYSCORE', KEYS[2], '-inf', now)
@@ -102,6 +103,7 @@ async def bedrock_request_budget(
         prefix + ":costs",
         prefix + ":requests",
         prefix + ":cooldown",
+        prefix + ":daily-quota",
     ]
     lease_id = uuid4().hex
     ttl = max(1200, settings.bedrock_timeout_seconds * 2 + 60)
@@ -109,17 +111,24 @@ async def bedrock_request_budget(
     heartbeat = None
     acquired = False
     try:
-        while not await client.eval(
-            ADMIT,
-            len(keys),
-            *keys,
-            lease_id,
-            max(1, settings.bedrock_max_concurrent),
-            limits["rpm"],
-            reserved,
-            limits["tpm"],
-            ttl,
-        ):
+        while True:
+            admission = await client.eval(
+                ADMIT,
+                len(keys),
+                *keys,
+                lease_id,
+                max(1, settings.bedrock_max_concurrent),
+                limits["rpm"],
+                reserved,
+                limits["tpm"],
+                ttl,
+            )
+            if admission == -1:
+                raise RuntimeError(
+                    f"Daily token quota unavailable for {model_id}; use fallback"
+                )
+            if admission == 1:
+                break
             await asyncio.sleep(1)
         acquired = True
 
@@ -147,6 +156,18 @@ async def throttle_cooldown(model_id: str, seconds: int = 60) -> None:
     try:
         await client.set(
             f"lenquant:bedrock:{model_key(model_id)}:cooldown", "1", ex=seconds
+        )
+    finally:
+        await client.aclose()
+
+
+async def mark_daily_quota_exhausted(model_id: str, seconds: int = 3600) -> None:
+    # AWS does not expose the reset time in this error. Probe again after an
+    # hour; all workers use the fallback immediately in the meantime.
+    client = redis.from_url(get_settings().celery_broker_url, decode_responses=True)
+    try:
+        await client.set(
+            f"lenquant:bedrock:{model_key(model_id)}:daily-quota", "1", ex=seconds
         )
     finally:
         await client.aclose()

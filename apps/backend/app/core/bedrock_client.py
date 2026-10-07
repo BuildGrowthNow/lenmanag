@@ -17,7 +17,11 @@ from botocore.exceptions import (
     EndpointConnectionError,
     ReadTimeoutError,
 )
-from app.core.bedrock_limits import bedrock_request_budget, throttle_cooldown
+from app.core.bedrock_limits import (
+    bedrock_request_budget,
+    mark_daily_quota_exhausted,
+    throttle_cooldown,
+)
 
 from app.core.config import get_settings
 
@@ -319,6 +323,13 @@ class BedrockClient:
                     return text
             except ClientError as error:
                 code = error.response["Error"]["Code"]
+                message = error.response["Error"].get("Message", "").lower()
+                if code in {"ThrottlingException", "TooManyRequestsException"} and (
+                    "tokens per day" in message
+                    or ("daily" in message and "token" in message)
+                ):
+                    await mark_daily_quota_exhausted(model_id)
+                    raise
                 if code not in transient or attempt == 2:
                     raise
                 if code in {"ThrottlingException", "TooManyRequestsException"}:
