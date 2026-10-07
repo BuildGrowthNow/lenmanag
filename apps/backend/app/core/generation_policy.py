@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from html import escape
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 
 from app.schemas.extraction import BrandAssetCue, ExtractionSnapshot
 
@@ -17,10 +17,12 @@ FOOTER_YEAR_POLICY = (
 )
 
 
-def _footer_year_text(text: str) -> str:
+def _footer_year_text(text: str, historic_years: set[str] | None = None) -> str:
     def replace(match: re.Match) -> str:
         prefix = text[max(0, match.start() - 40):match.start()]
-        if re.search(r"\b(?:since|founded|established|est\.)\s*$", prefix, re.I):
+        if re.search(r"\d{2,}[).\s-]{0,3}$", prefix):
+            return match.group()
+        if match.group() in (historic_years or set()) or re.search(r"\b(?:since|founded|established|est\.)(?:\s+in)?\s*$", prefix, re.I):
             return match.group()
         return FOOTER_YEAR
 
@@ -32,10 +34,24 @@ def enforce_html_footer_year(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     for footer in soup.select('footer, [role="contentinfo"]'):
         for node in list(footer.find_all(string=True)):
-            if node.parent.name in {"script", "style"}:
+            if isinstance(node, Comment) or node.parent.name in {"script", "style"}:
+                continue
+            if node.find_parent("address") or node.find_parent("a", href=re.compile(r"^(?:tel|mailto):", re.I)):
                 continue
             original = str(node)
-            updated = _footer_year_text(original)
+            context = node.parent if node.parent.name in {"p", "div", "li", "td", "footer"} else node.find_parent(["p", "div", "li", "td", "footer"])
+            context_text = context.get_text(" ", strip=True) if context else original
+            attributes = " ".join(str(parent.get("id", "")) + " " + " ".join(parent.get("class", []))
+                                  for parent in [node.parent, *node.parents] if getattr(parent, "attrs", None))
+            if not (re.search(r"©|copyright|rights reserved", context_text, re.I)
+                    or re.search(r"copyright|(?:footer|current|copy)[_-]?year", attributes, re.I)
+                    or re.fullmatch(r"\s*(?:19|20)\d{2}(?:\s*[-–—]\s*(?:19|20)\d{2})?\s*", original)):
+                continue
+            historic_years = set(re.findall(
+                r"\b(?:since|founded|established|est\.)(?:\s+in)?\s+((?:19|20)\d{2})\b",
+                context_text, re.I,
+            ))
+            updated = _footer_year_text(original, historic_years)
             if updated != original:
                 node.replace_with(updated)
     return str(soup)
@@ -48,7 +64,7 @@ def enforce_source_footer_year(source: str) -> str:
         block = re.sub(r"new Date\(\)\.getFullYear\(\)", FOOTER_YEAR, block)
         return re.sub(r"(?<=>)([^<]+)(?=<)", lambda text: _footer_year_text(text.group()), block)
 
-    return re.sub(r"<footer\b[^>]*>.*?</footer\s*>", footer, source, flags=re.I | re.S)
+    return re.sub(r"<(?P<tag>(?:motion\.)?footer)\b[^>]*>.*?</(?P=tag)\s*>", footer, source, flags=re.I | re.S)
 
 
 def normalize_color(value: str) -> str | None:
@@ -74,7 +90,7 @@ def primary_brand_cue(extraction: ExtractionSnapshot | None) -> BrandAssetCue | 
         color = normalize_color(cue.value) or "#000000"
         channels = [int(color[index:index + 2], 16) for index in (1, 3, 5)]
         chromatic = max(channels) - min(channels) > 30
-        rendered = "rendered source" in label
+        rendered = "rendered" in label or "monochrome source" in label
         return (3 if explicit else 2 if "brand" in label else int(chromatic), int(rendered), cue.confidence, max(channels) - min(channels))
 
     return max(cues, key=rank) if cues else None
