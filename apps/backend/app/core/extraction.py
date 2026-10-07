@@ -21,7 +21,7 @@ from urllib.request import Request, urlopen
 from app.core import asset_metadata
 from app.core.asset_downloader import AssetDownloader
 from app.core.config import get_settings
-from app.core.generation_policy import stylesheet_color_cues
+from app.core.generation_policy import stylesheet_color_cues, rendered_brand_cues
 
 USER_AGENT = "LenQuantBot/0.3 (+internal extraction)"
 BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -932,6 +932,9 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
             )
             page = context.new_page()
             response = page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            if urlparse(url).path in {"", "/"}:
+                # Let the homepage theme hydrate before reading its active colors.
+                page.wait_for_timeout(1500)
 
             # Handle Cloudflare/bot challenge pages: wait for challenge to complete
             # Cloudflare usually redirects within 5-10 seconds if the challenge passes
@@ -1099,6 +1102,15 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                     links: Array.from(document.querySelectorAll('a[href]')).map(el => ({href: el.href, text: el.innerText.trim()})).filter(l => l.href),
                     images: Array.from(document.querySelectorAll('img[src]')).map(el => ({src: el.src, alt: el.alt || ''})),
                     logoImages: logoImages.sort((a, b) => b.score - a.score),
+                    brandVariables: [document.body, document.documentElement].filter(Boolean).flatMap(el =>
+                        ['--brand-primary', '--brand-color', '--primary-color', '--color-primary', '--primary']
+                            .map(name => window.getComputedStyle(el).getPropertyValue(name).trim()).filter(Boolean)
+                    ),
+                    actionColors: Array.from(document.querySelectorAll('a, button')).filter(el => {
+                        const rect = el.getBoundingClientRect();
+                        return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden' &&
+                            /estimate|quote|call|book|schedule|request|contact|get started|services|learn more/i.test(el.innerText);
+                    }).slice(0, 50).map(el => getStyle(el, 'backgroundColor')),
                     sectionsData: sections.map((sec, idx) => ({
                         index: idx,
                         tagName: sec.tagName.toLowerCase(),
@@ -2031,6 +2043,7 @@ def crawl_website(
         brand_asset_cues.extend(_extract_brand_asset_cues(url, signals))
 
         if source == "homepage":
+            brand_asset_cues.extend(rendered_brand_cues(result.get("pageData") or {}, url))
             # Sites often keep their brand color in external CSS rather than theme-color metadata.
             stylesheets = [asset["url"] for asset in page_data.get("assets", [])
                            if asset.get("kind") == "stylesheet" and asset.get("url", "").startswith(("http://", "https://"))]

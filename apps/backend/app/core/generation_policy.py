@@ -56,6 +56,8 @@ def brand_color_policy(extraction: ExtractionSnapshot | None) -> str:
 def stylesheet_color_cues(css: str, source_url: str) -> list[dict]:
     """Rank source CSS colors by named brand variables and action styling."""
     scores: dict[str, int] = {}
+    declared_primary: dict[str, str] = {}
+    primary_names = ("--brand-primary", "--brand-color", "--primary-color", "--color-primary", "--primary")
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
     for rule in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
         selector, declarations = rule.groups()
@@ -64,6 +66,8 @@ def stylesheet_color_cues(css: str, source_url: str) -> list[dict]:
             color = normalize_color(value)
             if not color:
                 continue
+            if property_name.lower() in primary_names:
+                declared_primary[property_name.lower()] = color
             channels = [int(color[index:index + 2], 16) for index in (1, 3, 5)]
             named_brand = property_name.startswith("--") and bool(re.search(r"brand|primary", property_name, re.I))
             if max(channels) - min(channels) <= 30 and not named_brand:
@@ -73,10 +77,36 @@ def stylesheet_color_cues(css: str, source_url: str) -> list[dict]:
             action = bool(re.search(r"button|btn|cta|header|nav|logo|brand|\ba(?=[:.\s,]|$)", selector, re.I))
             scores[color] = scores.get(color, 0) + (30 if named_brand else 5 if action else 1)
     ranked = sorted(scores, key=lambda color: scores[color], reverse=True)
+    explicit = next((declared_primary[name] for name in primary_names if name in declared_primary), None)
+    if explicit:
+        ranked = [explicit, *[color for color in ranked if color != explicit]]
     return [{"assetType": "color", "label": "Primary brand color" if index == 0 else "Source accent color",
-             "value": color, "sourceUrl": source_url, "confidence": min(95, 75 + scores[color]) if index == 0 else 70,
+             "value": color, "sourceUrl": source_url, "confidence": (99 if color == explicit else min(95, 75 + scores[color])) if index == 0 else 70,
              "note": "Ranked from source stylesheet brand variables and navigation/action color usage."}
             for index, color in enumerate(ranked[:3])]
+
+
+def rendered_brand_cues(data: dict, source_url: str) -> list[dict]:
+    """Prefer the live theme's primary variable or visible action color to framework CSS."""
+    for value in data.get("brandVariables", []):
+        color = normalize_color(value)
+        if color:
+            return [{"assetType": "color", "label": "Primary brand color from rendered theme variable",
+                     "value": color, "sourceUrl": source_url, "confidence": 100,
+                     "note": "Resolved from the active source theme, after CSS overrides."}]
+    colors = []
+    for value in data.get("actionColors", []):
+        color = normalize_color(value)
+        if color:
+            channels = [int(color[i:i + 2], 16) for i in (1, 3, 5)]
+            if max(channels) - min(channels) > 30:
+                colors.append(color)
+    if not colors:
+        return []
+    color = max(dict.fromkeys(colors), key=colors.count)
+    return [{"assetType": "color", "label": "Primary brand color from rendered source actions",
+             "value": color, "sourceUrl": source_url, "confidence": 98,
+             "note": "Most frequent chromatic background of visible source conversion buttons; excludes framework defaults."}]
 
 
 def is_testimonial_section(value: str) -> bool:
