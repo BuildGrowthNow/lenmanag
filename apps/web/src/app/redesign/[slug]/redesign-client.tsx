@@ -133,21 +133,54 @@ export function RedesignClient({ data }: { data: RedesignPageData }) {
           ))}
         </div>
 
-        {/* CTA section */}
-        <div className="mt-16 flex flex-col items-center gap-6 text-center">
-          <div className="h-px w-24 bg-white/10" />
-          <p className="text-lg text-zinc-300">
-            Love one of these? Let&apos;s build your final version.
+        {/* Offer and next step */}
+        <section
+          aria-labelledby="redesign-offer-heading"
+          className="mx-auto mt-12 max-w-4xl rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-center sm:p-8"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-yellow-400">
+            Your custom landing page
           </p>
+          <h2 id="redesign-offer-heading" className="mt-3 text-2xl font-semibold text-white">
+            Love one of these? Let&apos;s build your final version.
+          </h2>
+          <dl className="mt-7 grid gap-5 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-white/10">
+            <div>
+              <dt className="text-sm text-zinc-400">One-time price</dt>
+              <dd className="mt-1 text-3xl font-bold text-yellow-400">$1,000</dd>
+            </div>
+            <div>
+              <dt className="text-sm text-zinc-400">Delivery</dt>
+              <dd className="mt-1 text-3xl font-bold text-white">3 days</dd>
+            </div>
+            <div>
+              <dt className="text-sm text-zinc-400">Revisions &amp; support</dt>
+              <dd className="mt-1 text-3xl font-bold text-white">7 days</dd>
+            </div>
+          </dl>
+          <div className="mt-7 rounded-2xl border border-yellow-500/15 bg-yellow-500/5 px-4 py-4">
+            <p className="text-sm font-semibold text-yellow-400">100% money-back guarantee</p>
+            <p className="mt-1 text-sm leading-relaxed text-zinc-300">
+              Not satisfied within 7 days of delivery? Get a full refund on the base landing page.
+            </p>
+          </div>
           <a
             href={resolveBookingUrl(data.callUrl)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block rounded-full bg-yellow-500 px-8 py-3 text-sm font-semibold text-slate-900 transition-colors hover:bg-yellow-400"
+            className="mt-7 inline-block rounded-full bg-yellow-500 px-8 py-3 text-sm font-semibold text-slate-900 transition-colors hover:bg-yellow-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-yellow-400"
           >
             Book a call
           </a>
-        </div>
+          <p className="mt-3 text-sm text-zinc-400">Free 30-minute call · No commitment</p>
+          <p className="mx-auto mt-5 max-w-2xl text-xs leading-relaxed text-zinc-500">
+            Delivery starts after scope approval and receipt of your content. Additional pages and features
+            are scoped on the call. Guarantee covers the base service.{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-zinc-300">
+              See terms
+            </a>.
+          </p>
+        </section>
 
         {/* Footer */}
         <p className="mt-16 text-center text-xs text-zinc-600">Built by LenQuant</p>
