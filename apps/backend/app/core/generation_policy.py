@@ -59,10 +59,21 @@ def stylesheet_color_cues(css: str, source_url: str) -> list[dict]:
     declared_primary: dict[str, str] = {}
     primary_names = ("--brand-primary", "--brand-color", "--primary-color", "--color-primary", "--primary")
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
-    for rule in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
-        selector, declarations = rule.groups()
-        for declaration in re.finditer(r"([\w-]+)\s*:\s*(#[0-9a-fA-F]{3,6}\b|rgb\([^)]*\))", declarations):
-            property_name, value = declaration.groups()
+    # Split complete blocks and declarations rather than retrying an unanchored
+    # regex at every byte of a large/truncated inline font or data URL.
+    for block in css.split("}")[:-1]:
+        if "{" not in block:
+            continue
+        selector, declarations = block.rsplit("{", 1)
+        for declaration in declarations.split(";"):
+            property_name, separator, raw_value = declaration.partition(":")
+            property_name = property_name.strip()
+            if not separator or not re.fullmatch(r"[\w-]+", property_name):
+                continue
+            value_match = re.match(r"\s*(#[0-9a-fA-F]{3,6}\b|rgb\([^)]*\))", raw_value)
+            if not value_match:
+                continue
+            value = value_match.group(1)
             color = normalize_color(value)
             if not color:
                 continue
