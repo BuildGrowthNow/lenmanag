@@ -12,6 +12,7 @@ from app.core.static_html_generator import (
     _remove_generated_asset_references,
     _validate_generated_document,
     _verified_contact_data,
+    _DocumentStructureParser,
     _build_static_html_prompt,
     _apply_static_safety_layer,
     _runtime_bundle_prefix,
@@ -251,6 +252,37 @@ def test_fatal_runtime_health_blocks_readiness() -> None:
 def test_document_requires_closed_structure() -> None:
     with pytest.raises(ValueError):
         _validate_generated_document("<!DOCTYPE html><html><head></head><body>", "a{}", "const a = 1;")
+
+
+def test_document_structure_parser_recovers_from_misnested_and_unmatched_closing_tags() -> None:
+    parser = _DocumentStructureParser()
+    parser.feed("<!doctype html><html><head></head><body><main><div><span>x</div></missing></main></body></html>")
+    parser.close()
+    assert parser.seen >= {"html", "head", "body", "main", "div", "span"}
+    assert parser.stack == []
+
+
+def test_provider_artifact_restores_omitted_verified_office_phone() -> None:
+    brief = _brief_with_logo(None)
+    brief.contactInfo = {"officePhone": "+1 (609) 555-1234"}
+    extraction = SimpleNamespace(
+        summary=SimpleNamespace(companyName="Green Leaf Painter"),
+        contactInfo=SimpleNamespace(
+            model_dump=lambda **_kwargs: {"officePhone": "+1 (609) 555-1234"}
+        ),
+        analysis=SimpleNamespace(testimonials=[]),
+        extractedTestimonials=[],
+    )
+    html, _css, _js = _prepare_provider_artifact(
+        "<!doctype html><html><head></head><body><main>Approved content</main>"
+        "<footer>© Green Leaf Painter</footer></body></html>",
+        "body {}",
+        "const ready = true;",
+        brief,
+        extraction,
+    )
+    assert "+1 (609) 555-1234" in html
+    assert 'href="tel:+16095551234"' in html
 
 
 def _brief_with_logo(logo: str | None):

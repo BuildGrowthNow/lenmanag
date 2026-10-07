@@ -1025,9 +1025,14 @@ class _DocumentStructureParser(HTMLParser):
             self.stack.append(tag.lower())
 
     def handle_endtag(self, tag: str) -> None:
-        if not self.stack or self.stack[-1] != tag.lower():
-            raise ValueError(f"Malformed HTML closing tag: </{tag}>")
-        self.stack.pop()
+        normalized = tag.lower()
+        # HTML browsers implicitly close descendants when an ancestor closes,
+        # and ignore unmatched end tags. Mirror that recovery here so harmless
+        # provider nesting mistakes do not discard an otherwise complete page.
+        # The actual browser render remains the final structural/runtime check.
+        if normalized in self.stack:
+            stack_index = len(self.stack) - 1 - self.stack[::-1].index(normalized)
+            del self.stack[stack_index:]
 
 
 def _validate_generated_document(
@@ -1070,7 +1075,20 @@ def _validate_generated_document(
     if runtime_errors:
         raise ValueError(runtime_errors[0])
     prohibited = r"\b(?:xxx|xxxx|000-0000|555[- )]?\d{3,4}|lorem ipsum|example\.com|your@email\.com|todo|coming soon|contact us for details|image placeholder)\b"
-    placeholder_match = re.search(prohibited, "\n".join((html, css, js)), re.I)
+    placeholder_source = "\n".join((html, css, js))
+    # A 555 number is usually a generated placeholder, but it may be genuine
+    # source-derived contact data. Exempt only exact approved phone values.
+    if brief is not None and extraction is not None:
+        try:
+            approved_contacts = _verified_contact_data(brief, extraction)
+        except Exception:
+            approved_contacts = {}
+        for key, value in approved_contacts.items():
+            if "phone" in key.lower() and value:
+                placeholder_source = re.sub(
+                    re.escape(value), "", placeholder_source, flags=re.I
+                )
+    placeholder_match = re.search(prohibited, placeholder_source, re.I)
     if placeholder_match:
         raise ValueError(
             "Generated output contains prohibited placeholder content: "
@@ -2218,6 +2236,43 @@ def _prepare_provider_artifact(
         ),
         None,
     )
+    # Verified contact details are deterministic source data. Restore them
+    # when the model omits them, instead of rejecting an otherwise usable
+    # artifact for a small content omission.
+    if verified_phone:
+        visible_html = re.sub(
+            r"<(?:script|style|noscript)\b[^>]*>.*?</(?:script|style|noscript)\s*>",
+            " ",
+            html,
+            flags=re.I | re.S,
+        )
+        visible_text = re.sub(r"<[^>]+>", " ", visible_html)
+        if not _has_semantic_phrase(visible_text, verified_phone):
+            telephone_target = re.sub(r"[^0-9+]", "", verified_phone)
+            phone_link = (
+                f'<a class="lq-verified-phone" href="tel:{escape(telephone_target, quote=True)}">'
+                f'{escape(verified_phone)}</a>'
+            )
+            contact_markup = (
+                '<div class="lq-verified-contact" aria-label="Verified contact information">'
+                f'<span>Call </span>{phone_link}</div>'
+            )
+            if re.search(r"</footer\s*>", html, re.I):
+                html = re.sub(
+                    r"</footer\s*>",
+                    f"{contact_markup}</footer>",
+                    html,
+                    count=1,
+                    flags=re.I,
+                )
+            elif re.search(r"</body\s*>", html, re.I):
+                html = re.sub(
+                    r"</body\s*>",
+                    f'<section id="contact" aria-label="Contact">{contact_markup}</section></body>',
+                    html,
+                    count=1,
+                    flags=re.I,
+                )
     cta_fallback = conversion_action if conversion_action else "Contact our team"
     html = re.sub(
         r"\byour@email\.com\b",
@@ -2229,9 +2284,17 @@ def _prepare_provider_artifact(
     html = re.sub(r"\b(?:coming soon|image placeholder)\b", "", html, flags=re.I)
     html = re.sub(r"\bcontact us for details\b", cta_fallback, html, flags=re.I)
     safe_phone_or_company = str(verified_phone or company_name)
+
+    def replace_unverified_placeholder_phone(match: re.Match[str]) -> str:
+        candidate_digits = re.sub(r"\D", "", match.group(0))
+        approved_digits = re.sub(r"\D", "", verified_phone or "")
+        if candidate_digits and candidate_digits in approved_digits:
+            return match.group(0)
+        return safe_phone_or_company
+
     html = re.sub(
         r"\b555[- )]?\d{3,4}\b|\b000[- )]?\d{3,4}\b",
-        safe_phone_or_company,
+        replace_unverified_placeholder_phone,
         html,
         flags=re.I,
     )
