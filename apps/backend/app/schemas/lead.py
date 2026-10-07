@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 GenerationType = Literal["html_v1", "html_v2", "html_v3", "nextjs"]
 LeadSourceType = Literal["csv", "manual", "crm", "future"]
 LeadStatus = Literal["new", "needs_review", "archived"]
-JobStatus = Literal["queued", "running", "partial", "completed", "failed", "superseded"]
+JobStatus = Literal["queued", "running", "completed", "failed"]
 JobType = Literal[
     "lead_import",
     "lead_create",
@@ -144,7 +144,6 @@ class LeadListItem(BaseModel):
     normalizedDomain: str
     status: LeadStatus
     pipelineStage: PipelineStage = "new"
-    latestGenerationRunId: Optional[str] = None
     pipelineMode: PipelineMode = "auto"
     pipelineStatusDetail: Optional[str] = None
     industry: Optional[str] = None
@@ -153,7 +152,6 @@ class LeadListItem(BaseModel):
     version: int
     latestJob: Optional[JobSummary] = None
     redesignSlug: Optional[str] = None
-    clientShareSiteIds: list[str] = Field(default_factory=list)
     createdAt: datetime
     updatedAt: datetime
 
@@ -176,14 +174,13 @@ class LeadDetail(BaseModel):
     pipelineStatusDetail: Optional[str] = None
     industry: Optional[str] = None
     notes: Optional[str] = None
-    generationTypes: list[GenerationType] = Field(default=["html_v1", "html_v2", "html_v3"])
+    generationTypes: list[GenerationType] = Field(default=["nextjs"])
     missingFields: list[str] = Field(default_factory=list)
     version: int
     latestJob: Optional[JobSummary] = None
     jobs: list[JobSummary] = Field(default_factory=list)
     pipelineEvents: list[PipelineEvent] = Field(default_factory=list)
     redesignSlug: Optional[str] = None
-    clientShareSiteIds: list[str] = Field(default_factory=list)
     createdAt: datetime
     updatedAt: datetime
     archivedAt: Optional[datetime] = None
@@ -198,7 +195,7 @@ class LeadUpsertRequest(BaseModel):
     pipelineMode: PipelineMode = "auto"
 
     generationTypes: list[GenerationType] = Field(
-        default=["html_v1", "html_v2", "html_v3"],
+        default=["nextjs"],
         description="Types of sites to generate. Can select 1-4 options.",
         min_length=1,
         max_length=4,
@@ -214,7 +211,6 @@ class LeadPatchRequest(BaseModel):
     status: Optional[LeadStatus] = None
     pipelineMode: Optional[PipelineMode] = None
     pipelineStage: Optional[PipelineStage] = None
-    latestGenerationRunId: Optional[str] = None
     generationTypes: Optional[list[GenerationType]] = None
 
 

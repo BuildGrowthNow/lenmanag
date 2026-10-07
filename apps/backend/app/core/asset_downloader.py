@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -11,6 +10,13 @@ from typing import List, Optional
 
 import httpx
 import tempfile
+
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential_jitter,
+    retry_if_exception_type,
+)
 
 from .asset_storage import LocalAssetStorage
 
@@ -27,8 +33,6 @@ from prometheus_client import Counter, Histogram
 # Metrics
 from .config import get_settings
 from .audit import write_asset_audit_log
-
-logger = logging.getLogger(__name__)
 
 DOWNLOAD_COUNTER = Counter("asset_download_total", "Total asset download attempts")
 DOWNLOAD_FAILURES = Counter(
@@ -51,8 +55,6 @@ class AssetDownloadResult:
     expires_at: Optional[datetime] = None
     checksum: Optional[str] = None
     error: Optional[str] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
 
 
 class AssetDownloader:
@@ -96,39 +98,27 @@ class AssetDownloader:
             max_bytes = self.settings.asset_max_aggregate_bytes
         return total_bytes <= max_bytes
 
-    def validate_image_file(self, path: str, content_type: str) -> tuple[int, int]:
-        """Decode images and reject empty or zero-dimension files."""
-        if not content_type.lower().startswith("image/"):
-            return (0, 0)
-        if os.path.getsize(path) == 0:
-            raise ValueError("image is empty")
-        try:
-            from PIL import Image
-
-            with Image.open(path) as image:
-                image.verify()
-            with Image.open(path) as image:
-                width, height = image.size
-        except Exception as exc:
-            raise ValueError(f"image decode failed: {exc}") from exc
-        if width <= 0 or height <= 0:
-            raise ValueError("image has zero dimensions")
-        return width, height
-
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=0.1, max=5),
+        retry=retry_if_exception_type(Exception),
+    )
     async def _stream_to_tempfile(
-        self, response: httpx.Response, temp_path: str, max_bytes: int
+        self, client: httpx.AsyncClient, url: str, temp_path: str, max_bytes: int
     ) -> int:
-        """Write the already-open response to disk without issuing another GET."""
         bytes_written = 0
-        response.raise_for_status()
-        with open(temp_path, "wb") as output:
-            async for chunk in response.aiter_bytes(chunk_size=64 * 1024):
+        hasher = hashlib.sha256()
+        async with client.stream("GET", url) as resp:
+            resp.raise_for_status()
+            async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
                 if not chunk:
                     break
                 bytes_written += len(chunk)
                 if max_bytes and bytes_written > max_bytes:
                     raise ValueError(f"file exceeded max bytes limit: {bytes_written}")
-                output.write(chunk)
+                # write to file in thread to avoid blocking
+                await asyncio.to_thread(lambda b: open(temp_path, "ab").write(b), chunk)
+                hasher.update(chunk)
 
         return bytes_written
 
@@ -175,11 +165,10 @@ class AssetDownloader:
                         temp_f = tf.name
                         tf.close()
 
-                        # Stream the response that was already opened above.
-                        # Re-opening the URL here used to cause duplicate GETs.
+                        # write streaming using helper
                         try:
                             await self._stream_to_tempfile(
-                                resp, temp_f, self.settings.asset_max_file_bytes
+                                client, url, temp_f, self.settings.asset_max_file_bytes
                             )
                         except Exception as ex:
                             # cleanup
@@ -191,9 +180,6 @@ class AssetDownloader:
                             return res
 
                         # compute checksum and open file for upload
-                        res.width, res.height = self.validate_image_file(
-                            temp_f, res.content_type or ""
-                        )
                         hasher = hashlib.sha256()
                         with open(temp_f, "rb") as fh:
                             while True:
@@ -226,47 +212,37 @@ class AssetDownloader:
                         DOWNLOAD_BYTES.inc(int(res.bytes or 0))
                         DOWNLOAD_LATENCY.observe(__import__("time").time() - start)
 
-                        # Audit logging must never turn a successful asset
-                        # download into a failed one. Crawls run in a worker
-                        # thread and an audit client can be bound to another
-                        # event loop; retain the cached object regardless.
-                        try:
-                            await write_asset_audit_log(
-                                actor_user_id=actor_user_id,
-                                lead_id=lead_id,
-                                asset_url=url,
-                                action="asset_download",
-                                metadata={
-                                    "bytes": stored_bytes,
-                                    "contentType": res.content_type,
-                                    "checksum": checksum,
-                                    "storageUri": uri,
-                                    "success": True,
-                                },
-                            )
-                        except Exception as audit_exc:
-                            logger.warning("Asset audit log skipped for %s: %s", url, audit_exc)
+                        # Audit log successful download
+                        await write_asset_audit_log(
+                            actor_user_id=actor_user_id,
+                            lead_id=lead_id,
+                            asset_url=url,
+                            action="asset_download",
+                            metadata={
+                                "bytes": stored_bytes,
+                                "contentType": res.content_type,
+                                "checksum": checksum,
+                                "storageUri": uri,
+                                "success": True,
+                            },
+                        )
 
                         return res
             except Exception as ex:
                 DOWNLOAD_FAILURES.inc()
                 res.error = str(ex)
 
-                # Audit logging is best effort and must not mask the original
-                # download error (or create a second event-loop failure).
-                try:
-                    await write_asset_audit_log(
-                        actor_user_id=actor_user_id,
-                        lead_id=lead_id,
-                        asset_url=url,
-                        action="asset_download_failed",
-                        metadata={
-                            "error": str(ex),
-                            "success": False,
-                        },
-                    )
-                except Exception as audit_exc:
-                    logger.warning("Asset failure audit skipped for %s: %s", url, audit_exc)
+                # Audit log failed download
+                await write_asset_audit_log(
+                    actor_user_id=actor_user_id,
+                    lead_id=lead_id,
+                    asset_url=url,
+                    action="asset_download_failed",
+                    metadata={
+                        "error": str(ex),
+                        "success": False,
+                    },
+                )
 
                 return res
             finally:

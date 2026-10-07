@@ -3,55 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from io import BytesIO
 from typing import Any
 
-from PIL import Image, ImageChops, ImageFilter, ImageStat, ImageOps
 from app.core.config import get_settings
 from app.core.screenshot_analyzer import get_screenshot_analyzer
 from app.schemas.site import GeneratedSite
 
 logger = logging.getLogger(__name__)
-
-RENDERED_VARIANT_MIN_DIFFERENCE = 0.12
-RENDERED_VARIANT_MIN_STRUCTURAL_DIFFERENCE = 0.18
-
-
-def rendered_visual_difference(screenshot_a: bytes, screenshot_b: bytes) -> float:
-    """Return a perceptual pixel difference from 0.0 (same) to 1.0."""
-    first = Image.open(BytesIO(screenshot_a)).convert("RGB")
-    second = Image.open(BytesIO(screenshot_b)).convert("RGB")
-    size = (96, 96)
-    canvas_a = first.resize(size)
-    canvas_b = second.resize(size)
-    difference = ImageChops.difference(canvas_a, canvas_b)
-    mean = sum(ImageStat.Stat(difference).mean) / (3 * 255)
-    return round(min(1.0, max(0.0, mean)), 4)
-
-
-def rendered_structural_difference(screenshot_a: bytes, screenshot_b: bytes) -> float:
-    """Compare edge/layout evidence while discounting palette-only changes."""
-    first = Image.open(BytesIO(screenshot_a)).convert("RGB").resize((192, 192))
-    second = Image.open(BytesIO(screenshot_b)).convert("RGB").resize((192, 192))
-    first_edges = ImageOps.grayscale(first).filter(ImageFilter.FIND_EDGES)
-    second_edges = ImageOps.grayscale(second).filter(ImageFilter.FIND_EDGES)
-    difference = ImageChops.difference(first_edges, second_edges)
-    mean = ImageStat.Stat(difference).mean[0] / 255
-    return round(min(1.0, max(0.0, mean)), 4)
-
-
-def rendered_variant_difference_score(screenshot_a: bytes, screenshot_b: bytes) -> dict[str, Any]:
-    """Return both palette and structural evidence for a variant gate."""
-    color = rendered_visual_difference(screenshot_a, screenshot_b)
-    structural = rendered_structural_difference(screenshot_a, screenshot_b)
-    composite = round((structural * 0.8) + (color * 0.2), 4)
-    return {
-        "difference": color,
-        "structuralDifference": structural,
-        "compositeDifference": composite,
-        "paletteOnly": structural < RENDERED_VARIANT_MIN_STRUCTURAL_DIFFERENCE and color >= RENDERED_VARIANT_MIN_DIFFERENCE,
-        "distinct": structural >= RENDERED_VARIANT_MIN_STRUCTURAL_DIFFERENCE,
-    }
 
 
 class ScreenshotComparator:
@@ -83,21 +41,6 @@ class ScreenshotComparator:
         # Simple hash comparison for now
         # Can be enhanced with weighted similarity scoring
         return 1.0 if hash_a == hash_b else 0.0
-
-    def compare_rendered_screenshots(
-        self,
-        screenshot_a: bytes,
-        screenshot_b: bytes,
-        *,
-        minimum_difference: float = RENDERED_VARIANT_MIN_DIFFERENCE,
-    ) -> dict[str, Any]:
-        """Enforce a final rendered-difference gate between variants."""
-        evidence = rendered_variant_difference_score(screenshot_a, screenshot_b)
-        return {
-            **evidence,
-            "minimumDifference": minimum_difference,
-            "minimumStructuralDifference": RENDERED_VARIANT_MIN_STRUCTURAL_DIFFERENCE,
-        }
 
     async def compare_layout_screenshot(
         self,
@@ -186,8 +129,7 @@ class ScreenshotComparator:
                 # attach screenshotRefs and rely on existing quality scoring.
                 logger.error("QA analysis failed for %s: %s", site_id, e)
                 qa_result = {
-                    "qualityScore": None,
-                    "available": False,
+                    "qualityScore": 0,
                     "sectionScores": [],
                     "rawCritique": f"QA analysis failed: {e}",
                     "readinessAssessment": "needs_refinement",
@@ -200,8 +142,6 @@ class ScreenshotComparator:
                 "mobileScreenshotUrl": screenshots["mobileUrl"],
                 "layoutHash": screenshots["layoutHash"],
                 "qualityScore": qa_result.get("qualityScore", 50),
-                "qualityScoreSource": "visual" if qa_result.get("available", False) else "fallback",
-                "qaAvailable": bool(qa_result.get("available", False)),
                 "sectionScores": qa_result.get("sectionScores", []),
                 "rawCritique": qa_result.get("rawCritique", ""),
                 "readinessAssessment": qa_result.get(

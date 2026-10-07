@@ -14,14 +14,12 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.asset_utils import (
-    get_cached_asset_url,
-    get_cached_asset_urls,
+    get_best_asset_url,
+    get_best_asset_urls,
     log_asset_cache_stats,
 )
 from app.core.llm import get_llm_client
-from app.core.color_system import build_brand_palette
 from app.core.variant_strategy import get_variant_strategy
-from app.core.brief_requirements import validate_master_brief_requirements
 from app.schemas.brief import (
     BrandAssets,
     CreativeDirection,
@@ -183,7 +181,7 @@ def _build_extraction_summary(extraction: ExtractionSnapshot) -> str:
 
             logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
             if logos:
-                logo_url = get_cached_asset_url(logos[0])
+                logo_url = get_best_asset_url(logos[0])
                 if logo_url:
                     summary_parts.append(f"Logo: {logo_url}")
 
@@ -318,8 +316,6 @@ Return a JSON object with this structure:
   "visualStyle": "Overall aesthetic (be specific, not 'clean and modern')",
   "colorStrategy": "How colors create mood (e.g., 'dark canvas with electric blue accents for tech authority')",
   "motionLevel": "none|subtle|moderate|dramatic",
-  "heroMode": "image_led|typography_only",
-  "heroArchetype": "photography|typography|svg_diagram|motion_graphic|webgl_fallback|hybrid",
   "specialEffects": ["parallax-scroll", "3d-hero", "particle-bg", "cursor-glow", "morphing-shapes"],
   "creativeDirection": {{
     "designConcept": "One sentence capturing the creative vision (e.g., 'A dark command center where data comes alive')",
@@ -352,8 +348,6 @@ Return a JSON object with this structure:
 
 CRITICAL:
 - Every field must be populated with real, specific content
-- Choose heroMode explicitly. Use image_led only when approved cached photography or a verified logo/visual asset is available and the hero genuinely benefits from it; otherwise use typography_only. Never choose image_led for an empty media shell.
-- Choose heroArchetype explicitly. This is the visible creative treatment, not a media permission: photography uses approved extracted imagery, typography uses type as the visual, svg_diagram uses inline SVG/diagrams, motion_graphic uses implemented animation, webgl_fallback uses Three.js/WebGL plus a real 2D fallback, and hybrid combines at least two of these. Do not select photography without approved photography or webgl_fallback without a fallback-capable effect.
 - The creativeDirection must have SPECIFIC techniques, not generic descriptions
 - suggestedApproach for each section should describe a specific component pattern
 - Think like an Awwwards judge — what makes this site worth featuring?
@@ -395,8 +389,6 @@ def _build_refinement_prompt(
         ],
         "visualStyle": previous_brief.visualStyle,
         "motionLevel": previous_brief.motionLevel,
-        "heroMode": getattr(previous_brief, "heroMode", "typography_only"),
-        "heroArchetype": getattr(previous_brief, "heroArchetype", "typography"),
         "creativeDirection": {
             "designConcept": previous_brief.creativeDirection.designConcept,
             "heroTreatment": previous_brief.creativeDirection.heroTreatment,
@@ -429,8 +421,6 @@ Return a JSON object with this structure:
   "visualStyle": "Description of look/feel (be specific)",
   "colorStrategy": "How colors should be used",
   "motionLevel": "none|subtle|moderate|dramatic",
-  "heroMode": "image_led|typography_only",
-  "heroArchetype": "photography|typography|svg_diagram|motion_graphic|webgl_fallback|hybrid",
   "specialEffects": ["3d-hero", "parallax-scroll"],
   "creativeDirection": {{
     "designConcept": "One sentence capturing the creative vision",
@@ -489,138 +479,23 @@ def _build_master_brief_from_response(
     if extraction.brandAssetCues:
         colors = [c for c in extraction.brandAssetCues if c.assetType == "color"]
         if colors:
-            palette = build_brand_palette([c.value for c in colors])
-            brand_assets.primaryColor = str(palette["primary"])
-            brand_assets.secondaryColor = str(palette["secondary"])
-            brand_assets.palette = {
-                k: str(v)
-                for k, v in palette.items()
-                if k in {"primary", "secondary", "accent"}
-            }
-            brand_assets.derivedColors = [str(v) for v in palette["derived"]]
+            brand_assets.primaryColor = colors[0].value
+            if len(colors) > 1:
+                brand_assets.secondaryColor = colors[1].value
 
         logos = [c for c in extraction.brandAssetCues if c.assetType == "logo"]
         if logos:
-            # A high-confidence stale homepage record is not a logo. Rank only
-            # usable asset URLs, then penalize the service/icon names commonly
-            # misclassified by crawlers.
-            ranked_logos = sorted(
-                logos,
-                key=lambda item: (
-                    bool(get_cached_asset_url(item)),
-                    -any(
-                        token in f"{item.label} {item.value}".lower()
-                        for token in (
-                            "water.svg",
-                            "settings",
-                            "valve",
-                            "favicon",
-                            "icon",
-                        )
-                    ),
-                    item.confidence,
-                ),
-                reverse=True,
-            )
-            usable_logos = [item for item in ranked_logos if get_cached_asset_url(item)]
-            brand_assets.logoUrl = (
-                get_cached_asset_url(usable_logos[0]) if usable_logos else None
-            )
-            brand_assets.logoVariants = list(
-                dict.fromkeys(
-                    url
-                    for url in (get_cached_asset_url(item) for item in usable_logos)
-                    if url
-                )
-            )
-            for logo in usable_logos:
-                url = get_cached_asset_url(logo)
-                hint = f"{logo.label} {logo.note or ''} {url or ''}".lower()
-                if (
-                    url
-                    and not brand_assets.logoLightUrl
-                    and any(token in hint for token in ("light", "white", "inverse"))
-                ):
-                    brand_assets.logoLightUrl = url
-                if (
-                    url
-                    and not brand_assets.logoDarkUrl
-                    and any(token in hint for token in ("dark", "black", "primary"))
-                ):
-                    brand_assets.logoDarkUrl = url
+            brand_assets.logoUrl = get_best_asset_url(logos[0])
             log_asset_cache_stats(logos, "logo", lead_id)
 
-        fonts = sorted(
-            extraction.extractedFonts,
-            key=lambda item: (item.confidence, bool(item.fontUrl)),
-            reverse=True,
-        )
+        fonts = [c for c in extraction.brandAssetCues if c.assetType == "typography"]
         if fonts:
-            font = fonts[0]
-            brand_assets.fontFamily = font.fontFamily
-            font_items = [
-                item.model_dump() if hasattr(item, "model_dump") else dict(item)
-                for item in extraction.extractedFonts
-            ]
-            font_cues = [
-                c for c in extraction.brandAssetCues if c.assetType == "typography"
-            ]
-            brand_assets.fontUrl = next(
-                (
-                    get_cached_asset_url(item)
-                    for item in font_cues
-                    if get_cached_asset_url(item)
-                ),
-                None,
-            )
-            if not brand_assets.fontUrl:
-                brand_assets.fontUrl = next(
-                    (
-                        get_cached_asset_url(item)
-                        for item in font_items
-                        if get_cached_asset_url(item)
-                    ),
-                    None,
-                )
-            brand_assets.fontWeight = font.fontWeight
-            brand_assets.fontStyle = font.fontStyle
-        else:
-            typography = [
-                c for c in extraction.brandAssetCues if c.assetType == "typography"
-            ]
-            if typography:
-                brand_assets.fontFamily = typography[0].value
-                brand_assets.fontUrl = get_cached_asset_url(typography[0])
+            brand_assets.fontFamily = fonts[0].value
 
-        images = sorted(
-            extraction.extractedImages,
-            key=lambda item: (
-                item.confidence,
-                item.category != "unknown",
-                item.width or 0,
-            ),
-            reverse=True,
-        )
-        cue_images = [c for c in extraction.brandAssetCues if c.assetType == "image"]
-        cached_image_urls = get_cached_asset_urls(cue_images, max_count=50)
-        cached_image_set = set(cached_image_urls)
-        image_inventory: list[dict[str, Any]] = []
-        for image in images[:50]:
-            item = image.model_dump()
-            cached_item_url = get_cached_asset_url(item)
-            if cached_item_url:
-                item["url"] = cached_item_url
-            if item.get("url") in cached_image_set or str(
-                item.get("url", "")
-            ).startswith(("data:", "/api/internal/assets/")):
-                image_inventory.append(item)
-        brand_assets.imageInventory = image_inventory
-        brand_assets.imageUrls = [
-            item["url"] for item in image_inventory if item.get("url")
-        ][:5]
-        if not brand_assets.imageUrls:
-            brand_assets.imageUrls = cached_image_urls[:5]
-        log_asset_cache_stats(cue_images, "image", lead_id)
+        images = [c for c in extraction.brandAssetCues if c.assetType == "image"]
+        brand_assets.imageUrls = get_best_asset_urls(images, max_count=5)
+        if images:
+            log_asset_cache_stats(images, "image", lead_id)
 
     # Extract content - prefer analyzed data, fall back to keywords
     extracted_content: dict[str, list[str]] = {}
@@ -648,12 +523,6 @@ def _build_master_brief_from_response(
         extracted_content["valueProposition"] = [extraction.analysis.valueProposition]
     if extraction.analysis and extraction.analysis.positioning:
         extracted_content["positioning"] = [extraction.analysis.positioning]
-    if extraction.analysis and extraction.analysis.testimonials:
-        extracted_content["testimonials"] = [
-            testimonial.quote
-            for testimonial in extraction.analysis.testimonials
-            if testimonial.quote
-        ]
 
     # Build sections
     sections = []
@@ -719,80 +588,6 @@ def _build_master_brief_from_response(
     if design_mode not in valid_design_modes:
         design_mode = None
 
-    # The hero media decision is part of the approved brief contract. Keep a
-    # conservative fallback for older LLM responses, and never allow an
-    # image-led brief when the extractor did not produce a usable cached asset.
-    requested_hero_mode = str(brief_data.get("heroMode", "")).strip().lower()
-    has_approved_hero_asset = bool(
-        brand_assets.imageUrls
-        or brand_assets.logoUrl
-        or brand_assets.logoLightUrl
-        or brand_assets.logoDarkUrl
-        or brand_assets.logoVariants
-    )
-    if requested_hero_mode not in {"image_led", "typography_only"}:
-        requested_hero_mode = "image_led" if has_approved_hero_asset else "typography_only"
-    hero_mode = (
-        "image_led"
-        if requested_hero_mode == "image_led" and has_approved_hero_asset
-        else "typography_only"
-    )
-
-    # Normalize creative hero intent separately from the safety-oriented media
-    # mode. Persisting this choice makes every renderer accountable for the
-    # visual idea selected by the brief instead of silently defaulting to a
-    # generic text hero.
-    requested_hero_archetype = str(brief_data.get("heroArchetype", "")).strip().lower()
-    archetype_aliases = {
-        "image": "photography",
-        "image_led": "photography",
-        "photo": "photography",
-        "photographic": "photography",
-        "type": "typography",
-        "kinetic_typography": "motion_graphic",
-        "svg": "svg_diagram",
-        "diagram": "svg_diagram",
-        "webgl": "webgl_fallback",
-        "three": "webgl_fallback",
-        "motion": "motion_graphic",
-    }
-    requested_hero_archetype = archetype_aliases.get(
-        requested_hero_archetype, requested_hero_archetype
-    )
-    valid_hero_archetypes = {
-        "photography",
-        "typography",
-        "svg_diagram",
-        "motion_graphic",
-        "webgl_fallback",
-        "hybrid",
-    }
-    direction_text = " ".join(
-        str(value or "")
-        for value in (
-            creative_direction.heroTreatment,
-            creative_direction.signatureTechnique,
-            *creative_direction.inspirationKeywords,
-            *brief_data.get("specialEffects", []),
-        )
-    ).lower()
-    if requested_hero_archetype not in valid_hero_archetypes:
-        if any(token in direction_text for token in ("webgl", "three", "3d")):
-            requested_hero_archetype = "webgl_fallback"
-        elif any(token in direction_text for token in ("photo", "photograph", "image", "video", "full-bleed")) and brand_assets.imageUrls:
-            requested_hero_archetype = "photography"
-        elif any(token in direction_text for token in ("svg", "diagram", "geometric", "illustration")):
-            requested_hero_archetype = "svg_diagram"
-        elif any(token in direction_text for token in ("motion", "kinetic", "animation", "particle", "parallax")):
-            requested_hero_archetype = "motion_graphic"
-        else:
-            requested_hero_archetype = "typography"
-    if requested_hero_archetype == "photography" and not brand_assets.imageUrls:
-        requested_hero_archetype = "svg_diagram" if "svg" in direction_text or "diagram" in direction_text else "typography"
-    hero_archetype = requested_hero_archetype
-    if hero_archetype in {"typography", "svg_diagram", "motion_graphic", "webgl_fallback"}:
-        hero_mode = "typography_only"
-
     master_brief = MasterBrief(
         id=str(uuid4()),
         leadId=lead_id,
@@ -808,8 +603,6 @@ def _build_master_brief_from_response(
         visualStyle=brief_data.get("visualStyle", "Clean and modern"),
         colorStrategy=brief_data.get("colorStrategy", "Neutral with subtle accents"),
         motionLevel=motion_level,
-        heroMode=hero_mode,
-        heroArchetype=hero_archetype,
         specialEffects=brief_data.get("specialEffects", []),
         creativeDirection=creative_direction,
         designMode=design_mode,
@@ -822,11 +615,6 @@ def _build_master_brief_from_response(
             "ctaStrategy", "Primary CTA: Contact, Secondary: Learn More"
         ),
         extractedContent=extracted_content,
-        contactInfo={
-            key: str(value)
-            for key, value in extraction.contactInfo.model_dump().items()
-            if value and key not in {"confidence", "sourceUrl"}
-        },
         brandAssets=brand_assets,
         competitorInsights="",
         confidenceScore=min(100, max(0, brief_data.get("confidenceScore", 75))),
@@ -837,5 +625,4 @@ def _build_master_brief_from_response(
         updatedAt=_now(),
     )
 
-    master_brief.missingRequirements = validate_master_brief_requirements(master_brief)
     return master_brief

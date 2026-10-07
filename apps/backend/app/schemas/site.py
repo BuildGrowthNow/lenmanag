@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal, Optional
-from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from app.schemas.brief import BriefEvidence, BriefSourceReference
 
@@ -203,8 +202,6 @@ class SiteReviewQueueItem(BaseModel):
     reviewRubric: list[SiteQualityCheck] = Field(default_factory=list)
     screenshotCount: int = 0
     screenshotRefs: list[SiteScreenshotMetadata] = Field(default_factory=list)
-    runtimeQA: Optional[dict[str, Any]] = None
-    qualityGateReport: Optional[dict[str, Any]] = None
     sourceAttribution: Optional[SiteSourceAttribution] = None
     isManuallyRefined: bool = False
     refinedCount: int = 0
@@ -300,17 +297,6 @@ class GeneratedSiteVersion(BaseModel):
     siteId: str
     leadId: str
     generationJobId: Optional[str] = None
-    generationRunId: Optional[str] = None
-    extractionId: Optional[str] = None
-    extractionVersion: Optional[int] = None
-    analysisId: Optional[str] = None
-    brandRevision: Optional[int] = None
-    brandSnapshotHash: Optional[str] = None
-    generationInputHash: Optional[str] = None
-    variantBriefId: Optional[str] = None
-    variantBriefVersion: Optional[int] = None
-    generatorVersion: Optional[str] = None
-    promptVersion: Optional[str] = None
     version: int
     briefId: str
     briefVersion: int
@@ -326,7 +312,6 @@ class GeneratedSiteVersion(BaseModel):
     ctaStrategy: CtaStrategy
     navigationConfig: Optional[dict[str, Any]] = None
     qualityScore: int
-    qualityScoreSource: Literal["visual", "fallback"] = "fallback"
     readinessStatus: SiteReadinessStatus
     qaStatus: SiteQaStatus
     reviewRubric: list[SiteQualityCheck] = Field(default_factory=list)
@@ -337,10 +322,6 @@ class GeneratedSiteVersion(BaseModel):
     browserReviewState: ReviewWorkflowState = "not_reviewed"
     publishApprovalState: PublishApprovalState = "pending"
     screenshotRefs: list[SiteScreenshotMetadata] = Field(default_factory=list)
-    runtimeQA: Optional[dict[str, Any]] = None
-    qualityGateReport: Optional[dict[str, Any]] = None
-    capabilityManifest: Optional[dict[str, Any]] = None
-    dependencyInventory: list[str] = Field(default_factory=list)
     latestReviewId: Optional[str] = None
     handoffRecordId: Optional[str] = None
     diversityNotes: list[str] = Field(default_factory=list)
@@ -379,17 +360,6 @@ class GeneratedSite(BaseModel):
     leadId: str
     userId: str = ""
     generationJobId: Optional[str] = None
-    generationRunId: Optional[str] = None
-    extractionId: Optional[str] = None
-    extractionVersion: Optional[int] = None
-    analysisId: Optional[str] = None
-    brandRevision: Optional[int] = None
-    brandSnapshotHash: Optional[str] = None
-    generationInputHash: Optional[str] = None
-    variantBriefId: Optional[str] = None
-    variantBriefVersion: Optional[int] = None
-    generatorVersion: Optional[str] = None
-    promptVersion: Optional[str] = None
     briefId: str
     briefVersion: int
     version: int
@@ -397,8 +367,6 @@ class GeneratedSite(BaseModel):
     # NEW: Variant identification
     variantType: VariantType = "nextjs"
     variantLabel: str = "Next.js Site"
-    variantTitle: Optional[str] = None
-    variantDescription: Optional[str] = None
     variantPosition: int = 1  # Display order: 1=first, 2=second, etc.
 
     # NEW: Static HTML output (for HTML variants only)
@@ -410,12 +378,6 @@ class GeneratedSite(BaseModel):
     )
     staticJsUrl: Optional[str] = Field(
         default=None, description="S3 URL to script.js for static variants"
-    )
-    staticCssCode: Optional[str] = Field(
-        default=None, description="Validated static CSS artifact for refinement and export"
-    )
-    staticJsCode: Optional[str] = Field(
-        default=None, description="Validated compiled static JS artifact for refinement and export"
     )
 
     themeId: str
@@ -431,8 +393,6 @@ class GeneratedSite(BaseModel):
     navigationConfig: Optional[dict[str, Any]] = None
     awwwardsPatternMetadata: Optional[dict[str, Any]] = None
     qualityScore: int
-    qualityScoreSource: Literal["visual", "fallback"] = "fallback"
-    capabilityManifest: Optional[dict[str, Any]] = None
     readinessStatus: SiteReadinessStatus
     qaStatus: SiteQaStatus
     reviewRubric: list[SiteQualityCheck] = Field(default_factory=list)
@@ -443,7 +403,6 @@ class GeneratedSite(BaseModel):
     browserReviewState: ReviewWorkflowState = "not_reviewed"
     publishApprovalState: PublishApprovalState = "pending"
     screenshotRefs: list[SiteScreenshotMetadata] = Field(default_factory=list)
-    qualityGateReport: Optional[dict[str, Any]] = None
     latestReviewId: Optional[str] = None
     handoffRecordId: Optional[str] = None
     diversityNotes: list[str] = Field(default_factory=list)
@@ -469,15 +428,6 @@ class GeneratedSite(BaseModel):
     )
     compiledBundleUrl: Optional[str] = Field(
         default=None, description="URL to the compiled JavaScript bundle (Next.js only)"
-    )
-    compiledCssUrl: Optional[str] = Field(
-        default=None, description="URL to the generated per-site stylesheet"
-    )
-    staticCssCode: Optional[str] = Field(
-        default=None, description="Validated static CSS artifact for refinement and export"
-    )
-    staticJsCode: Optional[str] = Field(
-        default=None, description="Validated compiled static JS artifact for refinement and export"
     )
     compilationStatus: Optional[str] = Field(
         default=None, description="Status of compilation: pending, success, failed"
@@ -555,37 +505,8 @@ class SiteOverrideCreateRequest(BaseModel):
 class RedesignVariant(BaseModel):
     siteId: str
     previewUrl: str
-    screenshotUrl: str = ""
+    screenshotUrl: str
     variantPosition: int
-    optionNumber: int = 1
-    variantLabel: Optional[str] = None
-    variantTitle: Optional[str] = None
-    variantDescription: Optional[str] = None
-
-
-class ClientShareRequest(BaseModel):
-    siteIds: list[str] = Field(default_factory=list)
-    bookingUrl: str | None = None
-
-    @field_validator("bookingUrl")  # type: ignore[misc]
-    @classmethod
-    def validate_booking_url(cls, value: str | None) -> str | None:
-        if value is None or not value.strip():
-            return None
-        parsed = urlparse(value.strip())
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("Book a call URL must be a valid http(s) URL.")
-        return value.strip()
-
-
-class ClientShareResponse(BaseModel):
-    id: str
-    leadId: str
-    slug: str
-    siteIds: list[str]
-    url: str
-    bookingUrl: str | None = None
-    updatedAt: datetime
 
 
 class RedesignPageData(BaseModel):
@@ -593,5 +514,4 @@ class RedesignPageData(BaseModel):
     companyName: Optional[str] = None
     contactName: Optional[str] = None
     logoUrl: Optional[str] = None
-    bookingUrl: str = "https://calendly.com/lenquant/sites"
     variants: list[RedesignVariant] = Field(default_factory=list)

@@ -4,7 +4,6 @@ import asyncio
 import csv
 import io
 import logging
-import os
 import re
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
@@ -33,7 +32,6 @@ from app.schemas.extraction import (
     PageInventoryResponse,
 )
 from app.schemas.job import JobQueueHealthItem, JobQueueHealthResponse
-from app.schemas.site import SiteGenerateRequest
 from app.schemas.lead import (
     ImportRowResult,
     JobRetryRequest,
@@ -261,21 +259,17 @@ def _lead_doc_to_detail(
         detectedWebsiteUrl=doc.get("detectedWebsiteUrl"),
         status=doc["status"],
         pipelineStage=doc.get("pipelineStage", "new"),
-        latestGenerationRunId=doc.get("latestGenerationRunId"),
         pipelineMode=doc.get("pipelineMode", "auto"),
         pipelineStatusDetail=doc.get("pipelineStatusDetail"),
         industry=doc.get("industry"),
         notes=doc.get("notes"),
-        generationTypes=doc.get("generationTypes", ["html_v1", "html_v2", "html_v3"]),
+        generationTypes=doc.get("generationTypes", ["nextjs"]),
         missingFields=list(doc.get("missingFields", [])),
         version=int(doc.get("version", 1)),
         latestJob=latest_job,
         jobs=[_job_doc_to_summary(job) for job in (jobs or [])],
         pipelineEvents=pipeline_events,
         redesignSlug=doc.get("redesignSlug"),
-        clientShareSiteIds=list(
-            (doc.get("clientShare") or {}).get("selectedSiteIds", [])
-        ),
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
         archivedAt=_serialize_datetime(doc.get("archivedAt")),
@@ -295,7 +289,6 @@ def _lead_doc_to_list_item(
         normalizedDomain=doc["normalizedDomain"],
         status=doc["status"],
         pipelineStage=doc.get("pipelineStage", "new"),
-        latestGenerationRunId=doc.get("latestGenerationRunId"),
         pipelineMode=doc.get("pipelineMode", "auto"),
         pipelineStatusDetail=doc.get("pipelineStatusDetail"),
         industry=doc.get("industry"),
@@ -304,9 +297,6 @@ def _lead_doc_to_list_item(
         version=int(doc.get("version", 1)),
         latestJob=_job_doc_to_summary(latest_job) if latest_job else None,
         redesignSlug=doc.get("redesignSlug"),
-        clientShareSiteIds=list(
-            (doc.get("clientShare") or {}).get("selectedSiteIds", [])
-        ),
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
     )
@@ -829,14 +819,12 @@ class LeadRepository:
                     metadata={"briefVersion": master_brief.version},
                 )
 
-                # Auto mode may recover from a completed partial crawl using
-                # evidence-safe fallbacks. A truly failed/no-data extraction is
-                # still rejected by approve_master_brief.
+                # Auto-approve the master brief.
+                # approve_master_brief already calls advance_pipeline_after_brief internally.
                 await self.approve_master_brief(
                     lead_id=lead_id,
                     approved_by="auto",
                     notes="Auto-approved in pipeline",
-                    allow_intentional_fallbacks=True,
                 )
 
             except Exception as exc:
@@ -878,8 +866,9 @@ class LeadRepository:
         await self._set_pipeline_stage(lead_id, "generating")
         try:
             lead = await self.get_lead(lead_id)
-            generation_types = (
-                lead.generationTypes if lead else ["html_v1", "html_v2", "html_v3"]
+            generation_types = lead.generationTypes if lead else ["nextjs"]
+            has_html_variants = any(
+                t in generation_types for t in ["html_v1", "html_v2", "html_v3"]
             )
 
             await self.log_pipeline_event(
@@ -894,30 +883,38 @@ class LeadRepository:
                 },
             )
 
-            from app.core.sites import site_repository
+            if len(generation_types) > 1 or has_html_variants:
+                from app.core.tasks import run_multi_variant_generation_task
 
-            # Always use the normal generation-run builder so the selected
-            # HTML variant strategies are pinned into the run snapshot. The
-            # legacy direct dispatch dropped those strategies and caused every
-            # html_v1/html_v2/html_v3 variant to be rejected as unknown.
-            generation_request = SiteGenerateRequest.model_validate(
-                {"variantTypes": generation_types}
-            )
-            job = await site_repository.queue_generation_job(
-                lead_id, request=generation_request
-            )
-            if job is None:
-                await self.log_pipeline_event(
-                    lead_id,
-                    event_type="site_generation_failed",
-                    status="error",
-                    message="Site generation could not be queued",
+                job = await self._create_job(
+                    lead_ids=[lead_id],
+                    job_type="site_generate",
+                    status="queued",
+                    progress=0,
+                    step=f"Queued: generating {len(generation_types)} variants",
+                    metadata={"generationTypes": generation_types},
                 )
-                await self._set_pipeline_stage(
-                    lead_id,
-                    "needs_attention",
-                    detail="Site generation could not be queued.",
+                run_multi_variant_generation_task.delay(  # type: ignore[attr-defined]
+                    lead_id=lead_id,
+                    job_id=job.id,
+                    generation_types=generation_types,
                 )
+            else:
+                from app.core.sites import site_repository
+
+                job = await site_repository.queue_generation_job(lead_id)
+                if job is None:
+                    await self.log_pipeline_event(
+                        lead_id,
+                        event_type="site_generation_failed",
+                        status="error",
+                        message="Site generation could not be queued",
+                    )
+                    await self._set_pipeline_stage(
+                        lead_id,
+                        "needs_attention",
+                        detail="Site generation could not be queued.",
+                    )
         except Exception as exc:
             import traceback
 
@@ -945,24 +942,7 @@ class LeadRepository:
     async def advance_pipeline_after_generation(
         self, lead_id: str, quality_score: int
     ) -> None:
-        """Legacy advancement hook; never report completion without an artifact."""
-        from app.core.sites import is_usable_generated_site, site_repository
-
-        sites = await site_repository.list_sites_by_lead(lead_id)
-        if not sites or not all(is_usable_generated_site(site) for site in sites):
-            await self.log_pipeline_event(
-                lead_id,
-                event_type="site_generation_failed",
-                status="error",
-                message="Site generation requires attention",
-                detail="No complete, usable preview artifact is available.",
-            )
-            await self._set_pipeline_stage(
-                lead_id,
-                "needs_attention",
-                detail="No complete, usable preview artifact is available.",
-            )
-            return
+        """Called after site generation completes — QA check and advance."""
         await self.log_pipeline_event(
             lead_id,
             event_type="site_generation_completed",
@@ -1556,7 +1536,7 @@ class LeadRepository:
                     return None
                 updated = self._apply_patch(doc, patch)
                 self._memory[lead_id] = updated
-            return _lead_doc_to_detail(updated, self._jobs_for_lead_memory(lead_id))
+                return _lead_doc_to_detail(updated, self._jobs_for_lead_memory(lead_id))
 
         query: dict[str, Any] = {"id": lead_id}
         if user_id:
@@ -1565,6 +1545,7 @@ class LeadRepository:
         if doc is None:
             return None
 
+        # Optimistic locking: check version if provided
         expected_version = getattr(patch, "expectedVersion", None)
         if expected_version is not None:
             current_version = int(doc.get("version", 1))
@@ -1574,172 +1555,19 @@ class LeadRepository:
                 )
 
         updated = self._apply_patch(doc, patch)
+
+        # Use version in query for atomic check-and-update
         result = await database["leads"].replace_one(
             {"id": lead_id, "version": doc.get("version", 1)}, updated
         )
+
         if result.matched_count == 0:
+            # Version mismatch - concurrent modification
             raise ValueError(
                 "Concurrent modification detected. Please refresh and try again."
             )
+
         return await self.get_lead(lead_id, user_id=user_id)
-
-    async def update_generation_stage_if_latest(
-        self, lead_id: str, generation_run_id: str, stage: str
-    ) -> bool:
-        """Update pipeline stage only while this run is still the lead's latest run."""
-        stage_detail = {
-            "ready": "All requested previews passed runtime QA.",
-            "needs_attention": "Generation or runtime QA requires attention.",
-        }.get(stage)
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                doc = self._memory.get(lead_id)
-                if not doc or doc.get("latestGenerationRunId") != generation_run_id:
-                    return False
-                doc["pipelineStage"] = stage
-                doc["pipelineStatusDetail"] = stage_detail
-                doc["version"] = int(doc.get("version", 1)) + 1
-                doc["updatedAt"] = _now()
-                return True
-        result = await database["leads"].update_one(
-            {"id": lead_id, "latestGenerationRunId": generation_run_id},
-            {
-                "$set": {
-                    "pipelineStage": stage,
-                    "pipelineStatusDetail": stage_detail,
-                    "updatedAt": _now(),
-                },
-                "$inc": {"version": 1},
-            },
-        )
-        return result.modified_count == 1
-
-    async def save_client_share(
-        self,
-        lead_id: str,
-        site_ids: list[str],
-        user_id: str,
-        booking_url: str | None = None,
-    ) -> dict[str, Any] | None:
-        """Persist the operator's ordered optional client-share selection."""
-        from app.core.sites import is_usable_generated_site, site_repository
-
-        unique_ids = list(dict.fromkeys(site_ids))
-        if len(unique_ids) > 0 and any(
-            not isinstance(site_id, str) or not site_id.strip()
-            for site_id in unique_ids
-        ):
-            raise ValueError("Selected website IDs must be non-empty strings.")
-        lead = await self.get_lead(lead_id, user_id=user_id)
-        if lead is None:
-            return None
-        sites = await site_repository.list_sites_by_lead(lead_id, user_id=user_id)
-        by_id = {site.id: site for site in sites}
-        selected = [by_id.get(site_id) for site_id in unique_ids]
-        if any(site is None for site in selected):
-            raise ValueError("Every selected website must belong to this lead.")
-        if any(
-            not is_usable_generated_site(site) for site in selected if site is not None
-        ):
-            raise ValueError(
-                "Only available, non-blocked websites with a preview can be shared."
-            )
-
-        # Keep the booking URL when older clients update only the gallery
-        # selection. Otherwise a legacy save silently turns a previously
-        # configured lead URL back into the global Calendly fallback.
-        existing_share: dict[str, Any] | None = None
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                existing_share = self._memory.get(lead_id, {}).get("clientShare")
-        else:
-            existing_doc = await database["leads"].find_one(
-                {"id": lead_id, "user_id": user_id}, {"clientShare": 1}
-            )
-            existing_share = existing_doc.get("clientShare") if existing_doc else None
-
-        persisted_booking_url = (
-            booking_url.strip()
-            if isinstance(booking_url, str) and booking_url.strip()
-            else (existing_share or {}).get("bookingUrl")
-            or "https://calendly.com/lenquant/sites"
-        )
-
-        now = _now()
-        # Keep one stable public slug across legacy and current lead records.
-        # Legacy leads may not have redesignSlug yet, while an earlier client
-        # link may already have a slug stored under clientShare.slug.
-        share_slug = (
-            lead.redesignSlug
-            or (existing_share or {}).get("slug")
-            or _generate_redesign_slug(lead.companyName)
-        )
-        share = {
-            "id": (existing_share or {}).get("id") or share_slug,
-            "leadId": lead_id,
-            "slug": share_slug,
-            "selectedSiteIds": unique_ids,
-            "bookingUrl": persisted_booking_url,
-            "createdAt": now,
-            "updatedAt": now,
-            "isActive": True,
-        }
-        if database is None:
-            async with self._memory_lock:
-                doc = self._memory.get(lead_id)
-                if doc is None:
-                    return None
-                doc["clientShare"] = share
-                doc["redesignSlug"] = share_slug
-                doc["updatedAt"] = now
-        else:
-            await database["leads"].update_one(
-                {"id": lead_id, "user_id": user_id},
-                {
-                    "$set": {
-                        "clientShare": share,
-                        "redesignSlug": share_slug,
-                        "updatedAt": now,
-                    }
-                },
-            )
-        return {
-            "id": share["id"],
-            "leadId": lead_id,
-            "slug": share["slug"],
-            "siteIds": unique_ids,
-            "url": f"{os.getenv('FRONTEND_PUBLIC_URL', 'https://sites.lenquant.com').rstrip('/')}/redesign/{share['slug']}",
-            "bookingUrl": share["bookingUrl"],
-            "updatedAt": now,
-        }
-
-    async def get_client_share(
-        self, lead_id: str, user_id: str
-    ) -> dict[str, Any] | None:
-        lead = await self.get_lead(lead_id, user_id=user_id)
-        if lead is None:
-            return None
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                share = self._memory.get(lead_id, {}).get("clientShare")
-        else:
-            doc = await database["leads"].find_one({"id": lead_id, "user_id": user_id})
-            share = doc.get("clientShare") if doc else None
-        if not share:
-            return None
-        return {
-            "id": share.get("id", lead.redesignSlug),
-            "leadId": lead_id,
-            "slug": share.get("slug", lead.redesignSlug),
-            "siteIds": list(share.get("selectedSiteIds", [])),
-            "url": f"{os.getenv('FRONTEND_PUBLIC_URL', 'https://sites.lenquant.com').rstrip('/')}/redesign/{share.get('slug', lead.redesignSlug)}",
-            "bookingUrl": share.get("bookingUrl")
-            or "https://calendly.com/lenquant/sites",
-            "updatedAt": _utc(share.get("updatedAt")) or _now(),
-        }
 
     def _apply_patch(
         self, doc: dict[str, Any], patch: LeadPatchRequest
@@ -1768,8 +1596,6 @@ class LeadRepository:
             updated["pipelineMode"] = patch.pipelineMode
         if patch.pipelineStage is not None:
             updated["pipelineStage"] = patch.pipelineStage
-        if patch.latestGenerationRunId is not None:
-            updated["latestGenerationRunId"] = patch.latestGenerationRunId
         if patch.generationTypes is not None:
             updated["generationTypes"] = patch.generationTypes
         updated["missingFields"] = _missing_fields(updated)
@@ -1800,7 +1626,6 @@ class LeadRepository:
         step: str,
         metadata: dict[str, Any] | None = None,
         error_message: str | None = None,
-        job_id: str | None = None,
     ) -> JobSummary:
         await self._maybe_ensure_indexes()
         job = await self._create_job(
@@ -1811,7 +1636,6 @@ class LeadRepository:
             step=step,
             metadata=metadata,
             error_message=error_message,
-            job_id=job_id,
         )
         return job
 
@@ -1825,11 +1649,10 @@ class LeadRepository:
         step: str,
         metadata: dict[str, Any] | None = None,
         error_message: str | None = None,
-        job_id: str | None = None,
     ) -> JobSummary:
         now = _now()
         doc = {
-            "id": job_id or uuid4().hex,
+            "id": uuid4().hex,
             "leadId": lead_ids[0] if len(lead_ids) == 1 else None,
             "leadIds": lead_ids,
             "jobType": job_type,
@@ -2062,19 +1885,8 @@ class LeadRepository:
                     site_repository,
                 )  # avoid circular at module level
 
-                source_metadata = dict(source.get("metadata", {}))
-                request_payload = source_metadata.get("request") or {}
-                retry_request = (
-                    SiteGenerateRequest.model_validate(request_payload)
-                    if request_payload
-                    else None
-                )
-
                 await site_repository._dispatch_generation_job(  # type: ignore[attr-defined]
-                    site_id=lead_id,
-                    job_id=job.id,
-                    request=retry_request,
-                    generation_run_id=source_metadata.get("generationRunId"),
+                    site_id=lead_id, job_id=job.id, request=None
                 )
 
         if database is None:
@@ -2207,96 +2019,6 @@ class LeadRepository:
     ) -> LeadDetail | None:
         return await self.archive_lead(lead_id, user_id=user_id)
 
-    async def permanently_delete_lead(
-        self, lead_id: str, user_id: str | None = None
-    ) -> bool:
-        """Permanently remove a lead and every record owned by its pipeline."""
-        await self._maybe_ensure_indexes()
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                lead = self._memory.get(lead_id)
-                if lead is None or (user_id and lead.get("user_id") != user_id):
-                    return False
-                job_ids = [
-                    job_id
-                    for job_id, job in self._jobs.items()
-                    if lead_id in job.get("leadIds", []) or job.get("leadId") == lead_id
-                ]
-                self._memory.pop(lead_id, None)
-                self._extractions.pop(lead_id, None)
-                self._briefs.pop(lead_id, None)
-                self._memory.get("master_briefs", {}).pop(lead_id, None)
-                for job_id in job_ids:
-                    self._jobs.pop(job_id, None)
-            from app.core.sites import site_repository
-
-            async with site_repository._memory_lock:  # noqa: SLF001
-                site_ids = [
-                    site_id
-                    for site_id, site in site_repository._sites.items()  # noqa: SLF001
-                    if site.get("leadId") == lead_id
-                ]
-                for site_id in site_ids:
-                    site_repository._sites.pop(site_id, None)  # noqa: SLF001
-                    site_repository._versions.pop(site_id, None)  # noqa: SLF001
-                    site_repository._overrides.pop(site_id, None)  # noqa: SLF001
-                    site_repository._exports.pop(site_id, None)  # noqa: SLF001
-                    site_repository._reviews.pop(site_id, None)  # noqa: SLF001
-                    site_repository._handoffs.pop(site_id, None)  # noqa: SLF001
-                site_repository._generation_runs = {  # noqa: SLF001
-                    run_id: run
-                    for run_id, run in site_repository._generation_runs.items()  # noqa: SLF001
-                    if run.get("leadId") != lead_id
-                }
-            return True
-
-        query: dict[str, Any] = {"id": lead_id}
-        if user_id:
-            query["user_id"] = user_id
-        if await database["leads"].find_one(query, {"id": 1}) is None:
-            return False
-
-        job_filter = {"$or": [{"leadId": lead_id}, {"leadIds": lead_id}]}
-        job_docs = (
-            await database["jobs"].find(job_filter, {"id": 1}).to_list(length=None)
-        )
-        job_ids = [str(job["id"]) for job in job_docs if job.get("id")]
-        if job_ids:
-            from app.core.celery_app import celery_app
-
-            for job_id in job_ids:
-                try:
-                    # Tasks are dispatched with their job ID as Celery task ID.
-                    celery_app.control.revoke(job_id, terminate=True)
-                except Exception:  # pragma: no cover - broker may be unavailable
-                    logger.warning(
-                        "Could not revoke task for deleted job %s",
-                        job_id,
-                        exc_info=True,
-                    )
-
-        await database["jobs"].delete_many(job_filter)
-        for collection in (
-            "site_extractions",
-            "site_briefs",
-            "master_briefs",
-            "generated_sites",
-            "generation_runs",
-            "generation_input_claims",
-            "message_drafts",
-            "analytics_events",
-            "asset_metadata",
-        ):
-            await database[collection].delete_many({"leadId": lead_id})
-        if job_ids:
-            await database["task_checkpoints"].delete_many({"taskId": {"$in": job_ids}})
-        await database["audit_logs"].delete_many(
-            {"$or": [{"entityId": lead_id}, {"metadata.leadId": lead_id}]}
-        )
-        result = await database["leads"].delete_one(query)
-        return result.deleted_count == 1
-
     async def search_jobs_for_lead(self, lead_id: str) -> list[JobSummary]:
         await self._maybe_ensure_indexes()
         database = get_database()
@@ -2361,7 +2083,6 @@ class LeadRepository:
             extractedClientLogos=list(doc.get("extractedClientLogos", [])),
             extractedFonts=list(doc.get("extractedFonts", [])),
             extractedImages=list(doc.get("extractedImages", [])),
-            contactInfo=dict(doc.get("contactInfo", {})),
             createdAt=_utc(doc["createdAt"]) or _now(),
             updatedAt=_utc(doc["updatedAt"]) or _now(),
         )
@@ -2423,29 +2144,6 @@ class LeadRepository:
             return None
         return self._extraction_doc_to_snapshot(doc)
 
-    async def get_extraction_version(
-        self, lead_id: str, extraction_id: str, version: int
-    ) -> ExtractionSnapshot | None:
-        """Load the exact extraction pinned by a generation run."""
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                docs = self._extractions.get(lead_id, [])
-                doc = next(
-                    (
-                        d
-                        for d in docs
-                        if str(d.get("id")) == extraction_id
-                        and int(d.get("version", 0)) == version
-                    ),
-                    None,
-                )
-        else:
-            doc = await database["site_extractions"].find_one(
-                {"id": extraction_id, "leadId": lead_id, "version": version}
-            )
-        return self._extraction_doc_to_snapshot(doc) if doc else None
-
     async def list_pages(
         self, lead_id: str, user_id: str | None = None
     ) -> PageInventoryResponse | None:
@@ -2504,35 +2202,6 @@ class LeadRepository:
             analysis=ExtractionAnalysis(**analysis_data)
             if isinstance(analysis_data, dict)
             else analysis_data,
-            extractionId=str(doc["id"]),
-            extractionVersion=int(doc.get("version", 1)),
-        )
-
-    async def get_analysis_version(
-        self, lead_id: str, extraction_id: str, version: int
-    ) -> ExtractionAnalysisResponse | None:
-        """Load analysis from the exact extraction version pinned by a run."""
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                docs = self._extractions.get(lead_id, [])
-                doc = next(
-                    (
-                        d
-                        for d in docs
-                        if str(d.get("id")) == extraction_id
-                        and int(d.get("version", 0)) == version
-                    ),
-                    None,
-                )
-        else:
-            doc = await database["site_extractions"].find_one(
-                {"id": extraction_id, "leadId": lead_id, "version": version}
-            )
-        if not doc or not doc.get("analysis"):
-            return None
-        return ExtractionAnalysisResponse(
-            analysis=ExtractionAnalysis(**doc["analysis"]),
             extractionId=str(doc["id"]),
             extractionVersion=int(doc.get("version", 1)),
         )
@@ -2610,7 +2279,6 @@ class LeadRepository:
         celery_app.send_task(
             "lenquant.jobs.run_analysis_refresh",
             args=[lead_id, job_id],
-            task_id=job_id,
         )
 
     async def run_analysis_refresh_job(self, *, lead_id: str, job_id: str) -> None:
@@ -2804,15 +2472,8 @@ class LeadRepository:
         approved_by: str,
         notes: str | None = None,
         user_id: str | None = None,
-        allow_intentional_fallbacks: bool = False,
     ) -> MasterBrief | None:
         """Approve the master brief to trigger site generation."""
-        # The pytest database is deliberately isolated from production and
-        # contains fallback-only fixtures without real brand assets. Keep the
-        # production approval contract strict while allowing those deterministic
-        # test fixtures to exercise persistence and generation flows.
-        if get_settings().mongo_use_mock:
-            allow_intentional_fallbacks = True
         await self._maybe_ensure_indexes()
         lead = await self.get_lead(lead_id, user_id=user_id)
         if lead is None:
@@ -2821,42 +2482,8 @@ class LeadRepository:
         if brief is None:
             raise ValueError("no_existing_brief")
 
-        # Approval is intentionally stricter than brief generation. Do not
-        # approve a brief built from a failed/partial extraction, since that can
-        # make unsupported claims look source-backed downstream.
-        extraction = await self.get_extraction(lead_id)
-        non_critical_gaps = {"sitemap_unavailable", "llm_enriched", "brand_assets_missing"}
-        critical_gaps = (
-            [gap for gap in (extraction.gapItems if extraction else []) if gap not in non_critical_gaps]
-            if extraction
-            else ["extraction_missing"]
-        )
-        extraction_failed = extraction is None or extraction.crawlStatus == "failed"
-        if extraction_failed or (critical_gaps and not allow_intentional_fallbacks):
-            raise ValueError("brief_requires_critical_gaps_resolved")
-
-        from app.core.brief_requirements import (
-            fallback_requirements,
-            validate_master_brief_requirements,
-        )
-
-        blockers = validate_master_brief_requirements(brief)
-        if allow_intentional_fallbacks:
-            fallback_blockers = fallback_requirements(blockers)
-            blockers = [item for item in blockers if item not in fallback_blockers]
-        if blockers:
-            raise ValueError("brief_requirements_unresolved:" + ",".join(blockers))
-
         # Create new version with approved state
         doc = brief.model_dump()
-        if allow_intentional_fallbacks:
-            doc["missingRequirements"] = [
-                item
-                for item in doc.get("missingRequirements", [])
-                if item not in fallback_requirements(
-                    list(doc.get("missingRequirements", []))
-                )
-            ]
         doc["approvalState"] = "approved"
         doc["approvedAt"] = _now()
         doc["approvedBy"] = approved_by
@@ -2886,7 +2513,6 @@ class LeadRepository:
                         "approvedAt": doc["approvedAt"],
                         "approvedBy": approved_by,
                         "reviewNotes": notes,
-                        "missingRequirements": doc["missingRequirements"],
                         "updatedAt": doc["updatedAt"],
                     }
                 },
@@ -2913,56 +2539,6 @@ class LeadRepository:
         await self.advance_pipeline_after_brief(lead_id)
 
         return MasterBrief.model_validate(doc)
-
-    async def get_master_brief_version(
-        self, lead_id: str, brief_id: str, version: int
-    ) -> MasterBrief | None:
-        """Load the exact approved brief pinned by a generation run."""
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                docs = self._memory.get("master_briefs", {}).get(lead_id, [])
-                doc = next(
-                    (
-                        d
-                        for d in docs
-                        if str(d.get("id")) == brief_id
-                        and int(d.get("version", 0)) == version
-                    ),
-                    None,
-                )
-        else:
-            doc = await database["master_briefs"].find_one(
-                {"id": brief_id, "leadId": lead_id, "version": version}
-            )
-        return MasterBrief.model_validate(doc) if doc else None
-
-    async def update_master_brief_assets(
-        self, lead_id: str, assets: dict[str, Any], user_id: str | None = None
-    ) -> MasterBrief | None:
-        """Persist operator corrections to brand assets before approval."""
-        if await self.get_lead(lead_id, user_id=user_id) is None:
-            return None
-        brief = await self.get_master_brief(lead_id)
-        if brief is None:
-            return None
-        merged = brief.brandAssets.model_dump()
-        merged.update(
-            {key: value for key, value in assets.items() if value is not None}
-        )
-        database = get_database()
-        now = _now()
-        if database is None:
-            async with self._memory_lock:
-                records = self._memory.setdefault("master_briefs", {}).get(lead_id, [])
-                if records:
-                    records[-1]["brandAssets"] = merged
-                    records[-1]["updatedAt"] = now
-        else:
-            await database["master_briefs"].update_one(
-                {"id": brief.id}, {"$set": {"brandAssets": merged, "updatedAt": now}}
-            )
-        return brief.model_copy(update={"brandAssets": merged, "updatedAt": now})
 
     async def start_extraction(
         self, lead_id: str, *, refresh: bool = False, user_id: str | None = None
@@ -3192,62 +2768,8 @@ class LeadRepository:
         now = _now()
         previous_doc = await self._latest_extraction_doc(lead_id)
         version = int(previous_doc.get("version", 0)) + 1 if previous_doc else 1
-        extraction_id = uuid4().hex
-        # Recompute from the persisted page inventory at the final write
-        # boundary as a defense against enrichment/checkpoint code dropping
-        # enhanced fields. This remains source-backed and never invents data.
-        from app.core.extraction import _extract_contact_info
-
-        persisted_contact_info = crawl_data.get("contactInfo") or {}
-        if not any(
-            persisted_contact_info.get(key)
-            for key in ("officePhone", "emergencyPhone", "email", "address", "hours")
-        ):
-            persisted_contact_info = _extract_contact_info(
-                crawl_data.get("pageInventory", [])
-            )
-        # Persist an evidence-backed category as soon as extraction is ready so
-        # review and subsequent variant strategy selection share the same
-        # industry context. Never overwrite a manually supplied industry.
-        if not getattr(lead, "industry", None):
-            from app.core.industry_detection import detect_industry
-
-            inferred_industry, industry_confidence = detect_industry(
-                company_name=str(
-                    crawl_data.get("summary", {}).get("companyName")
-                    or lead.companyName
-                    or ""
-                ),
-                services=list(
-                    (crawl_data.get("analysis") or {}).get("services")
-                    or crawl_data.get("summary", {}).get("serviceClues")
-                    or []
-                ),
-                content_snippets=[
-                    str(crawl_data.get("summary", {}).get("positioningSummary") or ""),
-                    *list(crawl_data.get("summary", {}).get("serviceClues") or []),
-                ],
-            )
-            lead.industry = inferred_industry
-            database = get_database()
-            if database is not None:
-                await database["leads"].update_one(
-                    {"id": lead_id, "industry": {"$in": [None, ""]}},
-                    {
-                        "$set": {
-                            "industry": inferred_industry,
-                            "inferredIndustry": {
-                                "value": inferred_industry,
-                                "confidence": industry_confidence,
-                                "extractionId": extraction_id,
-                                "source": "extraction",
-                            },
-                            "updatedAt": now,
-                        }
-                    },
-                )
         doc = {
-            "id": extraction_id,
+            "id": uuid4().hex,
             "leadId": lead_id,
             "jobId": job_id,
             "version": version,
@@ -3274,7 +2796,6 @@ class LeadRepository:
             "extractedClientLogos": crawl_data.get("extractedClientLogos", []),
             "extractedFonts": crawl_data.get("extractedFonts", []),
             "extractedImages": crawl_data.get("extractedImages", []),
-            "contactInfo": persisted_contact_info,
             "crawlBudgetUsed": crawl_data.get("crawlBudgetUsed", 0),
             "crawlBudgetLimit": crawl_data.get(
                 "crawlBudgetLimit", get_settings().crawl_budget_bytes
@@ -3371,10 +2892,7 @@ class LeadRepository:
 
         from app.core.tasks import run_extraction_job_task
 
-        run_extraction_job_task.apply_async(  # type: ignore[attr-defined]
-            kwargs={"lead_id": lead_id, "job_id": job_id, "refresh": refresh},
-            task_id=job_id,
-        )
+        run_extraction_job_task.delay(lead_id=lead_id, job_id=job_id, refresh=refresh)  # type: ignore[attr-defined]
 
     @staticmethod
     def log_inline_error(label: str, task: asyncio.Task[None]) -> None:

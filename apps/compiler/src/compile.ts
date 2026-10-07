@@ -4,17 +4,13 @@
  */
 
 import * as esbuild from 'esbuild';
-import postcss from 'postcss';
-import tailwindcss from 'tailwindcss';
-import { validateTsxSource, validateJavaScriptSource, validateDeclaredCapabilityUsage, validateCapabilityFallback, extractImportedDependencies, sanitizeComponentName } from './validate.js';
+import { validateTsxSource, sanitizeComponentName } from './validate.js';
 import { createVirtualModulesPlugin } from './virtual-modules-plugin.js';
 
 export interface CompileRequest {
   sourceCode: string;
   componentName: string;
   siteId: string;
-  jsEntry?: string;
-  capabilityManifest?: { dependencies?: string[]; interactionManifest?: unknown[]; runtimeMode?: string; webglFallback?: boolean };
 }
 
 export interface CompileResult {
@@ -23,9 +19,6 @@ export interface CompileResult {
   cssCode?: string;
   error?: string;
   validationErrors?: string[];
-  dependencyInventory?: string[];
-  bundleMetrics?: { bytes: number };
-  capabilityManifest?: CompileRequest['capabilityManifest'];
 }
 
 /**
@@ -33,18 +26,10 @@ export interface CompileResult {
  * Returns both JS bundle and extracted CSS.
  */
 export async function compileTsx(request: CompileRequest): Promise<CompileResult> {
-  const { sourceCode, componentName, siteId, jsEntry, capabilityManifest } = request;
-  const entrySource = jsEntry || sourceCode;
+  const { sourceCode, componentName, siteId } = request;
 
   // Validate source code first
-  const validation = jsEntry
-    ? validateJavaScriptSource(entrySource, capabilityManifest?.dependencies)
-    : validateTsxSource(entrySource, capabilityManifest?.dependencies);
-  if (capabilityManifest && validation.valid) {
-    validation.errors.push(...validateDeclaredCapabilityUsage(entrySource, capabilityManifest?.dependencies).errors);
-    validation.errors.push(...validateCapabilityFallback(capabilityManifest?.dependencies, capabilityManifest?.webglFallback).errors);
-    validation.valid = validation.errors.length === 0;
-  }
+  const validation = validateTsxSource(sourceCode);
   if (!validation.valid) {
     return {
       success: false,
@@ -59,8 +44,8 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
     // Build with esbuild
     const result = await esbuild.build({
       stdin: {
-        contents: entrySource,
-        loader: jsEntry ? 'js' : 'tsx',
+        contents: sourceCode,
+        loader: 'tsx',
         resolveDir: process.cwd(),
         sourcefile: `${safeName}.tsx`,
       },
@@ -73,8 +58,24 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
       write: false,
       minify: true,
       sourcemap: false,
-      // React and ReactDOM are bundled too. Generated artifacts must be
-      // self-contained and must not depend on preview-only CDN/global runtimes.
+      // External: only React runtime (loaded via CDN in preview shell)
+      // All other libraries (framer-motion, lucide-react, gsap, etc.) will be bundled
+      external: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'react/jsx-dev-runtime',
+      ],
+      banner: {
+        js: [
+          `var React = window.React;`,
+          `var ReactDOM = window.ReactDOM;`,
+          `var require = (function() {`,
+          `  var m = {'react': window.React, 'react-dom': window.ReactDOM, 'react/jsx-runtime': window.__reactJsxRuntime, 'react/jsx-dev-runtime': window.__reactJsxRuntime};`,
+          `  return function(id) { if (m[id]) return m[id]; throw new Error('Module not found: ' + id); };`,
+          `})();`,
+        ].join(' '),
+      },
       footer: {
         js: `if (typeof LandingPageBundle !== 'undefined') { window.LandingPageBundle = LandingPageBundle; }`,
       },
@@ -112,24 +113,10 @@ export async function compileTsx(request: CompileRequest): Promise<CompileResult
       };
     }
 
-    // Generated TSX is not part of the web app's Tailwind content globs. Build
-    // a stylesheet from this exact source so arbitrary, responsive, hover,
-    // and animation utilities are deterministic per site.
-    const generatedCss = await postcss([
-      tailwindcss({
-      content: [{ raw: sourceCode, extension: 'tsx' }],
-        corePlugins: { preflight: true },
-        theme: { extend: {} },
-      }),
-    ]).process('@tailwind base;\n@tailwind components;\n@tailwind utilities;', { from: `${safeName}.css` });
-
     return {
       success: true,
       bundleCode,
-      cssCode: `${generatedCss.css}\n${cssCode}`,
-      dependencyInventory: extractImportedDependencies(entrySource, capabilityManifest?.dependencies || []),
-      bundleMetrics: { bytes: new TextEncoder().encode(bundleCode).byteLength },
-      capabilityManifest,
+      cssCode: cssCode || undefined,
     };
   } catch (err: any) {
     const errorMessage = err?.message || String(err);

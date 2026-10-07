@@ -16,7 +16,6 @@ from app.core.variant_strategy import (
     get_variant_strategies,
     get_variant_strategy,
 )
-from app.core.sites import _client_variant_copy
 from app.schemas.site import VariantType
 
 
@@ -130,26 +129,6 @@ class TestVariantStrategies:
             keywords = strategy["inspirationKeywords"]
             assert len(keywords) >= 5, f"{variant_type} needs at least 5 keywords"
 
-    def test_home_service_strategy_does_not_assume_water(self) -> None:
-        strategies = get_variant_strategies("home service")
-        direction = " ".join(
-            f"{strategy['variantLabel']} {strategy['creativeBriefGuidance']}"
-            for strategy in strategies.values()
-        ).lower()
-
-        assert "water" in direction
-        assert "well" not in direction
-
-    def test_variant_titles_are_scoped_to_the_company(self) -> None:
-        strategy = {"variantType": "html_v1"}
-
-        get_it_done_title, _ = _client_variant_copy(strategy, "Get It Done")
-        bug_killers_title, _ = _client_variant_copy(strategy, "New Jersey Bug Killers")
-
-        assert get_it_done_title != bug_killers_title
-        assert get_it_done_title.startswith("Get It Done —")
-        assert bug_killers_title.startswith("New Jersey Bug Killers —")
-
     def test_avoid_patterns_not_empty(self) -> None:
         """Test that avoid patterns are provided."""
         strategies = get_variant_strategies()
@@ -214,16 +193,6 @@ class TestGenerationLock:
 class TestStaticHtmlGenerator:
     """Tests for static HTML generation."""
 
-    def test_static_variants_are_default_and_nextjs_is_optional(self) -> None:
-        """Default generation remains the three static creative variants."""
-        from app.schemas.lead import LeadUpsertRequest
-        from app.schemas.site import SiteGenerateRequest
-
-        assert LeadUpsertRequest(websiteUrl="https://example.test").generationTypes == [
-            "html_v1", "html_v2", "html_v3"
-        ]
-        assert SiteGenerateRequest(variantTypes=["nextjs"]).variantTypes == ["nextjs"]
-
     def test_parse_llm_response_valid(self) -> None:
         """Test parsing valid LLM response with all code blocks."""
         from app.core.static_html_generator import _parse_llm_response
@@ -270,7 +239,7 @@ body { margin: 0; }
 console.log('test');
 ```
 """
-        with pytest.raises(ValueError, match="Expected closed"):
+        with pytest.raises(ValueError, match="No HTML code block"):
             _parse_llm_response(response)
 
     def test_parse_llm_response_missing_css(self) -> None:
@@ -286,11 +255,11 @@ console.log('test');
 console.log('test');
 ```
 """
-        with pytest.raises(ValueError, match="Expected closed"):
+        with pytest.raises(ValueError, match="No CSS code block"):
             _parse_llm_response(response)
 
-    def test_parse_llm_response_missing_js_is_rejected(self) -> None:
-        """A missing JavaScript block must never publish a fake no-op script."""
+    def test_parse_llm_response_missing_js_uses_default(self) -> None:
+        """Test that missing JS block uses minimal JS placeholder."""
         from app.core.static_html_generator import _parse_llm_response
 
         response = """
@@ -302,8 +271,11 @@ console.log('test');
 body { margin: 0; }
 ```
 """
-        with pytest.raises(ValueError, match="Expected closed"):
-            _parse_llm_response(response)
+        html, css, js = _parse_llm_response(response)
+
+        assert "<!DOCTYPE html>" in html
+        assert "margin: 0" in css
+        assert "Minimal script" in js or "DOMContentLoaded" in js
 
     def test_parse_llm_response_js_alternate_syntax(self) -> None:
         """Test parsing JS with ```js instead of ```javascript."""

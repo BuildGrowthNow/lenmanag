@@ -12,7 +12,6 @@ from io import BytesIO
 from typing import Any, cast
 from uuid import uuid4
 
-import httpx
 from pymongo.results import UpdateResult
 from app.core.analytics import analytics_repository
 from app.core.color_system import generate_color_system
@@ -20,16 +19,9 @@ from app.core.config import get_settings
 from app.core.industry_detection import get_industry_design_config
 from app.core.leads import _job_doc_to_summary, lead_repository  # type: ignore[attr-defined]
 from app.core.mongo import get_database
-from app.core.generation_run import (
-    brand_snapshot_hash,
-    generation_input_hash,
-    supersede_reason,
-)
-from app.core.rollout import enhanced_html_enabled, rollout_decision
 from app.core.screenshot_comparator import ScreenshotComparator
 from app.schemas.brief import (
     BriefEvidence,
-    BriefSourceReference,
     SiteBrief,
     VisualCritique,
     VisualRedesignBrief,
@@ -64,7 +56,6 @@ from app.schemas.site import (
     SiteReviewRecord,
     SiteReviewRequest,
     SiteScreenshotMetadata,
-    SiteSection,
     SiteSourceAttribution,
     SiteToken,
     ThemeLibraryResponse,
@@ -73,209 +64,6 @@ from app.schemas.site import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _variant_blueprint_similarity(
-    previous: dict[str, Any], current: dict[str, Any]
-) -> tuple[float, float, float]:
-    """Compare content and creative contracts separately.
-
-    Variants are expected to reuse approved facts and copy. They should only
-    fail the diversity gate when both the content blueprint and the visual
-    strategy are duplicates.
-    """
-    prior_content = previous.get("contentStrategy") or {}
-    current_content = current.get("contentStrategy") or {}
-    prior_sections = [
-        str(value).strip().lower() for value in prior_content.get("sections") or []
-    ]
-    current_sections = [
-        str(value).strip().lower() for value in current_content.get("sections") or []
-    ]
-    section_similarity = (
-        1.0
-        if prior_sections == current_sections
-        else len(set(prior_sections) & set(current_sections))
-        / max(1, len(set(prior_sections) | set(current_sections)))
-    )
-    prior_headline = str(prior_content.get("headline") or "").strip().lower()
-    current_headline = str(current_content.get("headline") or "").strip().lower()
-    prior_cta = str(prior_content.get("cta") or "").strip().lower()
-    current_cta = str(current_content.get("cta") or "").strip().lower()
-    content_similarity = (
-        (section_similarity * 0.7)
-        + (float(prior_headline == current_headline) * 0.2)
-        + (float(prior_cta == current_cta) * 0.1)
-    )
-
-    prior_creative = previous.get("creativeStrategy") or {}
-    current_creative = current.get("creativeStrategy") or {}
-    creative_keys = (
-        "variantType",
-        "variantLabel",
-        "designMode",
-        "paletteMode",
-        "heroComposition",
-        "layoutSystem",
-        "sectionRhythm",
-        "signatureTechnique",
-        "creativeBriefGuidance",
-    )
-    compared = [
-        key for key in creative_keys if key in prior_creative or key in current_creative
-    ]
-    creative_similarity = (
-        sum(prior_creative.get(key) == current_creative.get(key) for key in compared)
-        / len(compared)
-        if compared
-        else float(prior_creative == current_creative)
-    )
-    combined = (content_similarity * 0.45) + (creative_similarity * 0.55)
-    return content_similarity, creative_similarity, combined
-
-
-CLIENT_VARIANT_COPY: dict[str, tuple[str, str]] = {
-    "html_v1": (
-        "The Authority Edit",
-        "Editorial clarity with a composed, high-trust presentation.",
-    ),
-    "html_v2": (
-        "Signal & Structure",
-        "A confident, energetic direction built for momentum and action.",
-    ),
-    "html_v3": (
-        "The Counsel Atelier",
-        "A warmer, more distinctive expression with memorable detail.",
-    ),
-    "nextjs": (
-        "The Interactive Brief",
-        "A polished interactive direction with room for richer product moments.",
-    ),
-}
-
-
-def is_artifact_generated_site(site: GeneratedSite) -> bool:
-    """Return true when a complete artifact exists, before runtime QA."""
-    if site.readinessStatus == "blocked" or not (site.previewUrl or site.previewSlug):
-        return False
-    return has_renderable_generated_artifact(site)
-
-
-def has_renderable_generated_artifact(site: GeneratedSite) -> bool:
-    """Return true when the compiled output itself can be shown in a preview."""
-    if not (site.previewUrl or site.previewSlug):
-        return False
-    if site.variantType in {"html_v1", "html_v2", "html_v3"}:
-        return bool(
-            site.staticHtml
-            and site.staticHtml.strip()
-            and site.compilationStatus in {"success", "completed"}
-        )
-    return bool(
-        site.compiledBundleUrl
-        and site.compiledBundleUrl.strip()
-        and site.compilationStatus in {"success", "completed"}
-    )
-
-
-def is_usable_generated_site(site: GeneratedSite) -> bool:
-    """Return true only after the artifact and runtime QA both pass."""
-    if not is_artifact_generated_site(site):
-        return False
-    # A missing QA result is unmeasured, not a pass. This keeps generated
-    # artifacts out of public/client surfaces until runtime QA explicitly
-    # succeeds.
-    return getattr(site, "qaStatus", None) == "pass"
-
-
-def _client_variant_copy(
-    variant_strategy: dict[str, Any], company_name: str | None = None
-) -> tuple[str, str]:
-    variant_type = str(variant_strategy.get("variantType") or "nextjs")
-    default_title, default_description = CLIENT_VARIANT_COPY.get(
-        variant_type,
-        (
-            "A New Direction",
-            "A distinct visual direction shaped around the approved brief.",
-        ),
-    )
-    title = str(variant_strategy.get("variantTitle") or default_title)
-    if company_name and company_name.strip():
-        title = f"{company_name.strip()} — {title}"
-    return title, str(variant_strategy.get("variantDescription") or default_description)
-
-
-async def _generate_client_variant_copy(
-    *,
-    master_brief: Any,
-    variant_strategy: dict[str, Any],
-    extraction: ExtractionSnapshot,
-) -> tuple[str, str]:
-    """Generate the client-facing variant name and description from the brief.
-
-    Variant labels are internal strategy metadata. The preview card should have
-    editorial copy that reflects the actual company, approved positioning, and
-    the variant's creative direction, so it must not use a fixed global label.
-    """
-    from app.core.llm import get_llm_client
-
-    company_name = (
-        _text(getattr(extraction.summary, "companyName", None)) or "the company"
-    )
-    creative_direction = getattr(master_brief, "creativeDirection", None)
-    direction = creative_direction.model_dump(mode="json") if creative_direction else {}
-    prompt = f"""
-Create the client-facing name and one-sentence description for one website design
-direction. Use only the approved brief and design direction below.
-
-Company: {company_name}
-Approved brief:
-- Value proposition: {_text(getattr(master_brief, "valueProposition", ""))}
-- Audience: {_text(getattr(master_brief, "primaryAudience", ""))}
-- Hero headline: {_text(getattr(master_brief, "headline", ""))}
-- Supporting line: {_text(getattr(master_brief, "subheadline", ""))}
-- Tone: {_text(getattr(master_brief, "toneAndVoice", ""))}
-
-Design direction:
-{json.dumps(direction, ensure_ascii=False)}
-
-Variant strategy:
-- Design mode: {_text(variant_strategy.get("designMode"))}
-- Creative guidance: {_text(variant_strategy.get("creativeBriefGuidance"))}
-
-Return JSON only with exactly these keys:
-{{"title": "a distinctive 2-6 word design name", "description": "one concise 10-22 word sentence describing this design direction"}}
-
-The title must be specific to this company's approved brief and this design
-direction. Do not use generic fixed labels such as "The Authority Edit",
-"Signal & Structure", or "The Counsel Atelier". Do not introduce claims,
-services, locations, or industry terms that are absent from the brief. Do not
-mention water or wells unless the approved brief explicitly does.
-""".strip()
-
-    try:
-        llm = get_llm_client()
-        response = await llm.generate_text(
-            prompt=prompt, temperature=0.7, max_tokens=500
-        )
-        data = llm.extract_json_from_response(response)
-        title = _text(data.get("title")).strip().strip('"')
-        description = _text(data.get("description")).strip().strip('"')
-        if title and description:
-            return title[:120], description[:240]
-        logger.warning(
-            "LLM returned incomplete client variant copy; using brief fallback"
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Client variant copy generation failed: %s", exc)
-
-    # This fallback is still brief-backed and company-scoped for providers that
-    # are temporarily unavailable; normal production generation uses the LLM.
-    fallback_title, fallback_description = _client_variant_copy(
-        variant_strategy, company_name
-    )
-    return fallback_title, fallback_description
-
 
 THEME_LIBRARY: list[dict[str, Any]] = [
     {
@@ -2074,27 +1862,6 @@ def _quality_score(
     sections) cannot receive high scores.
     """
 
-    # Deterministic factual/runtime failures are never recoverable through a
-    # visual fallback score. Callers pass these markers from generation and QA.
-    fatal_markers = {
-        "invalid_javascript",
-        "runtime_initialization_failed",
-        "missing_stylesheet",
-        "missing_script",
-        "wrong_mime_type",
-        "broken_main_content",
-        "required_interaction_failed",
-        "fake_business_contact",
-        "missing_valid_logo",
-        "stale_footer_year",
-        "diversity_gate_failed",
-    }
-    if any(
-        any(marker in str(requirement).lower() for marker in fatal_markers)
-        for requirement in missing_requirements
-    ):
-        return 0
-
     # DESIGN QUALITY CHECKS
     if site_sections:
         sections_with_component_id = sum(
@@ -2181,49 +1948,25 @@ def _quality_score(
 
         return max(0, min(100, score))
 
-    # Fallback: data-richness score (no visual validation available)
-    # Base reflects a minimally complete pipeline run
-    score = 40
-
-    # Brief quality (up to +20)
+    # Fallback: very conservative data completeness score (no visual validation)
+    score = 20
     if brief.approvalState == "approved":
-        score += 8
-    # MasterBrief stores the approved content blueprint as `sections`.
-    # Keep this tolerant of older brief objects so persistence cannot fail
-    # while calculating a fallback quality score.
-    score += min(len(getattr(brief, "sections", []) or []), 5) * 2  # up to +10
-    score += min(len(getattr(brief, "proofPoints", []) or []), 2) * 1  # up to +2
-
-    # Brief confidence (0–100 → up to +8)
-    score += int(brief.confidenceScore * 0.08)
-
-    # Extraction richness (up to +15)
-    score += min(len(extraction.sourceCitations), 5) * 1  # up to +5
-    score += min(len(extraction.brandAssetCues), 3) * 1  # up to +3
-    score += min(extraction.pagesCrawled, 5) * 1  # up to +5
-    if extraction.extractedTestimonials:
-        score += 1
-    if extraction.extractedImages:
-        score += 1
-
-    # Extraction confidence (0–100 → up to +5)
-    score += int(extraction.confidenceScore * 0.05)
-
-    # Brand tokens grounded in source data (up to +6)
-    if brand_tokens["primaryColor"]["evidence"]["sourceKind"] == "source_backed":
-        score += 3
-    if brand_tokens["typography"]["evidence"]["sourceKind"] == "source_backed":
-        score += 3
-
-    # Visual redesign briefs present (up to +4)
-    score += min(len(getattr(brief, "visualRedesign", []) or []), 2) * 2
-
-    # Diversity bonus (up to +3)
-    score += int(diversity_score * 0.06)
-
-    # Penalise missing requirements
-    score -= min(len(missing_requirements), 5) * 4
-
+        score += 5
+    score += min(len(extraction.sourceCitations), 3) * 2
+    score += min(len(extraction.brandAssetCues), 2) * 2
+    score += min(len(site_sections), 3) * 2
+    score += (
+        4
+        if brand_tokens["primaryColor"]["evidence"]["sourceKind"] == "source_backed"
+        else 0
+    )
+    score += (
+        3
+        if brand_tokens["typography"]["evidence"]["sourceKind"] == "source_backed"
+        else 0
+    )
+    score += int(diversity_score * 0.05)
+    score -= min(len(missing_requirements), 5) * 5
     return max(0, min(100, score))
 
 
@@ -2390,82 +2133,6 @@ def _site_source_attribution(
         "themeKey": theme["themeKey"],
         "paletteMode": palette_mode,
     }
-
-
-def _generated_site_traceability(
-    brief: Any, extraction: ExtractionSnapshot
-) -> list[dict[str, Any]]:
-    """Attach source evidence to each generated section and approved asset."""
-    refs: list[dict[str, Any]] = []
-    pages = list(getattr(extraction, "sourceCitations", None) or [])
-    source_sections = list(getattr(extraction, "sectionInventory", None) or [])
-    canonical = getattr(extraction, "canonicalWebsiteUrl", "") or ""
-
-    def add(ref: dict[str, Any]) -> None:
-        key = (ref.get("kind"), ref.get("sourceUrl"), ref.get("label"), ref.get("excerpt"))
-        if ref.get("sourceUrl") and key not in {
-            (item.get("kind"), item.get("sourceUrl"), item.get("label"), item.get("excerpt"))
-            for item in refs
-        }:
-            refs.append(ref)
-
-    for citation in pages[:80]:
-        data = citation.model_dump() if hasattr(citation, "model_dump") else dict(citation)
-        add(
-            {
-                "kind": "page",
-                "sourceUrl": data.get("pageUrl") or canonical,
-                "label": data.get("label") or data.get("evidenceType") or "Source page",
-                "excerpt": data.get("excerpt") or "",
-                "confidence": int(data.get("confidence") or 0),
-                "evidenceType": data.get("evidenceType"),
-            }
-        )
-
-    for cue in list(getattr(extraction, "brandAssetCues", None) or [])[:50]:
-        data = cue.model_dump() if hasattr(cue, "model_dump") else dict(cue)
-        add(
-            {
-                "kind": "asset",
-                "sourceUrl": data.get("sourceUrl") or data.get("pageUrl") or canonical,
-                "label": data.get("label") or data.get("assetType") or "Approved asset",
-                "excerpt": data.get("value") or "",
-                "confidence": int(data.get("confidence") or 0),
-                "assetType": data.get("assetType"),
-            }
-        )
-
-    for section in list(getattr(brief, "sections", None) or []):
-        purpose = str(getattr(section, "purpose", "section") or "section")
-        terms = " ".join(
-            str(value or "")
-            for value in (
-                purpose,
-                getattr(section, "headline", ""),
-                getattr(section, "contentSummary", ""),
-            )
-        ).casefold()
-        candidates = []
-        for source in source_sections:
-            data = source.model_dump() if hasattr(source, "model_dump") else dict(source)
-            haystack = " ".join(
-                str(data.get(key) or "")
-                for key in ("type", "heading", "text", "pageUrl")
-            ).casefold()
-            if any(token and token in haystack for token in terms.split() if len(token) > 3):
-                candidates.append(data)
-        candidate = candidates[0] if candidates else None
-        add(
-            {
-                "kind": "page",
-                "sourceUrl": (candidate or {}).get("pageUrl") or canonical,
-                "label": f"Generated section: {purpose}",
-                "excerpt": (candidate or {}).get("text") or getattr(section, "contentSummary", "") or "",
-                "confidence": int((candidate or {}).get("confidence") or 60),
-                "evidenceType": "section",
-            }
-        )
-    return refs[:160]
 
 
 def _check_theme_diversity_constraint(
@@ -2657,7 +2324,6 @@ class SiteRepository:
         self._handoffs: dict[str, dict[str, Any]] = {}
         self._memory_ready = False
         self._screenshot_comparator = ScreenshotComparator()
-        self._generation_runs: dict[str, dict[str, Any]] = {}
 
     async def _maybe_ensure_indexes(self) -> None:
         database = get_database()
@@ -2667,21 +2333,6 @@ class SiteRepository:
         await database["generated_sites"].create_index("id", unique=True)
         await database["generated_sites"].create_index("leadId")
         await database["generated_sites"].create_index("previewSlug")
-        await database["generated_sites"].create_index("generationRunId")
-        await database["generated_sites"].create_index(
-            [("generationRunId", 1), ("variantType", 1)],
-            unique=True,
-            partialFilterExpression={"generationRunId": {"$type": "string"}},
-        )
-        await database["generation_runs"].create_index("id", unique=True)
-        await database["generation_runs"].create_index(
-            [("leadId", 1), ("createdAt", -1)]
-        )
-        await database["generation_runs"].create_index([("leadId", 1), ("status", 1)])
-        await database["generation_runs"].create_index("generationInputHash")
-        await database["generation_input_claims"].create_index(
-            [("leadId", 1), ("generationInputHash", 1)], unique=True
-        )
         await database["generated_site_versions"].create_index("siteId")
         await database["generated_site_versions"].create_index(
             [("siteId", 1), ("version", -1)]
@@ -3051,15 +2702,12 @@ class SiteRepository:
                 if not doc:
                     # Fallback: treat site_id as a leadId and return lowest-position variant
                     candidates = [
-                        d
-                        for d in self._sites.values()
+                        d for d in self._sites.values()
                         if d.get("leadId") == site_id
                         and (not user_id or d.get("userId") == user_id)
                     ]
                     if candidates:
-                        doc = min(
-                            candidates, key=lambda d: d.get("variantPosition", 99)
-                        )
+                        doc = min(candidates, key=lambda d: d.get("variantPosition", 99))
                 if doc:
                     if user_id and doc.get("userId") != user_id:
                         return None
@@ -3074,12 +2722,7 @@ class SiteRepository:
             lead_query: dict[str, Any] = {"leadId": site_id}
             if user_id:
                 lead_query["userId"] = user_id
-            cursor = (
-                database["generated_sites"]
-                .find(lead_query)
-                .sort("variantPosition", 1)
-                .limit(1)
-            )
+            cursor = database["generated_sites"].find(lead_query).sort("variantPosition", 1).limit(1)
             docs = await cursor.to_list(length=1)
             doc = docs[0] if docs else None
         if doc:
@@ -3144,75 +2787,6 @@ class SiteRepository:
         sites = [_site_doc_to_current(doc) for doc in docs]
         return sorted(sites, key=lambda s: s.variantPosition)
 
-    async def persist_visual_quality(
-        self, site_id: str, quality_score: int, qa_metadata: dict[str, Any]
-    ) -> None:
-        """Replace the provisional score after visual QA and runtime checks."""
-        score = max(0, min(100, int(quality_score)))
-        runtime = qa_metadata.get("runtimeQA") or {}
-        fatal_runtime = (
-            bool(runtime.get("fatalRuntimeFailures"))
-            or runtime.get("runtimeStatus") == "failed"
-        )
-        if fatal_runtime:
-            # Vision availability or a prior fallback score can never mask a
-            # parse/load/init failure in a public preview.
-            score = 0
-        if runtime:
-            penalties = 0
-            if runtime.get("consoleErrors") or runtime.get("pageErrors"):
-                penalties += 20
-            if runtime.get("failedRequests"):
-                penalties += 15
-            if runtime.get("brokenImages") or runtime.get("imageLoadTimeout"):
-                penalties += 15
-            if runtime.get("hiddenAfterScroll"):
-                penalties += 15
-            if runtime.get("horizontalOverflow"):
-                penalties += 10
-            if runtime.get("fontsReady") is False:
-                penalties += 10
-            score = max(0, score - penalties)
-            qa_metadata = {
-                **qa_metadata,
-                "qualityComponents": {
-                    "brandFidelity": int(qa_metadata.get("brandFidelity", score)),
-                    "visualImpact": int(qa_metadata.get("visualImpact", score)),
-                    "typography": int(qa_metadata.get("typography", score)),
-                    "layoutComposition": int(
-                        qa_metadata.get("layoutComposition", score)
-                    ),
-                    "imagery": int(qa_metadata.get("imagery", score)),
-                    "responsiveness": 0 if runtime.get("horizontalOverflow") else 100,
-                    "runtimeHealth": 0 if penalties else 100,
-                    "contentCompleteness": 0
-                    if runtime.get("hiddenAfterScroll")
-                    else 100,
-                },
-                "runtimePenalty": penalties,
-            }
-        now = _now()
-        update = {
-            "qualityScore": score,
-            "qualityScoreSource": "visual",
-            "screenshotQA": qa_metadata,
-            "runtimeQA": qa_metadata.get("runtimeQA") or runtime or None,
-            "qualityGateReport": qa_metadata.get("qualityGateReport"),
-            "updatedAt": now,
-        }
-        if fatal_runtime:
-            update.update({"qaStatus": "fail", "readinessStatus": "blocked"})
-        database = get_database()
-        # Keep the in-process projection current even when a test/dev database
-        # is configured. This projection is also used by status reads before a
-        # database refresh and must not retain the provisional score.
-        async with self._memory_lock:
-            if site_id in self._sites:
-                self._sites[site_id].update(update)
-        if database is None:
-            return
-        await database["generated_sites"].update_one({"id": site_id}, {"$set": update})
-
     async def generate_site_variant(
         self,
         *,
@@ -3222,8 +2796,6 @@ class SiteRepository:
         extraction: ExtractionSnapshot,
         analysis: Any,
         user_id: str,
-        approved_brief: Any | None = None,
-        generation_run_id: str | None = None,
     ) -> GeneratedSite:
         """
         Generate a single site variant (HTML or Next.js).
@@ -3243,140 +2815,18 @@ class SiteRepository:
         from app.core.static_html_generator import generate_static_html
         from app.core.ai_site_generation import generate_landing_page_code
 
-        if generation_run_id:
-            database = get_database()
-            existing_doc = None
-            if database is not None:
-                existing_doc = await database["generated_sites"].find_one(
-                    {"generationRunId": generation_run_id, "variantType": variant_type}
-                )
-            else:
-                async with self._memory_lock:
-                    existing_doc = next(
-                        (
-                            d
-                            for d in self._sites.values()
-                            if d.get("generationRunId") == generation_run_id
-                            and d.get("variantType") == variant_type
-                        ),
-                        None,
-                    )
-            if existing_doc:
-                return GeneratedSite.model_validate(existing_doc)
-
-        # Step 1: derive a variant brief from the approved brief. This preserves
-        # the exact approved brand assets and factual source while allowing each
-        # variant to have an independent creative direction.
+        # Step 1: Generate variant-specific master brief
         industry = None
         if analysis and hasattr(analysis, "analysis"):
             industry = getattr(analysis.analysis, "industry", None)
 
-        if approved_brief is None:
-            logger.info(f"Generating master brief for {variant_type} (legacy path)")
-            master_brief = await generate_master_brief(
-                lead_id=lead_id,
-                extraction=extraction,
-                variant_type=variant_type,
-                industry=industry,
-            )
-        else:
-            # Keep hero copy source-backed. Variant diversity comes from the
-            # strategy and art direction, never from industry-specific copy
-            # accidentally applied to an unrelated lead.
-            variant_copy = (
-                approved_brief.headline,
-                approved_brief.subheadline,
-                approved_brief.ctaStrategy,
-            )
-            ordered_sections = list(approved_brief.sections)
-            if variant_type == "html_v2":
-                ordered_sections = sorted(
-                    ordered_sections,
-                    key=lambda section: (
-                        0 if section.purpose in {"services", "process"} else 1
-                    ),
-                )
-            elif variant_type == "html_v3":
-                ordered_sections = sorted(
-                    ordered_sections,
-                    key=lambda section: (
-                        0 if section.purpose in {"about", "proof", "testimonial"} else 1
-                    ),
-                )
-            master_brief = approved_brief.model_copy(
-                deep=True,
-                update={
-                    "id": f"{generation_run_id}:{variant_type}"
-                    if generation_run_id
-                    else approved_brief.id,
-                    "visualStyle": variant_strategy.get(
-                        "designMode", approved_brief.visualStyle
-                    ),
-                    "designMode": variant_strategy.get(
-                        "designMode", approved_brief.designMode
-                    ),
-                    "headline": variant_copy[0],
-                    "subheadline": variant_copy[1],
-                    "ctaStrategy": variant_copy[2],
-                    "sections": ordered_sections,
-                    "creativeDirection": approved_brief.creativeDirection.model_copy(
-                        update={
-                            "designConcept": variant_strategy.get(
-                                "creativeBriefGuidance",
-                                approved_brief.creativeDirection.designConcept,
-                            ),
-                            "heroTreatment": {
-                                "html_v1": "Editorial authority with a source-backed hero image",
-                                "html_v2": "Cinematic service hero with an operational carousel",
-                                "html_v3": "Warm layered storytelling with a source-backed image collage",
-                            }.get(
-                                str(variant_type),
-                                approved_brief.creativeDirection.heroTreatment,
-                            ),
-                            "signatureTechnique": {
-                                "html_v1": "Measured editorial reveal",
-                                "html_v2": "Service carousel with controls",
-                                "html_v3": "Layered storytelling scroll",
-                            }.get(
-                                str(variant_type),
-                                approved_brief.creativeDirection.signatureTechnique,
-                            ),
-                            "layoutStrategy": {
-                                "html_v1": "Asymmetric editorial columns",
-                                "html_v2": "Full-bleed cinematic panels",
-                                "html_v3": "Warm staggered storytelling blocks",
-                            }.get(
-                                str(variant_type),
-                                approved_brief.creativeDirection.layoutStrategy,
-                            ),
-                            "colorMood": {
-                                "html_v1": "Bright, grounded brand neutrals",
-                                "html_v2": "Deep contrast with a focused brand accent",
-                                "html_v3": "Warm, tactile brand colors",
-                            }.get(
-                                str(variant_type),
-                                approved_brief.creativeDirection.colorMood,
-                            ),
-                            "typographyPersonality": {
-                                "html_v1": "Authority-led editorial display",
-                                "html_v2": "Condensed technical display and humanist body",
-                                "html_v3": "Warm expressive display and clear body",
-                            }.get(
-                                str(variant_type),
-                                approved_brief.creativeDirection.typographyPersonality,
-                            ),
-                            "inspirationKeywords": variant_strategy.get(
-                                "inspirationKeywords",
-                                approved_brief.creativeDirection.inspirationKeywords,
-                            ),
-                            "avoidPatterns": variant_strategy.get(
-                                "avoidPatterns",
-                                approved_brief.creativeDirection.avoidPatterns,
-                            ),
-                        }
-                    ),
-                },
-            )
+        logger.info(f"Generating master brief for {variant_type} (lead {lead_id})")
+        master_brief = await generate_master_brief(
+            lead_id=lead_id,
+            extraction=extraction,
+            variant_type=variant_type,
+            industry=industry,
+        )
 
         # Save brief to database
         database = get_database()
@@ -3414,7 +2864,7 @@ class SiteRepository:
                 logger.error(f"Next.js generation failed: {e}")
                 code_result = {}
 
-            site = await self._build_nextjs_site(
+            site = self._build_nextjs_site(
                 site_id=site_id,
                 lead_id=lead_id,
                 master_brief=master_brief,
@@ -3426,19 +2876,18 @@ class SiteRepository:
         else:
             # Generate static HTML
             logger.info(f"Generating static HTML for {variant_type} (site {site_id})")
-            # A failed generator call must abort before a GeneratedSite is
-            # built or persisted. The caller records the structured failure.
-            html_result = await generate_static_html(
-                master_brief=master_brief,
-                extraction=extraction,
-                variant_type=variant_type,
-                site_id=site_id,
-                preview_slug=slug,
-            )
-            if not html_result.get("html", "").strip():
-                raise ValueError("static_html_empty_after_generation")
+            try:
+                html_result = await generate_static_html(
+                    master_brief=master_brief,
+                    extraction=extraction,
+                    variant_type=variant_type,
+                    site_id=site_id,
+                )
+            except Exception as e:
+                logger.error(f"Static HTML generation failed: {e}")
+                html_result = {"html": "", "cssUrl": None, "jsUrl": None}
 
-            site = await self._build_static_html_site(
+            site = self._build_static_html_site(
                 site_id=site_id,
                 lead_id=lead_id,
                 master_brief=master_brief,
@@ -3450,72 +2899,6 @@ class SiteRepository:
 
         # Stamp the owning user and source attribution before saving
         site.userId = user_id
-        if generation_run_id:
-            site.generationRunId = generation_run_id
-            site.briefId = approved_brief.id if approved_brief else master_brief.id
-            site.briefVersion = (
-                approved_brief.version if approved_brief else master_brief.version
-            )
-            site.variantBriefId = master_brief.id
-            site.variantBriefVersion = master_brief.version
-            run = await self._get_generation_run(generation_run_id)
-            if run:
-                site.generationInputHash = run.get("generationInputHash")
-                site.brandSnapshotHash = run["snapshot"].get("brandSnapshotHash")
-                site.brandRevision = run["snapshot"].get("brandRevision", 1)
-                site.extractionId = run["snapshot"].get("extractionId")
-                site.extractionVersion = run["snapshot"].get("extractionVersion")
-                site.generatorVersion = run["snapshot"].get("generatorVersion")
-                site.promptVersion = run["snapshot"].get("promptVersion")
-                previous = list(run.get("variantBriefs") or [])
-                current_blueprint = {
-                    "contentStrategy": {
-                        "headline": master_brief.headline,
-                        "sections": [s.purpose for s in master_brief.sections],
-                        "cta": master_brief.ctaStrategy,
-                    },
-                    "creativeStrategy": variant_strategy,
-                }
-                similarities: list[float] = []
-                content_similarities: list[float] = []
-                creative_similarities: list[float] = []
-                for item in previous:
-                    content_similarity, creative_similarity, combined = (
-                        _variant_blueprint_similarity(item, current_blueprint)
-                    )
-                    content_similarities.append(content_similarity)
-                    creative_similarities.append(creative_similarity)
-                    similarities.append(combined)
-                max_similarity = max(similarities, default=0.0)
-                site.diversityScore = max(0, round((1 - max_similarity) * 100))
-                max_content = max(content_similarities, default=0.0)
-                max_creative = max(creative_similarities, default=0.0)
-                site.diversityNotes = [
-                    f"Compared with {len(previous)} prior variants; content similarity {max_content:.2f}, creative similarity {max_creative:.2f}."
-                ]
-                if any(
-                    content >= 0.95 and creative >= 0.95
-                    for content, creative in zip(
-                        content_similarities, creative_similarities
-                    )
-                ):
-                    raise ValueError(
-                        "diversity_gate_failed: identical section/copy blueprint"
-                    )
-                await self._update_generation_run(
-                    generation_run_id,
-                    {
-                        "variantBriefs": [
-                            *previous,
-                            {
-                                "id": master_brief.id,
-                                "variantType": variant_type,
-                                "version": master_brief.version,
-                                **current_blueprint,
-                            },
-                        ]
-                    },
-                )
         site.sourceAttribution = SiteSourceAttribution.model_validate(
             _site_source_attribution(
                 lead=await lead_repository.get_lead(lead_id),
@@ -3567,19 +2950,13 @@ class SiteRepository:
         database = get_database()
         if database is None:
             async with self._memory_lock:
-                return {
-                    doc.get("previewSlug", "")
-                    for doc in self._sites.values()
-                    if doc.get("archived") is not True
-                }
+                return {doc.get("previewSlug", "") for doc in self._sites.values()}
 
-        cursor = database["generated_sites"].find(
-            {"archived": {"$ne": True}}, {"previewSlug": 1}
-        )
+        cursor = database["generated_sites"].find({}, {"previewSlug": 1})
         docs = await cursor.to_list(length=10000)
         return {doc.get("previewSlug", "") for doc in docs}
 
-    async def _build_nextjs_site(
+    def _build_nextjs_site(
         self,
         *,
         site_id: str,
@@ -3594,13 +2971,6 @@ class SiteRepository:
         settings = get_settings()
         preview_base = settings.preview_base_url.rstrip("/")
 
-        sections = self._master_section_stack(master_brief, extraction)
-        cta_strategy = self._master_cta_strategy(master_brief)
-        variant_title, variant_description = await _generate_client_variant_copy(
-            master_brief=master_brief,
-            variant_strategy=variant_strategy,
-            extraction=extraction,
-        )
         return GeneratedSite(
             id=site_id,
             leadId=lead_id,
@@ -3609,8 +2979,6 @@ class SiteRepository:
             version=1,
             variantType="nextjs",
             variantLabel=variant_strategy.get("variantLabel", "Next.js Site"),
-            variantTitle=variant_title,
-            variantDescription=variant_description,
             variantPosition=variant_strategy.get("variantPosition", 4),
             themeId="nextjs-generated",
             themeKey="nextjs-generated",
@@ -3618,22 +2986,17 @@ class SiteRepository:
             themeRationale="AI-generated Next.js site",
             paletteMode=variant_strategy.get("paletteMode", "zinc"),
             paletteRationale="From variant strategy",
-            brandTokens=self._brand_tokens_from_brief(master_brief),
+            brandTokens=self._default_brand_tokens(),
             heroVariant=self._default_hero_variant(),
-            sectionStack=[SiteSection.model_validate(section) for section in sections],
-            ctaStrategy=CtaStrategy.model_validate(cta_strategy),
-            sourceTraceability=[
-                BriefSourceReference.model_validate(item)
-                for item in _generated_site_traceability(master_brief, extraction)
-            ],
+            sectionStack=[],
+            ctaStrategy=self._default_cta_strategy(),
             qualityScore=_quality_score(
                 brief=master_brief,
                 extraction=extraction,
-                brand_tokens=self._brand_tokens_from_brief(master_brief).model_dump(),
-                site_sections=sections,
+                brand_tokens=_default_brand_tokens_dict(),
+                site_sections=[],
                 missing_requirements=list(master_brief.missingRequirements or []),
             ),
-            qualityScoreSource="fallback",
             readinessStatus="ready_for_review",
             qaStatus="warn",
             previewSlug=slug,
@@ -3641,14 +3004,12 @@ class SiteRepository:
             overrideCount=0,
             sourceCode=code_result.get("sourceCode"),
             compiledBundleUrl=code_result.get("compiledBundleUrl"),
-            compiledCssUrl=code_result.get("compiledCssUrl"),
-            capabilityManifest=code_result.get("capabilityManifest"),
             compilationStatus=code_result.get("compilationStatus", "pending"),
             createdAt=_now(),
             updatedAt=_now(),
         )
 
-    async def _build_static_html_site(
+    def _build_static_html_site(
         self,
         *,
         site_id: str,
@@ -3663,13 +3024,6 @@ class SiteRepository:
         settings = get_settings()
         preview_base = settings.preview_base_url.rstrip("/")
 
-        sections = self._master_section_stack(master_brief, extraction)
-        cta_strategy = self._master_cta_strategy(master_brief)
-        variant_title, variant_description = await _generate_client_variant_copy(
-            master_brief=master_brief,
-            variant_strategy=variant_strategy,
-            extraction=extraction,
-        )
         return GeneratedSite(
             id=site_id,
             leadId=lead_id,
@@ -3678,152 +3032,36 @@ class SiteRepository:
             version=1,
             variantType=variant_strategy.get("variantType", "html_v1"),
             variantLabel=variant_strategy.get("variantLabel", "Static HTML"),
-            variantTitle=variant_title,
-            variantDescription=variant_description,
             variantPosition=variant_strategy.get("variantPosition", 1),
             staticHtml=html_result.get("html"),
             staticCssUrl=html_result.get("cssUrl"),
             staticJsUrl=html_result.get("jsUrl"),
-            staticCssCode=html_result.get("cssSourceCode") or html_result.get("cssCode"),
-            staticJsCode=html_result.get("jsSourceCode") or html_result.get("jsCode"),
-            capabilityManifest=html_result.get("capabilityManifest"),
             themeId="static-html",
             themeKey="static-html",
             themeName="Static HTML",
             themeRationale="AI-generated static HTML",
             paletteMode=variant_strategy.get("paletteMode", "light"),
             paletteRationale="From variant strategy",
-            brandTokens=self._brand_tokens_from_brief(master_brief),
+            brandTokens=self._default_brand_tokens(),
             heroVariant=self._default_hero_variant(),
-            sectionStack=[SiteSection.model_validate(section) for section in sections],
-            ctaStrategy=CtaStrategy.model_validate(cta_strategy),
-            sourceTraceability=[
-                BriefSourceReference.model_validate(item)
-                for item in _generated_site_traceability(master_brief, extraction)
-            ],
+            sectionStack=[],
+            ctaStrategy=self._default_cta_strategy(),
             qualityScore=_quality_score(
                 brief=master_brief,
                 extraction=extraction,
-                brand_tokens=self._brand_tokens_from_brief(master_brief).model_dump(),
-                site_sections=sections,
+                brand_tokens=_default_brand_tokens_dict(),
+                site_sections=[],
                 missing_requirements=list(master_brief.missingRequirements or []),
             ),
-            qualityScoreSource="fallback",
             readinessStatus="ready_for_review",
             qaStatus="warn",
             previewSlug=slug,
             previewUrl=f"{preview_base}/{slug}",
             overrideCount=0,
             sourceCode=html_result.get("html"),
-            compilationStatus="success" if html_result.get("html") else "failed",
             createdAt=_now(),
             updatedAt=_now(),
         )
-
-    def _brand_tokens_from_brief(self, brief: Any) -> BrandTokens:
-        """Persist approved brief assets instead of unrelated defaults."""
-        tokens = self._default_brand_tokens()
-        assets = getattr(brief, "brandAssets", None)
-        evidence = BriefEvidence(
-            sourceKind="source_backed",
-            inferenceLabel="Approved master brief",
-            confidence=85,
-        )
-        if assets:
-            values = {
-                "primaryColor": assets.primaryColor,
-                "secondaryColor": assets.secondaryColor,
-                "accentColor": assets.palette.get("accent")
-                or assets.secondaryColor
-                or assets.primaryColor,
-                "typography": assets.fontFamily,
-            }
-            for field, value in values.items():
-                if value:
-                    setattr(
-                        tokens, field, SiteToken(value=str(value), evidence=evidence)
-                    )
-            if assets.logoUrl:
-                tokens.logoAsset = SiteToken(value=assets.logoUrl, evidence=evidence)
-        return tokens
-
-    def _master_section_stack(
-        self, brief: Any, extraction: ExtractionSnapshot
-    ) -> list[dict[str, Any]]:
-        """Convert the approved master brief blueprint into persisted site metadata."""
-        evidence = BriefEvidence(
-            sourceKind="source_backed",
-            inferenceLabel="Approved master brief section",
-            confidence=85,
-        )
-        result: list[dict[str, Any]] = []
-        for section in list(getattr(brief, "sections", []) or []):
-            purpose = _text(section.purpose) or "section"
-            result.append(
-                {
-                    "kind": purpose,
-                    "title": section.headline or purpose,
-                    "headline": section.headline or purpose,
-                    "body": _sanitize_public_copy(section.contentSummary),
-                    "items": [
-                        _sanitize_public_copy(item)
-                        for item in section.contentPoints[:6]
-                    ],
-                    "ctaLabel": _ensure_client_safe_cta(_text(brief.conversionAction))
-                    if purpose.lower() in {"cta", "contact", "conversion"}
-                    else None,
-                    "componentId": _map_section_kind_to_component_id(purpose),
-                    "evidence": evidence.model_dump(),
-                }
-            )
-        if not result:
-            result.append(
-                {
-                    "kind": "overview",
-                    "title": "Overview",
-                    "headline": brief.headline,
-                    "body": _sanitize_public_copy(brief.valueProposition),
-                    "items": [],
-                    "ctaLabel": None,
-                    "componentId": _map_section_kind_to_component_id("overview"),
-                    "evidence": evidence.model_dump(),
-                }
-            )
-        return result
-
-    def _master_cta_strategy(self, brief: Any) -> dict[str, Any]:
-        """Persist CTA labels and destinations derived from the approved conversion action."""
-        action = _ensure_client_safe_cta(
-            _text(getattr(brief, "conversionAction", "")) or "Get started"
-        )
-        rationale = _text(getattr(brief, "ctaStrategy", "")) or _text(
-            getattr(brief, "conversionAction", "")
-        )
-        evidence = BriefEvidence(
-            sourceKind="source_backed",
-            inferenceLabel="Approved conversion action",
-            confidence=85,
-        ).model_dump()
-        return {
-            "primary": {
-                "label": action,
-                "href": "#contact",
-                "rationale": rationale,
-                "evidence": evidence,
-            },
-            "secondary": {
-                "label": "Learn more",
-                "href": "#overview",
-                "rationale": "Lower-friction exploration path.",
-                "evidence": evidence,
-            },
-            "footer": {
-                "label": action,
-                "href": "#contact",
-                "rationale": rationale,
-                "evidence": evidence,
-            },
-        }
 
     def _default_brand_tokens(self) -> BrandTokens:
         """Return default brand tokens."""
@@ -4130,14 +3368,6 @@ class SiteRepository:
         site = await self.get_site(site_id)
         if site is None:
             return None
-        if site.generationRunId:
-            run = await self._get_generation_run(site.generationRunId)
-            snapshot = (run or {}).get("snapshot") or {}
-            if snapshot.get("enhancedHtmlShadowMode"):
-                raise ValueError("shadow_mode_artifacts_cannot_be_published")
-        quality_gate_report = site.qualityGateReport or {}
-        if quality_gate_report.get("publishable") is not True:
-            raise ValueError("quality_gates_unmeasured_or_failed")
         review = await self._get_review_doc(site_id)
         record = self._handoff_doc_for_site(site, review)
         now = _now()
@@ -4320,193 +3550,6 @@ class SiteRepository:
                 return None
         return current
 
-    async def _get_generation_run(self, run_id: str) -> dict[str, Any] | None:
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                return self._generation_runs.get(run_id)
-        return await database["generation_runs"].find_one({"id": run_id})
-
-    async def _save_generation_run(self, run: dict[str, Any]) -> None:
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                self._generation_runs[run["id"]] = run
-            return
-        await database["generation_runs"].insert_one(run)
-
-    async def _update_generation_run(self, run_id: str, update: dict[str, Any]) -> None:
-        update["updatedAt"] = _now()
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                if run_id in self._generation_runs:
-                    self._generation_runs[run_id].update(update)
-            return
-        await database["generation_runs"].update_one({"id": run_id}, {"$set": update})
-
-    async def _claim_generation_input(
-        self, *, lead_id: str, input_hash: str, job_id: str
-    ) -> dict[str, Any] | None:
-        """Atomically claim an active immutable input fingerprint."""
-        now = _now()
-        claim = {
-            "leadId": lead_id,
-            "generationInputHash": input_hash,
-            "jobId": job_id,
-            "createdAt": now,
-        }
-        database = get_database()
-        if database is None:
-            async with lead_repository._memory_lock:
-                key = (lead_id, input_hash)
-                claims = getattr(self, "_generation_input_claims", {})
-                existing = claims.get(key)
-                if existing:
-                    return existing
-                claims[key] = claim
-                self._generation_input_claims = claims
-                return None
-        try:
-            await database["generation_input_claims"].insert_one(claim)
-            return None
-        except Exception as exc:
-            if "duplicate" not in str(exc).lower() and "11000" not in str(exc):
-                raise
-            return await database["generation_input_claims"].find_one(
-                {"leadId": lead_id, "generationInputHash": input_hash}
-            )
-
-    async def _release_generation_input(
-        self, *, lead_id: str, input_hash: str, job_id: str
-    ) -> None:
-        database = get_database()
-        if database is None:
-            async with lead_repository._memory_lock:
-                claims = getattr(self, "_generation_input_claims", {})
-                claim = claims.get((lead_id, input_hash))
-                if claim and claim.get("jobId") == job_id:
-                    claims.pop((lead_id, input_hash), None)
-            return
-        await database["generation_input_claims"].delete_one(
-            {"leadId": lead_id, "generationInputHash": input_hash, "jobId": job_id}
-        )
-
-    async def list_generation_runs(
-        self, lead_id: str, limit: int = 20
-    ) -> list[dict[str, Any]]:
-        database = get_database()
-        if database is None:
-            async with self._memory_lock:
-                runs = [
-                    r
-                    for r in self._generation_runs.values()
-                    if r.get("leadId") == lead_id
-                ]
-                return sorted(
-                    runs, key=lambda r: r.get("createdAt", _now()), reverse=True
-                )[:limit]
-        cursor = (
-            database["generation_runs"]
-            .find({"leadId": lead_id})
-            .sort("createdAt", -1)
-            .limit(limit)
-        )
-        return await cursor.to_list(length=limit)
-
-    async def _create_generation_run(
-        self,
-        *,
-        lead: Any,
-        extraction: ExtractionSnapshot,
-        brief: Any,
-        request: SiteGenerateRequest | None,
-        job_id: str,
-        requested_by: str | None = None,
-    ) -> dict[str, Any]:
-        generation_types = list(
-            (
-                request.variantTypes
-                if request and request.variantTypes
-                else ["html_v1", "html_v2", "html_v3"]
-            )
-        )
-        assets = (
-            brief.brandAssets.model_dump(mode="json")
-            if getattr(brief, "brandAssets", None)
-            else {}
-        )
-        instructions = None
-        if request and request.refinementPromptId:
-            instructions = f"refinement_prompt:{request.refinementPromptId}"
-        from app.core.variant_strategy import get_variant_strategies
-
-        all_strategies = get_variant_strategies(lead.industry)
-        default_nextjs = {
-            "variantType": "nextjs",
-            "variantLabel": "Next.js Site",
-            "variantPosition": 4,
-            "designMode": "interactive",
-            "paletteMode": "zinc",
-            "creativeBriefGuidance": "",
-            "inspirationKeywords": [],
-            "avoidPatterns": [],
-        }
-        strategies = [
-            dict(all_strategies.get(v, default_nextjs if v == "nextjs" else {}))
-            for v in generation_types
-        ]
-        snapshot = {
-            "leadId": lead.id,
-            "leadVersion": getattr(lead, "version", None),
-            "extractionId": extraction.id,
-            "extractionVersion": extraction.version,
-            "analysisId": extraction.id,
-            "analysisVersion": extraction.version,
-            "briefId": brief.id,
-            "briefVersion": brief.version,
-            "brandRevision": int(getattr(brief, "brandRevision", 1) or 1),
-            "brandSnapshotHash": brand_snapshot_hash(assets),
-            "brandSnapshot": assets,
-            "approvedImageInventory": list(assets.get("imageInventory") or []),
-            "rejectedImages": list(assets.get("rejectedImages") or []),
-            "operatorInstructions": instructions,
-            "generationTypes": generation_types,
-            "variantStrategies": strategies,
-            "generatorVersion": "generation-run-v1",
-            "enhancedHtmlRollout": enhanced_html_enabled(
-                lead.id, get_settings().enhanced_html_rollout_percent
-            ),
-            "enhancedHtmlShadowMode": get_settings().enhanced_html_shadow_mode,
-            "enhancedHtmlRolloutDecision": rollout_decision(
-                lead.id,
-                get_settings().enhanced_html_rollout_percent,
-                latency_budget_seconds=get_settings().enhanced_html_latency_budget_seconds,
-            ),
-            "promptVersion": "master-brief-v1",
-        }
-        input_hash = generation_input_hash(snapshot)
-        now = _now()
-        run = {
-            "id": uuid4().hex,
-            "leadId": lead.id,
-            "jobId": job_id,
-            "status": "queued",
-            "snapshot": snapshot,
-            "generationInputHash": input_hash,
-            "requestedBy": requested_by,
-            "operatorInstructions": instructions,
-            "variantBriefs": [],
-            "variantResults": [],
-            "createdAt": now,
-            "startedAt": None,
-            "finishedAt": None,
-            "supersededByRunId": None,
-            "supersededReason": None,
-        }
-        await self._save_generation_run(run)
-        return run
-
     async def queue_generation_job(
         self, site_id: str, request: SiteGenerateRequest | None = None
     ) -> JobSummary | None:
@@ -4523,142 +3566,15 @@ class SiteRepository:
         extraction = await lead_repository.get_extraction(site_id)
         if extraction is None or extraction.version <= 0:
             raise ValueError("extraction_required")
-        # Provider calls are expensive and must never be used to discover an
-        # asset/hero contradiction which preflight can determine exactly.
-        from app.core.generation_contracts import generation_preflight
 
-        preflight = generation_preflight(
-            master_brief, asset_download_enabled=get_settings().asset_download_enabled
-        )
-        if not preflight.allowed:
-            block = preflight.blocks[0]
-            raise ValueError(f"preflight_blocked:{block.rule_id}:{block.message}")
+        # Prevent duplicate generation jobs (same guard as start_extraction)
         database = get_database()
-
-        # Use source evidence when an imported lead did not carry an industry;
-        # this prevents trade businesses from falling into SaaS defaults.
-        if not getattr(lead, "industry", None):
-            from app.core.industry_detection import detect_industry
-
-            inferred_industry, confidence = detect_industry(
-                company_name=extraction.summary.companyName or "",
-                services=list(
-                    getattr(extraction.analysis, "services", [])
-                    or extraction.summary.serviceClues
-                ),
-                content_snippets=[
-                    extraction.summary.positioningSummary or "",
-                    *extraction.summary.serviceClues,
-                ],
-            )
-            lead.industry = inferred_industry
-            if database is not None:
-                await database["leads"].update_one(
-                    {"id": lead.id, "industry": {"$in": [None, ""]}},
-                    {
-                        "$set": {
-                            "industry": inferred_industry,
-                            "inferredIndustry": {
-                                "value": inferred_industry,
-                                "confidence": confidence,
-                                "extractionId": extraction.id,
-                                "source": "extraction",
-                            },
-                            "updatedAt": _now(),
-                        }
-                    },
-                )
-
-        # Build a pinned run before deduplicating. Active jobs only match when the
-        # immutable input fingerprint is identical; a lead-only guard caused stale reuse.
-        requested_by = getattr(lead, "user_id", None)
-        assets_for_hash = master_brief.brandAssets.model_dump(mode="json")
-        prospective = {
-            "leadId": lead.id,
-            "leadVersion": getattr(lead, "version", None),
-            "briefId": master_brief.id,
-            "briefVersion": master_brief.version,
-            "extractionId": extraction.id,
-            "extractionVersion": extraction.version,
-            "analysisId": extraction.id,
-            "analysisVersion": extraction.version,
-            "generationTypes": list(
-                request.variantTypes
-                if request and request.variantTypes
-                else ["html_v1", "html_v2", "html_v3"]
-            ),
-            "operatorInstructions": f"refinement_prompt:{request.refinementPromptId}"
-            if request and request.refinementPromptId
-            else None,
-            "brandSnapshotHash": brand_snapshot_hash(assets_for_hash),
-            "brandSnapshot": assets_for_hash,
-            "approvedImageInventory": list(assets_for_hash.get("imageInventory") or []),
-            "rejectedImages": list(assets_for_hash.get("rejectedImages") or []),
-            "brandRevision": int(getattr(master_brief, "brandRevision", 1) or 1),
-            "variantStrategies": [],
-            "generatorVersion": "generation-run-v1",
-            "promptVersion": "master-brief-v1",
-            "enhancedHtmlRollout": enhanced_html_enabled(
-                lead.id, get_settings().enhanced_html_rollout_percent
-            ),
-            "enhancedHtmlShadowMode": get_settings().enhanced_html_shadow_mode,
-            "enhancedHtmlRolloutDecision": rollout_decision(
-                lead.id,
-                get_settings().enhanced_html_rollout_percent,
-                latency_budget_seconds=get_settings().enhanced_html_latency_budget_seconds,
-            ),
-        }
-        from app.core.variant_strategy import get_variant_strategies
-
-        default_nextjs = {
-            "variantType": "nextjs",
-            "variantLabel": "Next.js Site",
-            "variantPosition": 4,
-            "designMode": "interactive",
-            "paletteMode": "zinc",
-            "creativeBriefGuidance": "",
-            "inspirationKeywords": [],
-            "avoidPatterns": [],
-        }
-        strategy_map = get_variant_strategies(lead.industry)
-        prospective["variantStrategies"] = [
-            dict(strategy_map.get(v, default_nextjs if v == "nextjs" else {}))
-            for v in prospective["generationTypes"]
-        ]
-        input_hash = generation_input_hash(prospective)
-        # This claim closes the read-then-create race between identical requests.
-        # It is released only after runtime QA has finalized the run.
-        provisional_job_id = uuid4().hex
-        existing_claim = await self._claim_generation_input(
-            lead_id=site_id, input_hash=input_hash, job_id=provisional_job_id
-        )
-        if existing_claim is not None:
-            existing_job_id = existing_claim.get("jobId")
-            existing_job = (
-                await database["jobs"].find_one({"id": existing_job_id})
-                if database is not None
-                else lead_repository._jobs.get(existing_job_id)
-            )
-            if existing_job is not None:
-                await self._release_generation_input(
-                    lead_id=site_id, input_hash=input_hash, job_id=provisional_job_id
-                )
-                return _job_doc_to_summary(existing_job)
-            await self._release_generation_input(
-                lead_id=site_id, input_hash=input_hash, job_id=existing_job_id or ""
-            )
-            existing_claim = await self._claim_generation_input(
-                lead_id=site_id, input_hash=input_hash, job_id=provisional_job_id
-            )
-            if existing_claim is not None:
-                raise ValueError("generation_input_claim_unavailable")
         if database is not None:
             existing_gen_job = await database["jobs"].find_one(
                 {
                     "leadId": site_id,
                     "jobType": {"$in": ["site_generate", "site_republish"]},
                     "status": {"$in": ["queued", "running"]},
-                    "metadata.generationInputHash": input_hash,
                 }
             )
             if existing_gen_job is not None:
@@ -4667,26 +3583,7 @@ class SiteRepository:
                     site_id,
                     existing_gen_job["id"],
                 )
-                await self._release_generation_input(
-                    lead_id=site_id, input_hash=input_hash, job_id=provisional_job_id
-                )
                 return _job_doc_to_summary(existing_gen_job)
-        else:
-            async with lead_repository._memory_lock:
-                existing_gen_job = next(
-                    (
-                        j
-                        for j in lead_repository._jobs.values()
-                        if site_id in j.get("leadIds", [])
-                        and j.get("jobType") in {"site_generate", "site_republish"}
-                        and j.get("status") in {"queued", "running"}
-                        and (j.get("metadata") or {}).get("generationInputHash")
-                        == input_hash
-                    ),
-                    None,
-                )
-                if existing_gen_job is not None:
-                    return _job_doc_to_summary(existing_gen_job)
 
         current = await self.get_site(site_id)
         next_version = int(current.version if current else 0) + 1
@@ -4767,148 +3664,9 @@ class SiteRepository:
                 "nextVersion": next_version,
                 "request": request.model_dump() if request else {},
             },
-            job_id=provisional_job_id,
         )
-        run = await self._create_generation_run(
-            lead=lead,
-            extraction=extraction,
-            brief=master_brief,
-            request=request,
-            job_id=job.id,
-            requested_by=requested_by,
-        )
-        # Pin the run before dispatch so runtime QA can advance the lead only
-        # when this is still the latest generation attempt.
-        if database is None:
-            async with lead_repository._memory_lock:
-                if site_id in lead_repository._memory:
-                    lead_repository._memory[site_id].update(
-                        {
-                            "latestGenerationRunId": run["id"],
-                            "pipelineStage": "generating",
-                            "pipelineStatusDetail": "Generation in progress",
-                            "updatedAt": _now(),
-                        }
-                    )
-        else:
-            await database["leads"].update_one(
-                {"id": site_id},
-                {
-                    "$set": {
-                        "latestGenerationRunId": run["id"],
-                        "pipelineStage": "generating",
-                        "pipelineStatusDetail": "Generation in progress",
-                        "updatedAt": _now(),
-                    }
-                },
-            )
-        # Supersede older queued runs with different inputs. Running runs remain
-        # historical and are allowed to finish without becoming the latest state.
-        if database is not None:
-            old_jobs = (
-                await database["jobs"]
-                .find(
-                    {
-                        "leadId": site_id,
-                        "jobType": {"$in": ["site_generate", "site_republish"]},
-                        "status": "queued",
-                        "id": {"$ne": job.id},
-                    }
-                )
-                .to_list(length=50)
-            )
-            for old_job in old_jobs:
-                old_run_id = (old_job.get("metadata") or {}).get("generationRunId")
-                if old_run_id:
-                    old_run = await self._get_generation_run(old_run_id)
-                    if (
-                        old_run
-                        and old_run.get("generationInputHash")
-                        != run["generationInputHash"]
-                    ):
-                        reason = supersede_reason(old_run, run)
-                        await self._update_generation_run(
-                            old_run_id,
-                            {
-                                "status": "superseded",
-                                "supersededByRunId": run["id"],
-                                "supersededReason": reason,
-                                "finishedAt": _now(),
-                            },
-                        )
-                        await database["jobs"].update_one(
-                            {"id": old_job["id"], "status": "queued"},
-                            {
-                                "$set": {
-                                    "status": "failed",
-                                    "step": "Superseded by newer generation run",
-                                    "errorMessage": f"superseded:{reason}",
-                                    "finishedAt": _now(),
-                                    "updatedAt": _now(),
-                                    "metadata.supersededByRunId": run["id"],
-                                    "metadata.supersededReason": reason,
-                                }
-                            },
-                        )
-        # Store the exact run reference and fingerprint on the job itself for old
-        # monitoring surfaces and safe task dispatch.
-        database = get_database()
-        if database is None:
-            async with lead_repository._memory_lock:
-                if job.id in lead_repository._jobs:
-                    lead_repository._jobs[job.id]["metadata"].update(
-                        {
-                            "generationRunId": run["id"],
-                            "generationInputHash": run["generationInputHash"],
-                            "snapshot": run["snapshot"],
-                        }
-                    )
-            old_jobs = [
-                j
-                for j in lead_repository._jobs.values()
-                if site_id in j.get("leadIds", [])
-                and j.get("jobType") in {"site_generate", "site_republish"}
-                and j.get("status") == "queued"
-                and j.get("id") != job.id
-            ]
-            for old_job in old_jobs:
-                old_run_id = (old_job.get("metadata") or {}).get("generationRunId")
-                old_run = self._generation_runs.get(old_run_id) if old_run_id else None
-                if (
-                    old_run
-                    and old_run.get("generationInputHash") != run["generationInputHash"]
-                ):
-                    reason = supersede_reason(old_run, run)
-                    old_run.update(
-                        {
-                            "status": "superseded",
-                            "supersededByRunId": run["id"],
-                            "supersededReason": reason,
-                            "finishedAt": _now(),
-                        }
-                    )
-                    old_job.update(
-                        {
-                            "status": "failed",
-                            "step": "Superseded by newer generation run",
-                            "errorMessage": f"superseded:{reason}",
-                            "finishedAt": _now(),
-                            "updatedAt": _now(),
-                        }
-                    )
-        else:
-            await database["jobs"].update_one(
-                {"id": job.id},
-                {
-                    "$set": {
-                        "metadata.generationRunId": run["id"],
-                        "metadata.generationInputHash": run["generationInputHash"],
-                        "metadata.snapshot": run["snapshot"],
-                    }
-                },
-            )
         await self._dispatch_generation_job(
-            site_id=site_id, job_id=job.id, request=request, generation_run_id=run["id"]
+            site_id=site_id, job_id=job.id, request=request
         )
         return job
 
@@ -4921,34 +3679,9 @@ class SiteRepository:
         return await self.get_site(site_id)
 
     async def run_generation_job(
-        self,
-        *,
-        site_id: str,
-        job_id: str,
-        request: SiteGenerateRequest | None = None,
-        generation_run_id: str | None = None,
+        self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None = None
     ) -> GeneratedSite | None:
         await self._maybe_ensure_indexes()
-        run = (
-            await self._get_generation_run(generation_run_id)
-            if generation_run_id
-            else None
-        )
-        if run:
-            if run.get("jobId") != job_id or run.get("leadId") != site_id:
-                raise ValueError("generation_run_job_or_lead_mismatch")
-            if run.get("status") in {"superseded", "cancelled"}:
-                logger.warning(
-                    "Skipping non-executable generation run %s", generation_run_id
-                )
-                return None
-            snapshot = run["snapshot"]
-            await self._update_generation_run(
-                generation_run_id,
-                {"status": "running", "startedAt": run.get("startedAt") or _now()},
-            )
-        else:
-            snapshot = None
         lead = await lead_repository.get_lead(site_id)
         if lead is None:
             await lead_repository._update_job(  # noqa: SLF001
@@ -4963,13 +3696,7 @@ class SiteRepository:
             return None
 
         # Check for master brief (AI generation support)
-        master_brief = await (
-            lead_repository.get_master_brief_version(
-                site_id, snapshot["briefId"], snapshot["briefVersion"]
-            )
-            if snapshot
-            else lead_repository.get_master_brief(site_id)
-        )
+        master_brief = await lead_repository.get_master_brief(site_id)
         use_ai_generation = (
             master_brief is not None and master_brief.approvalState == "approved"
         )
@@ -4977,19 +3704,9 @@ class SiteRepository:
         # Phase 3: Legacy briefs deleted; only master_brief now
         if not use_ai_generation:
             raise ValueError("brief_not_approved")
-        extraction = await (
-            lead_repository.get_extraction_version(
-                site_id, snapshot["extractionId"], snapshot["extractionVersion"]
-            )
-            if snapshot
-            else lead_repository.get_extraction(site_id)
-        )
+        extraction = await lead_repository.get_extraction(site_id)
         if extraction is None or extraction.version <= 0:
             raise ValueError("extraction_required")
-        if snapshot and (
-            master_brief is None or master_brief.approvalState != "approved"
-        ):
-            raise ValueError("pinned_brief_not_approved")
 
         # High-level generation trace
         logger.info("=== Starting site generation for %s ===", site_id)
@@ -5098,7 +3815,6 @@ class SiteRepository:
                 version=next_version,
                 current=current,
                 refinement_prompt_id=refinement_prompt_id,
-                generation_run_id=generation_run_id,
             )
 
             # Verify site was persisted successfully
@@ -5155,21 +3871,6 @@ class SiteRepository:
                 finished=True,
                 lead_ids=[site_id],
             )
-            if run:
-                await self._update_generation_run(
-                    generation_run_id,
-                    {
-                        "status": "completed",
-                        "finishedAt": _now(),
-                        "variantResults": [
-                            {
-                                "variantType": "nextjs",
-                                "siteId": persisted_site.id,
-                                "status": "completed",
-                            }
-                        ],
-                    },
-                )
             from app.core.analytics import analytics_repository
 
             await analytics_repository.record_admin_event(
@@ -5270,13 +3971,8 @@ class SiteRepository:
             from app.core.tasks import run_site_refinement_job_task
 
             try:
-                task_result = run_site_refinement_job_task.apply_async(  # type: ignore[attr-defined]
-                    kwargs={
-                        "site_id": site_id,
-                        "job_id": job.id,
-                        "prompt_id": prompt_id,
-                    },
-                    task_id=job.id,
+                task_result = run_site_refinement_job_task.delay(  # type: ignore[attr-defined]
+                    site_id=site_id, job_id=job.id, prompt_id=prompt_id
                 )
                 logger.info(
                     "Queued refinement task %s for site %s job %s",
@@ -5386,50 +4082,11 @@ class SiteRepository:
             },
         )
 
-        master_brief = await lead_repository.get_master_brief(lead_id)
-        extraction = await lead_repository.get_extraction(lead_id)
-        if master_brief is None or extraction is None:
-            await lead_repository._update_job(  # noqa: SLF001
-                job_id,
-                status="failed",
-                progress=100,
-                step="Brief or extraction missing before refinement",
-                error_message="Cannot validate refined site without brief/extraction",
-                finished=True,
-                lead_ids=[lead_id],
-            )
-            return None
-
-        static_css = current.staticCssCode
-        static_js = current.staticJsCode
-        if current.variantType and current.variantType.startswith("html_") and (
-            not static_css or not static_js
-        ):
-            # Backfill artifacts for sites generated before source artifacts
-            # were persisted, so refinement still validates the real bundle.
-            try:
-                async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-                    if not static_css and current.staticCssUrl:
-                        response = await client.get(current.staticCssUrl)
-                        if response.is_success:
-                            static_css = response.text
-                    if not static_js and current.staticJsUrl:
-                        response = await client.get(current.staticJsUrl)
-                        if response.is_success:
-                            static_js = response.text
-            except httpx.HTTPError as exc:
-                logger.warning("Unable to backfill static refinement artifacts for %s: %s", site_id, exc)
-
         result = await refine_with_retry(
             site_id=site_id,
             current_source_code=current.sourceCode,
             refinement_prompt=prompt_text,
             variant_type=current.variantType or "nextjs",
-            master_brief=master_brief,
-            extraction=extraction,
-            preview_slug=current.previewSlug,
-            current_static_css=static_css,
-            current_static_js=static_js,
         )
 
         if not result.get("success"):
@@ -5450,6 +4107,20 @@ class SiteRepository:
                 quality_score=0,
                 status="failed",
                 failure_reason=error_msg,
+            )
+            return None
+
+        master_brief = await lead_repository.get_master_brief(lead_id)
+        extraction = await lead_repository.get_extraction(lead_id)
+        if master_brief is None or extraction is None:
+            await lead_repository._update_job(  # noqa: SLF001
+                job_id,
+                status="failed",
+                progress=100,
+                step="Brief or extraction missing after refinement",
+                error_message="Cannot persist refined site without brief/extraction",
+                finished=True,
+                lead_ids=[lead_id],
             )
             return None
 
@@ -5520,7 +4191,6 @@ class SiteRepository:
         version: int,
         current: GeneratedSite | None,
         refinement_prompt_id: str | None = None,
-        generation_run_id: str | None = None,
     ) -> None:
         """Persist generated site record after successful AI code generation."""
         now = _now()
@@ -5568,7 +4238,6 @@ class SiteRepository:
             "confidence": 80,
             "references": [],
         }
-        approved_tokens = self._brand_tokens_from_brief(master_brief).model_dump()
         brand_tokens = {
             "paletteMode": palette_mode,
             "primaryColor": {"value": "#1a1a2e", "evidence": default_evidence},
@@ -5592,17 +4261,6 @@ class SiteRepository:
             },
             "layoutDensity": {"value": "balanced", "evidence": default_evidence},
         }
-        # Approved brand assets are the source of truth for every generation run.
-        for token_name in (
-            "primaryColor",
-            "secondaryColor",
-            "accentColor",
-            "typography",
-        ):
-            if approved_tokens.get(token_name):
-                brand_tokens[token_name] = approved_tokens[token_name]
-        if approved_tokens.get("logoAsset"):
-            brand_tokens["logoAsset"] = approved_tokens["logoAsset"]
 
         hero_variant = {
             "headline": master_brief.headline,
@@ -5613,6 +4271,27 @@ class SiteRepository:
             "layout": theme.get("heroFamily", "stacked-panel"),
             "visualTreatment": master_brief.visualStyle or "modern",
             "evidence": default_evidence,
+        }
+
+        cta_strategy = {
+            "primary": {
+                "label": _ensure_client_safe_cta("Get started"),
+                "href": "#",
+                "rationale": "Primary conversion action",
+                "evidence": default_evidence,
+            },
+            "secondary": {
+                "label": _ensure_client_safe_cta("Learn more"),
+                "href": "#",
+                "rationale": "Secondary engagement action",
+                "evidence": default_evidence,
+            },
+            "footer": {
+                "label": _ensure_client_safe_cta("Get started"),
+                "href": "#",
+                "rationale": "Footer conversion action",
+                "evidence": default_evidence,
+            },
         }
 
         # Generate or reuse preview slug
@@ -5636,13 +4315,11 @@ class SiteRepository:
         )
 
         missing_reqs = list(master_brief.missingRequirements or [])
-        generated_sections = self._master_section_stack(master_brief, extraction)
-        generated_cta = self._master_cta_strategy(master_brief)
         computed_quality_score = _quality_score(
             brief=master_brief,
             extraction=extraction,
             brand_tokens=brand_tokens,
-            site_sections=generated_sections,
+            site_sections=[],
             missing_requirements=missing_reqs,
         )
         settings_for_readiness = get_settings()
@@ -5667,28 +4344,8 @@ class SiteRepository:
             "id": site_id,
             "leadId": lead.id,
             "generationJobId": job_id,
-            "generationRunId": generation_run_id,
             "briefId": master_brief.id,
             "briefVersion": master_brief.version,
-            "variantBriefId": master_brief.id
-            if generation_run_id is None
-            else f"{generation_run_id}:nextjs",
-            "variantBriefVersion": master_brief.version,
-            "extractionId": extraction.id,
-            "extractionVersion": extraction.version,
-            "brandRevision": int(getattr(master_brief, "brandRevision", 1) or 1),
-            "brandSnapshotHash": brand_snapshot_hash(
-                master_brief.brandAssets.model_dump(mode="json")
-            ),
-            "generationInputHash": (
-                (await self._get_generation_run(generation_run_id) or {}).get(
-                    "generationInputHash"
-                )
-                if generation_run_id
-                else None
-            ),
-            "generatorVersion": "generation-run-v1",
-            "promptVersion": "master-brief-v1",
             "version": version,
             "themeId": theme["id"],
             "themeKey": theme["themeKey"],
@@ -5698,15 +4355,14 @@ class SiteRepository:
             "paletteRationale": palette_rationale,
             "brandTokens": brand_tokens,
             "heroVariant": hero_variant,
-            "sectionStack": generated_sections,
-            "ctaStrategy": generated_cta,
+            "sectionStack": [],
+            "ctaStrategy": cta_strategy,
             "qualityScore": computed_quality_score,
-            "qualityScoreSource": "fallback",
             "readinessStatus": computed_readiness,
             "qaStatus": computed_qa,
             "reviewRubric": [],
             "comparisonEntries": [],
-            "sourceTraceability": _generated_site_traceability(master_brief, extraction),
+            "sourceTraceability": [],
             "missingRequirements": list(master_brief.missingRequirements or []),
             "sourceAttribution": source_attribution,
             "browserReviewState": "not_reviewed",
@@ -5724,30 +4380,11 @@ class SiteRepository:
             "promptHistory": [
                 (r.model_dump() if hasattr(r, "model_dump") else r)
                 for r in (current.promptHistory or [])
-            ]
-            if current
-            else [],
+            ] if current else [],
             "isManuallyRefined": refinement_prompt_id is not None,
             "improvementRecommendations": None,
             "sourceCode": result.get("sourceCode"),
-            "staticHtml": result.get("staticHtml")
-            if result.get("staticHtml") is not None
-            else (current.staticHtml if current else None),
-            "staticCssUrl": result.get("staticCssUrl")
-            if result.get("staticCssUrl") is not None
-            else (current.staticCssUrl if current else None),
-            "staticJsUrl": result.get("staticJsUrl")
-            if result.get("staticJsUrl") is not None
-            else (current.staticJsUrl if current else None),
-            "staticCssCode": result.get("staticCssCode")
-            if result.get("staticCssCode") is not None
-            else (current.staticCssCode if current else None),
-            "staticJsCode": result.get("staticJsCode")
-            if result.get("staticJsCode") is not None
-            else (current.staticJsCode if current else None),
             "compiledBundleUrl": result.get("compiledBundleUrl"),
-            "compiledCssUrl": result.get("compiledCssUrl"),
-            "capabilityManifest": result.get("capabilityManifest"),
             "compilationStatus": result.get("compilationStatus", "success"),
             "compilationError": None,
             "createdAt": current.createdAt if current else now,
@@ -5815,12 +4452,7 @@ class SiteRepository:
         )
 
     async def _dispatch_generation_job(
-        self,
-        *,
-        site_id: str,
-        job_id: str,
-        request: SiteGenerateRequest | None,
-        generation_run_id: str | None = None,
+        self, *, site_id: str, job_id: str, request: SiteGenerateRequest | None
     ) -> None:
         settings = get_settings()
 
@@ -5836,7 +4468,6 @@ class SiteRepository:
                         lead_id=site_id,
                         job_id=job_id,
                         generation_types=list(variant_types),
-                        generation_run_id=generation_run_id,
                     )
                 except Exception:  # pragma: no cover - eager path logging
                     logging.getLogger("lenquant.jobs").exception(
@@ -5847,14 +4478,8 @@ class SiteRepository:
 
             from app.core.tasks import run_multi_variant_generation_task
 
-            run_multi_variant_generation_task.apply_async(  # type: ignore[attr-defined]
-                kwargs={
-                    "lead_id": site_id,
-                    "job_id": job_id,
-                    "generation_types": list(variant_types),
-                    "generation_run_id": generation_run_id,
-                },
-                task_id=job_id,
+            run_multi_variant_generation_task.delay(  # type: ignore[attr-defined]
+                lead_id=site_id, job_id=job_id, generation_types=list(variant_types)
             )
             return
 
@@ -5862,10 +4487,7 @@ class SiteRepository:
         if settings.celery_task_always_eager:
             try:
                 await self.run_generation_job(
-                    site_id=site_id,
-                    job_id=job_id,
-                    request=request,
-                    generation_run_id=generation_run_id,
+                    site_id=site_id, job_id=job_id, request=request
                 )
                 await self._maybe_queue_auto_iteration(
                     site_id=site_id, job_id=job_id, request=request
@@ -5880,14 +4502,8 @@ class SiteRepository:
         from app.core.tasks import run_site_generation_job_task
 
         payload = request.model_dump() if request else None
-        run_site_generation_job_task.apply_async(  # type: ignore[attr-defined]
-            kwargs={
-                "site_id": site_id,
-                "job_id": job_id,
-                "request_payload": payload,
-                "generation_run_id": generation_run_id,
-            },
-            task_id=job_id,
+        run_site_generation_job_task.delay(  # type: ignore[attr-defined]
+            site_id=site_id, job_id=job_id, request_payload=payload
         )
 
     async def run_republish_job(self, *, site_id: str, job_id: str) -> None:
@@ -6073,9 +4689,7 @@ class SiteRepository:
 
         from app.core.tasks import run_site_republish_task
 
-        run_site_republish_task.apply_async(  # type: ignore[attr-defined]
-            kwargs={"site_id": site_id, "job_id": job.id}, task_id=job.id
-        )
+        run_site_republish_task.delay(site_id=site_id, job_id=job.id)  # type: ignore[attr-defined]
         return job
 
     async def add_export_metadata(
@@ -6483,11 +5097,7 @@ class SiteRepository:
         self, sites: list[GeneratedSite]
     ) -> list[GeneratedSite]:
         """For sites with no sourceAttribution, fetch lead names in one batch query."""
-        missing = [
-            s
-            for s in sites
-            if not s.sourceAttribution or not s.sourceAttribution.companyName
-        ]
+        missing = [s for s in sites if not s.sourceAttribution or not s.sourceAttribution.companyName]
         if not missing:
             return sites
         lead_ids = list({s.leadId for s in missing})

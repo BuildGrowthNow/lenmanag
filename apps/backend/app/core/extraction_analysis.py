@@ -80,23 +80,21 @@ async def analyze_extraction(extraction: ExtractionSnapshot) -> dict[str, Any]:
 def _build_analysis_context(extraction: ExtractionSnapshot) -> dict[str, Any]:
     """Extract relevant content from extraction for LLM analysis."""
 
-    # Gather representative text from every crawled page. The old first-three
-    # page cap made services, contact details, and proof on deeper pages
-    # invisible to semantic analysis.
+    # Gather all text content (homepage + top pages)
     all_text_chunks = []
 
     if extraction.pageInventory:
-        for page in extraction.pageInventory:
+        for page in extraction.pageInventory[:3]:  # Homepage + 2 key pages
             if hasattr(page, "cleanedText") and page.cleanedText:
-                all_text_chunks.append(page.cleanedText[:1800])
+                all_text_chunks.append(page.cleanedText[:3000])
             elif hasattr(page, "summary") and page.summary:
-                all_text_chunks.append(str(page.summary)[:1800])
+                all_text_chunks.append(page.summary)
 
     # Section content
     section_texts = []
     section_headings = []
     if extraction.sectionInventory:
-        for section in extraction.sectionInventory:
+        for section in extraction.sectionInventory[:10]:
             if hasattr(section, "model_dump"):
                 section_data = section.model_dump()
             else:
@@ -105,7 +103,7 @@ def _build_analysis_context(extraction: ExtractionSnapshot) -> dict[str, Any]:
             if section_data.get("heading"):
                 section_headings.append(section_data["heading"])
             if section_data.get("text"):
-                section_texts.append(section_data["text"][:350])
+                section_texts.append(section_data["text"][:500])
 
     # All CTAs (buttons, links with action text)
     all_ctas = extraction.summary.ctaClues if extraction.summary.ctaClues else []
@@ -132,9 +130,9 @@ def _build_analysis_context(extraction: ExtractionSnapshot) -> dict[str, Any]:
         "company_name": extraction.summary.companyName or "this company",
         "website_url": extraction.canonicalWebsiteUrl,
         "homepage_text": all_text_chunks[0] if all_text_chunks else "",
-        "additional_pages_text": "\n\n".join(all_text_chunks[1:]),
-        "section_headings": section_headings[:40],
-        "section_texts": section_texts[:80],
+        "additional_pages_text": "\n\n".join(all_text_chunks[1:3]),
+        "section_headings": section_headings,
+        "section_texts": section_texts,
         "all_ctas": all_ctas[:20],
         "raw_positioning": extraction.summary.positioningSummary or "",
         "raw_testimonials": raw_testimonials,
@@ -174,13 +172,13 @@ Name: {context["company_name"]}
 Website: {context["website_url"]}
 
 # Homepage Content
-{context["homepage_text"][:5000]}
+{context["homepage_text"][:6000]}
 
 # Additional Page Content
-{context["additional_pages_text"][:12000]}
+{context["additional_pages_text"][:3000]}
 
 # Section Headings Found
-{chr(10).join(f"- {h}" for h in context["section_headings"][:40])}
+{chr(10).join(f"- {h}" for h in context["section_headings"][:15])}
 
 # All CTA Buttons/Links Found
 {chr(10).join(f"- {cta}" for cta in context["all_ctas"][:20])}

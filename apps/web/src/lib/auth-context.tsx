@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       setUser(null);
       if (!isPublicPath && pathname.startsWith("/app")) {
-        router.push(`/login?next=${encodeURIComponent(pathname)}`);
+        router.push("/login");
       }
     } finally {
       setLoading(false);

@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from app.core.compiler_client import CompilerError, get_compiler_client
 
@@ -19,17 +19,9 @@ router = APIRouter(prefix="/internal", tags=["internal"])
 
 
 class CompileRequest(BaseModel):
-    sourceCode: str = ""
+    sourceCode: str = Field(..., min_length=1)
     componentName: str = Field(..., min_length=1)
     siteId: str = Field(..., min_length=1)
-    jsEntry: str | None = None
-    capabilityManifest: dict[str, Any] | None = None
-
-    @model_validator(mode="after")
-    def require_an_entry(self) -> "CompileRequest":
-        if not self.sourceCode.strip() and not (self.jsEntry or "").strip():
-            raise ValueError("sourceCode or jsEntry is required")
-        return self
 
 
 class CompileResponse(BaseModel):
@@ -38,9 +30,6 @@ class CompileResponse(BaseModel):
     cssCode: str | None = None
     error: str | None = None
     validationErrors: list[str] = Field(default_factory=list)
-    dependencyInventory: list[str] = Field(default_factory=list)
-    bundleMetrics: dict[str, int] | None = None
-    capabilityManifest: dict[str, Any] | None = None
 
 
 @router.post("/compile", response_model=CompileResponse)
@@ -58,8 +47,6 @@ async def compile_tsx(request: CompileRequest) -> CompileResponse:
             source_code=request.sourceCode,
             component_name=request.componentName,
             site_id=request.siteId,
-            js_entry=request.jsEntry,
-            capability_manifest=request.capabilityManifest,
         )
 
         return CompileResponse(**result)

@@ -1,8 +1,7 @@
 """
-Distributed locks for site generation.
+Distributed lock for ensuring sequential site generation across all workers.
 
-Generation is serialized per lead so variants for one lead cannot race each
-other, while independent leads can use separate workers concurrently.
+Uses Redis to enforce global sequential execution, preventing rate limits.
 """
 
 from __future__ import annotations
@@ -22,29 +21,6 @@ logger = logging.getLogger(__name__)
 # Global lock key in Redis
 GENERATION_LOCK_KEY = "lenquant:generation:lock"
 LOCK_TIMEOUT_SECONDS = 3600  # 1 hour max per generation
-_LOCAL_TEST_LOCK = asyncio.Lock()
-
-
-async def clear_orphaned_generation_locks() -> int:
-    """Clear locks left by in-process jobs before a backend restart.
-
-    Production generation currently runs inside the API process. If that
-    process is recreated during a provider call, Redis cannot know that the
-    owner disappeared and the old per-lead lock can block the next run for an
-    hour. Startup is a safe boundary: no task from the previous process can
-    still be active in this process.
-    """
-    settings = get_settings()
-    if settings.mongo_use_mock:
-        return 0
-    redis_client = redis.from_url(settings.celery_broker_url, decode_responses=True)
-    try:
-        keys = [key async for key in redis_client.scan_iter(match=f"{GENERATION_LOCK_KEY}*")]
-        if not keys:
-            return 0
-        return int(await redis_client.delete(*keys))
-    finally:
-        await redis_client.aclose()
 
 
 class GenerationLockTimeout(Exception):
@@ -56,18 +32,15 @@ class GenerationLockTimeout(Exception):
 @asynccontextmanager
 async def generation_lock(
     timeout_seconds: int = 300,
-    scope: str | None = None,
 ) -> AsyncGenerator[None, None]:
     """
     Distributed lock for site generation.
 
-    Ensures only ONE generation task runs for the requested scope at a time,
-    even across multiple workers/processes. When no scope is supplied, the
-    legacy global lock is used for callers that still need global serialization.
+    Ensures only ONE generation task runs globally at any time,
+    even across multiple workers/processes.
 
     Args:
         timeout_seconds: How long to wait for lock acquisition
-        scope: Independent lock namespace, normally the lead ID.
 
     Raises:
         GenerationLockTimeout: If lock not acquired within timeout
@@ -79,18 +52,10 @@ async def generation_lock(
     """
     settings = get_settings()
 
-    # Unit tests use mongomock and must not require a developer Redis daemon.
-    # Keep the same serialization semantics inside the test process.
-    if settings.mongo_use_mock:
-        async with _LOCAL_TEST_LOCK:
-            yield
-        return
-
     # Parse Redis URL from Celery broker
     redis_url = settings.celery_broker_url
 
     redis_client = redis.from_url(redis_url, decode_responses=True)
-    lock_key = GENERATION_LOCK_KEY if scope is None else f"{GENERATION_LOCK_KEY}:{scope}"
 
     lock_acquired = False
     lock_id = f"{time.time()}-{id(redis_client)}"  # Unique lock ID
@@ -101,7 +66,7 @@ async def generation_lock(
         while True:
             # SET with NX (only if not exists) and EX (expiry)
             acquired = await redis_client.set(
-                lock_key,
+                GENERATION_LOCK_KEY,
                 lock_id,
                 nx=True,
                 ex=LOCK_TIMEOUT_SECONDS,
@@ -121,7 +86,7 @@ async def generation_lock(
             if elapsed > timeout_seconds:
                 logger.error(
                     f"Generation lock timeout after {timeout_seconds}s - "
-                    f"another generation may be stuck (key={lock_key})"
+                    "another generation may be stuck"
                 )
                 raise GenerationLockTimeout(
                     f"Could not acquire generation lock after {timeout_seconds}s"
@@ -149,7 +114,7 @@ async def generation_lock(
                 "return redis.call('del', KEYS[1]) "
                 "else return 0 end"
             )
-            await redis_client.eval(release_script, 1, lock_key, lock_id)  # type: ignore[arg-type]
+            await redis_client.eval(release_script, 1, GENERATION_LOCK_KEY, lock_id)  # type: ignore[arg-type]
             logger.info("Generation lock released")
 
         await redis_client.aclose()

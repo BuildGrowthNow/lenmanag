@@ -49,8 +49,6 @@ services:
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
-      args:
-        BUILD_VERSION: ${BUILD_VERSION:-unknown}
     container_name: lenquant-backend
     ports:
       - "8000:8000"
@@ -60,30 +58,13 @@ services:
       - MONGODB_URI=${MONGODB_URI}
       - CORS_ORIGINS=https://sites.lenquant.com
       - LLM_PROVIDER=${LLM_PROVIDER:-bedrock}
-      - CLOUDFLARE_ACCOUNT_ID=${CLOUDFLARE_ACCOUNT_ID}
-      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
-      - CLOUDFLARE_MODEL=${CLOUDFLARE_MODEL:-@cf/deepseek-ai/deepseek-v4-flash-0731}
-      - CLOUDFLARE_FALLBACK_MODELS=${CLOUDFLARE_FALLBACK_MODELS:-@cf/zai-org/glm-5.3-flash}
-      - CLOUDFLARE_VISION_MODEL=${CLOUDFLARE_VISION_MODEL:-@cf/zai-org/glm-5.3-flash}
-      - CLOUDFLARE_TIMEOUT_SECONDS=${CLOUDFLARE_TIMEOUT_SECONDS:-300}
-      - BEDROCK_MANTLE_MODEL_ID=${BEDROCK_MANTLE_MODEL_ID:-qwen.qwen3-coder-30b-a3b-instruct}
-      - BEDROCK_MANTLE_REGION=${BEDROCK_MANTLE_REGION:-us-east-1}
-      - BEDROCK_MANTLE_TIMEOUT_SECONDS=${BEDROCK_MANTLE_TIMEOUT_SECONDS:-300}
-      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-global.anthropic.claude-sonnet-4-6}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-us.anthropic.claude-sonnet-4-6-v1}
       - BEDROCK_REGION=${BEDROCK_REGION:-us-east-1}
-      - BEDROCK_MAX_TOKENS=${BEDROCK_MAX_TOKENS:-32768}
-      - BEDROCK_TIMEOUT_SECONDS=${BEDROCK_TIMEOUT_SECONDS:-600}
-      - BEDROCK_FALLBACK_MODELS=${BEDROCK_FALLBACK_MODELS:-amazon.nova-pro-v1:0,us.meta.llama4-scout-17b-instruct-v1:0,mistral.mistral-large-2402-v1:0,us.anthropic.claude-haiku-4-5-20251001-v1:0,us.anthropic.claude-sonnet-4-5-20250929-v1:0,us.anthropic.claude-opus-4-6-v1}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
       - ASSET_STORAGE_BACKEND=${ASSET_STORAGE_BACKEND:-s3}
-      - ASSET_DOWNLOAD_ENABLED=${ASSET_DOWNLOAD_ENABLED:-true}
-      - REJECTED_ARTIFACT_PATH=${REJECTED_ARTIFACT_PATH:-/var/lib/lenquant/rejected-artifacts}
-      - REJECTED_ARTIFACT_RETENTION_DAYS=${REJECTED_ARTIFACT_RETENTION_DAYS:-14}
-      - REJECTED_ARTIFACT_ENCRYPTION_KEY=${REJECTED_ARTIFACT_ENCRYPTION_KEY}
-      - BACKEND_PUBLIC_URL=${BACKEND_PUBLIC_URL:-https://sites-api.lenquant.com}
       - COMPILER_SERVICE_URL=http://compiler:3001
       - LOG_LEVEL=warning
     restart: always
@@ -99,8 +80,6 @@ services:
       - redis
       - mongodb
       - compiler
-    volumes:
-      - rejected_artifacts:/var/lib/lenquant/rejected-artifacts
     labels:
       - "app=lenquant-backend"
       - "version=1.0.0"
@@ -189,6 +168,4 @@ volumes:
   mongodb_data:
     driver: local
   mongodb_config:
-    driver: local
-  rejected_artifacts:
     driver: local

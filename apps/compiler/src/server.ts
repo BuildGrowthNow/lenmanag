@@ -8,18 +8,9 @@ import { z } from 'zod';
 import { compileTsx, isCompilerAvailable } from './compile.js';
 
 const CompileRequestSchema = z.object({
-  sourceCode: z.string().default(''),
+  sourceCode: z.string().min(1),
   componentName: z.string().min(1),
   siteId: z.string().min(1),
-  jsEntry: z.string().optional(),
-  capabilityManifest: z.object({
-    dependencies: z.array(z.string()).optional(),
-    interactionManifest: z.array(z.unknown()).optional(),
-    runtimeMode: z.string().optional(),
-    webglFallback: z.boolean().optional(),
-  }).optional(),
-}).refine((request) => request.sourceCode.trim().length > 0 || (request.jsEntry || '').trim().length > 0, {
-  message: 'sourceCode or jsEntry is required',
 });
 
 const fastify = Fastify({

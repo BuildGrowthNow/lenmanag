@@ -19,7 +19,6 @@ IndustryType = Literal[
     "tech",
     "education",
     "hospitality",
-    "trades_services",
 ]
 
 
@@ -231,10 +230,6 @@ INDUSTRY_PATTERNS = {
             "service",
         ],
     },
-    "trades_services": {
-        "high_weight": ["well drilling", "water well", "well pump", "water systems", "emergency service", "drilling"],
-        "medium_weight": ["pump", "well", "water", "service area", "residential", "commercial"],
-    },
 }
 
 
@@ -280,7 +275,6 @@ def detect_industry(
         "tech": 0.0,
         "education": 0.0,
         "hospitality": 0.0,
-        "trades_services": 0.0,
     }
 
     # Score each industry
@@ -458,15 +452,6 @@ def get_industry_design_config(industry: IndustryType) -> dict:
                 "reservations",
                 "location_hours",
             ],
-            "animation_intensity": "medium",
-            "dark_mode_default": False,
-        },
-        "trades_services": {
-            "visual_direction": "Rugged, credible, regional and image-led. Use real equipment, water and field photography; never SaaS abstractions.",
-            "hero_style": "cinematic_field_image",
-            "color_palette_mood": "earth_water",
-            "typography_pairing": "Confident display sans + durable humanist body",
-            "unique_sections": ["emergency_response", "services", "service_area", "equipment_or_process", "contact"],
             "animation_intensity": "medium",
             "dark_mode_default": False,
         },

@@ -1,10 +1,6 @@
 import logging
-from html import escape
 
-try:
-    import resend  # type: ignore[import-untyped]
-except ImportError:  # Optional in local/test environments.
-    resend = None  # type: ignore[assignment]
+import resend  # type: ignore[import-untyped]
 
 from app.core.config import get_settings
 
@@ -14,7 +10,7 @@ settings = get_settings()
 
 async def send_verification_email(email: str, verification_token: str) -> bool:
     try:
-        if not settings.resend_api_key or resend is None:
+        if not settings.resend_api_key:
             logger.warning("RESEND_API_KEY not configured, skipping email send")
             return False
 
@@ -65,7 +61,7 @@ async def send_verification_email(email: str, verification_token: str) -> bool:
 
 async def send_password_reset_email(email: str, reset_token: str) -> bool:
     try:
-        if not settings.resend_api_key or resend is None:
+        if not settings.resend_api_key:
             logger.warning("RESEND_API_KEY not configured, skipping email send")
             return False
 
@@ -115,47 +111,4 @@ async def send_password_reset_email(email: str, reset_token: str) -> bool:
 
     except Exception as e:
         logger.error(f"Failed to send password reset email to {email}: {e}")
-        return False
-
-
-async def send_public_form_notification(
-    *,
-    recipient: str,
-    submission_id: str,
-    site_id: str,
-    name: str,
-    email: str,
-    message: str,
-    phone: str = "",
-    company: str = "",
-) -> bool:
-    """Deliver a generated-site submission to the configured business inbox."""
-    try:
-        if not settings.resend_api_key or not recipient or resend is None:
-            logger.warning("Public form notification unavailable: email delivery is not configured")
-            return False
-        resend.api_key = settings.resend_api_key  # type: ignore[attr-defined]
-        html_content = (
-            "<h2>New generated-site form submission</h2>"
-            f"<p><strong>Site:</strong> {escape(site_id)}</p>"
-            f"<p><strong>Name:</strong> {escape(name)}</p>"
-            f"<p><strong>Email:</strong> {escape(email)}</p>"
-            f"<p><strong>Company:</strong> {escape(company)}</p>"
-            f"<p><strong>Phone:</strong> {escape(phone)}</p>"
-            f"<p><strong>Message:</strong><br>{escape(message).replace(chr(10), '<br>')}</p>"
-            f"<p><small>Submission id: {escape(submission_id)}</small></p>"
-        )
-        resend.Emails.send(  # type: ignore[attr-defined]
-            {
-                "from": settings.resend_from_email,
-                "to": [recipient],
-                "reply_to": [email],
-                "subject": f"New website inquiry from {name or email}",
-                "html": html_content,
-            }
-        )
-        logger.info("Public form notification sent for %s", submission_id)
-        return True
-    except Exception as exc:
-        logger.error("Public form notification failed for %s: %s", submission_id, exc)
         return False

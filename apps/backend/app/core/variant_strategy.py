@@ -7,7 +7,7 @@ design parameters to ensure meaningfully different outputs.
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from app.schemas.brief import DesignMode
 from app.schemas.site import PaletteMode, VariantType
@@ -24,12 +24,10 @@ class VariantStrategy(TypedDict):
     creativeBriefGuidance: str
     inspirationKeywords: list[str]
     avoidPatterns: list[str]
-    artDirectionPlan: dict[str, Any]
 
 
 def get_variant_strategies(
     industry: str | None = None,
-    adapter: dict[str, Any] | None = None,
 ) -> dict[VariantType, VariantStrategy]:
     """
     Return variant strategies based on industry context.
@@ -41,8 +39,6 @@ def get_variant_strategies(
 
     Args:
         industry: Optional industry context for tailoring strategies
-        adapter: Optional evidence-led visual adapter used to attach an
-            implementation-ready art direction plan to every strategy.
 
     Returns:
         Dictionary mapping variant type to strategy definition
@@ -164,7 +160,7 @@ def get_variant_strategies(
     }
 
     # Industry-specific adjustments
-    industry_lower = (industry or (adapter or {}).get("industry") or "").lower()
+    industry_lower = (industry or "").lower()
 
     if any(
         keyword in industry_lower
@@ -207,22 +203,6 @@ def get_variant_strategies(
             ],
         }
 
-    if any(keyword in industry_lower for keyword in ("well", "water", "drilling", "trades", "home service")):
-        base_strategies["html_v1"].update({"variantLabel": "Regional Trust", "paletteMode": "light", "creativeBriefGuidance": "Premium editorial direction built on real regional field imagery, heritage, trust and source-backed service information. Use a bright, grounded palette and a quiet reveal system.", "inspirationKeywords": ["regional", "editorial", "trust", "field photography", "heritage"], "avoidPatterns": ["startup", "neon", "generic svg art", "legal language"]})
-        base_strategies["html_v2"].update({"variantLabel": "Field Precision", "paletteMode": "zinc", "creativeBriefGuidance": "Cinematic industrial direction: equipment and drilling photography, high-contrast but brand-grounded palette, technical precision and emergency response. Use one operational carousel or progress interaction.", "inspirationKeywords": ["cinematic", "industrial", "precision", "equipment", "water"], "avoidPatterns": ["purple gradient", "SaaS", "bento template", "random stock"]})
-        base_strategies["html_v3"].update({"variantLabel": "Clean Water, Close to Home", "paletteMode": "light", "creativeBriefGuidance": "Warm community and clean-water direction with real people/location imagery, friendly but premium typography, a service-area story and gentle tactile motion.", "inspirationKeywords": ["community", "clean water", "warm", "craft", "local"], "avoidPatterns": ["playful blobs", "legal terminology", "fake metrics", "generic icons"]})
-    if adapter is not None:
-        # Import lazily to keep the strategy module usable by callers that do
-        # not need visual adaptation and to avoid an import cycle.
-        from app.core.visual_adapter import build_art_direction_plan
-
-        for strategy in base_strategies.values():
-            strategy["artDirectionPlan"] = build_art_direction_plan(
-                adapter, strategy
-            )
-    else:
-        for strategy in base_strategies.values():
-            strategy["artDirectionPlan"] = {}
     return base_strategies
 
 

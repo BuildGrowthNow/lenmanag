@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from app.core.audit import write_audit_log
 from app.core.auth_dependencies import CurrentUserId, OptionalUserId
 from app.core.leads import _job_doc_to_summary, lead_repository
-from app.core.sites import is_usable_generated_site, site_repository, validate_operator_prompt
+from app.core.sites import site_repository, validate_operator_prompt
 from app.core.versioning import response_meta
 from app.schemas.job import JobResponse
 from app.schemas.response import ResponseEnvelope, success_response
@@ -68,11 +68,7 @@ async def list_sites(
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
         success_response(
-            [
-                site
-                for site in await site_repository.list_sites(limit=limit, offset=offset, user_id=user_id)
-                if is_usable_generated_site(site)
-            ],
+            await site_repository.list_sites(limit=limit, offset=offset),
             meta=response_meta(request),
         ),
     )
@@ -86,7 +82,7 @@ async def review_queue(
     offset: int = 0,
 ) -> ResponseEnvelope[SiteReviewQueueResponse]:
     return success_response(
-        await site_repository.list_review_queue(limit=limit, offset=offset, user_id=user_id),
+        await site_repository.list_review_queue(limit=limit, offset=offset),
         meta=response_meta(request),
     )
 
@@ -110,39 +106,22 @@ async def list_variants_for_lead(
     _user_id: OptionalUserId,
 ) -> ResponseEnvelope[list[GeneratedSite]]:
     """Get all site variants for a lead. Public — used by compare and redesign pages."""
-    sites = [
-        site
-        for site in await site_repository.list_sites_by_lead(lead_id, user_id=_user_id)
-        if is_usable_generated_site(site)
-    ]
+    sites = await site_repository.list_sites_by_lead(lead_id)
     return cast(
         ResponseEnvelope[list[GeneratedSite]],
         success_response(sites, meta=response_meta(request)),
     )
 
 
-@router.get("/generation-runs/{lead_id}", response_model=ResponseEnvelope[list[dict[str, Any]]])
-async def list_generation_runs(
-    lead_id: str, request: Request, user_id: CurrentUserId
-) -> ResponseEnvelope[list[dict[str, Any]]]:
-    """Operator-facing immutable generation lineage and status history."""
-    lead = await lead_repository.get_lead(lead_id, user_id=user_id)
-    if lead is None:
-        raise HTTPException(status_code=404, detail="Lead not found.")
-    return success_response(await site_repository.list_generation_runs(lead_id), meta=response_meta(request))
-
-
 @router.get("/{site_id}", response_model=ResponseEnvelope[GeneratedSite | None])
 async def get_site(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[GeneratedSite | None]:
-    site = await site_repository.get_site(site_id, user_id=user_id)
+    site = await site_repository.get_site(site_id)
     return success_response(site, meta=response_meta(request))
 
 
-@router.get(
-    "/{site_id}/latest-job", response_model=ResponseEnvelope[JobResponse | None]
-)
+@router.get("/{site_id}/latest-job", response_model=ResponseEnvelope[JobResponse | None])
 async def get_site_latest_job(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[JobResponse | None]:
@@ -154,9 +133,6 @@ async def get_site_latest_job(
         return success_response(None, meta=response_meta(request))
 
     # Find the most recent refine or generate job for this site
-    site = await site_repository.get_site(site_id, user_id=user_id)
-    if site is None:
-        raise HTTPException(status_code=404, detail="Site not found.")
     job_doc = await database["jobs"].find_one(
         {
             "metadata.siteId": site_id,
@@ -177,7 +153,7 @@ async def get_site_latest_job(
 async def delete_site(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[dict[str, bool]]:
-    deleted = await site_repository.delete_site(site_id, user_id=user_id)
+    deleted = await site_repository.delete_site(site_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(user_id, "site", site_id, "site_delete", {"siteId": site_id})
@@ -191,8 +167,6 @@ async def delete_site(
 async def get_prompt_history(
     site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[list[RefinementPromptRecord]]:
-    if await site_repository.get_site(site_id, user_id=_user_id) is None:
-        raise HTTPException(status_code=404, detail="Site not found.")
     history = await site_repository.get_prompt_history(site_id)
     return success_response(history, meta=response_meta(request))
 
@@ -276,10 +250,7 @@ async def patch_review(
 async def approve_review(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteHandoffRecord]:
-    try:
-        handoff = await site_repository.publish_handoff(site_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    handoff = await site_repository.publish_handoff(site_id)
     if handoff is None:
         raise HTTPException(status_code=404, detail="Site not found.")
     await write_audit_log(
@@ -319,7 +290,7 @@ async def refine_site_with_prompt(
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_message)
 
-    site = await site_repository.get_site(site_id, user_id=user_id)
+    site = await site_repository.get_site(site_id)
     if site is None:
         raise HTTPException(status_code=404, detail="Site not found.")
 
@@ -383,7 +354,7 @@ async def regenerate_site_with_prompt(
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_message)
 
-    site = await site_repository.get_site(site_id, user_id=user_id)
+    site = await site_repository.get_site(site_id)
     if site is None:
         raise HTTPException(status_code=404, detail="Site not found.")
 
@@ -511,41 +482,6 @@ async def republish_site(
 
 
 @router.post(
-    "/{site_id}/generate/{variant_type}/retry",
-    response_model=ResponseEnvelope[JobResponse],
-    status_code=202,
-)
-async def retry_site_variant(
-    site_id: str,
-    variant_type: str,
-    request: Request,
-    user_id: CurrentUserId,
-) -> ResponseEnvelope[JobResponse]:
-    """Retry one failed variant while preserving successful siblings."""
-    if variant_type not in {"html_v1", "html_v2", "html_v3", "nextjs"}:
-        raise HTTPException(status_code=422, detail="Unsupported variant type.")
-    site = await site_repository.get_site(site_id, user_id=user_id)
-    if site is not None and site.variantType == variant_type and is_usable_generated_site(site):
-        raise HTTPException(status_code=409, detail="Variant already passed runtime QA.")
-    try:
-        job = await site_repository.queue_generation_job(
-            site_id, request=SiteGenerateRequest(force=True, variantTypes=[variant_type])
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if job is None:
-        raise HTTPException(status_code=404, detail="Site or lead not found.")
-    await write_audit_log(
-        user_id,
-        "site",
-        site_id,
-        "site_variant_retry",
-        after={"variantType": variant_type, "jobId": job.id},
-    )
-    return success_response(await _job_response(job), meta=response_meta(request))
-
-
-@router.post(
     "/{site_id}/screenshot",
     response_model=ResponseEnvelope[dict[str, str]],
     status_code=202,
@@ -554,9 +490,9 @@ async def recapture_screenshot(
     site_id: str, request: Request, user_id: CurrentUserId
 ) -> ResponseEnvelope[dict[str, str]]:
     """Manually trigger screenshot recapture for a site."""
-    from app.core.tasks import capture_screenshot
+    from app.core.tasks import run_screenshot_task
 
-    site = await site_repository.get_site(site_id, user_id=user_id)
+    site = await site_repository.get_site(site_id)
     if site is None:
         raise HTTPException(status_code=404, detail="Site not found.")
 
@@ -565,12 +501,12 @@ async def recapture_screenshot(
             status_code=400, detail="Site has no preview URL to capture."
         )
 
-    # Capture in-process; production deliberately has no task queue.
+    # Queue screenshot capture task
     try:
-        await capture_screenshot(site_id=site.id, preview_url=site.previewUrl)
+        run_screenshot_task.delay(site_id=site.id, preview_url=site.previewUrl)  # type: ignore[attr-defined]
     except Exception as exc:
         raise HTTPException(
-            status_code=500, detail=f"Failed to start screenshot capture: {exc}"
+            status_code=500, detail=f"Failed to queue screenshot task: {exc}"
         ) from exc
 
     await write_audit_log(
@@ -582,11 +518,7 @@ async def recapture_screenshot(
     )
 
     return success_response(
-        {
-            "status": "queued",
-            "siteId": site_id,
-            "message": "Screenshot recapture queued",
-        },
+        {"status": "queued", "siteId": site_id, "message": "Screenshot recapture queued"},
         meta=response_meta(request),
     )
 
@@ -673,7 +605,7 @@ async def export_site(
 async def get_export(
     site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[SiteExportMetadata | None]:
-    site = await site_repository.get_site(site_id, user_id=_user_id)
+    site = await site_repository.get_site(site_id)
     if site is None:
         raise HTTPException(status_code=404, detail="Site not found.")
     return success_response(site.exportMetadata, meta=response_meta(request))
@@ -685,7 +617,7 @@ async def get_export(
 async def export_history(
     site_id: str, request: Request, _user_id: CurrentUserId
 ) -> ResponseEnvelope[list[SiteExportRecord]]:
-    site = await site_repository.get_site(site_id, user_id=_user_id)
+    site = await site_repository.get_site(site_id)
     if site is None:
         raise HTTPException(status_code=404, detail="Site not found.")
     return success_response(

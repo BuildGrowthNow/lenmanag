@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -16,14 +16,6 @@ DesignMode = Literal[
     "minimalist",  # High contrast, few elements, dramatic whitespace
     "playful",  # Organic shapes, bouncy animations, vibrant colors
     "corporate",  # Professional but not boring — structured with subtle polish
-]
-HeroArchetype = Literal[
-    "photography",
-    "typography",
-    "svg_diagram",
-    "motion_graphic",
-    "webgl_fallback",
-    "hybrid",
 ]
 BriefSourceKind = Literal["source_backed", "inferred", "extraction"]
 BriefReferenceKind = Literal["page", "asset"]
@@ -172,42 +164,10 @@ class BrandAssets(BaseModel):
     """Brand assets extracted from source site"""
 
     logoUrl: Optional[str] = None
-    logoLightUrl: Optional[str] = None
-    logoDarkUrl: Optional[str] = None
     primaryColor: Optional[str] = None
     secondaryColor: Optional[str] = None
     fontFamily: Optional[str] = None
-    fontUrl: Optional[str] = None
-    fontWeight: Optional[str] = None
-    fontStyle: Optional[str] = None
-    fontFormat: Optional[str] = None
-    logoVariants: list[str] = Field(default_factory=list)
     imageUrls: list[str] = Field(default_factory=list)
-    imageInventory: list[dict[str, Any]] = Field(default_factory=list)
-    palette: dict[str, str] = Field(default_factory=dict)
-    derivedColors: list[str] = Field(default_factory=list)
-
-
-class MasterBriefBrandAssetsPatch(BaseModel):
-    logoUrl: Optional[str] = None
-    primaryColor: Optional[str] = None
-    secondaryColor: Optional[str] = None
-    fontFamily: Optional[str] = None
-    fontUrl: Optional[str] = None
-    fontWeight: Optional[str] = None
-    fontStyle: Optional[str] = None
-    fontFormat: Optional[str] = None
-    logoVariants: Optional[list[str]] = None
-    imageUrls: Optional[list[str]] = None
-    imageInventory: Optional[list[dict[str, Any]]] = None
-    palette: Optional[dict[str, str]] = None
-    derivedColors: Optional[list[str]] = None
-
-
-class PreflightAssetAction(BaseModel):
-    sourceUrl: str
-    action: Literal["approve", "reject", "role"]
-    role: Optional[Literal["logo", "hero", "project", "gallery", "decorative"]] = None
 
 
 class MasterBriefSection(BaseModel):
@@ -259,18 +219,6 @@ class MasterBrief(BaseModel):
     motionLevel: Literal["none", "subtle", "moderate", "dramatic"] = Field(
         ..., description="Animation intensity"
     )
-    heroMode: Literal["image_led", "typography_only"] = Field(
-        default="typography_only",
-        description="Explicit media contract for the hero; typography-only has no fake media shell.",
-    )
-    heroArchetype: HeroArchetype = Field(
-        default="typography",
-        description=(
-            "The visible hero concept: photography, typography, svg_diagram, "
-            "motion_graphic, webgl_fallback, or hybrid. This is creative intent, "
-            "separate from the hero media safety contract."
-        ),
-    )
     specialEffects: list[str] = Field(
         default_factory=list, description="3d-hero, parallax-scroll, particle-bg, etc"
     )
@@ -304,7 +252,6 @@ class MasterBrief(BaseModel):
     extractedContent: dict[str, list[str]] = Field(
         default_factory=dict, description="Key content from extraction"
     )
-    contactInfo: dict[str, str] = Field(default_factory=dict)
     brandAssets: BrandAssets = Field(
         default_factory=BrandAssets, description="Logo, colors, fonts found"
     )

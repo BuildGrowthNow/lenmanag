@@ -26,22 +26,13 @@ export interface CreativeDirection {
 }
 
 export type DesignMode = "editorial" | "immersive" | "interactive" | "minimalist" | "playful" | "corporate";
-export type HeroArchetype = "photography" | "typography" | "svg_diagram" | "motion_graphic" | "webgl_fallback" | "hybrid";
 
 export interface BrandAssets {
   logoUrl?: string;
   primaryColor?: string;
   secondaryColor?: string;
   fontFamily?: string;
-  fontUrl?: string;
-  fontWeight?: string;
-  fontStyle?: string;
-  fontFormat?: string;
-  logoVariants?: string[];
   imageUrls: string[];
-  imageInventory?: Array<{ url: string; altText?: string; category?: string }>;
-  palette?: Record<string, string>;
-  derivedColors?: string[];
 }
 
 export interface MasterBrief {
@@ -59,8 +50,6 @@ export interface MasterBrief {
   visualStyle: string;
   colorStrategy: string;
   motionLevel: 'none' | 'subtle' | 'moderate' | 'dramatic';
-  heroMode?: 'image_led' | 'typography_only';
-  heroArchetype?: HeroArchetype;
   specialEffects: string[];
   creativeDirection?: CreativeDirection;
   designMode?: DesignMode;
@@ -108,41 +97,5 @@ export async function approveMasterBrief(
   return request<MasterBrief>(`/api/leads/${leadId}/master-brief/approve`, {
     method: 'POST',
     body: { approvedBy, notes }
-  });
-}
-
-export async function updateMasterBriefAssets(
-  leadId: string,
-  assets: Partial<BrandAssets>
-): Promise<MasterBrief> {
-  return request<MasterBrief>(`/api/leads/${leadId}/master-brief/assets`, {
-    method: 'PATCH',
-    body: assets,
-  });
-}
-
-export type GenerationPreflight = {
-  leadId: string;
-  assetDownload: { enabled: boolean; backend: string; healthy: boolean };
-  selectedLogo?: string;
-  logoVariants: string[];
-  heroCandidates: Array<{ url: string; altText?: string; category?: string }>;
-  projectAssets: Array<{ url: string; altText?: string; category?: string }>;
-  rejectedAssets: Array<{ value?: string; note?: string }>;
-  sourceOnlyAssets: Array<{ value?: string; note?: string }>;
-  proofEvidence: string[];
-  missingRequirements: string[];
-  intentionalFallbacks: string[];
-  runtimeModes: Record<string, string>;
-};
-
-export async function getGenerationPreflight(leadId: string): Promise<GenerationPreflight> {
-  return request<GenerationPreflight>(`/api/leads/${leadId}/preflight`);
-}
-
-export async function updatePreflightAsset(leadId: string, sourceUrl: string, action: 'approve' | 'reject' | 'role', role?: string): Promise<MasterBrief> {
-  return request<MasterBrief>(`/api/leads/${leadId}/preflight/assets`, {
-    method: 'POST',
-    body: { sourceUrl, action, role },
   });
 }

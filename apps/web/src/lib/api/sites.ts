@@ -17,46 +17,12 @@ import type {
   SiteReviewRecord,
   SiteReviewResponse,
   SiteHandoffRecord,
-  RefinementPromptRecord,
-  VariantType
+  RefinementPromptRecord
 } from "@/lib/types";
 import { API_BASE_URL } from "@/lib/constants";
 
 export async function getVariantsForLead(leadId: string): Promise<GeneratedSite[]> {
   return safeRequest<GeneratedSite[]>(`/api/sites/variants/${leadId}`, []);
-}
-
-export function isPreviewUsable(site: GeneratedSite | null | undefined): boolean {
-  if (!site || site.readinessStatus === "blocked") return false;
-  if (site.variantType === "html_v1" || site.variantType === "html_v2" || site.variantType === "html_v3") {
-    return Boolean(site.staticHtml?.trim()) && ["success", "completed"].includes(site.compilationStatus ?? "");
-  }
-  return Boolean(site.compiledBundleUrl?.trim()) && ["success", "completed"].includes(site.compilationStatus ?? "");
-}
-
-export function previewPath(site: GeneratedSite): string {
-  return `/st/${encodeURIComponent(site.previewSlug)}`;
-}
-
-export type ClientShare = {
-  id: string;
-  leadId: string;
-  slug: string;
-  siteIds: string[];
-  url: string;
-  bookingUrl: string;
-  updatedAt: string;
-};
-
-export async function getClientShare(leadId: string): Promise<ClientShare | null> {
-  return safeRequest<ClientShare | null>(`/api/leads/${leadId}/client-link`, null);
-}
-
-export async function saveClientShare(leadId: string, siteIds: string[], bookingUrl: string): Promise<ClientShare> {
-  return request<ClientShare>(`/api/leads/${leadId}/client-link`, {
-    method: "PUT",
-    body: { siteIds, bookingUrl },
-  });
 }
 
 export async function getSites(params: { limit?: number; offset?: number } = {}): Promise<GeneratedSite[]> {
@@ -146,10 +112,6 @@ export async function getThemes(): Promise<ThemeLibraryResponse> {
 
 export async function generateSite(id: string, payload: SiteGeneratePayload = {}): Promise<JobResponse> {
   return request(`/api/sites/${id}/generate`, { method: "POST", body: payload });
-}
-
-export async function retrySiteVariant(siteId: string, variantType: VariantType): Promise<JobResponse> {
-  return request<JobResponse>(`/api/sites/${siteId}/generate/${variantType}/retry`, { method: 'POST' });
 }
 
 export async function republishSite(id: string): Promise<JobResponse> {

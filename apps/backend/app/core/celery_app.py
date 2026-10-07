@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 from celery import Celery
-from celery.signals import worker_ready
-import logging
 
 from app.core.config import get_settings
 
 settings = get_settings()
-logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "lenquant",
@@ -26,10 +23,5 @@ celery_app.conf.update(
     # The default 'prefork' pool causes RuntimeError: Event loop is closed
     # when tasks use asyncio (via _run helper in tasks.py)
     worker_pool="solo",
-    worker_concurrency=settings.celery_worker_concurrency,
+    worker_concurrency=1,
 )
-
-
-@worker_ready.connect
-def _log_worker_build_version(**_: object) -> None:
-    logger.warning("LenQuant Celery worker ready; build_version=%s", settings.build_version)

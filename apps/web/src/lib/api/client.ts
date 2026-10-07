@@ -4,7 +4,6 @@ export const API_VERSION = "1";
 export const VERSION_HEADER_NAME = "X-API-Version";
 const VERSIONED_PATH_PREFIX = `/api/v${API_VERSION}`;
 export const VENDOR_MEDIA_TYPE = `application/vnd.lenmanag.v${API_VERSION}+json`;
-const REQUEST_TIMEOUT_MS = 20_000;
 
 type RequestOptions = {
   method?: string;
@@ -22,24 +21,6 @@ type ApiResponseEnvelope<T> = {
   data?: T;
   error?: { code: string; message: string; details?: Record<string, unknown> };
 };
-
-function readableError(value: unknown, fallback: string): string {
-  if (typeof value === "string" && value.trim()) return value;
-  if (Array.isArray(value)) {
-    const messages = value
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item === "object" && "msg" in item && typeof item.msg === "string") return item.msg;
-        return null;
-      })
-      .filter((message): message is string => Boolean(message));
-    if (messages.length) return messages.join("; ");
-  }
-  if (value && typeof value === "object" && "message" in value && typeof value.message === "string") {
-    return value.message;
-  }
-  return fallback;
-}
 
 function normalizePath(path: string): string {
   if (!path.startsWith("/api")) {
@@ -63,20 +44,14 @@ function normalizePath(path: string): string {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
-  let payload: ApiResponseEnvelope<T> | null = null;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch {
-    throw new Error(response.ok ? "The API returned an invalid response." : response.statusText);
-  }
+  const payload: ApiResponseEnvelope<T> | null = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    const raw = payload as ApiResponseEnvelope<T> & { detail?: unknown; error?: unknown };
-    throw new Error(
-      readableError(raw.error, readableError(raw.detail, response.statusText))
-    );
+    const message = payload?.error?.message || payload?.error?.code || (payload as unknown as { detail?: string })?.detail || response.statusText;
+    throw new Error(message);
   }
   if (!payload || payload.status !== "success") {
-    throw new Error(readableError(payload?.error, "Unknown API error."));
+    const message = payload?.error?.message || "Unknown API error.";
+    throw new Error(message);
   }
   return payload.data as T;
 }
@@ -90,35 +65,23 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     authToken = localStorage.getItem("access_token");
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(`${API_BASE_URL}${normalizedPath}`, {
-      method: options.method || "GET",
-      headers: {
-        Accept: VENDOR_MEDIA_TYPE,
-        [VERSION_HEADER_NAME]: API_VERSION,
-        ...(isFormData ? {} : { "Content-Type": "application/json" }),
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        ...(options.headers || {})
-      },
-      body:
-        options.body === undefined
-          ? undefined
-          : isFormData
-            ? (options.body as BodyInit)
-            : JSON.stringify(options.body),
-      signal: controller.signal,
-    });
-    return parseResponse<T>(response);
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`The API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  const response = await fetch(`${API_BASE_URL}${normalizedPath}`, {
+    method: options.method || "GET",
+    headers: {
+      Accept: VENDOR_MEDIA_TYPE,
+      [VERSION_HEADER_NAME]: API_VERSION,
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(options.headers || {})
+    },
+    body:
+      options.body === undefined
+        ? undefined
+        : isFormData
+          ? (options.body as BodyInit)
+          : JSON.stringify(options.body)
+  });
+  return parseResponse<T>(response);
 }
 
 export async function safeRequest<T>(path: string, fallback: T, options: RequestOptions = {}): Promise<T> {

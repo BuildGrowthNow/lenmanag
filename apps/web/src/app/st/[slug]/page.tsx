@@ -4,18 +4,12 @@
  * Accessed via public URLs: /st/{slug}
  */
 
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import { PreviewRenderer } from './preview-renderer';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-}
-
-function hasPreviewArtifact(site: Record<string, unknown>): boolean {
-  if (!["success", "completed"].includes(String(site.compilationStatus ?? ""))) return false;
-  if (site.variantType === "html_v1" || site.variantType === "html_v2" || site.variantType === "html_v3") {
-    return typeof site.staticHtml === "string" && Boolean(site.staticHtml.trim());
-  }
-  return typeof site.compiledBundleUrl === "string" && Boolean(site.compiledBundleUrl.trim());
 }
 
 async function fetchSiteBundle(slug: string) {
@@ -47,34 +41,20 @@ export default async function PreviewPage({ params }: PageProps) {
   const strippedSource = rawSource.replace(/^['"]use client['"];\s*/s, '').trimStart();
   const htmlContent = strippedSource.startsWith('<') ? strippedSource : null;
 
-  const isStaticVariant = site.variantType === 'html_v1' || site.variantType === 'html_v2' || site.variantType === 'html_v3';
-  const hasArtifact = hasPreviewArtifact(site as Record<string, unknown>);
-
-  if (isStaticVariant && htmlContent && hasArtifact) {
-    return (
-      <iframe
-        title={`Generated preview for ${slug}`}
-        src={`/st/${encodeURIComponent(slug)}/document`}
-      className="min-h-screen w-full border-0"
-      style={{ height: '100vh' }}
-      sandbox="allow-scripts"
-      referrerPolicy="no-referrer"
-    />
-    );
+  if (htmlContent) {
+    return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
   }
 
-  // Compiled model output is rendered in a separate sandboxed document. The
-  // route below fetches the artifact server-side and mounts it only inside the
-  // isolated frame, keeping generated code out of this preview shell.
-  const isCompiledBundle = hasArtifact && !!site.compiledBundleUrl;
+  // Check if this is a compiled Next.js bundle
+  const isCompiledBundle = !!site.compiledBundleUrl;
 
   if (!isCompiledBundle) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-50">
         <div className="text-center space-y-4">
-          <h1 className="text-2xl font-semibold">Preview unavailable</h1>
+          <h1 className="text-2xl font-semibold">Not compiled yet</h1>
           <p className="text-zinc-400">
-            This variant has no generated artifact to preview yet. QA approval is still required before publication.
+            This site is still being processed. Check back shortly.
           </p>
           <p className="text-sm text-zinc-500">Slug: {slug}</p>
         </div>
@@ -83,13 +63,19 @@ export default async function PreviewPage({ params }: PageProps) {
   }
 
   return (
-    <iframe
-      title={`Generated preview for ${slug}`}
-      src={`/st/${encodeURIComponent(slug)}/compiled`}
-      className="min-h-screen w-full border-0"
-      style={{ height: '100vh' }}
-      sandbox="allow-scripts"
-      referrerPolicy="no-referrer"
-    />
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+          <div className="animate-pulse text-zinc-400">Loading preview...</div>
+        </div>
+      }
+    >
+      <PreviewRenderer
+        slug={slug}
+        bundleUrl={site.compiledBundleUrl}
+        brandTokens={site.brandTokens}
+        compilationStatus={site.compilationStatus}
+      />
+    </Suspense>
   );
 }

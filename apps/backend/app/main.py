@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse
 
 from app.api.router import api_router
 from app.core.config import get_settings
-from app.core.generation_lock import clear_orphaned_generation_locks
 from app.core.mongo import get_mongo_client
 
 logger = logging.getLogger(__name__)
@@ -15,22 +14,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        settings.validate_asset_settings()
-        logger.info(
-            "Asset ingestion configuration: enabled=%s backend=%s retention_days=%s",
-            settings.asset_download_enabled,
-            settings.asset_storage_backend,
-            settings.asset_retention_days,
-        )
-    except RuntimeError as exc:
-        logger.error("Asset ingestion configuration is unhealthy: %s", exc)
-    try:
-        cleared_locks = await clear_orphaned_generation_locks()
-        if cleared_locks:
-            logger.warning("Cleared %s orphaned generation lock(s) at startup", cleared_locks)
-    except Exception:
-        logger.exception("Unable to clear orphaned generation locks at startup")
     client = get_mongo_client()
     if client is not None:
         try:

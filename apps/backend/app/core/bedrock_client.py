@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+import base64
 import json
 import logging
 import time
@@ -8,13 +8,7 @@ from typing import Any, Optional
 
 import boto3
 from botocore.config import Config as BotoConfig
-from botocore.exceptions import (
-    ConnectTimeoutError,
-    ConnectionClosedError,
-    EndpointConnectionError,
-    ReadTimeoutError,
-)
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import get_settings
 
@@ -22,38 +16,6 @@ logger = logging.getLogger(__name__)
 
 FAST_TIMEOUT_SECONDS = 60
 """Per-model timeout before falling back to the next model in the chain."""
-
-_IMAGE_FORMATS = {"png", "jpeg", "gif", "webp"}
-
-
-def _should_retry_bedrock_error(error: BaseException) -> bool:
-    """Retry transport/transient service errors, not access or validation errors."""
-    if isinstance(
-        error,
-        (
-            ConnectTimeoutError,
-            ConnectionClosedError,
-            EndpointConnectionError,
-            ReadTimeoutError,
-            TimeoutError,
-        ),
-    ):
-        return True
-
-    response = getattr(error, "response", {})
-    metadata = response.get("ResponseMetadata", {}) if isinstance(response, dict) else {}
-    status_code = metadata.get("HTTPStatusCode")
-    error_code = response.get("Error", {}).get("Code") if isinstance(response, dict) else None
-    return bool(
-        (isinstance(status_code, int) and status_code >= 500)
-        or error_code
-        in {
-            "InternalServerException",
-            "ModelNotReadyException",
-            "ServiceUnavailableException",
-            "ThrottlingException",
-        }
-    )
 
 
 class BedrockClient:
@@ -65,7 +27,7 @@ class BedrockClient:
         self.region = settings.bedrock_region
         self.max_tokens = settings.bedrock_max_tokens
         self.timeout_seconds = settings.bedrock_timeout_seconds
-        self.fallback_models = settings.bedrock_fallback_model_list
+        self.fallback_models = settings.bedrock_fallback_models
         self._model_failures: dict[str, int] = {}
 
         self._clients: dict[str, Any] = {}
@@ -101,12 +63,12 @@ class BedrockClient:
         max_tokens: int = 2048,
     ) -> str:
         """Generate text response from Bedrock with automatic fallback to alternate models."""
-        models_to_try = self._models_to_try()
+        models_to_try = [self.model_id] + self.fallback_models
         models_to_try = [m for m in models_to_try if not self._should_skip_model(m)]
 
         if not models_to_try:
             self._model_failures.clear()
-            models_to_try = self._models_to_try()
+            models_to_try = [self.model_id] + self.fallback_models
 
         last_error: Exception | None = None
         for i, model_to_try in enumerate(models_to_try):
@@ -147,28 +109,7 @@ class BedrockClient:
             f"Bedrock text generation failed after all fallbacks: {last_error}"
         )
 
-    def _models_to_try(self) -> list[str]:
-        return list(dict.fromkeys([self.model_id] + self.fallback_models))
-
-    @staticmethod
-    def _extract_converse_text(response: dict[str, Any], context: str) -> str:
-        output = response.get("output", {})
-        message = output.get("message", {}) if isinstance(output, dict) else {}
-        content = message.get("content", []) if isinstance(message, dict) else []
-        text = "".join(
-            block.get("text", "")
-            for block in content
-            if isinstance(block, dict) and isinstance(block.get("text"), str)
-        ).strip()
-        if not text:
-            raise ValueError(f"Empty response from Bedrock {context}")
-        return text
-
-    @retry(
-        retry=retry_if_exception(_should_retry_bedrock_error),
-        stop=stop_after_attempt(2),
-        wait=wait_exponential(min=2, max=8),
-    )
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=2, max=8))
     async def _invoke_bedrock(
         self,
         model_id: str,
@@ -176,18 +117,27 @@ class BedrockClient:
         temperature: float = 0.7,
         max_tokens: int = 2048,
     ) -> str:
-        """Invoke any Converse-compatible Bedrock model with a text prompt."""
-        client = self._get_client_for_model(model_id)
-        response = await asyncio.to_thread(
-            client.converse,
-            modelId=model_id,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={
-                "maxTokens": max_tokens,
+        """Internal method to invoke Bedrock with a specific model."""
+        body = json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": max_tokens,
                 "temperature": temperature,
-            },
+                "messages": [{"role": "user", "content": prompt}],
+            }
         )
-        return self._extract_converse_text(response, "text")
+        client = self._get_client_for_model(model_id)
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=body,
+        )
+        result = json.loads(response["body"].read())
+        text = result["content"][0]["text"]
+        if not text:
+            raise ValueError("Empty response from Bedrock")
+        return text
 
     async def analyze_image(
         self,
@@ -198,12 +148,12 @@ class BedrockClient:
         max_tokens: int = 2048,
     ) -> str:
         """Analyze image with Bedrock Claude Vision with fallback models."""
-        models_to_try = self._models_to_try()
+        models_to_try = [self.model_id] + self.fallback_models
         models_to_try = [m for m in models_to_try if not self._should_skip_model(m)]
 
         if not models_to_try:
             self._model_failures.clear()
-            models_to_try = self._models_to_try()
+            models_to_try = [self.model_id] + self.fallback_models
 
         last_error: Exception | None = None
         for i, model_to_try in enumerate(models_to_try):
@@ -233,11 +183,7 @@ class BedrockClient:
             f"Bedrock vision analysis failed after all fallbacks: {last_error}"
         )
 
-    @retry(
-        retry=retry_if_exception(_should_retry_bedrock_error),
-        stop=stop_after_attempt(2),
-        wait=wait_exponential(min=2, max=8),
-    )
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=2, max=8))
     async def _invoke_bedrock_vision(
         self,
         model_id: str,
@@ -247,37 +193,43 @@ class BedrockClient:
         temperature: float = 0.7,
         max_tokens: int = 2048,
     ) -> str:
-        """Invoke a Converse-compatible Bedrock model with an image and prompt."""
-        image_format = image_mime_type.split("/", 1)[-1].split(";", 1)[0].lower()
-        if image_format == "jpg":
-            image_format = "jpeg"
-        if image_format not in _IMAGE_FORMATS:
-            raise ValueError(f"Unsupported Bedrock image MIME type: {image_mime_type}")
-
-        client = self._get_client_for_model(model_id)
-        response = await asyncio.to_thread(
-            client.converse,
-            modelId=model_id,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "image": {
-                                "format": image_format,
-                                "source": {"bytes": image_data},
-                            }
-                        },
-                        {"text": prompt},
-                    ],
-                }
-            ],
-            inferenceConfig={
-                "maxTokens": max_tokens,
+        """Internal method to invoke Bedrock vision with a specific model."""
+        encoded = base64.b64encode(image_data).decode()
+        body = json.dumps(
+            {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": max_tokens,
                 "temperature": temperature,
-            },
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": image_mime_type,
+                                    "data": encoded,
+                                },
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+            }
         )
-        return self._extract_converse_text(response, "vision")
+        client = self._get_client_for_model(model_id)
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=body,
+        )
+        result = json.loads(response["body"].read())
+        text = result["content"][0]["text"]
+        if not text:
+            raise ValueError("Empty response from Bedrock Vision")
+        return text
 
     async def batch_generate_text(
         self,

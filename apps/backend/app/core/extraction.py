@@ -526,7 +526,7 @@ class _SignalParser(HTMLParser):
                 ):
                     self.signals.font_files.append(
                         {
-                            "fontFamily": "Source font file (family unresolved)",
+                            "fontFamily": "Preloaded Font",
                             "fontUrl": href.strip(),
                             "sourceType": "link_tag",
                             "confidence": 80,
@@ -900,8 +900,8 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
         return None
     try:
         sync_playwright = importlib.import_module("playwright.sync_api").sync_playwright
-    except Exception as exc:
-        return {"_playwright_fallback": f"playwright_unavailable: {exc}"}
+    except Exception:
+        return None
 
     try:
         with sync_playwright() as pw:
@@ -1147,27 +1147,19 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
             }
     except Exception as exc:
         logger.warning("Playwright fetch failed for %s: %s", url, exc)
-        # Tell the caller to use the raw fetch fallback while preserving the
-        # fact that rendered extraction was unavailable. Without this signal a
-        # crawl could look completed even though JS-only content was skipped.
-        return {"_playwright_fallback": str(exc)}
+        return None
 
 
 def _safe_fetch(url: str) -> dict[str, Any]:
     # Try Playwright first to get JS-rendered content
     pw_result = _playwright_fetch(url)
-    if pw_result is not None and "_playwright_fallback" not in pw_result:
+    if pw_result is not None:
         return pw_result
-    playwright_error = (
-        pw_result.get("_playwright_fallback")
-        if isinstance(pw_result, dict)
-        else None
-    )
 
     # Fallback to urllib for raw HTML
     try:
         body, final_url, headers = _fetch_url(url)
-        result = {
+        return {
             "ok": True,
             "body": body,
             "finalUrl": final_url,
@@ -1175,11 +1167,8 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "error": None,
             "renderedByPlaywright": False,
         }
-        if playwright_error:
-            result["playwrightError"] = playwright_error
-        return result
     except HTTPError as exc:
-        result = {
+        return {
             "ok": False,
             "body": None,
             "finalUrl": url,
@@ -1187,11 +1176,8 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "error": f"http_{exc.code}",
             "renderedByPlaywright": False,
         }
-        if playwright_error:
-            result["playwrightError"] = playwright_error
-        return result
     except URLError as exc:
-        result = {
+        return {
             "ok": False,
             "body": None,
             "finalUrl": url,
@@ -1199,11 +1185,8 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "error": f"url_{getattr(exc, 'reason', 'fetch_failed')}",
             "renderedByPlaywright": False,
         }
-        if playwright_error:
-            result["playwrightError"] = playwright_error
-        return result
     except Exception as exc:  # pragma: no cover - network edge cases
-        result = {
+        return {
             "ok": False,
             "body": None,
             "finalUrl": url,
@@ -1211,9 +1194,6 @@ def _safe_fetch(url: str) -> dict[str, Any]:
             "error": str(exc),
             "renderedByPlaywright": False,
         }
-        if playwright_error:
-            result["playwrightError"] = playwright_error
-        return result
 
 
 def _parse_html(body: str) -> PageSignals:
@@ -1461,11 +1441,6 @@ def _extract_brand_asset_cues(
         scored_logos: list[tuple[str, int, str]] = []
 
         for candidate in signals.logo_candidates[:10]:  # Limit to top 10 candidates
-            # HTML parsers can leave image src values relative to the page.
-            # Resolve those before scoring and caching so a valid logo is not
-            # demoted in favor of the page URL or discarded as invalid.
-            if candidate.startswith(("/", "./", "../", "//")):
-                candidate = _absolute_url(page_url, candidate)
             score = 50  # Base score
             note_parts = []
 
@@ -1534,8 +1509,6 @@ def _extract_brand_asset_cues(
                     "assetType": "logo",
                     "label": "Primary logo",
                     "value": best_logo,
-                    "assetUrl": best_logo,
-                    "pageUrl": page_url,
                     "sourceUrl": page_url,
                     "confidence": confidence,
                     "note": best_note,
@@ -1551,8 +1524,6 @@ def _extract_brand_asset_cues(
                             "assetType": "logo",
                             "label": "Secondary logo",
                             "value": second_logo,
-                            "assetUrl": second_logo,
-                            "pageUrl": page_url,
                             "sourceUrl": page_url,
                             "confidence": min(85, max(45, second_score - 10)),
                             "note": f"Alternative: {second_note}",
@@ -1575,8 +1546,6 @@ def _extract_brand_asset_cues(
                 "assetType": "image",
                 "label": "Image asset reference",
                 "value": signals.images[0],
-                "assetUrl": signals.images[0],
-                "pageUrl": page_url,
                 "sourceUrl": page_url,
                 "confidence": 60,
                 "note": "Public image or icon reference discovered on the page.",
@@ -1588,149 +1557,12 @@ def _extract_brand_asset_cues(
                 "assetType": "typography",
                 "label": "Typography cue",
                 "value": signals.font_family,
-                "pageUrl": page_url,
                 "sourceUrl": page_url,
                 "confidence": 52,
                 "note": "Detected from font-family or font resource hints.",
             }
         )
     return cues
-
-
-def _safe_asset_lead_key(lead_company_name: str | None, hostname: str) -> str:
-    raw = lead_company_name or hostname or "unknown"
-    key = re.sub(r"[^A-Za-z0-9_-]+", "-", raw).strip("-_")
-    return (key or "unknown")[:80]
-
-
-def _cache_crawled_assets(
-    *,
-    downloader: AssetDownloader,
-    brand_asset_cues: list[dict[str, Any]],
-    extracted_images: list[dict[str, Any]],
-    extracted_fonts: list[dict[str, Any]],
-    extracted_client_logos: list[dict[str, Any]],
-    crawl_id: str,
-    lead_company_name: str | None,
-    hostname: str,
-) -> int:
-    """Download discovered assets once and replace render URLs with cache URLs.
-
-    Source URLs remain in provenance fields, but no source URL is exposed to the
-    brief or generated markup after a successful cache operation.
-    """
-    runtime_settings = settings
-    if not runtime_settings.asset_download_enabled:
-        for cue in brand_asset_cues:
-            if cue.get("value") or cue.get("assetUrl"):
-                cue.setdefault("note", "")
-                cue["note"] = f"{cue.get('note') or ''};asset_download_disabled:preflight_blocked".strip(";")
-        logger.warning("Asset download is disabled; image-led generation preflight must block")
-        return 0
-
-    candidates: list[str] = []
-    for item in [
-        *brand_asset_cues,
-        *extracted_images,
-        *extracted_fonts,
-        *extracted_client_logos,
-    ]:
-        values = (
-            item.get("value"), item.get("assetUrl"), item.get("url"),
-            item.get("fontUrl"), item.get("imageUrl"),
-        )
-        for value in values:
-            if isinstance(value, str) and value.startswith(("http://", "https://")) and value not in candidates:
-                candidates.append(value)
-    if not candidates:
-        return 0
-
-    storage_lead_key = _safe_asset_lead_key(lead_company_name, hostname)
-    try:
-        results = asyncio.run(downloader.download_batch(candidates[:120], storage_lead_key))
-    except Exception as exc:
-        logger.warning("Asset download batch failed: %s", exc)
-        return 0
-
-    cached_by_source: dict[str, str] = {}
-    total_bytes = 0
-    expiry = max(3600, int(runtime_settings.asset_retention_days or 1) * 86400)
-    for result_item in results:
-        if not result_item.success or not result_item.cached_uri:
-            for cue in brand_asset_cues:
-                if cue.get("value") == result_item.source_url:
-                    cue.setdefault("note", "")
-                    cue["note"] = f"{cue.get('note') or ''};download_error:{result_item.error}".strip(";")
-            continue
-        try:
-            asyncio.run(asset_metadata.reserve_crawl_budget(
-                crawl_id, int(result_item.bytes or 0), runtime_settings.crawl_budget_bytes
-            ))
-            cached_url = downloader.storage.generate_signed_url(result_item.cached_uri, expiry)
-            if cached_url.startswith("/"):
-                backend_public_url = os.getenv("BACKEND_PUBLIC_URL", "").rstrip("/")
-                cached_url = f"{backend_public_url}{cached_url}" if backend_public_url else cached_url
-            if not cached_url.startswith(("https://", "http://", "/api/internal/assets/")):
-                raise ValueError("storage did not return a renderable signed URL")
-            awaitable_doc = asset_metadata.create_asset_doc({
-                "leadId": storage_lead_key,
-                "sourceUrl": result_item.source_url,
-                "cachedUri": result_item.cached_uri,
-                "cachedUrl": cached_url,
-                "cachedAt": result_item.cached_at,
-                "expiresAt": result_item.expires_at,
-                "bytes": int(result_item.bytes or 0),
-                "checksum": result_item.checksum,
-                "contentType": result_item.content_type,
-                "pinned": False,
-                "error": None,
-            })
-            asyncio.run(awaitable_doc)
-        except Exception as exc:
-            try:
-                downloader.storage.delete(result_item.cached_uri)
-            except Exception:
-                pass
-            logger.warning("Cached asset was rejected for %s: %s", result_item.source_url, exc)
-            continue
-
-        cached_by_source[result_item.source_url] = cached_url
-        total_bytes += int(result_item.bytes or 0)
-        for cue in brand_asset_cues:
-            if cue.get("value") == result_item.source_url or cue.get("assetUrl") == result_item.source_url:
-                cue["cachedUri"] = result_item.cached_uri
-                cue["cachedUrl"] = cached_url
-                cue["cachedAt"] = result_item.cached_at.isoformat() if result_item.cached_at else None
-                cue["expiresAt"] = result_item.expires_at.isoformat() if result_item.expires_at else None
-                cue["bytes"] = result_item.bytes
-                cue["checksum"] = result_item.checksum
-
-    def replace_url(item: dict[str, Any], field: str) -> None:
-        value = item.get(field)
-        if isinstance(value, str) and value in cached_by_source:
-            item.setdefault("sourceUrl", value)
-            item[field] = cached_by_source[value]
-            item["cachedUrl"] = cached_by_source[value]
-            item["cachedUri"] = next(
-                (result.cached_uri for result in results if result.source_url == value and result.success),
-                None,
-            )
-
-    for item in extracted_images:
-        replace_url(item, "url")
-    for item in extracted_fonts:
-        replace_url(item, "fontUrl")
-        if item.get("cachedUrl"):
-            for cue in brand_asset_cues:
-                if cue.get("assetType") == "typography" and (
-                    not cue.get("value") or cue.get("value") == item.get("fontFamily")
-                ):
-                    cue["assetUrl"] = item["cachedUrl"]
-                    cue["cachedUrl"] = item["cachedUrl"]
-                    cue["cachedUri"] = item.get("cachedUri")
-    for item in extracted_client_logos:
-        replace_url(item, "imageUrl")
-    return total_bytes
 
 
 def _collect_audience_clues(text_chunks: Iterable[str]) -> list[str]:
@@ -2088,8 +1920,6 @@ def crawl_website(
     crawl_start = time.time()
     crawl_id = f"crawl-{uuid.uuid4().hex}"
     total_bytes_downloaded = 0
-    # Used for the existing page-budget guard. Asset downloads themselves are
-    # performed once, after all pages have been crawled.
     downloader = AssetDownloader()
     page_inventory: list[dict[str, Any]] = []
     source_citations: list[dict[str, Any]] = []
@@ -2147,9 +1977,6 @@ def crawl_website(
         crawled_count += 1
         page_data = _extract_page_summary(url, result["body"] or "", source, depth)
         signals: PageSignals = page_data.pop("signals")
-        if result.get("playwrightError"):
-            page_data["playwrightError"] = result["playwrightError"]
-            page_data.setdefault("errors", []).append("playwright_render_failed")
 
         # Enrich with Playwright pageData if available
         if result.get("renderedByPlaywright") and result.get("pageData"):
@@ -2166,13 +1993,6 @@ def crawl_website(
             page_data["cleanedText"] = pw_data.get("cleanedText", "")
             page_data["fonts"] = pw_data.get("fonts", [])
             page_data["colors"] = list(set(pw_data.get("colors", [])))
-            for color in page_data["colors"]:
-                if color and color not in {cue.get("value") for cue in brand_asset_cues if cue.get("assetType") == "color"}:
-                    brand_asset_cues.append({
-                        "assetType": "color", "label": "Computed rendered color", "value": color,
-                        "pageUrl": url, "sourceUrl": url, "confidence": 68,
-                        "note": "Captured from Playwright computed styles.",
-                    })
             page_data["headings"] = pw_data.get("headings", [])
             page_data["playwrightLinks"] = pw_data.get("links", [])
             page_data["playwrightImages"] = pw_data.get("images", [])
@@ -2210,15 +2030,15 @@ def crawl_website(
         brand_asset_cues.extend(_extract_brand_asset_cues(url, signals))
 
         # Collect enhanced extraction data from signals
-        for testimonial in getattr(signals, "testimonials", []):
+        for testimonial in signals.testimonials:
             testimonial["sourceUrl"] = url
             extracted_testimonials.append(testimonial)
 
-        for client_logo in getattr(signals, "client_logos", []):
+        for client_logo in signals.client_logos:
             client_logo["sourceUrl"] = url
             extracted_client_logos.append(client_logo)
 
-        for font in getattr(signals, "font_files", []):
+        for font in signals.font_files:
             font["sourceUrl"] = url
             # Resolve relative font URLs
             if font.get("fontUrl") and not font["fontUrl"].startswith(
@@ -2227,12 +2047,106 @@ def crawl_website(
                 font["fontUrl"] = _absolute_url(url, font["fontUrl"])
             extracted_fonts.append(font)
 
-        for img in getattr(signals, "categorized_images", []):
+        for img in signals.categorized_images:
             img["sourceUrl"] = url
             # Resolve relative image URLs
             if img.get("url") and not img["url"].startswith(("http", "data:")):
                 img["url"] = _absolute_url(url, img["url"])
             extracted_images.append(img)
+        if url == homepage_url:
+            asset_urls = [
+                value
+                for cue in brand_asset_cues
+                for value in [cue.get("value")]
+                if cue.get("assetType") in {"logo", "image", "typography"}
+                and isinstance(value, str)
+                and value.startswith("http")
+            ]
+            if asset_urls and settings.asset_download_enabled:
+                try:
+                    lead_id_for_download = lead_company_name or "unknown"
+                    dl_results = asyncio.run(
+                        downloader.download_batch(asset_urls, lead_id_for_download)
+                    )
+                    for result_item in dl_results:
+                        for cue in brand_asset_cues:
+                            if cue.get("value") != result_item.source_url:
+                                continue
+                            if not result_item.success:
+                                cue.setdefault("note", "")
+                                cue["note"] = (
+                                    cue.get("note") or ""
+                                ) + f";download_error:{result_item.error}"
+                                continue
+
+                            try:
+                                asyncio.run(
+                                    asset_metadata.reserve_crawl_budget(
+                                        crawl_id,
+                                        int(result_item.bytes or 0),
+                                        settings.crawl_budget_bytes,
+                                    )
+                                )
+                            except Exception:
+                                if result_item.cached_uri:
+                                    try:
+                                        downloader.storage.delete(
+                                            result_item.cached_uri
+                                        )
+                                    except Exception:
+                                        pass
+                                cue.setdefault("note", "")
+                                cue["note"] = (
+                                    cue.get("note") or ""
+                                ) + ";download_error:budget_exceeded"
+                                continue
+
+                            doc = {
+                                "leadId": lead_company_name or "unknown",
+                                "sourceUrl": result_item.source_url,
+                                "cachedUri": result_item.cached_uri,
+                                "cachedAt": result_item.cached_at,
+                                "expiresAt": result_item.expires_at,
+                                "bytes": int(result_item.bytes or 0),
+                                "checksum": result_item.checksum,
+                                "contentType": result_item.content_type,
+                                "pinned": False,
+                                "error": None,
+                            }
+                            try:
+                                asyncio.run(asset_metadata.create_asset_doc(doc))
+                            except Exception:
+                                if result_item.cached_uri:
+                                    try:
+                                        downloader.storage.delete(
+                                            result_item.cached_uri
+                                        )
+                                    except Exception:
+                                        pass
+                                cue.setdefault("note", "")
+                                cue["note"] = (
+                                    cue.get("note") or ""
+                                ) + ";metadata_error"
+                                continue
+
+                            cue["cachedUri"] = result_item.cached_uri
+                            cue["cachedAt"] = (
+                                result_item.cached_at.isoformat()
+                                if result_item.cached_at
+                                else None
+                            )
+                            cue["expiresAt"] = (
+                                result_item.expires_at.isoformat()
+                                if result_item.expires_at
+                                else None
+                            )
+                            cue["bytes"] = result_item.bytes
+                            cue["checksum"] = result_item.checksum
+                            total_bytes_downloaded += result_item.bytes or 0
+                    if total_bytes_downloaded > settings.crawl_budget_bytes:
+                        break
+                except Exception as e:
+                    logger.warning(f"Asset download failed: {e}")
             # Enhanced service extraction - prioritize actual descriptions over bare headings
             for section in page_data.get("sections", []):
                 section_type = section.get("type")
@@ -2401,17 +2315,6 @@ def crawl_website(
             if signals.font_family and not tone_clues:
                 tone_clues.append(f"Typography cue: {signals.font_family[:50]}")
 
-    total_bytes_downloaded = _cache_crawled_assets(
-        downloader=downloader,
-        brand_asset_cues=brand_asset_cues,
-        extracted_images=extracted_images,
-        extracted_fonts=extracted_fonts,
-        extracted_client_logos=extracted_client_logos,
-        crawl_id=crawl_id,
-        lead_company_name=lead_company_name,
-        hostname=hostname,
-    )
-
     crawled_urls = [
         item["url"] for item in page_inventory if item.get("status") == "crawled"
     ]
@@ -2517,8 +2420,6 @@ def crawl_website(
         gaps.append("section_structure_sparse")
     if not asset_manifest:
         gaps.append("asset_manifest_sparse")
-    if any(item.get("playwrightError") for item in page_inventory):
-        gaps.append("playwright_render_failed")
 
     errors = list(
         dict.fromkeys(
@@ -2579,8 +2480,6 @@ def crawl_website(
         f"Crawl complete: {pages_crawled} pages crawled, {pages_discovered} discovered, "
         f"status={crawl_status}, sitemap={sitemap_status}"
     )
-
-    contact_info = _extract_contact_info(page_inventory)
 
     # Deduplicate enhanced extraction results
     seen_testimonials: set[tuple[str, str | None]] = set()
@@ -2646,64 +2545,4 @@ def crawl_website(
         "extractedClientLogos": unique_client_logos[:30],
         "extractedFonts": unique_fonts[:15],
         "extractedImages": unique_images[:50],
-        "contactInfo": contact_info,
-    }
-
-
-def _extract_contact_info(page_inventory: list[dict[str, Any]]) -> dict[str, Any]:
-    """Extract source-backed contact values without manufacturing a fallback."""
-    # Telephone/mailto values are commonly absent from visual text but retained
-    # in crawled markup. Support international prefixes, trunk prefixes,
-    # extensions, and compact local formats while requiring a plausible phone
-    # boundary so asset hashes are not contacts.
-    phone_pattern = re.compile(
-        r"(?<![\dA-Za-z])(?:\+?\d{1,3}[\s().-]*)?(?:\(?\d{2,4}\)?[\s.-]*)"
-        r"\d{2,4}[\s.-]+\d{2,4}(?:[\s.-]+\d{2,6})?"
-        r"(?:\s*(?:x|ext\.?|доб\.?|добочный)\s*\d{1,6})?(?!\d)",
-        re.I,
-    )
-    candidates: list[tuple[str, str, str]] = []
-    all_text: list[str] = []
-    for page in page_inventory:
-        page_url = str(page.get("url") or "")
-        page_text = "\n".join(str(page.get(field) or "") for field in ("cleanedText", "summary", "rawHtml", "html"))
-        all_text.append(page_text)
-        for match in phone_pattern.finditer(page_text):
-            normalised = re.sub(r"[^\d+]", "", match.group(0))
-            digit_count = len(re.sub(r"\D", "", normalised))
-            if 7 <= digit_count <= 15:
-                candidates.append((normalised, page_url, page_text))
-    deduped: list[tuple[str, str, str]] = []
-    seen: set[str] = set()
-    for candidate in candidates:
-        if candidate[0] not in seen:
-            seen.add(candidate[0])
-            deduped.append(candidate)
-    emergency_candidate = next(
-        (item for item in deduped if re.search(r"emergency.{0,5000}" + re.escape(item[0][-4:]), item[2], re.I | re.S)),
-        None,
-    )
-    office_candidate = next((item for item in deduped if not emergency_candidate or item[0] != emergency_candidate[0]), None)
-    text = "\n".join(all_text)
-    emails = list(dict.fromkeys(re.findall(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text, re.I)))
-    source = (emergency_candidate or office_candidate or (deduped[0] if deduped else None))
-    source_url = source[1] if source else next((str(page.get("url")) for page in page_inventory if page.get("url")), None)
-    hours_patterns = (
-        r"((?:Monday|Mon)\s*(?:[-–—]|to)\s*(?:Friday|Fri)[^\n]{0,120})",
-        r"((?:Monday|Mon)(?:\s*[,;|/]\s*(?:Tuesday|Tue|Wednesday|Wed|Thursday|Thu|Friday|Fri|Saturday|Sat|Sunday|Sun))+[^\n]{0,120})",
-        r"((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s*[-–—:]\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*[-–—to]+\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?[^\n]{0,80})",
-        r"((?:opening|business|office)\s+hours?\s*[:\-]?[^\n]{0,160})",
-    )
-    hours_match = next(
-        (re.search(pattern, text, re.I) for pattern in hours_patterns if re.search(pattern, text, re.I)),
-        None,
-    )
-    return {
-        "officePhone": office_candidate[0] if office_candidate else None,
-        "emergencyPhone": emergency_candidate[0] if emergency_candidate else None,
-        "email": emails[0] if emails else None,
-        "hours": hours_match.group(1).strip() if hours_match else None,
-        "contactUrl": source_url,
-        "sourceUrl": source_url,
-        "confidence": 80 if (office_candidate or emergency_candidate or emails) else 0,
     }

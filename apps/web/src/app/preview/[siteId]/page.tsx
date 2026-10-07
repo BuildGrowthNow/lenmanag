@@ -3,7 +3,9 @@
  * Dynamically loads and mounts compiled bundles with brand tokens.
  */
 
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import { PreviewRenderer } from './preview-renderer';
 
 interface PageProps {
   params: Promise<{ siteId: string }>;
@@ -52,13 +54,19 @@ export default async function PreviewPage({ params }: PageProps) {
   }
 
   return (
-    <iframe
-      title={`Generated preview for ${siteId}`}
-      src={`/st/${encodeURIComponent(site.previewSlug || siteId)}`}
-      className="min-h-screen w-full border-0"
-      style={{ height: '100vh' }}
-      sandbox="allow-scripts"
-      referrerPolicy="no-referrer"
-    />
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+          <div className="animate-pulse text-zinc-400">Loading preview...</div>
+        </div>
+      }
+    >
+      <PreviewRenderer
+        siteId={siteId}
+        bundleUrl={site.compiledBundleUrl}
+        brandTokens={site.brandTokens}
+        compilationStatus={site.compilationStatus}
+      />
+    </Suspense>
   );
 }

@@ -88,7 +88,7 @@ export type PipelineEvent = {
   jobId: string | null;
   variantType: string | null;
   durationMs: number | null;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, string | number | boolean | null>;
   timestamp: string;
 };
 
@@ -610,7 +610,6 @@ export type GeneratedSiteVersion = {
   sectionStack: SiteSection[];
   ctaStrategy: CtaStrategy;
   qualityScore: number;
-  qualityScoreSource?: "visual" | "fallback";
   readinessStatus: SiteReadinessStatus;
   qaStatus: SiteQaStatus;
   reviewRubric: SiteQualityCheck[];
@@ -661,8 +660,6 @@ export type GeneratedSite = {
   // Variant fields
   variantType?: VariantType;
   variantLabel?: string;
-  variantTitle?: string | null;
-  variantDescription?: string | null;
   variantPosition?: number;
   staticHtml?: string;
   staticCssUrl?: string;
@@ -680,7 +677,6 @@ export type GeneratedSite = {
   sectionStack: SiteSection[];
   ctaStrategy: CtaStrategy;
   qualityScore: number;
-  qualityScoreSource?: "visual" | "fallback";
   readinessStatus: SiteReadinessStatus;
   qaStatus: SiteQaStatus;
   reviewRubric: SiteQualityCheck[];
@@ -1250,7 +1246,6 @@ export type LeadListItem = {
   version: number;
   latestJob: LeadJobSummary | null;
   redesignSlug: string | null;
-  clientShareSiteIds: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -1274,7 +1269,6 @@ export type LeadDetail = {
   pipelineStage: PipelineStage;
   pipelineMode: PipelineMode;
   pipelineStatusDetail: string | null;
-  generationTypes: GenerationType[];
   industry: string | null;
   notes: string | null;
   missingFields: string[];
@@ -1283,7 +1277,6 @@ export type LeadDetail = {
   jobs: LeadJobSummary[];
   pipelineEvents: PipelineEvent[];
   redesignSlug: string | null;
-  clientShareSiteIds: string[];
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -1340,7 +1333,6 @@ export type CreativeDirection = {
 };
 
 export type DesignMode = "editorial" | "immersive" | "interactive" | "minimalist" | "playful" | "corporate";
-export type HeroArchetype = "photography" | "typography" | "svg_diagram" | "motion_graphic" | "webgl_fallback" | "hybrid";
 
 export type MasterBrief = {
   id: string;
@@ -1354,8 +1346,6 @@ export type MasterBrief = {
   visualStyle: string;
   colorStrategy: string;
   motionLevel: "none" | "subtle" | "moderate" | "dramatic";
-  heroMode?: "image_led" | "typography_only";
-  heroArchetype?: HeroArchetype;
   specialEffects: string[];
   creativeDirection?: CreativeDirection;
   designMode?: DesignMode;

@@ -117,9 +117,7 @@ class GenerationMetricsCollector:
         try:
             yield
         finally:
-            # Keep the metric useful even on coarse monotonic clocks; entering
-            # the lock-wait scope is still a measurable event.
-            metrics.lock_wait_seconds = max(time.monotonic() - start_time, 1e-9)
+            metrics.lock_wait_seconds = time.monotonic() - start_time
 
             if metrics.lock_wait_seconds > 30:
                 logger.warning(

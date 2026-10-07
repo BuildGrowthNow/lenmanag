@@ -123,8 +123,6 @@ class _AsyncMongoMockAdmin:
 
 def _build_client() -> AsyncIOMotorClient | _AsyncMongoMockClient:
     settings = get_settings()
-    if settings.mongo_use_mock:
-        return _AsyncMongoMockClient()
     if settings.mongodb_uri:
         # Configure connection pool to prevent connection exhaustion
         return AsyncIOMotorClient(

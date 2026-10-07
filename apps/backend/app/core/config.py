@@ -1,4 +1,3 @@
-import json
 from functools import lru_cache
 from typing import List, Optional
 
@@ -11,13 +10,9 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "LenQuant Website Fabric API"
-    build_version: str = "unknown"
     api_prefix: str = "/api"
     mongodb_uri: str = ""
     mongodb_db_name: str = "lenquant"
-    # Explicit opt-in for isolated test runs. Production keeps using the
-    # configured URI; pytest sets this before importing the application.
-    mongo_use_mock: bool = False
     session_secret: str = "replace-me"
     jwt_secret: str = "replace-with-a-secure-random-string"
     jwt_algorithm: str = "HS256"
@@ -27,47 +22,18 @@ class Settings(BaseSettings):
     password_reset_token_expiry_hours: int = 24
     require_email_verification: bool = True
     frontend_url: str = "http://localhost:3000"
-    backend_public_url: str = "http://localhost:8000"
     auth_allowlist_emails: str = "operator@example.com"
     auth_allowlist_domains: str = ""
     resend_api_key: str = ""
     resend_from_email: str = "noreply@lenquant.com"
-    public_form_notification_email: str = ""
-    public_form_max_requests: int = 5
-    public_form_window_seconds: int = 900
     backend_cors_origins: str = "http://localhost:3000,http://localhost:3002"
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str | None = None
     celery_default_queue: str = "lenquant"
     celery_task_always_eager: bool = True
-    # Keep the default conservative; production can raise this after checking
-    # provider rate limits and compiler capacity.
-    celery_worker_concurrency: int = 1
 
-    # Bedrock is the default design-generation provider. Cloudflare remains an
-    # explicit opt-in via LLM_PROVIDER=cloudflare.
-    llm_provider: str = "bedrock"
-
-    # Cloudflare Workers AI Configuration
-    cloudflare_account_id: Optional[str] = None
-    cloudflare_api_token: Optional[str] = None
-    cloudflare_model: str = "@cf/deepseek-ai/deepseek-v4-flash-0731"
-    cloudflare_fallback_models: str = "@cf/zai-org/glm-5.3-flash"
-    cloudflare_vision_model: str = "@cf/qwen/qwen3.8-27b"
-    cloudflare_timeout_seconds: int = 300
-
-    # Final fallback for Cloudflare Workers AI: Amazon Bedrock Mantle.
-    bedrock_mantle_model_id: str = "qwen.qwen3-coder-30b-a3b-instruct"
-    bedrock_mantle_region: str = "us-east-1"
-    bedrock_mantle_timeout_seconds: int = 300
-
-    @property
-    def cloudflare_fallback_model_list(self) -> list[str]:
-        return [
-            model.strip()
-            for model in self.cloudflare_fallback_models.split(",")
-            if model.strip()
-        ]
+    # LLM Provider: "gemini" (default for local) or "bedrock" (production)
+    llm_provider: str = "gemini"
 
     # Gemini Configuration (used when llm_provider=gemini)
     gemini_api_key: Optional[str] = None
@@ -75,54 +41,21 @@ class Settings(BaseSettings):
     gemini_vision_model: str = "gemini-2.0-flash"
 
     # Amazon Bedrock Configuration (used when llm_provider=bedrock)
-    # Global inference profile for Claude Sonnet 4.6. This is the preferred
-    # production model for site generation and visual QA.
-    bedrock_model_id: str = "global.anthropic.claude-sonnet-4-6"
+    bedrock_model_id: str = "us.anthropic.claude-sonnet-4-6"
     bedrock_region: str = "us-east-1"
     bedrock_max_tokens: int = 32768  # Increased for full page code generation
     bedrock_timeout_seconds: int = (
         600  # 10 minutes for complex code generation (up from 5min)
     )
-    # Comma-separated so production can override the chain without relying on
-    # Pydantic's JSON-only parsing for list environment variables. These are
-    # tried in order through Bedrock Converse, which normalizes provider
-    # request/response formats for supported models.
-    bedrock_fallback_models: str = (
-        "amazon.nova-pro-v1:0,"
-        "us.meta.llama4-scout-17b-instruct-v1:0,"
-        "mistral.mistral-large-2402-v1:0,"
-        "us.anthropic.claude-haiku-4-5-20251001-v1:0,"
-        "us.anthropic.claude-sonnet-4-5-20250929-v1:0,"
-        "us.anthropic.claude-opus-4-6-v1"
-    )
-
-    @property
-    def bedrock_fallback_model_list(self) -> list[str]:
-        """Return an ordered, de-duplicated Bedrock fallback chain.
-
-        Accept both the documented comma-separated form and a JSON list so
-        older deployment environment files remain compatible.
-        """
-        raw = self.bedrock_fallback_models
-        if isinstance(raw, list):  # type: ignore[unreachable]
-            values = raw
-        else:
-            value = raw.strip()
-            if value.startswith("["):
-                try:
-                    parsed = json.loads(value)
-                except json.JSONDecodeError:
-                    parsed = []
-                values = parsed if isinstance(parsed, list) else []
-            else:
-                values = value.split(",")
-
-        result: list[str] = []
-        for model in values:
-            model_id = str(model).strip()
-            if model_id and model_id not in result:
-                result.append(model_id)
-        return result
+    # Fallback models if primary fails 2-3x or times out
+    bedrock_fallback_models: list[str] = [
+        "amazon.nova-pro-v1:0",
+        "us.meta.llama4-scout-17b-instruct-v1:0",
+        "mistral.mistral-large-2402-v1:0",
+        "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "us.anthropic.claude-opus-4-6-v1",
+    ]
 
     # Visual Redesign Configuration
     visual_redesign_enabled: bool = True
@@ -134,18 +67,13 @@ class Settings(BaseSettings):
     # Base URL for rendering public previews used by screenshot QA.
     # Can be overridden via PREVIEW_BASE_URL env var when the frontend
     # runs on a non-default port or host.
-    # Public preview routes live below /st. Keep the route prefix in the
-    # setting so generated links and screenshot QA resolve to the same page.
-    preview_base_url: str = "http://localhost:3000/st"
+    preview_base_url: str = "http://localhost:3000"
 
     # Compiler service URL for TSX compilation
     compiler_service_url: str = "http://localhost:3001"
 
     # Asset download / caching settings
-    # Production generation must cache source assets before rendering. An
-    # explicit ASSET_DOWNLOAD_ENABLED=false still opts out and omits uncached
-    # assets rather than leaking original-site URLs into generated markup.
-    asset_download_enabled: bool = True
+    asset_download_enabled: bool = False
     asset_storage_backend: str = "local"  # local | s3 | gcp
     asset_max_file_bytes: int = 1_500_000
     asset_max_aggregate_bytes: int = 12_000_000
@@ -167,13 +95,6 @@ class Settings(BaseSettings):
     asset_upload_chunk_size: int = 8 * 1024 * 1024
     # Retry attempts for network/storage ops
     asset_retry_max_attempts: int = 5
-    enhanced_html_rollout_percent: int = 100
-    enhanced_html_shadow_mode: bool = False
-    enhanced_html_failure_threshold: float = 0.05
-    enhanced_html_latency_budget_seconds: float = 120.0
-    rejected_artifact_path: str = "/var/lib/lenquant/rejected-artifacts"
-    rejected_artifact_retention_days: int = 3
-    rejected_artifact_encryption_key: str | None = None
 
     # Crawl budget / limits
     crawl_max_pages: int = 10

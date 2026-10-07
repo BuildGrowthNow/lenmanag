@@ -28,8 +28,7 @@ class CompilerClient:
         self.timeout = 30.0
 
     async def compile_tsx(
-        self, *, source_code: str, component_name: str, site_id: str,
-        js_entry: str | None = None, capability_manifest: dict[str, Any] | None = None,
+        self, *, source_code: str, component_name: str, site_id: str
     ) -> dict[str, Any]:
         """
         Compile TSX source code to JavaScript bundle.
@@ -49,8 +48,6 @@ class CompilerClient:
             "sourceCode": source_code,
             "componentName": component_name,
             "siteId": site_id,
-            "jsEntry": js_entry,
-            "capabilityManifest": capability_manifest,
         }
 
         try:

@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 interface PreviewRendererProps {
-  slug: string;
+  siteId: string;
   bundleUrl: string;
   brandTokens?: any;
   compilationStatus?: string;
@@ -43,7 +43,7 @@ function ErrorFallback({ error }: { error: unknown }) {
 }
 
 export function PreviewRenderer({
-  slug,
+  siteId,
   bundleUrl,
   brandTokens,
   compilationStatus,
@@ -61,44 +61,22 @@ export function PreviewRenderer({
 
     const loadBundle = async () => {
       try {
-        // Ensure React and JSX runtime are available globally for the bundle
-        if (typeof window !== 'undefined') {
-          const react = require('react');
-          const reactDOM = require('react-dom');
-          const jsxRuntime = require('react/jsx-runtime');
-          (window as any).React = react;
-          (window as any).ReactDOM = reactDOM;
-          (window as any).__reactJsxRuntime = jsxRuntime;
-        }
-
-        // Fetch the IIFE bundle
         const response = await fetch(bundleUrl);
         if (!response.ok) {
           throw new Error(`Failed to fetch bundle: ${response.status}`);
         }
         const bundleCode = await response.text();
 
-        // Create and inject script tag for IIFE bundle
-        const script = document.createElement('script');
-        script.textContent = bundleCode;
-        document.head.appendChild(script);
+        const moduleExports: { default?: React.ComponentType } = {};
+        const moduleFunc = new Function('exports', bundleCode);
+        moduleFunc(moduleExports);
 
-        // The IIFE assigns to var LandingPageBundle AND our footer sets window.LandingPageBundle
-        const bundle = (window as any).LandingPageBundle;
-        if (!bundle) {
-          throw new Error('Bundle loaded but LandingPageBundle not found on window');
+        const DefaultExport = moduleExports.default;
+        if (!DefaultExport) {
+          throw new Error('Bundle has no default export');
         }
 
-        // esbuild IIFE wraps exports: { default: Component, __esModule: true }
-        const ResolvedComponent = bundle.default || bundle;
-        if (typeof ResolvedComponent !== 'function') {
-          throw new Error(
-            `Bundle loaded but export is not a component (got ${typeof ResolvedComponent})`
-          );
-        }
-
-        setComponent(() => ResolvedComponent);
-        document.head.removeChild(script);
+        setComponent(() => DefaultExport);
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load bundle';
         console.error('Failed to load bundle:', errorMessage);
@@ -107,7 +85,7 @@ export function PreviewRenderer({
     };
 
     loadBundle();
-  }, [bundleUrl, compilationStatus, slug]);
+  }, [bundleUrl, compilationStatus]);
 
   if (loadError) {
     return (
@@ -117,7 +95,7 @@ export function PreviewRenderer({
             Bundle Load Error
           </h1>
           <p className="text-zinc-400">{loadError}</p>
-          <p className="text-xs text-zinc-600">Slug: {slug}</p>
+          <p className="text-xs text-zinc-600">Site ID: {siteId}</p>
         </div>
       </div>
     );
