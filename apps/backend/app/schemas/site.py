@@ -6,6 +6,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 from app.schemas.brief import BriefEvidence, BriefSourceReference
+from app.core.booking import DEFAULT_BOOKING_URL
 
 VariantType = Literal["html_v1", "html_v2", "html_v3", "nextjs"]
 PaletteMode = Literal["zinc", "light", "colorful"]
@@ -518,5 +519,5 @@ class RedesignPageData(BaseModel):
     companyName: Optional[str] = None
     contactName: Optional[str] = None
     logoUrl: Optional[str] = None
-    callUrl: str = "https://calendly.com/lenquant/sites"
+    callUrl: str = DEFAULT_BOOKING_URL
     variants: list[RedesignVariant] = Field(default_factory=list)

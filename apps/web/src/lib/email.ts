@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { DEFAULT_BOOKING_URL } from "@/lib/booking";
 
 // Initialize Resend only if API key is available
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -291,7 +292,7 @@ export async function sendCustomerConfirmation(data: CustomerConfirmationEmailDa
     <p style="color: #78350F; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
       We're ready to start your project! Book a 30-minute kickoff call to discuss your vision and finalize details.
     </p>
-    <a href="https://calendly.com/lenquant/sites"
+    <a href="${DEFAULT_BOOKING_URL}"
        style="display: inline-block; background: #EAB308; color: #1E293B; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 18px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
       📅 Book Your Kickoff Call
     </a>

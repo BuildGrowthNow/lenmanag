@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { resolveBookingUrl } from "@/lib/booking";
 import type { RedesignPageData, RedesignVariant } from "./page";
 
 function BusinessIdentity({ logoUrl, companyName }: { logoUrl: string | null; companyName: string | null }) {
@@ -139,7 +140,7 @@ export function RedesignClient({ data }: { data: RedesignPageData }) {
             Love one of these? Let&apos;s build your final version.
           </p>
           <a
-            href={data.callUrl || "https://calendly.com/lenquant/sites"}
+            href={resolveBookingUrl(data.callUrl)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block rounded-full bg-yellow-500 px-8 py-3 text-sm font-semibold text-slate-900 transition-colors hover:bg-yellow-400"

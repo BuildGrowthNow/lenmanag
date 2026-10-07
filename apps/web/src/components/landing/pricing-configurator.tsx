@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSupportsHover } from "@/hooks/use-supports-hover";
+import { DEFAULT_BOOKING_URL } from "@/lib/booking";
 
 const INCLUDED = [
   "Complete landing page built for your brand",
@@ -94,7 +95,7 @@ export function PricingConfigurator() {
             whileTap={{ scale: 0.98 }}
           >
             <Button
-              onClick={() => window.open("https://calendly.com/lenquant/sites", "_blank")}
+              onClick={() => window.open(DEFAULT_BOOKING_URL, "_blank")}
               className="w-full py-6 text-lg font-bold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-xl shadow-2xl shadow-yellow-500/50 transition-all"
             >
               <Calendar className="mr-2 w-5 h-5" />

@@ -18,6 +18,7 @@ import { getSite, getVariantsForLead } from "@/lib/api/sites";
 import { evaluateExtractionHealth } from "@/lib/extraction-health";
 import type { LeadDetail, ExtractionSnapshot, MasterBrief, GeneratedSite, PipelineStage, ExtractionAnalysisResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { DEFAULT_BOOKING_URL } from "@/lib/booking";
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -242,10 +243,10 @@ function GallerySettings({
             type="url"
             value={callUrl}
             onChange={(event) => { setCallUrl(event.target.value); setSaved(false); }}
-            placeholder="https://calendly.com/lenquant/sites (default)"
+            placeholder={`${DEFAULT_BOOKING_URL} (default)`}
             className="w-full rounded-lg border border-line bg-panel px-3 py-2 text-text placeholder:text-muted"
           />
-          <span className="block text-xs text-muted">Leave blank to use https://calendly.com/lenquant/sites.</span>
+          <span className="block text-xs text-muted">Leave blank to use {DEFAULT_BOOKING_URL}.</span>
         </label>
 
         <div className="flex items-center gap-3">

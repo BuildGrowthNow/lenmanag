@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.core.config import get_settings
+from app.core.booking import resolve_booking_url
 from app.core.leads import lead_repository
 from app.core.mongo import get_database
 from app.core.sites import site_repository
@@ -129,7 +130,7 @@ async def get_redesign_page(
         companyName=lead_doc.get("companyName"),
         contactName=lead_doc.get("contactName"),
         logoUrl=logo_url,
-        callUrl=lead_doc.get("galleryCallUrl") or "https://calendly.com/lenquant/sites",
+        callUrl=resolve_booking_url(lead_doc.get("galleryCallUrl")),
         variants=variants,
     )
 

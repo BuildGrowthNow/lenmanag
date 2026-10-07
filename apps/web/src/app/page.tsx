@@ -32,6 +32,7 @@ import { RiskReversalBadge } from "@/components/landing/risk-reversal-badge";
 import { Footer } from "@/components/landing/footer";
 import { ScrollProgressBar } from "@/components/landing/scroll-progress-bar";
 import { CursorGlow } from "@/components/cursor-glow";
+import { DEFAULT_BOOKING_URL } from "@/lib/booking";
 
 export default function SitesLandingPage() {
   const [showSuccess, setShowSuccess] = useState(false);
@@ -216,7 +217,7 @@ export default function SitesLandingPage() {
                 className="inline-block"
               >
                 <Button
-                  onClick={() => window.open("https://calendly.com/lenquant/sites", "_blank")}
+                  onClick={() => window.open(DEFAULT_BOOKING_URL, "_blank")}
                   className="px-8 py-6 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
                 >
                   <Calendar className="mr-2 w-5 h-5" />
@@ -356,7 +357,7 @@ export default function SitesLandingPage() {
                   whileTap={{ scale: 0.95 }}
                 >
                   <Button
-                    onClick={() => window.open("https://calendly.com/lenquant/sites", "_blank")}
+                    onClick={() => window.open(DEFAULT_BOOKING_URL, "_blank")}
                     className="px-8 py-6 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
                   >
                     <Calendar className="mr-2 w-5 h-5" />
@@ -428,7 +429,7 @@ export default function SitesLandingPage() {
                 whileTap={{ scale: 0.95 }}
               >
                 <Button
-                  onClick={() => window.open("https://calendly.com/lenquant/sites", "_blank")}
+                  onClick={() => window.open(DEFAULT_BOOKING_URL, "_blank")}
                   className="px-8 py-6 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-zinc-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
                 >
                   <Calendar className="mr-2 w-5 h-5" />
@@ -463,7 +464,7 @@ export default function SitesLandingPage() {
               whileTap={{ scale: 0.95 }}
             >
               <Button
-                onClick={() => window.open("https://calendly.com/lenquant/sites", "_blank")}
+                onClick={() => window.open(DEFAULT_BOOKING_URL, "_blank")}
                 className="px-8 py-6 text-lg font-semibold bg-yellow-500 hover:bg-yellow-600 text-zinc-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
               >
                 <Calendar className="mr-2 w-5 h-5" />
@@ -505,7 +506,7 @@ export default function SitesLandingPage() {
               </p>
               <motion.div {...(supportsHover && { whileHover: { scale: 1.05 } })} whileTap={{ scale: 0.95 }}>
                 <Button
-                  onClick={() => window.open("https://calendly.com/lenquant/sites", "_blank")}
+                  onClick={() => window.open(DEFAULT_BOOKING_URL, "_blank")}
                   className="px-10 py-7 text-xl font-bold bg-yellow-500 hover:bg-yellow-600 text-slate-900 rounded-full shadow-2xl shadow-yellow-500/50 transition-all"
                 >
                   <Calendar className="mr-2 w-6 h-6" />
