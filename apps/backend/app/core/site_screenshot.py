@@ -122,13 +122,14 @@ def capture_site_screenshot(
     backend_public_url = os.getenv(
         "BACKEND_PUBLIC_URL", "http://localhost:8000"
     ).rstrip("/")
-    screenshot_url = f"{backend_public_url}/api/v1/screenshots/{site_id}/preview.jpg"
+    captured_at = datetime.now(timezone.utc)
+    screenshot_url = f"{backend_public_url}/api/v1/screenshots/{site_id}/preview.jpg?v={int(captured_at.timestamp() * 1000)}"
 
     return SiteScreenshotMetadata(
         id=uuid4().hex,
         label="preview",
         url=screenshot_url,
-        capturedAt=datetime.now(timezone.utc),
+        capturedAt=captured_at,
         width=_VIEWPORT_WIDTH,
         height=_VIEWPORT_HEIGHT,
     )
