@@ -119,19 +119,8 @@ class AnalyticsRepository:
     async def _events(self, user_id: str | None = None) -> list[dict[str, Any]]:
         database = get_database()
         query: dict[str, Any] = {}
-        if user_id:
-            from app.core.leads import lead_repository
-
-            lead_ids = await lead_repository.get_lead_ids_for_user(user_id)
-            if not lead_ids:
-                return []
-            query["leadId"] = {"$in": lead_ids}
+        # Analytics follows the same shared workspace as leads and websites.
         if database is None:
-            if user_id:
-                lead_ids_set = set(query.get("leadId", {}).get("$in", []))
-                return [
-                    e for e in self._memory if str(e.get("leadId", "")) in lead_ids_set
-                ]
             return list(self._memory)
         cursor = database["analytics_events"].find(query).sort("createdAt", -1)
         docs = await cursor.to_list(length=None)

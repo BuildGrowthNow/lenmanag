@@ -2707,8 +2707,6 @@ class SiteRepository:
         await self._maybe_ensure_indexes()
         database = get_database()
         query: dict[str, Any] = {"id": site_id}
-        if user_id:
-            query["userId"] = user_id
         if database is None:
             async with self._memory_lock:
                 doc = self._sites.get(site_id)
@@ -2717,13 +2715,10 @@ class SiteRepository:
                     candidates = [
                         d for d in self._sites.values()
                         if d.get("leadId") == site_id
-                        and (not user_id or d.get("userId") == user_id)
                     ]
                     if candidates:
                         doc = min(candidates, key=lambda d: d.get("variantPosition", 99))
                 if doc:
-                    if user_id and doc.get("userId") != user_id:
-                        return None
                     site = _site_doc_to_current(doc)
                     diffs = await self.get_override_diff(site.id)
                     site.overrideDiffs = diffs
@@ -2733,8 +2728,6 @@ class SiteRepository:
         if not doc:
             # Fallback: treat site_id as a leadId and return lowest-position variant
             lead_query: dict[str, Any] = {"leadId": site_id}
-            if user_id:
-                lead_query["userId"] = user_id
             cursor = database["generated_sites"].find(lead_query).sort("variantPosition", 1).limit(1)
             docs = await cursor.to_list(length=1)
             doc = docs[0] if docs else None
@@ -2783,15 +2776,12 @@ class SiteRepository:
         await self._maybe_ensure_indexes()
         database = get_database()
         query: dict[str, Any] = {"leadId": lead_id}
-        if user_id:
-            query["userId"] = user_id
         if database is None:
             async with self._memory_lock:
                 sites = [
                     _site_doc_to_current(doc)
                     for doc in self._sites.values()
                     if doc.get("leadId") == lead_id
-                    and (not user_id or doc.get("userId") == user_id)
                 ]
                 return sorted(sites, key=lambda s: s.variantPosition)
 
@@ -5400,16 +5390,14 @@ class SiteRepository:
     async def _list_sites(
         self, *, limit: int, offset: int, user_id: str | None = None
     ) -> list[GeneratedSite]:
+        # Website and QA visibility is shared across authenticated accounts.
         database = get_database()
         query: dict[str, Any] = {}
-        if user_id:
-            query["userId"] = user_id
         if database is None:
             async with self._memory_lock:
                 docs = [
                     doc
                     for doc in self._sites.values()
-                    if not user_id or doc.get("userId") == user_id
                 ]
                 docs.sort(key=lambda item: item.get("updatedAt", _now()), reverse=True)
                 return [
@@ -5428,16 +5416,8 @@ class SiteRepository:
     async def _count_sites(self, user_id: str | None = None) -> int:
         database = get_database()
         query: dict[str, Any] = {}
-        if user_id:
-            query["userId"] = user_id
         if database is None:
             async with self._memory_lock:
-                if user_id:
-                    return sum(
-                        1
-                        for doc in self._sites.values()
-                        if doc.get("userId") == user_id
-                    )
                 return len(self._sites)
         return await database["generated_sites"].count_documents(query)
 

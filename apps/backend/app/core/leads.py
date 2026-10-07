@@ -1296,6 +1296,7 @@ class LeadRepository:
         offset: int = 0,
         user_id: str | None = None,
     ) -> LeadListResponse:
+        # Business records belong to the shared workspace; user_id is attribution only.
         # Validate pagination parameters
         max_limit = 100
         max_offset = 10000
@@ -1320,8 +1321,6 @@ class LeadRepository:
                 )
 
         query: dict[str, Any] = {}
-        if user_id:
-            query["user_id"] = user_id
         if status:
             query["status"] = status
         else:
@@ -1432,8 +1431,6 @@ class LeadRepository:
         }
         try:
             match_filter: dict[str, Any] = {"status": {"$ne": "archived"}}
-            if user_id:
-                match_filter["user_id"] = user_id
             agg = (
                 await database["leads"]
                 .aggregate(
@@ -1487,8 +1484,6 @@ class LeadRepository:
                 return _lead_doc_to_detail(doc, jobs)
 
         query: dict[str, Any] = {"id": lead_id}
-        if user_id:
-            query["user_id"] = user_id
         doc = await database["leads"].find_one(query)
         if doc is None:
             return None
@@ -1503,6 +1498,7 @@ class LeadRepository:
         return _lead_doc_to_detail(doc, jobs)
 
     async def get_lead_ids_for_user(self, user_id: str) -> list[str]:
+        """Return workspace lead IDs (legacy name retained for callers)."""
         await self._maybe_ensure_indexes()
         database = get_database()
         if database is None:
@@ -1510,9 +1506,8 @@ class LeadRepository:
                 return [
                     doc["id"]
                     for doc in self._memory.values()
-                    if doc.get("user_id") == user_id
                 ]
-        cursor = database["leads"].find({"user_id": user_id}, {"id": 1})
+        cursor = database["leads"].find({}, {"id": 1})
         docs = await cursor.to_list(length=None)
         return [str(doc["id"]) for doc in docs if doc.get("id")]
 
@@ -1541,8 +1536,6 @@ class LeadRepository:
                 return _lead_doc_to_detail(updated, self._jobs_for_lead_memory(lead_id))
 
         query: dict[str, Any] = {"id": lead_id}
-        if user_id:
-            query["user_id"] = user_id
         doc = await database["leads"].find_one(query)
         if doc is None:
             return None
@@ -1799,17 +1792,6 @@ class LeadRepository:
         doc = await database["jobs"].find_one({"id": job_id})
         if doc is None:
             return None
-        if user_id:
-            lead_ids = list(doc.get("leadIds", []))
-            if lead_id := doc.get("leadId"):
-                if lead_id not in lead_ids:
-                    lead_ids.append(lead_id)
-            if lead_ids:
-                owned_count = await database["leads"].count_documents(
-                    {"id": {"$in": lead_ids}, "user_id": user_id}
-                )
-                if owned_count == 0:
-                    return None
         return _job_doc_to_summary(doc)
 
     async def get_job_doc(self, job_id: str) -> dict[str, Any] | None:
@@ -1913,13 +1895,7 @@ class LeadRepository:
             async with self._memory_lock:
                 docs = list(self._jobs.values())
         else:
-            if user_id:
-                lead_ids = await self.get_lead_ids_for_user(user_id)
-                query: dict[str, Any] = (
-                    {"leadId": {"$in": lead_ids}} if lead_ids else {"leadId": None}
-                )
-            else:
-                query = {}
+            query: dict[str, Any] = {}
             cursor = database["jobs"].find(query).sort("updatedAt", -1).limit(250)
             docs = await cursor.to_list(length=250)
 
