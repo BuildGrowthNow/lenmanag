@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, CheckCircle2, Circle, XCircle, ExternalLink, Copy, Check } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, CheckCircle2, Circle, XCircle, ExternalLink, Copy, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -102,7 +102,7 @@ function GallerySettings({
     let mounted = true;
     getVariantsForLead(lead.id).then((items) => {
       if (!mounted) return;
-      setVariants(items.filter((item) => item.compilationStatus === "success"));
+      setVariants(items.sort((a, b) => (a.variantPosition ?? 0) - (b.variantPosition ?? 0)));
       setLoading(false);
     }).catch(() => {
       if (!mounted) return;
@@ -124,6 +124,17 @@ function GallerySettings({
         ? selected.filter((id) => id !== variantId)
         : [...selected, variantId];
     });
+    setSaved(false);
+  };
+
+  const moveVariant = (variantId: string, offset: -1 | 1) => {
+    const ordered = [...effectiveSelectedIds];
+    const currentIndex = ordered.indexOf(variantId);
+    const nextIndex = currentIndex + offset;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= ordered.length) return;
+    [ordered[currentIndex], ordered[nextIndex]] = [ordered[nextIndex], ordered[currentIndex]];
+    setUsesDefaultSelection(false);
+    setSelectedIds(ordered);
     setSaved(false);
   };
 
@@ -157,14 +168,14 @@ function GallerySettings({
       <CardContent className="space-y-5">
         <div>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-muted">Choose which completed websites appear on the View Gallery page.</p>
+            <p className="text-sm text-muted">Choose which websites appear on the View Gallery page and arrange their order.</p>
             {!usesDefaultSelection && (
               <button
                 type="button"
                 onClick={() => { setUsesDefaultSelection(true); setSaved(false); }}
                 className="text-xs text-accent hover:underline"
               >
-                Use all completed websites
+                Use all websites
               </button>
             )}
           </div>
@@ -177,17 +188,45 @@ function GallerySettings({
               {variants.map((variant, index) => {
                 const checked = effectiveSelectedIds.includes(variant.id);
                 const label = variant.variantLabel || variant.variantType || `Website ${index + 1}`;
+                const position = effectiveSelectedIds.indexOf(variant.id);
                 return (
-                  <label key={variant.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-line px-3 py-2.5 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleVariant(variant.id)}
-                      className="h-4 w-4 accent-yellow-400"
-                    />
-                    <span className="flex-1">{label}</span>
-                    <span className="text-xs text-muted">Position {variant.variantPosition ?? index + 1}</span>
-                  </label>
+                  <div key={variant.id} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5 text-sm">
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleVariant(variant.id)}
+                        className="h-4 w-4 accent-yellow-400"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{label}</span>
+                        <span className="block truncate font-mono text-[11px] text-muted">/st/{variant.previewSlug}</span>
+                      </span>
+                    </label>
+                    {checked && (
+                      <div className="flex items-center gap-1">
+                        <span className="whitespace-nowrap text-xs text-muted">Position {position + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => moveVariant(variant.id, -1)}
+                          disabled={position === 0}
+                          aria-label={`Move ${label} up`}
+                          className="rounded p-1 text-muted hover:bg-white/10 hover:text-text disabled:opacity-30"
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveVariant(variant.id, 1)}
+                          disabled={position === effectiveSelectedIds.length - 1}
+                          aria-label={`Move ${label} down`}
+                          className="rounded p-1 text-muted hover:bg-white/10 hover:text-text disabled:opacity-30"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -686,10 +725,6 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         )}
       </div>
 
-      {redesignUrl && (
-        <GallerySettings lead={lead} onSaved={setLead} />
-      )}
-
       {/* Two-column layout */}
       <div className="grid gap-4 xl:grid-cols-[35%_65%]">
 
@@ -710,6 +745,10 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               <Row label="Version" value={`v${lead.version}`} />
             </CardContent>
           </Card>
+
+          {redesignUrl && (
+            <GallerySettings lead={lead} onSaved={setLead} />
+          )}
 
           {/* Notes card */}
           <Card>

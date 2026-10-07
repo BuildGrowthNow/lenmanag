@@ -78,21 +78,27 @@ async def get_redesign_page(
     # Fetch all sites for this lead
     sites = await site_repository.list_sites_by_lead(lead_id)
 
-    # Filter to successfully compiled sites (screenshots optional)
-    eligible = [s for s in sites if s.compilationStatus == "success"]
+    # Galleries can include any generated site; screenshots remain optional.
+    eligible = list(sites)
 
-    # Missing/null settings preserve the existing behavior of showing every
-    # successful variant. An explicit list limits the client gallery.
+    # Missing/null settings preserve the default of showing every site.
+    # An explicit list controls both gallery membership and display order.
     selected_site_ids = lead_doc.get("gallerySiteIds")
     if selected_site_ids is not None:
-        selected_site_ids = {str(site_id) for site_id in selected_site_ids}
-        eligible = [site for site in eligible if site.id in selected_site_ids]
+        sites_by_id = {site.id: site for site in eligible}
+        eligible = [
+            sites_by_id[str(site_id)]
+            for site_id in selected_site_ids
+            if str(site_id) in sites_by_id
+        ]
 
     if not eligible:
         raise HTTPException(status_code=404, detail="Redesign page not found")
 
-    # Sort by variantPosition
-    eligible.sort(key=lambda s: s.variantPosition)
+    # For default galleries use the sites' assigned positions. Explicit
+    # selections already follow the saved order from the lead document.
+    if selected_site_ids is None:
+        eligible.sort(key=lambda s: s.variantPosition)
 
     # Build variant list — use first screenshot if available, else empty string
     variants: list[RedesignVariant] = []

@@ -25,9 +25,7 @@ function buildHeadline(
 
   let headline: string;
   if (count === 1) {
-    headline = `${greeting}We built something for ${company}.`;
-  } else if (count === 2) {
-    headline = `${greeting}Two directions for ${company}.`;
+    headline = `${greeting}We explored one design direction for ${company}.`;
   } else {
     headline = `${greeting}We explored ${count} design directions for ${company}.`;
   }
