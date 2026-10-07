@@ -233,6 +233,6 @@ def validate_testimonial_source(source: str, extraction: ExtractionSnapshot | No
         # Quote data must be copied exactly, rather than paraphrased into an invented review.
         for quote in re.findall(r"\bquote\s*:\s*([\"'`])(.+?)\1", source, re.S):
             value = quote[1].replace("\\'", "'").replace('\\"', '"')
-            if not any(value == record.quote for record in extraction.extractedTestimonials):
+            if not any(value == record.quote for record in source_testimonials(extraction)):
                 return ["A testimonial quote does not match the extracted source evidence. Use exact source quotes only."]
     return []
