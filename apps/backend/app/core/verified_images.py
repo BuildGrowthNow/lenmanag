@@ -52,6 +52,10 @@ def image_candidates(extraction) -> list[dict]:
     result = []
     for item in candidates:
         url = item["url"]
+        # The catalogue accepts raster photographs. Unsupported vector icons and
+        # fonts must not exhaust the candidate budget before project photos.
+        if re.search(r"\.(?:svg|ico|woff2?|ttf|otf)(?:[?#]|$)", url, re.I):
+            continue
         if url in seen or re.search(r"favicon|logo|icon|badge|check.?mark|spacer|pixel|review.us.google|vid.splash.play|facebook.com/tr|bat.bing.com|ipromote.com", url, re.I):
             continue
         if urlsplit(url).scheme not in {"http", "https"}:
