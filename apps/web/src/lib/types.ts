@@ -1277,6 +1277,8 @@ export type LeadDetail = {
   jobs: LeadJobSummary[];
   pipelineEvents: PipelineEvent[];
   redesignSlug: string | null;
+  gallerySiteIds: string[] | null;
+  galleryCallUrl: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -1298,6 +1300,8 @@ export type LeadPatchPayload = {
   industry?: string | null;
   notes?: string | null;
   status?: LeadStatus;
+  gallerySiteIds?: string[] | null;
+  galleryCallUrl?: string | null;
 };
 
 export type SiteBriefPatchPayload = {

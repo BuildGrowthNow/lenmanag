@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 GenerationType = Literal["html_v1", "html_v2", "html_v3", "nextjs"]
@@ -181,6 +181,8 @@ class LeadDetail(BaseModel):
     jobs: list[JobSummary] = Field(default_factory=list)
     pipelineEvents: list[PipelineEvent] = Field(default_factory=list)
     redesignSlug: Optional[str] = None
+    gallerySiteIds: Optional[list[str]] = None
+    galleryCallUrl: Optional[str] = None
     createdAt: datetime
     updatedAt: datetime
     archivedAt: Optional[datetime] = None
@@ -212,6 +214,20 @@ class LeadPatchRequest(BaseModel):
     pipelineMode: Optional[PipelineMode] = None
     pipelineStage: Optional[PipelineStage] = None
     generationTypes: Optional[list[GenerationType]] = None
+    gallerySiteIds: Optional[list[str]] = None
+    galleryCallUrl: Optional[str] = None
+
+    @field_validator("galleryCallUrl")
+    @classmethod
+    def validate_gallery_call_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or not value.strip():
+            return None
+        from urllib.parse import urlparse
+
+        parsed = urlparse(value.strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Book a Call link must be an http or https URL.")
+        return value.strip()
 
 
 class ImportRowResult(BaseModel):

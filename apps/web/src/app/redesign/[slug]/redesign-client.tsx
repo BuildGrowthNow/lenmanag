@@ -125,7 +125,7 @@ export function RedesignClient({ data }: { data: RedesignPageData }) {
             Love one of these? Let&apos;s build your final version.
           </p>
           <a
-            href="https://calendly.com/lenquant/sites"
+            href={data.callUrl || "https://calendly.com/lenquant/sites"}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block rounded-full bg-yellow-500 px-8 py-3 text-sm font-semibold text-slate-900 transition-colors hover:bg-yellow-400"

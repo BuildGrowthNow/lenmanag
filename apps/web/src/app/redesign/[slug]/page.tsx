@@ -24,6 +24,7 @@ export type RedesignPageData = {
   companyName: string | null;
   contactName: string | null;
   logoUrl: string | null;
+  callUrl?: string;
   variants: RedesignVariant[];
 };
 

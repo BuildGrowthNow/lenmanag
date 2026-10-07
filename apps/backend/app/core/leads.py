@@ -270,6 +270,8 @@ def _lead_doc_to_detail(
         jobs=[_job_doc_to_summary(job) for job in (jobs or [])],
         pipelineEvents=pipeline_events,
         redesignSlug=doc.get("redesignSlug"),
+        gallerySiteIds=doc.get("gallerySiteIds"),
+        galleryCallUrl=doc.get("galleryCallUrl"),
         createdAt=_utc(doc["createdAt"]) or _now(),
         updatedAt=_utc(doc["updatedAt"]) or _now(),
         archivedAt=_serialize_datetime(doc.get("archivedAt")),
@@ -1598,6 +1600,14 @@ class LeadRepository:
             updated["pipelineStage"] = patch.pipelineStage
         if patch.generationTypes is not None:
             updated["generationTypes"] = patch.generationTypes
+        if "gallerySiteIds" in patch.model_fields_set:
+            updated["gallerySiteIds"] = (
+                list(dict.fromkeys(patch.gallerySiteIds))
+                if patch.gallerySiteIds is not None
+                else None
+            )
+        if "galleryCallUrl" in patch.model_fields_set:
+            updated["galleryCallUrl"] = patch.galleryCallUrl
         updated["missingFields"] = _missing_fields(updated)
         if updated["status"] != "archived":
             updated["status"] = (

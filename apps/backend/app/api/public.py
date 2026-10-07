@@ -81,6 +81,13 @@ async def get_redesign_page(
     # Filter to successfully compiled sites (screenshots optional)
     eligible = [s for s in sites if s.compilationStatus == "success"]
 
+    # Missing/null settings preserve the existing behavior of showing every
+    # successful variant. An explicit list limits the client gallery.
+    selected_site_ids = lead_doc.get("gallerySiteIds")
+    if selected_site_ids is not None:
+        selected_site_ids = {str(site_id) for site_id in selected_site_ids}
+        eligible = [site for site in eligible if site.id in selected_site_ids]
+
     if not eligible:
         raise HTTPException(status_code=404, detail="Redesign page not found")
 
@@ -114,6 +121,7 @@ async def get_redesign_page(
         companyName=lead_doc.get("companyName"),
         contactName=lead_doc.get("contactName"),
         logoUrl=logo_url,
+        callUrl=lead_doc.get("galleryCallUrl") or "https://calendly.com/lenquant/sites",
         variants=variants,
     )
 

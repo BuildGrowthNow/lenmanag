@@ -514,4 +514,5 @@ class RedesignPageData(BaseModel):
     companyName: Optional[str] = None
     contactName: Optional[str] = None
     logoUrl: Optional[str] = None
+    callUrl: str = "https://calendly.com/lenquant/sites"
     variants: list[RedesignVariant] = Field(default_factory=list)

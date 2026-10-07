@@ -13,8 +13,8 @@ import { LeadBriefReview } from "@/components/lead-brief-review";
 import { LeadExtractionControls } from "@/components/lead-extraction-controls";
 import { LeadVariantsView } from "@/components/lead-variants-view";
 import { PipelineActivityLog } from "@/components/pipeline-activity-log";
-import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages, getLeadAnalysis } from "@/lib/api/leads";
-import { getSite } from "@/lib/api/sites";
+import { getLead, getLeadMasterBrief, getLeadExtraction, getLeadPages, getLeadAnalysis, updateLead } from "@/lib/api/leads";
+import { getSite, getVariantsForLead } from "@/lib/api/sites";
 import { evaluateExtractionHealth } from "@/lib/extraction-health";
 import type { LeadDetail, ExtractionSnapshot, MasterBrief, GeneratedSite, PipelineStage, ExtractionAnalysisResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -79,6 +79,142 @@ function ProgressBar({ progress, label }: { progress: number; label: string }) {
         <div className="h-full rounded-full bg-accent transition-all" style={{ width: progressWidth(progress) }} />
       </div>
     </div>
+  );
+}
+
+function GallerySettings({
+  lead,
+  onSaved,
+}: {
+  lead: LeadDetail;
+  onSaved: (lead: LeadDetail) => void;
+}) {
+  const [variants, setVariants] = useState<GeneratedSite[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(lead.gallerySiteIds ?? []);
+  const [usesDefaultSelection, setUsesDefaultSelection] = useState(lead.gallerySiteIds == null);
+  const [callUrl, setCallUrl] = useState(lead.galleryCallUrl ?? "");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    getVariantsForLead(lead.id).then((items) => {
+      if (!mounted) return;
+      setVariants(items.filter((item) => item.compilationStatus === "success"));
+      setLoading(false);
+    }).catch(() => {
+      if (!mounted) return;
+      setError("Could not load website variants.");
+      setLoading(false);
+    });
+    return () => { mounted = false; };
+  }, [lead.id]);
+
+  const effectiveSelectedIds = usesDefaultSelection
+    ? variants.map((variant) => variant.id)
+    : selectedIds;
+
+  const toggleVariant = (variantId: string) => {
+    setUsesDefaultSelection(false);
+    setSelectedIds((current) => {
+      const selected = usesDefaultSelection ? variants.map((variant) => variant.id) : current;
+      return selected.includes(variantId)
+        ? selected.filter((id) => id !== variantId)
+        : [...selected, variantId];
+    });
+    setSaved(false);
+  };
+
+  const save = async () => {
+    if (effectiveSelectedIds.length === 0) {
+      setError("Choose at least one website for the gallery.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const updated = await updateLead(lead.id, {
+        gallerySiteIds: usesDefaultSelection ? null : effectiveSelectedIds,
+        galleryCallUrl: callUrl.trim() || null,
+      });
+      onSaved(updated);
+      setSaved(true);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Could not save gallery settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Client gallery</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted">Choose which completed websites appear on the View Gallery page.</p>
+            {!usesDefaultSelection && (
+              <button
+                type="button"
+                onClick={() => { setUsesDefaultSelection(true); setSaved(false); }}
+                className="text-xs text-accent hover:underline"
+              >
+                Use all completed websites
+              </button>
+            )}
+          </div>
+          {loading ? (
+            <p className="text-sm text-muted">Loading websites…</p>
+          ) : variants.length === 0 ? (
+            <p className="text-sm text-muted">No completed websites are available yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {variants.map((variant, index) => {
+                const checked = effectiveSelectedIds.includes(variant.id);
+                const label = variant.variantLabel || variant.variantType || `Website ${index + 1}`;
+                return (
+                  <label key={variant.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-line px-3 py-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleVariant(variant.id)}
+                      className="h-4 w-4 accent-yellow-400"
+                    />
+                    <span className="flex-1">{label}</span>
+                    <span className="text-xs text-muted">Position {variant.variantPosition ?? index + 1}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <label className="block space-y-2 text-sm">
+          <span className="font-medium">Book a Call link</span>
+          <input
+            type="url"
+            value={callUrl}
+            onChange={(event) => { setCallUrl(event.target.value); setSaved(false); }}
+            placeholder="https://calendly.com/lenquant/sites (default)"
+            className="w-full rounded-lg border border-line bg-panel px-3 py-2 text-text placeholder:text-muted"
+          />
+          <span className="block text-xs text-muted">Leave blank to use https://calendly.com/lenquant/sites.</span>
+        </label>
+
+        <div className="flex items-center gap-3">
+          <Button onClick={() => void save()} disabled={saving || loading || variants.length === 0}>
+            {saving ? "Saving…" : "Save gallery settings"}
+          </Button>
+          {saved && <span className="text-sm text-emerald-400">Saved</span>}
+          {error && <span className="text-sm text-rose-300">{error}</span>}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -549,6 +685,10 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
           </div>
         )}
       </div>
+
+      {redesignUrl && (
+        <GallerySettings lead={lead} onSaved={setLead} />
+      )}
 
       {/* Two-column layout */}
       <div className="grid gap-4 xl:grid-cols-[35%_65%]">

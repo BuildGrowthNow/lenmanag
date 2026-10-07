@@ -110,7 +110,7 @@ async def get_lead(
     user_id: CurrentUserId,
     http_request: Request,
 ) -> ResponseEnvelope[LeadDetail]:
-    lead = await lead_repository.get_lead(lead_id)
+    lead = await lead_repository.get_lead(lead_id, user_id=user_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     return success_response(lead, meta=response_meta(http_request))
@@ -123,7 +123,7 @@ async def patch_lead(
     payload: LeadPatchRequest,
     http_request: Request,
 ) -> ResponseEnvelope[LeadDetail]:
-    lead = await lead_repository.update_lead(lead_id, payload)
+    lead = await lead_repository.update_lead(lead_id, payload, user_id=user_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="Lead not found.")
     await write_audit_log(
