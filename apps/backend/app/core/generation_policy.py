@@ -68,13 +68,14 @@ def primary_brand_cue(extraction: ExtractionSnapshot | None) -> BrandAssetCue | 
         return None
     cues = [cue for cue in extraction.brandAssetCues if cue.assetType == "color" and normalize_color(cue.value)]
 
-    def rank(cue: BrandAssetCue) -> tuple[int, int, int]:
+    def rank(cue: BrandAssetCue) -> tuple[int, int, int, int]:
         label = cue.label.lower()
         explicit = bool(re.search(r"primary|cta|button", label))
         color = normalize_color(cue.value) or "#000000"
         channels = [int(color[index:index + 2], 16) for index in (1, 3, 5)]
         chromatic = max(channels) - min(channels) > 30
-        return (3 if explicit else 2 if "brand" in label else int(chromatic), cue.confidence, max(channels) - min(channels))
+        rendered = "rendered source" in label
+        return (3 if explicit else 2 if "brand" in label else int(chromatic), int(rendered), cue.confidence, max(channels) - min(channels))
 
     return max(cues, key=rank) if cues else None
 
