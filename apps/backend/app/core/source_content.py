@@ -64,6 +64,21 @@ def enforce_html_source_contacts(html: str, extraction: ExtractionSnapshot) -> s
             supported = len(digits) >= 7 and any(phone.endswith(digits[-7:]) for phone in phones)
         if not supported:
             anchor.decompose()
+        elif href.startswith("tel:"):
+            label = anchor.get_text(" ", strip=True)
+            label_digits = re.sub(r"\D", "", label)
+            if len(label_digits) >= 7 and not label_digits.endswith(digits[-7:]):
+                # A label such as "01727 375007 / 8" describes two numbers,
+                # while a tel link can dial only one. Keep its displayed
+                # number aligned with the verified destination.
+                candidates = re.findall(r"\+?\d[\d \t\u00a0().-]{5,}\d", label)
+                display = next((candidate for candidate in candidates
+                                if re.sub(r"\D", "", candidate).endswith(digits[-7:])), value)
+                written = False
+                for node in list(anchor.find_all(string=True)):
+                    if re.search(r"\d", str(node)) and node.parent.name not in {"script", "style", "title"}:
+                        node.replace_with(display if not written else "")
+                        written = True
     # The same invented address may also be printed without a mailto link.
     for node in list(document.find_all(string=True)):
         if node.parent and node.parent.name not in {"script", "style", "head", "title"}:
@@ -100,5 +115,6 @@ def source_content_policy(extraction: ExtractionSnapshot) -> str:
         "Do not use a website designer's, hosting provider's or tracking service's contact details as business contacts. "
         "If a fact is absent, omit it. "
         "Only include contact links supported by this evidence.\n"
+        "A visible phone number must match its tel link. Give alternate numbers separate links; never combine them in one clickable label.\n"
         + json.dumps({"pages": pages, "contactLinks": sorted(contacts)}, ensure_ascii=False)
     )
