@@ -21,7 +21,7 @@ from app.core.config import get_settings
 from app.core.compiler_client import get_compiler_client
 from app.core.generation_policy import FOOTER_YEAR_POLICY, apply_brief_policy, brand_color_policy, enforce_html_footer_year, enforce_html_testimonials, source_testimonials, static_safety_css
 from app.core.llm import get_llm_client
-from app.core.source_content import source_content_policy
+from app.core.source_content import enforce_html_source_contacts, source_content_policy
 from app.core.verified_images import verified_image_catalog, enforce_image_catalog
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
@@ -73,6 +73,7 @@ async def generate_static_html(
     # Reviews are rendered from extraction records rather than AI-written quotes.
     html_content = enforce_html_testimonials(html_content, extraction)
     html_content = enforce_html_footer_year(html_content)
+    html_content = enforce_html_source_contacts(html_content, extraction)
     html_content, css_content = enforce_image_catalog(html_content, css_content, images)
     document = BeautifulSoup(html_content, "html.parser")
     for script in list(document.find_all("script")):
