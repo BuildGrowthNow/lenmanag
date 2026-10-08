@@ -268,11 +268,13 @@ def enforce_html_testimonials(html: str, extraction: ExtractionSnapshot | None) 
             node.decompose()
     records = source_testimonials(extraction)
     if records and soup.body:
+        language = str(soup.html.get("lang", "en") if soup.html else "en").lower()
+        heading, label = ("O que dizem os nossos clientes", "Depoimentos de clientes") if language.startswith("pt") else ("What our customers say", "Customer testimonials")
         cards = []
         for record in records[:6]:
             attribution = ", ".join(part for part in [record.authorName, record.authorTitle, record.authorCompany] if part)
             cards.append(f'<figure><blockquote>{escape(record.quote)}</blockquote>' + (f'<figcaption>{escape(attribution)}</figcaption>' if attribution else "") + '</figure>')
-        section = BeautifulSoup('<section id="source-testimonials" class="source-testimonials" aria-label="Customer testimonials"><h2>What our customers say</h2>' + "".join(cards) + '</section>', "html.parser")
+        section = BeautifulSoup(f'<section id="source-testimonials" class="source-testimonials" aria-label="{label}"><h2>{heading}</h2>' + "".join(cards) + '</section>', "html.parser")
         footer = soup.body.find("footer")
         if footer:
             footer.insert_before(section)
