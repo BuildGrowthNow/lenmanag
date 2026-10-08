@@ -131,7 +131,8 @@ class Settings(BaseSettings):
     extraction_screenshot_height: int = 1200
     extraction_mobile_screenshot_width: int = 390
     extraction_mobile_screenshot_height: int = 844
-    extraction_section_screenshot_limit: int = 8
+    extraction_section_screenshot_limit: int = 2
+    extraction_visual_capture_max_pages: int = 3
     # Sitemap configuration
     sitemap_url: str | None = None  # Optional custom sitemap URL
     sitemap_gz_enabled: bool = True  # Try .gz compressed sitemaps

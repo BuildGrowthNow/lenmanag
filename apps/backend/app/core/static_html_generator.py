@@ -19,7 +19,7 @@ from botocore.exceptions import ClientError
 
 from app.core.config import get_settings
 from app.core.compiler_client import get_compiler_client
-from app.core.generation_policy import FOOTER_YEAR_POLICY, apply_brief_policy, brand_color_policy, enforce_html_footer_year, enforce_html_testimonials, source_testimonials, static_safety_css
+from app.core.generation_policy import FOOTER_YEAR_POLICY, apply_brief_policy, brand_color_policy, enforce_html_footer_year, enforce_html_testimonials, enforce_source_font_stylesheets, source_testimonials, static_safety_css
 from app.core.llm import get_llm_client
 from app.core.source_content import enforce_html_source_contacts, source_content_policy
 from app.core.verified_images import verified_image_catalog, enforce_image_catalog
@@ -74,6 +74,7 @@ async def generate_static_html(
     html_content = enforce_html_testimonials(html_content, extraction)
     html_content = enforce_html_footer_year(html_content)
     html_content = enforce_html_source_contacts(html_content, extraction)
+    html_content, css_content = enforce_source_font_stylesheets(html_content, css_content, extraction)
     html_content, css_content = enforce_image_catalog(html_content, css_content, images)
     document = BeautifulSoup(html_content, "html.parser")
     for script in list(document.find_all("script")):
@@ -390,6 +391,7 @@ REQUIREMENTS:
    - Include all listed sections, subject to the testimonial evidence rule above
    - Use brand logo if available (as img src)
    - NO inline styles or scripts
+   - Never invent Adobe/Typekit kit IDs or placeholder asset links. Use a real stylesheet found in source evidence, Google Fonts, or system font fallbacks.
    - Use only the verified source photograph URLs supplied below. Never invent or guess image URLs.
    - Keep the native cursor visible everywhere. Never use cursor:none or a replacement custom cursor.
 

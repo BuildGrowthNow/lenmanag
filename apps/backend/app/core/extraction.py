@@ -24,6 +24,7 @@ from app.core import asset_metadata
 from app.core.asset_downloader import AssetDownloader
 from app.core.config import get_settings
 from app.core.generation_policy import stylesheet_color_cues, rendered_brand_cues
+from app.core.extraction_storage import compact_extraction_for_storage
 
 USER_AGENT = "LenQuantBot/0.3 (+internal extraction)"
 BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -987,7 +988,7 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                 ];
 
                 const isGenericIcon = (src, hint) => {
-                    return materialDesignPatterns.some(pattern =>
+                    return /\b(?:facebook|instagram|twitter|linkedin|youtube|pinterest|tiktok)\b/i.test(hint) || materialDesignPatterns.some(pattern =>
                         src.toLowerCase().includes(pattern) || hint.includes(pattern)
                     );
                 };
@@ -1487,7 +1488,9 @@ def _extract_brand_asset_cues(
         for candidate in signals.logo_candidates[:10]:  # Limit to top 10 candidates
             if candidate.startswith("data:") or candidate == "inline-svg" or re.search(
                 r"cookie|gdpr|poweredbt|termly|juicer|trustindex|recaptcha|cloudflare|"
-                r"linguist-flags|/assets/flags/|/wp-content/themes/bridge/img/logo(?:_|\.)", candidate, re.I
+                r"linguist-flags|/assets/flags/|/wp-content/themes/bridge/img/logo(?:_|\.)|"
+                r"xpel[-_]authorised[-_]installer|specsavers[-_]logo|fensalogo|hpc[_-]reg[-_]logo|"
+                r"livro[_-]reclamacoes[_-]logo", candidate, re.I
             ):
                 continue
             candidate = urljoin(page_url, candidate)
@@ -1715,7 +1718,9 @@ def _capture_page_visuals(
                     "Upgrade-Insecure-Requests": "1",
                 }
             )
-            for page_index, url in enumerate(urls):
+            context.set_default_timeout(8_000)
+            visual_page_limit = max(1, int(get_settings().extraction_visual_capture_max_pages))
+            for page_index, url in enumerate(urls[:visual_page_limit]):
                 base_name = (
                     f"{page_index:02d}-{_safe_filename(urlparse(url).path or 'home')}"
                 )
@@ -1724,7 +1729,7 @@ def _capture_page_visuals(
                     page = context.new_page()
                     page.goto(url, wait_until="domcontentloaded", timeout=20000)
                     desktop_path = os.path.join(target_dir, f"{base_name}-desktop.png")
-                    page.screenshot(path=desktop_path, full_page=True)
+                    page.screenshot(path=desktop_path, full_page=True, timeout=8_000, animations="disabled")
                     capture.update(
                         {
                             "desktopScreenshotUrl": desktop_path,
@@ -1736,7 +1741,8 @@ def _capture_page_visuals(
                     eval_script = """
                     () => {
                         const getStyle = (el, prop) => window.getComputedStyle(el)[prop];
-                        const sections = Array.from(document.querySelectorAll('header, main > section, section, article, footer'));
+                        const sections = Array.from(document.querySelectorAll('header, main > section, section, article, footer')).slice(0, 80);
+                        const elements = Array.from(document.querySelectorAll('*')).slice(0, 2_000);
                         return {
                             meta: Array.from(document.querySelectorAll('meta')).reduce((acc, meta) => {
                                 const name = meta.getAttribute('name') || meta.getAttribute('property');
@@ -1744,16 +1750,15 @@ def _capture_page_visuals(
                                 return acc;
                             }, {}),
                             cleanedText: document.body ? document.body.innerText : "",
-                            fonts: Array.from(new Set(Array.from(document.querySelectorAll('*')).map(el => getStyle(el, 'fontFamily')))),
-                            colors: Array.from(new Set(Array.from(document.querySelectorAll('*')).map(el => getStyle(el, 'backgroundColor')).concat(Array.from(document.querySelectorAll('*')).map(el => getStyle(el, 'color'))))),
+                            fonts: Array.from(new Set(elements.map(el => getStyle(el, 'fontFamily')))),
+                            colors: Array.from(new Set(elements.map(el => getStyle(el, 'backgroundColor')).concat(elements.map(el => getStyle(el, 'color'))))),
                             headings: Array.from(document.querySelectorAll('h1, h2, h3, h4')).map(el => el.innerText),
                             links: Array.from(document.querySelectorAll('a')).map(el => el.href).filter(Boolean),
-                            html: document.documentElement.outerHTML,
                             sectionsData: sections.map((sec, idx) => {
                                 return {
                                     index: idx,
-                                    html: sec.outerHTML,
-                                    text: sec.innerText,
+                                    html: sec.outerHTML.slice(0, 8_000),
+                                    text: sec.innerText.slice(0, 3_000),
                                     computedStyles: {
                                         backgroundColor: getStyle(sec, 'backgroundColor'),
                                         color: getStyle(sec, 'color'),
@@ -1787,7 +1792,7 @@ def _capture_page_visuals(
                                 target_dir,
                                 f"{base_name}-section-{section_index:02d}.png",
                             )
-                            locator.screenshot(path=section_path)
+                            locator.screenshot(path=section_path, timeout=3_000, animations="disabled")
                             capture["sections"].append(
                                 {
                                     "index": section_index,
@@ -1806,7 +1811,7 @@ def _capture_page_visuals(
                         }
                     )
                     mobile_path = os.path.join(target_dir, f"{base_name}-mobile.png")
-                    page.screenshot(path=mobile_path, full_page=True)
+                    page.screenshot(path=mobile_path, full_page=True, timeout=8_000, animations="disabled")
                     capture["mobileScreenshotUrl"] = mobile_path
                     page.close()
                 except Exception as exc:
@@ -2605,7 +2610,7 @@ def crawl_website(
         f"{len(unique_images)} categorized images"
     )
 
-    return {
+    return compact_extraction_for_storage({
         "crawlStatus": crawl_status,
         "sitemapStatus": sitemap_status,
         "canonicalWebsiteUrl": canonical_url,
@@ -2632,4 +2637,4 @@ def crawl_website(
         "extractedClientLogos": unique_client_logos[:30],
         "extractedFonts": unique_fonts[:15],
         "extractedImages": unique_images[:50],
-    }
+    })

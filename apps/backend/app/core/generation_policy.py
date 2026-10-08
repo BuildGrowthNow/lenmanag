@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from html import escape
+from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup, Comment
 
@@ -125,7 +126,7 @@ def stylesheet_color_cues(css: str, source_url: str) -> list[dict]:
         if "{" not in block:
             continue
         selector, declarations = block.rsplit("{", 1)
-        if re.search(r"social|facebook|twitter|instagram|pinterest|cookie|consent", selector, re.I):
+        if re.search(r"social|facebook|twitter|instagram|pinterest|\bPIN_\d+|cookie|consent", selector, re.I):
             continue
         for declaration in declarations.split(";"):
             property_name, separator, raw_value = declaration.partition(":")
@@ -163,8 +164,22 @@ def stylesheet_color_cues(css: str, source_url: str) -> list[dict]:
 
 def rendered_brand_cues(data: dict, source_url: str) -> list[dict]:
     """Prefer the live theme's primary variable or visible action color to framework CSS."""
+    visible_colors = {
+        color for value in [*data.get("actionColors", []), *data.get("headingColors", [])]
+        if (color := normalize_color(value))
+    }
+    visible_accents = {
+        color for color in visible_colors
+        if max(int(color[i:i + 2], 16) for i in (1, 3, 5))
+        - min(int(color[i:i + 2], 16) for i in (1, 3, 5)) > 30
+    }
+    framework_defaults = {"#007bff", "#0d6efd", "#6200ee", "#6059ff", "#116dff", "#3899ec"}
     for value in data.get("brandVariables", []):
         color = normalize_color(value)
+        # Frameworks expose a default --primary even when business styling
+        # overrides every visible action and heading with another colour.
+        if color in framework_defaults and color not in visible_colors and visible_accents:
+            continue
         if color:
             return [{"assetType": "color", "label": "Primary brand color from rendered theme variable",
                      "value": color, "sourceUrl": source_url, "confidence": 100,
@@ -229,6 +244,32 @@ def source_testimonials(extraction: ExtractionSnapshot | None):
             if record.quote.strip() and record.sourceUrl and record.confidence >= 85
             and len(record.authorCompany or "") <= 160
             and len(record.authorTitle or "") <= 160]
+
+
+def enforce_source_font_stylesheets(html: str, css: str, extraction: ExtractionSnapshot) -> tuple[str, str]:
+    """Adobe font kits must come from source evidence, never an invented kit ID."""
+    known_kits = set()
+    for page in extraction.pageInventory:
+        source = BeautifulSoup(page.rawHtml or "", "html.parser")
+        known_kits.update(urljoin(page.url, link["href"]) for link in source.select('link[href]')
+                          if urlsplit(urljoin(page.url, link["href"])).hostname == "use.typekit.net")
+        known_kits.update(re.findall(r'https?://use\.typekit\.net/[a-zA-Z0-9]+\.css', page.rawHtml or ""))
+
+    def unsupported(url: str) -> bool:
+        return bool(re.search(r"placeholder|your[-_]?kit", url, re.I)
+                    or (urlsplit(url).hostname == "use.typekit.net" and url not in known_kits))
+
+    document = BeautifulSoup(html, "html.parser")
+    for link in list(document.select('link[rel="stylesheet"][href]')):
+        if unsupported(link["href"]):
+            link.decompose()
+
+    def font_import(match: re.Match) -> str:
+        url = re.search(r'@import\s+(?:url\(\s*)?[\'"]?([^\s\'"()]+)', match.group(), re.I)
+        return "" if url and unsupported(url.group(1)) else match.group()
+
+    css = re.sub(r"@import\s+[^;]+;", font_import, css, flags=re.I)
+    return str(document), css
 
 
 def apply_brief_policy(brief, extraction: ExtractionSnapshot):
