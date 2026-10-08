@@ -21,6 +21,7 @@ from app.core.config import get_settings
 from app.core.compiler_client import get_compiler_client
 from app.core.generation_policy import FOOTER_YEAR_POLICY, apply_brief_policy, brand_color_policy, enforce_html_footer_year, enforce_html_testimonials, source_testimonials, static_safety_css
 from app.core.llm import get_llm_client
+from app.core.source_content import source_content_policy
 from app.core.verified_images import verified_image_catalog, enforce_image_catalog
 from app.schemas.brief import MasterBrief
 from app.schemas.extraction import ExtractionSnapshot
@@ -51,6 +52,7 @@ async def generate_static_html(
     images = await verified_image_catalog(extraction)
     prompt = _build_static_html_prompt(master_brief, extraction, variant_type)
     prompt += "\n" + FOOTER_YEAR_POLICY
+    prompt += "\n" + source_content_policy(extraction)
     prompt += "\nVERIFIED SOURCE PHOTOGRAPHS (use only these exact URLs; match subjects to descriptions):\n" + json.dumps(images)
     prompt += "\nIf no appropriate photograph exists, use CSS shapes, typography and gradients. Do not invent project locations, team identities or image URLs."
     html_content = css_content = ""

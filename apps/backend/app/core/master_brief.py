@@ -19,6 +19,7 @@ from app.core.asset_utils import (
     log_asset_cache_stats,
 )
 from app.core.llm import get_llm_client
+from app.core.source_content import source_content_policy
 from app.core.generation_policy import apply_brief_policy, brand_color_policy, primary_brand_cue, normalize_color
 from app.core.variant_strategy import get_variant_strategy
 from app.schemas.brief import (
@@ -92,6 +93,7 @@ async def generate_master_brief(
         )
 
     prompt += "\n" + brand_color_policy(extraction)
+    prompt += "\n" + source_content_policy(extraction)
     if not extraction.extractedTestimonials:
         prompt += "\nNo testimonials were extracted. Omit testimonial, review, customer quote, endorsement and star-rating sections. Do not invent social proof."
 
