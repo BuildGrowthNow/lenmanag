@@ -65,7 +65,7 @@ def normalize_site_url(raw_url: str) -> tuple[str, str]:
 
     normalized = parsed._replace(
         scheme=parsed.scheme.lower() or "https",
-        netloc=hostname + (f":{parsed.port}" if parsed.port else ""),
+        netloc=(parsed.hostname or "").lower() + (f":{parsed.port}" if parsed.port else ""),
         path=parsed.path.rstrip("/") or "",
         params="",
         query="",
