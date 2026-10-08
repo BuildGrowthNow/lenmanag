@@ -1117,8 +1117,12 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                     ),
                     actionColors: Array.from(document.querySelectorAll('a, button')).filter(el => {
                         const rect = el.getBoundingClientRect();
+                        const href = el.getAttribute('href') || '';
+                        if (el.closest('[class*="social"], [class*="cookie"], [class*="consent"]') ||
+                            /facebook\.com|instagram\.com|twitter\.com|x\.com|youtube\.com|youtu\.be|pinterest\./i.test(href)) return false;
                         return rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden' &&
-                            /estimate|quote|call|book|schedule|request|contact|get started|services|learn more/i.test(el.innerText);
+                            (/^(?:tel|mailto):/i.test(href) ||
+                             /\b(?:estimate|quote|call|book|schedule|request|contact|services|orçamento|contacto|contato|ligue)\b|get started|learn more/i.test(el.innerText));
                     }).slice(0, 50).map(el => getStyle(el, 'backgroundColor')),
                     headingColors: Array.from(document.querySelectorAll('h1, h2, h3')).filter(el => {
                         const rect = el.getBoundingClientRect();

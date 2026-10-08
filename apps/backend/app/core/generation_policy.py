@@ -123,9 +123,13 @@ def stylesheet_color_cues(css: str, source_url: str) -> list[dict]:
         if "{" not in block:
             continue
         selector, declarations = block.rsplit("{", 1)
+        if re.search(r"social|facebook|twitter|instagram|pinterest|cookie|consent", selector, re.I):
+            continue
         for declaration in declarations.split(";"):
             property_name, separator, raw_value = declaration.partition(":")
             property_name = property_name.strip()
+            if property_name.startswith("--wp--preset"):
+                continue
             if not separator or not re.fullmatch(r"[\w-]+", property_name):
                 continue
             value_match = re.match(r"\s*(#[0-9a-fA-F]{3,6}\b|rgb\([^)]*\))", raw_value)
