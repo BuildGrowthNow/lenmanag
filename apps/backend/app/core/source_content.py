@@ -30,7 +30,9 @@ def source_content_policy(extraction: ExtractionSnapshot) -> str:
         "and local spelling; prefer the actual source text if its HTML language hint is wrong. "
         "Set html lang to match the copy. Preserve real names, services, locations and "
         "contact details. Never invent phone numbers, email addresses, credentials, "
-        "statistics, founding dates or customer claims. If a fact is absent, omit it. "
+        "statistics, founding dates or customer claims. Do not copy obvious template "
+        "placeholder phone numbers or email addresses as real business contacts. "
+        "If a fact is absent, omit it. "
         "Only include contact links supported by this evidence.\n"
         + json.dumps({"pages": pages, "contactLinks": sorted(contacts)}, ensure_ascii=False)
     )

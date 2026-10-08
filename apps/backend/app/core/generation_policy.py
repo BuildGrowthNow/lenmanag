@@ -73,9 +73,11 @@ def normalize_color(value: str) -> str | None:
         return "#" + "".join(char * 2 for char in value[1:])
     if re.fullmatch(r"#[0-9a-f]{6}", value):
         return value
-    match = re.fullmatch(r"rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", value)
-    if match and all(int(part) <= 255 for part in match.groups()):
-        return "#" + "".join(f"{int(part):02x}" for part in match.groups())
+    match = re.fullmatch(r"rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*(\d*\.?\d+)\s*)?\)", value)
+    if match and all(int(part) <= 255 for part in match.groups()[:3]):
+        if match.group(4) is not None and not 0.5 <= float(match.group(4)) <= 1:
+            return None
+        return "#" + "".join(f"{int(part):02x}" for part in match.groups()[:3])
     return None
 
 
@@ -132,7 +134,7 @@ def stylesheet_color_cues(css: str, source_url: str) -> list[dict]:
                 continue
             if not separator or not re.fullmatch(r"[\w-]+", property_name):
                 continue
-            value_match = re.match(r"\s*(#[0-9a-fA-F]{3,6}\b|rgb\([^)]*\))", raw_value)
+            value_match = re.match(r"\s*(#[0-9a-fA-F]{3,6}\b|rgba?\([^)]*\))", raw_value)
             if not value_match:
                 continue
             value = value_match.group(1)

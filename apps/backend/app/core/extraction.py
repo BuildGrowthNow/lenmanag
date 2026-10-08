@@ -1183,7 +1183,7 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
 def _safe_fetch(url: str) -> dict[str, Any]:
     # Try Playwright first to get JS-rendered content
     pw_result = _playwright_fetch(url)
-    if pw_result is not None:
+    if pw_result is not None and pw_result.get("ok"):
         return pw_result
 
     # Fallback to urllib for raw HTML
@@ -1472,7 +1472,7 @@ def _extract_brand_asset_cues(
 
         for candidate in signals.logo_candidates[:10]:  # Limit to top 10 candidates
             if candidate.startswith("data:") or candidate == "inline-svg" or re.search(
-                r"cookieyes|poweredbt|termly|juicer|trustindex|recaptcha|cloudflare", candidate, re.I
+                r"cookie|gdpr|poweredbt|termly|juicer|trustindex|recaptcha|cloudflare", candidate, re.I
             ):
                 continue
             candidate = urljoin(page_url, candidate)
