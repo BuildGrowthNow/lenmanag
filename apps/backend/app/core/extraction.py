@@ -1471,6 +1471,13 @@ def _extract_brand_asset_cues(
         scored_logos: list[tuple[str, int, str]] = []
 
         for candidate in signals.logo_candidates[:10]:  # Limit to top 10 candidates
+            if candidate.startswith("data:") or candidate == "inline-svg" or re.search(
+                r"cookieyes|poweredbt|termly|juicer|trustindex|recaptcha|cloudflare", candidate, re.I
+            ):
+                continue
+            candidate = urljoin(page_url, candidate)
+            if urlparse(candidate).scheme not in {"http", "https"}:
+                continue
             score = 50  # Base score
             note_parts = []
 
