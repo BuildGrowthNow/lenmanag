@@ -224,9 +224,11 @@ def is_testimonial_section(value: str) -> bool:
 
 
 def source_testimonials(extraction: ExtractionSnapshot | None):
-    """Low-confidence proof text can be navigation or headings, not a review."""
+    """Require strong review evidence; broad proof sections include service copy."""
     return [record for record in (extraction.extractedTestimonials if extraction else [])
-            if record.quote.strip() and record.sourceUrl and record.confidence >= 70]
+            if record.quote.strip() and record.sourceUrl and record.confidence >= 85
+            and len(record.authorCompany or "") <= 160
+            and len(record.authorTitle or "") <= 160]
 
 
 def apply_brief_policy(brief, extraction: ExtractionSnapshot):

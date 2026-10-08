@@ -2102,7 +2102,7 @@ def crawl_website(
 
         # Collect enhanced extraction data from signals
         for testimonial in signals.testimonials:
-            if testimonial.get("confidence", 0) < 70:
+            if testimonial.get("confidence", 0) < 85:
                 continue
             testimonial["sourceUrl"] = url
             extracted_testimonials.append(testimonial)
