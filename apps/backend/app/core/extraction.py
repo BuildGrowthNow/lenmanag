@@ -1472,7 +1472,8 @@ def _extract_brand_asset_cues(
 
         for candidate in signals.logo_candidates[:10]:  # Limit to top 10 candidates
             if candidate.startswith("data:") or candidate == "inline-svg" or re.search(
-                r"cookie|gdpr|poweredbt|termly|juicer|trustindex|recaptcha|cloudflare", candidate, re.I
+                r"cookie|gdpr|poweredbt|termly|juicer|trustindex|recaptcha|cloudflare|"
+                r"linguist-flags|/assets/flags/|/wp-content/themes/bridge/img/logo(?:_|\.)", candidate, re.I
             ):
                 continue
             candidate = urljoin(page_url, candidate)
@@ -1482,6 +1483,15 @@ def _extract_brand_asset_cues(
             note_parts = []
 
             candidate_lower = candidate.lower()
+
+            # Uploaded business artwork is stronger evidence than a theme's
+            # bundled example logo, even when both have a generic filename.
+            if "/wp-content/uploads/" in candidate_lower:
+                score += 15
+                note_parts.append("uploaded business artwork")
+            elif "/wp-content/themes/" in candidate_lower:
+                score -= 15
+                note_parts.append("theme asset; prefer uploaded business artwork")
 
             # High-confidence patterns (direct logo naming)
             if (
