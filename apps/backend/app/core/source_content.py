@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 from bs4 import BeautifulSoup
 
@@ -13,16 +13,35 @@ from app.schemas.extraction import ExtractionSnapshot
 _EMAIL = re.compile(r"[A-Z0-9_.+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
 
 
+def _provider_contact(anchor, source_url: str, company_name: str | None) -> bool:
+    context = anchor.parent.get_text(" ", strip=True) if anchor.parent else ""
+    if re.search(r"(?:website|site|web\s*design)\s+(?:by|por)|designed\s+by|developed\s+by|powered\s+by|produzido\s+por", context, re.I):
+        return True
+    address = unquote(anchor.get("href", "")).split("?", 1)[0]
+    if "@" not in address or not company_name or "©" not in context or len(context) > 300:
+        return False
+    domain = address.rsplit("@", 1)[1].lower()
+    business = re.sub(r"\W", "", company_name.lower())
+    owner = re.sub(r"\W", "", context.lower())
+    host = (urlsplit(source_url).hostname or "").removeprefix("www.")
+    return bool(business and business not in owner and domain != host
+                and domain not in {"gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com"})
+
+
 def enforce_html_source_contacts(html: str, extraction: ExtractionSnapshot) -> str:
     """Omit invented contact details instead of publishing plausible guesses."""
     emails: set[str] = set()
     phones: set[str] = set()
+    provider_emails: set[str] = set()
     for page in extraction.pageInventory:
         document = BeautifulSoup(page.rawHtml or "", "html.parser")
         text = (page.cleanedText or "") + " " + document.get_text(" ", strip=True)
         emails.update(value.lower() for value in _EMAIL.findall(text))
         for anchor in document.select('a[href^="mailto:"],a[href^="tel:"]'):
             value = unquote(anchor["href"].split(":", 1)[1].split("?")[0])
+            if _provider_contact(anchor, page.url, extraction.summary.companyName):
+                provider_emails.update(value.lower() for value in _EMAIL.findall(value))
+                continue
             if anchor["href"].startswith("mailto:"):
                 emails.update(value.lower() for value in _EMAIL.findall(value))
             else:
@@ -30,7 +49,7 @@ def enforce_html_source_contacts(html: str, extraction: ExtractionSnapshot) -> s
         # Line breaks separate contacts; joining office and mobile numbers
         # would turn both valid numbers into one invalid long candidate.
         phones.update(re.sub(r"\D", "", value) for value in re.findall(r"\+?\d[\d \t\u00a0().-]{5,}\d", text))
-    emails = {value for value in emails if not re.search(r"@(example\.|yourdomain\.|sentry[^.]*\.)", value)}
+    emails = {value for value in emails - provider_emails if not re.search(r"@(example\.|yourdomain\.|sentry[^.]*\.)", value)}
     phones = {value for value in phones if 7 <= len(value) <= 16
               and "0123456789" not in value and "1234567890" not in value
               and len(set(value)) > 1}
@@ -61,7 +80,8 @@ def source_content_policy(extraction: ExtractionSnapshot) -> str:
         document = BeautifulSoup(page.rawHtml or "", "html.parser")
         language = document.html.get("lang") if document.html else None
         for anchor in document.select('a[href^="tel:"], a[href^="mailto:"]'):
-            contacts.add(anchor["href"])
+            if not _provider_contact(anchor, page.url, extraction.summary.companyName):
+                contacts.add(anchor["href"])
         pages.append({
             "url": page.url,
             "languageHint": language,
@@ -77,6 +97,7 @@ def source_content_policy(extraction: ExtractionSnapshot) -> str:
         "contact details. Never invent phone numbers, email addresses, credentials, "
         "statistics, founding dates or customer claims. Do not copy obvious template "
         "placeholder phone numbers or email addresses as real business contacts. "
+        "Do not use a website designer's, hosting provider's or tracking service's contact details as business contacts. "
         "If a fact is absent, omit it. "
         "Only include contact links supported by this evidence.\n"
         + json.dumps({"pages": pages, "contactLinks": sorted(contacts)}, ensure_ascii=False)
