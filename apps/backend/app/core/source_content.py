@@ -27,7 +27,9 @@ def enforce_html_source_contacts(html: str, extraction: ExtractionSnapshot) -> s
                 emails.update(value.lower() for value in _EMAIL.findall(value))
             else:
                 phones.add(re.sub(r"\D", "", value))
-        phones.update(re.sub(r"\D", "", value) for value in re.findall(r"\+?\d[\d\s().-]{5,}\d", text))
+        # Line breaks separate contacts; joining office and mobile numbers
+        # would turn both valid numbers into one invalid long candidate.
+        phones.update(re.sub(r"\D", "", value) for value in re.findall(r"\+?\d[\d \t\u00a0().-]{5,}\d", text))
     emails = {value for value in emails if not re.search(r"@(example\.|yourdomain\.|sentry[^.]*\.)", value)}
     phones = {value for value in phones if 7 <= len(value) <= 16
               and "0123456789" not in value and "1234567890" not in value
