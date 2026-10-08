@@ -18,6 +18,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
+from bs4 import BeautifulSoup
+
 from app.core import asset_metadata
 from app.core.asset_downloader import AssetDownloader
 from app.core.config import get_settings
@@ -1105,9 +1107,9 @@ def _playwright_fetch(url: str) -> dict[str, Any] | None:
                     headings: Array.from(document.querySelectorAll('h1, h2, h3, h4')).map(el => el.innerText),
                     links: Array.from(document.querySelectorAll('a[href]')).map(el => ({href: el.href, text: el.innerText.trim()})).filter(l => l.href),
                     images: Array.from(document.querySelectorAll('img[src]')).map(el => ({src: el.src, alt: el.alt || ''})),
-                    testimonials: Array.from(document.querySelectorAll('[itemprop="reviewBody"], .ti-review-content, .wp-google-text, .review-text, .testimonial-text')).map(el => {
-                        const card = el.closest('.ti-review-item, .review, .testimonial, [itemtype*="Review"], .testimonial-card');
-                        const author = card?.querySelector('.ti-name, .review-author, .testimonial-author, [itemprop="author"]');
+                    testimonials: Array.from(document.querySelectorAll('[itemprop="reviewBody"], .ti-review-content, .wp-google-text, .review-text, .testimonial-text, .et_pb_testimonial_content')).map(el => {
+                        const card = el.closest('.ti-review-item, .review, .testimonial, [itemtype*="Review"], .testimonial-card, .et_pb_testimonial');
+                        const author = card?.querySelector('.ti-name, .review-author, .testimonial-author, [itemprop="author"], .et_pb_testimonial_author');
                         return {quote:el.innerText.trim(), authorName:author?.innerText.trim() || null, confidence:95};
                     }).filter(record => record.quote.length >= 30),
                     logoImages: logoImages.sort((a, b) => b.score - a.score),
@@ -1230,6 +1232,18 @@ def _parse_html(body: str) -> PageSignals:
     parser = _SignalParser()
     parser.feed(body)
     parser.close()
+    if "et_pb_testimonial_content" in body:
+        document = BeautifulSoup(body, "html.parser")
+        for card in document.select(".et_pb_testimonial"):
+            content = card.select_one(".et_pb_testimonial_content")
+            author = card.select_one(".et_pb_testimonial_author")
+            quote = content.get_text(" ", strip=True) if content else ""
+            if len(quote) >= 30:
+                parser.signals.testimonials.append({
+                    "quote": quote,
+                    "authorName": author.get_text(" ", strip=True) if author else None,
+                    "confidence": 95,
+                })
     return parser.signals
 
 
