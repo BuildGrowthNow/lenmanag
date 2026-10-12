@@ -23,7 +23,7 @@ const FAQS = [
   {
     question: "How does LenQuant's process work?",
     answer:
-      "We developed a simple and efficient process to save you time and money. First, we'll schedule a free 30-minute call to understand your goals. Then, we'll research your niche and present the best solution for your business. Once you approve the proposal, we'll deliver your landing page within 3 days. You'll have 7 days to request revisions, and if you're not completely satisfied, we'll give you a full refund.",
+      "We developed a simple and efficient process to save you time and money. First, we'll schedule a free 30-minute call to understand your goals. Then, we'll research your niche and present the best solution for your business. Once you approve the proposal, we'll deliver your landing page within 3 days. You'll have 30 days to request revisions, and if you're not completely satisfied, we'll give you a full refund.",
   },
   {
     question: "Do I own the website after purchase?",
@@ -38,17 +38,17 @@ const FAQS = [
   {
     question: "What happens after delivery?",
     answer:
-      "Your package includes 7 days of post-launch support. During this time, we're available to make adjustments and provide any additional help you need. The entire process takes up to 11 days: 1 day for our online meeting, 3 days to build your landing page, and 7 days for revisions and support. After that, we can continue helping with updates, hosting, and maintenance as outlined in your agreement with LenQuant.",
+      "Your package includes 30 days of post-launch support. During this time, we're available to make adjustments and provide any additional help you need. The entire process takes up to 34 days: 1 day for our online meeting, 3 days to build your landing page, and 30 days for revisions and support. After that, we can continue helping with updates, hosting, and maintenance as outlined in your agreement with LenQuant.",
   },
   {
     question: "What happens if I'm not satisfied?",
     answer:
-      "We have a 98% satisfaction rate — and we intend to keep it that way. If we don't deliver what we agreed, you get a full refund within the first 7 days. No questions asked.",
+      "We have a 98% satisfaction rate — and we intend to keep it that way. If we don't deliver what we agreed, you get a full refund within the first 30 days. No questions asked.",
   },
   {
     question: "How LenQuant works?",
     answer:
-      "After building more than 100 websites, we've developed a proven 11-day process. Day 1: We meet for a free 30-minute discovery call to align on your goals, project scope, and any additional requirements. After we agree on the proposal, you'll receive a project summary and payment link. 3 Days Production: We design and build your landing page — throughout the process, you'll receive previews so you can follow the progress. 7 Days Support: We provide dedicated post-delivery support, making any necessary revisions to ensure your landing page is exactly what you need.",
+      "After building more than 100 websites, we've developed a proven 34-day process. Day 1: We meet for a free 30-minute discovery call to align on your goals, project scope, and any additional requirements. After we agree on the proposal, you'll receive a project summary and payment link. 3 Days Production: We design and build your landing page — throughout the process, you'll receive previews so you can follow the progress. 30 Days Support: We provide dedicated post-delivery support, making any necessary revisions to ensure your landing page is exactly what you need.",
   },
   {
     question: "I'm ready to start! What do I need to prepare for the call?",

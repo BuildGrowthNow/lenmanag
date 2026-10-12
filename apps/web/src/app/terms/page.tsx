@@ -74,7 +74,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-bold text-white mb-4">7. Satisfaction Guarantee</h2>
             <p>
-              We stand behind our work with a 100% satisfaction guarantee. If you are not satisfied with the delivered website within 7 days of delivery, we will provide a full refund. This guarantee applies only to the base service and does not cover add-on services or additional features unless specifically requested.
+              We stand behind our work with a 100% satisfaction guarantee. If you are not satisfied with the delivered website within 30 days of delivery, we will provide a full refund. This guarantee applies only to the base service and does not cover add-on services or additional features unless specifically requested.
             </p>
           </section>
 

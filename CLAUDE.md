@@ -490,6 +490,7 @@ All services share the `lenquant-network` bridge network.
 ## Agent Behaviour
 
 - **Work sequentially, never in parallel** — do not spawn sub-agents or run parallel tool calls that hit the LLM. AWS Bedrock has strict requests-per-minute limits; parallel agent tasks will cause rate-limit errors. Always complete one step fully before starting the next.
+- **Never create one-off scripts to patch sites** — do not write standalone Python or shell scripts to directly modify S3 CSS, MongoDB records, or site assets. Run all site improvements and generations through the platform's API endpoints and generation system instead. The platform can handle any adjustments on specific sites without going offline, and scripts leave no audit trail, bypass platform logic, and are deleted anyway.
 
 ---
 

@@ -399,7 +399,7 @@ export default function SitesLandingPage() {
                 "Share your success on social media",
                 "Full ownership of all code and assets",
                 "Delivered ready to deploy anywhere",
-                "7 days of post-launch support included",
+                "30 days of post-launch support included",
               ].map((item, i) => (
                 <motion.div
                   key={i}

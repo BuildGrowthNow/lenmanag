@@ -157,13 +157,13 @@ export function RedesignClient({ data }: { data: RedesignPageData }) {
             </div>
             <div>
               <dt className="text-sm text-zinc-400">Revisions &amp; support</dt>
-              <dd className="mt-1 text-3xl font-bold text-white">7 days</dd>
+              <dd className="mt-1 text-3xl font-bold text-white">30 days</dd>
             </div>
           </dl>
           <div className="mt-7 rounded-2xl border border-yellow-500/15 bg-yellow-500/5 px-4 py-4">
             <p className="text-sm font-semibold text-yellow-400">100% money-back guarantee</p>
             <p className="mt-1 text-sm leading-relaxed text-zinc-300">
-              Not satisfied within 7 days of delivery? Get a full refund on the base landing page.
+              Not satisfied within 30 days of delivery? Get a full refund on the base landing page.
             </p>
           </div>
           <a

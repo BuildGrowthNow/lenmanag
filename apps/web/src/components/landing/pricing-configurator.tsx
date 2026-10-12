@@ -21,7 +21,7 @@ const INCLUDED = [
   "Easy way for customers to contact you",
   "Full ownership of all code and assets",
   "Delivered ready to go live",
-  "7 days of post-launch support included",
+  "30 days of post-launch support included",
 ];
 
 export function PricingConfigurator() {
