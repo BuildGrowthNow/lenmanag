@@ -44,6 +44,46 @@ def get_variant_strategies(
         Dictionary mapping variant type to strategy definition
     """
     base_strategies: dict[VariantType, VariantStrategy] = {
+        "html_v4": {
+            "variantType": "html_v4",
+            "variantLabel": "Photo-Forward Premium",
+            "variantPosition": 4,
+            "designMode": "minimalist",
+            "paletteMode": "light",
+            "creativeBriefGuidance": """
+                Generate a photo-forward premium design that leads with stunning full-bleed imagery:
+                - Hero section dominated by a large, atmospheric background image placeholder with elegant text overlay
+                - Neutral, sophisticated palette: warm whites, creamy off-whites, deep charcoal text
+                - Clean grid-based gallery or portfolio section showing service imagery
+                - Sparse, confident typography — a single display serif or premium sans-serif
+                - Minimal decoration — let photography and whitespace do the work
+                - Large section dividers with tinted image backgrounds or full-bleed photo panels
+                - Premium, polished feel suitable for high-end residential clients
+                - Smooth, understated scroll animations (fade-in, gentle parallax)
+                - Generous padding and breathing room throughout
+            """,
+            "inspirationKeywords": [
+                "photo-forward",
+                "premium",
+                "full-bleed",
+                "editorial",
+                "luxury",
+                "sparse",
+                "whitespace",
+                "gallery",
+                "atmospheric",
+                "sophisticated",
+            ],
+            "avoidPatterns": [
+                "busy layouts",
+                "gradient-only backgrounds",
+                "loud colors",
+                "dense text blocks",
+                "excessive icons",
+                "dark mode",
+                "neon accents",
+            ],
+        },
         "html_v1": {
             "variantType": "html_v1",
             "variantLabel": "Professional Standard",
